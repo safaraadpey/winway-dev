@@ -291,10 +291,8 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
       return;
     }
 
-    const displayAdminSubRole =
-      adminSubRole === null || adminSubRole === "manager"
-        ? null
-        : adminSubRole;
+    const displayAdminSubRole: AdminSubRole | null =
+      adminSubRole == null || adminSubRole === "manager" ? null : adminSubRole;
 
     const roleLabel =
       newRole === "admin"

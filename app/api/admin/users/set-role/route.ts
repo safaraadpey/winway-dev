@@ -206,8 +206,13 @@ export async function POST(request: NextRequest) {
         .eq('user_id', user_id)
         .maybeSingle()
       
-      if (targetRole === 'agent' && existingCommission?.agent_commission !== null) {
-        commissionUpdateData.agent_commission = existingCommission.agent_commission
+      if (
+        targetRole === "agent" &&
+        existingCommission &&
+        existingCommission.agent_commission !== null
+      ) {
+        commissionUpdateData.agent_commission =
+          existingCommission.agent_commission;
       } else {
         commissionUpdateData.agent_commission = null
       }
@@ -220,8 +225,13 @@ export async function POST(request: NextRequest) {
         .eq('user_id', user_id)
         .maybeSingle()
       
-      if (targetRole === 'super' && existingCommission?.super_commission !== null) {
-        commissionUpdateData.super_commission = existingCommission.super_commission
+      if (
+        targetRole === "super" &&
+        existingCommission &&
+        existingCommission.super_commission !== null
+      ) {
+        commissionUpdateData.super_commission =
+          existingCommission.super_commission;
       } else {
         commissionUpdateData.super_commission = null
       }

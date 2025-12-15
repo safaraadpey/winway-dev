@@ -29,7 +29,7 @@ export default function RoomTemplatesPage() {
       setOnBackClick(null);
     };
   }, [setShowHeader, setShowBackButton, setOnBackClick, router]);
-  const [templates, setTemplates] = useState<RoomTemplatePanelMode[]>([]);
+  const [templates, setTemplates] = useState<string[]>([]);
   const [templateData, setTemplateData] = useState<
     Map<string, RoomTemplatePayload>
   >(new Map());
@@ -63,7 +63,11 @@ export default function RoomTemplatesPage() {
 
       setTemplateData(newMap);
       setModes(newModes);
-      setTemplates(data.map((t) => t.id || "").filter(Boolean));
+      setTemplates(
+        data
+          .map((t) => t.id || "")
+          .filter((id): id is string => Boolean(id))
+      );
     } catch (error) {
       console.error("Error loading templates:", error);
       toast.error("خطا در بارگذاری اتاق‌ها");

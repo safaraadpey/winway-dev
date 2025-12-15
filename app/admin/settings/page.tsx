@@ -116,7 +116,7 @@ export default function AdminSettingsPage() {
 
   const handleRevertToCode = async (code: string) => {
     if (code === currentCode) {
-      toast.info("این کد در حال حاضر فعال است");
+      toast("این کد در حال حاضر فعال است");
       return;
     }
 

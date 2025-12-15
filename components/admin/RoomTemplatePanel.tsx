@@ -303,7 +303,7 @@ export default function RoomTemplatePanel({
       <div className="bg-neutral-900 text-neutral-100 rounded-xl px-4 py-3 flex items-center justify-between shadow-md">
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-semibold text-sm truncate">
-            {title ?? form.name || "Room template"}
+            {title ?? (form.name || "Room template")}
           </span>
           {/* نمایش بج وضعیت فقط برای تمپلیت‌های ذخیره‌شده (نه ساخت اتاق جدید) */}
           {form.id && (
@@ -338,7 +338,7 @@ export default function RoomTemplatePanel({
         <h2 className="text-sm font-semibold truncate">
           {isCreate
             ? title ?? "ساخت اتاق جدید"
-            : title ?? form.name || "ویرایش اتاق"}
+            : title ?? (form.name || "ویرایش اتاق")}
         </h2>
         <div className="flex gap-2">
           {!isCreate && form.id && (

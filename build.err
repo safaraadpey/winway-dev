@@ -1,0 +1,158 @@
+ ⚠ For production Image Optimization with Next.js, the optional 'sharp' package is strongly recommended. Run 'npm i sharp', and Next.js will use it automatically for Image Optimization.
+Read more: https://nextjs.org/docs/messages/sharp-missing-in-production
+ ⚠ For production Image Optimization with Next.js, the optional 'sharp' package is strongly recommended. Run 'npm i sharp', and Next.js will use it automatically for Image Optimization.
+Read more: https://nextjs.org/docs/messages/sharp-missing-in-production
+GET /api/admin/card-pool/active error: B [Error]: Dynamic server usage: Route /api/admin/card-pool/active couldn't be rendered statically because it used `request.headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at V (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:21778)
+    at Object.get (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:29465)
+    at d (C:\Dr.odds\bingo\winway\.next\server\app\api\admin\card-pool\generate\route.js:1:5295)
+    at p (C:\Dr.odds\bingo\winway\.next\server\app\api\admin\card-pool\generate\route.js:1:5920)
+    at l (C:\Dr.odds\bingo\winway\.next\server\app\api\admin\card-pool\active\route.js:1:567)
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:38417
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\server\lib\trace\tracer.js:140:36
+    at NoopContextManager.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093) {
+  description: "Route /api/admin/card-pool/active couldn't be rendered statically because it used `request.headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+GET /api/player/lobby-online-count error: B [Error]: Dynamic server usage: Route /api/player/lobby-online-count couldn't be rendered statically because it used `request.headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at V (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:21778)
+    at Object.get (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:29465)
+    at l (C:\Dr.odds\bingo\winway\.next\server\app\api\admin\card-pool\active\route.js:1:3419)
+    at u (C:\Dr.odds\bingo\winway\.next\server\app\api\player\lobby-online-count\route.js:1:545)
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:38417
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\server\lib\trace\tracer.js:140:36
+    at NoopContextManager.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093)
+    at ProxyTracer.startActiveSpan (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18854) {
+  description: "Route /api/player/lobby-online-count couldn't be rendered statically because it used `request.headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+GET /api/admin/card-pool/history error: B [Error]: Dynamic server usage: Route /api/admin/card-pool/history couldn't be rendered statically because it used `request.headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at V (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:21778)
+    at Object.get (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:29465)
+    at c (C:\Dr.odds\bingo\winway\.next\server\app\api\player\lobby-online-count\route.js:1:3398)
+    at p (C:\Dr.odds\bingo\winway\.next\server\app\api\player\lobby-online-count\route.js:1:4023)
+    at l (C:\Dr.odds\bingo\winway\.next\server\app\api\admin\card-pool\history\route.js:1:567)
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:38417
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\server\lib\trace\tracer.js:140:36
+    at NoopContextManager.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093) {
+  description: "Route /api/admin/card-pool/history couldn't be rendered statically because it used `request.headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+GET /api/admin/card-pool/download error: B [Error]: Dynamic server usage: Route /api/admin/card-pool/download couldn't be rendered statically because it used `request.headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at V (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:21778)
+    at Object.get (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:29465)
+    at c (C:\Dr.odds\bingo\winway\.next\server\app\api\player\my-active-rooms\route.js:1:4680)
+    at m (C:\Dr.odds\bingo\winway\.next\server\app\api\player\my-active-rooms\route.js:1:5305)
+    at l (C:\Dr.odds\bingo\winway\.next\server\app\api\admin\card-pool\download\route.js:1:566)
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:38417
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\server\lib\trace\tracer.js:140:36
+    at NoopContextManager.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093) {
+  description: "Route /api/admin/card-pool/download couldn't be rendered statically because it used `request.headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+GET /api/player/lobby-room-groups error: B [Error]: Dynamic server usage: Route /api/player/lobby-room-groups couldn't be rendered statically because it used `request.headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at V (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:21778)
+    at Object.get (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:29465)
+    at u (C:\Dr.odds\bingo\winway\.next\server\app\api\admin\wallet\adjust\route.js:1:4882)
+    at u (C:\Dr.odds\bingo\winway\.next\server\app\api\player\lobby-room-groups\route.js:1:545)
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:38417
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\server\lib\trace\tracer.js:140:36
+    at NoopContextManager.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093)
+    at ProxyTracer.startActiveSpan (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18854) {
+  description: "Route /api/player/lobby-room-groups couldn't be rendered statically because it used `request.headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+GET /api/me/ding-balance error: B [Error]: Dynamic server usage: Route /api/me/ding-balance couldn't be rendered statically because it used `request.headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at V (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:21778)
+    at Object.get (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:29465)
+    at l (C:\Dr.odds\bingo\winway\.next\server\app\api\admin\users\set-role\route.js:1:5824)
+    at u (C:\Dr.odds\bingo\winway\.next\server\app\api\me\ding-balance\route.js:1:547)
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:38417
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\server\lib\trace\tracer.js:140:36
+    at NoopContextManager.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093)
+    at ProxyTracer.startActiveSpan (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18854) {
+  description: "Route /api/me/ding-balance couldn't be rendered statically because it used `request.headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+GET /api/admin/card-pool/status error: B [Error]: Dynamic server usage: Route /api/admin/card-pool/status couldn't be rendered statically because it used `request.headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at V (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:21778)
+    at Object.get (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:29465)
+    at d (C:\Dr.odds\bingo\winway\.next\server\app\api\admin\admins\set-sub-role\route.js:1:4301)
+    at c (C:\Dr.odds\bingo\winway\.next\server\app\api\admin\admins\set-sub-role\route.js:1:4926)
+    at l (C:\Dr.odds\bingo\winway\.next\server\app\api\admin\card-pool\status\route.js:1:567)
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:38417
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\server\lib\trace\tracer.js:140:36
+    at NoopContextManager.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093) {
+  description: "Route /api/admin/card-pool/status couldn't be rendered statically because it used `request.headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+GET /api/player/live-room error: B [Error]: Dynamic server usage: Route /api/player/live-room couldn't be rendered statically because it used `request.url`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at V (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:21778)
+    at Object.get (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:29465)
+    at u (C:\Dr.odds\bingo\winway\.next\server\app\api\player\live-room\route.js:1:541)
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:38417
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\server\lib\trace\tracer.js:140:36
+    at NoopContextManager.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093)
+    at ProxyTracer.startActiveSpan (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18854)
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\server\lib\trace\tracer.js:122:103 {
+  description: "Route /api/player/live-room couldn't be rendered statically because it used `request.url`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+GET /api/player/gameroom error: B [Error]: Dynamic server usage: Route /api/player/gameroom couldn't be rendered statically because it used `request.url`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at V (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:21778)
+    at Object.get (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:29465)
+    at u (C:\Dr.odds\bingo\winway\.next\server\app\api\player\gameroom\route.js:1:541)
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:38417
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\server\lib\trace\tracer.js:140:36
+    at NoopContextManager.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093)
+    at ProxyTracer.startActiveSpan (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18854)
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\server\lib\trace\tracer.js:122:103 {
+  description: "Route /api/player/gameroom couldn't be rendered statically because it used `request.url`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+GET /api/player/room-results error: B [Error]: Dynamic server usage: Route /api/player/room-results couldn't be rendered statically because it used `request.url`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at V (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:21778)
+    at Object.get (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:29465)
+    at u (C:\Dr.odds\bingo\winway\.next\server\app\api\player\room-results\route.js:1:543)
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:38417
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\server\lib\trace\tracer.js:140:36
+    at NoopContextManager.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093)
+    at ProxyTracer.startActiveSpan (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18854)
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\server\lib\trace\tracer.js:122:103 {
+  description: "Route /api/player/room-results couldn't be rendered statically because it used `request.url`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}
+GET /api/player/my-active-rooms error: B [Error]: Dynamic server usage: Route /api/player/my-active-rooms couldn't be rendered statically because it used `request.headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error
+    at V (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:21778)
+    at Object.get (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:29465)
+    at u (C:\Dr.odds\bingo\winway\.next\server\app\api\admin\wallet\adjust\route.js:1:4882)
+    at d (C:\Dr.odds\bingo\winway\.next\server\app\api\player\my-active-rooms\route.js:1:596)
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\next-server\app-route.runtime.prod.js:6:38417
+    at C:\Dr.odds\bingo\winway\node_modules\next\dist\server\lib\trace\tracer.js:140:36
+    at NoopContextManager.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093)
+    at ProxyTracer.startActiveSpan (C:\Dr.odds\bingo\winway\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18854) {
+  description: "Route /api/player/my-active-rooms couldn't be rendered statically because it used `request.headers`. See more info here: https://nextjs.org/docs/messages/dynamic-server-error",
+  digest: 'DYNAMIC_SERVER_USAGE'
+}

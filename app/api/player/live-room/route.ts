@@ -164,7 +164,7 @@ export async function GET(request: Request) {
           .from("users")
           .select("id, username, user_profiles(nickname)")
           .in("id", playerIds)
-      : { data: [], error: null };
+      : { data: [] as any[] };
 
     const userMap = new Map<
       string,
@@ -193,7 +193,7 @@ export async function GET(request: Request) {
           .from("card_numbers")
           .select("pool_card_id, row_no, col_no, value")
           .in("pool_card_id", poolIds)
-      : { data: [], error: null };
+      : { data: [] as any[] };
 
     const cardNumberMap = new Map<
       string,

@@ -14,17 +14,25 @@ export function generateCard(poolSeedHex: string, cardNo: number): BingoCard {
 
   const rng = (() => {
 
-    let state = 0n;
+    // NOTE: از BigInt literal استفاده نمی‌کنیم تا با targetهای پایین‌تر از ES2020 هم type-check پاس شود.
+    const MUL = BigInt("2862933555777941757");
+    const ADD = BigInt("3037000493");
+    const SHIFT = BigInt(32);
+    // حالت RNG در PostgreSQL عملاً روی یک فضای محدود (uint64) می‌چرخد.
+    // اگر state را ماسک نکنیم، BigInt بی‌نهایت رشد می‌کند و Number(...) نهایتاً Infinity می‌شود.
+    const MASK_64 = (BigInt(1) << BigInt(64)) - BigInt(1);
+
+    let state = BigInt(0);
 
     const s = BigInt("0x" + poolSeedHex.slice(0, 16)) + BigInt(cardNo);
 
-    state = (s * 2862933555777941757n) + 3037000493n;
+    state = (s * MUL + ADD) & MASK_64;
 
     return () => {
 
-      state = (state * 2862933555777941757n) + 3037000493n;
+      state = (state * MUL + ADD) & MASK_64;
 
-      return Number(state >> 32n) / 4294967296; // [0, 1)
+      return Number(state >> SHIFT) / 4294967296; // [0, 1)
 
     };
 

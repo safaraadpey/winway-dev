@@ -180,6 +180,7 @@ export async function POST(request: NextRequest) {
     // 6) ثبت در admin_audit_log (اگر خورد زمین، عملیات اصلی fail نمی‌شود)
     try {
       await logAdminAction(
+        supabase,
         adminId,
         "wallet_adjust_bulk",
         "wallets",

@@ -1,43 +1,12 @@
-"use client";
-
-import React, { useEffect } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
-import GameRoomScreen from "@/src/screens/GameRoomScreen";
+import { Suspense } from "react";
+import GameRoomClient from "./GameRoomClient";
 
 export default function GameRoomPage() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const roomId = searchParams.get('roomId') ?? undefined;
-  const templateId = searchParams.get('templateId') ?? undefined;
-
-  // غیرفعال کردن اسکرول عمودی برای این صفحه
-  useEffect(() => {
-    // ذخیره حالت قبلی
-    const originalOverflow = document.body.style.overflow;
-    const originalOverflowY = document.body.style.overflowY;
-    
-    // غیرفعال کردن اسکرول
-    document.body.style.overflow = 'hidden';
-    document.body.style.overflowY = 'hidden';
-    
-    // برگرداندن حالت قبلی هنگام unmount
-    return () => {
-      document.body.style.overflow = originalOverflow;
-      document.body.style.overflowY = originalOverflowY;
-    };
-  }, []);
-
-  // اگر نه roomId و نه templateId وجود نداشت، به لابی برگردان
-  useEffect(() => {
-    if (!roomId && !templateId) {
-      router.push('/player/lobby');
-    }
-  }, [roomId, templateId, router]);
-
-  if (!roomId && !templateId) {
-    return null; // در حال redirect است
-  }
-
-  return <GameRoomScreen roomId={roomId} templateId={templateId} />;
+  // useSearchParams در Client Component استفاده می‌شود و باید داخل Suspense قرار بگیرد
+  return (
+    <Suspense fallback={<div className="p-4 text-gray-600">در حال بارگذاری...</div>}>
+      <GameRoomClient />
+    </Suspense>
+  );
 }
 

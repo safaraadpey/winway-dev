@@ -4,10 +4,19 @@
 
 import { supabase } from "@/lib/supabaseClient";
 import type {
+  BannerTargetAudience,
   EntryBanner,
   EntryBannerFormData,
   EntryBannerListResult,
 } from "@/src/types/entry-banner";
+
+function normalizeTargetAudience(value: unknown): BannerTargetAudience[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (v): v is BannerTargetAudience =>
+      v === "admin" || v === "agent" || v === "super" || v === "player"
+  );
+}
 
 /**
  * بارگذاری لیست بنرهای ورودی
@@ -35,7 +44,7 @@ export async function loadEntryBanners(): Promise<EntryBannerListResult> {
       imageHeight: banner.image_height || null,
       startDate: banner.start_date || null,
       endDate: banner.end_date || null,
-      targetAudience: (banner.target_audience || []) as string[],
+      targetAudience: normalizeTargetAudience(banner.target_audience),
       requireConfirmation: banner.require_confirmation || false,
       confirmationText: banner.confirmation_text || null,
       isActive: banner.is_active !== false,
@@ -81,7 +90,7 @@ export async function loadEntryBanner(bannerId: string): Promise<EntryBanner | n
       imageHeight: bannerData.image_height || null,
       startDate: bannerData.start_date || null,
       endDate: bannerData.end_date || null,
-      targetAudience: (bannerData.target_audience || []) as string[],
+      targetAudience: normalizeTargetAudience(bannerData.target_audience),
       requireConfirmation: bannerData.require_confirmation || false,
       confirmationText: bannerData.confirmation_text || null,
       isActive: bannerData.is_active !== false,
@@ -329,7 +338,14 @@ export async function loadActiveBannersForUser(): Promise<EntryBanner[]> {
       return [];
     }
 
-    const userRole = userData.role as string;
+    const userRoleRaw = userData.role as string;
+    const userRole: BannerTargetAudience | null =
+      userRoleRaw === "admin" ||
+      userRoleRaw === "agent" ||
+      userRoleRaw === "super" ||
+      userRoleRaw === "player"
+        ? userRoleRaw
+        : null;
 
     if (bannersError) {
       console.error("loadActiveBannersForUser: banners error", bannersError);
@@ -348,10 +364,11 @@ export async function loadActiveBannersForUser(): Promise<EntryBanner[]> {
         if (endDate && nowDate > endDate) return false;
 
         // بررسی target_audience
-        const targetAudience = banner.target_audience || [];
+        const targetAudience = normalizeTargetAudience(banner.target_audience);
         // اگر target_audience خالی باشد، برای همه است
         if (targetAudience.length === 0) return true;
         // بررسی اینکه role کاربر در target_audience باشد
+        if (!userRole) return false;
         return targetAudience.includes(userRole);
       })
       .map((banner: any) => ({
@@ -365,7 +382,7 @@ export async function loadActiveBannersForUser(): Promise<EntryBanner[]> {
         imageHeight: banner.image_height || null,
         startDate: banner.start_date || null,
         endDate: banner.end_date || null,
-        targetAudience: (banner.target_audience || []) as string[],
+        targetAudience: normalizeTargetAudience(banner.target_audience),
         requireConfirmation: banner.require_confirmation || false,
         confirmationText: banner.confirmation_text || null,
         isActive: banner.is_active !== false,

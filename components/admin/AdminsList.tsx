@@ -36,12 +36,11 @@ function formatDate(dateString: string | null): string {
   return `${hours}:${minutes} ${day}-${month}-${year}`;
 }
 
-const SUB_ROLE_LABELS: Record<AdminSubRole | "manager" | null, string> = {
+const SUB_ROLE_LABELS: Record<AdminSubRole | "manager", string> = {
   manager: "مدیر کل",
   finance: "مالی",
   support: "پشتیبانی",
   room: "اتاق‌ها",
-  null: "مدیر کل",
 };
 
 export default function AdminsList({ pageTitle }: AdminsListProps) {
@@ -393,7 +392,7 @@ export default function AdminsList({ pageTitle }: AdminsListProps) {
                                 : "text-gray-300 hover:bg-[#374151]"
                             }`}
                           >
-                            {SUB_ROLE_LABELS[role === "manager" ? null : role]}
+                            {SUB_ROLE_LABELS[role]}
                             {(admin.adminSubRole === role ||
                               (admin.adminSubRole === null && role === "manager")) &&
                               " ✓"}

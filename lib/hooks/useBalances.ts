@@ -215,7 +215,6 @@ export function useBalances(): Balances {
   }, []);
 
   useEffect(() => {
-    let unsubscribeDing: (() => void) | null = null;
     let walletChannel: ReturnType<typeof supabase.channel> | null = null;
 
     async function fetchBalances() {
@@ -324,9 +323,6 @@ export function useBalances(): Balances {
 
     return () => {
       console.log('[useBalances] Cleanup: unsubscribing and removing channels');
-      if (unsubscribeDing) {
-        unsubscribeDing();
-      }
       if (walletChannel) {
         supabase.removeChannel(walletChannel);
       }
