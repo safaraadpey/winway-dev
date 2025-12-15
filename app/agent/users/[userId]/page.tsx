@@ -1,0 +1,13 @@
+"use client";
+
+import UserAccountPage from "@/components/admin/UserAccountPage";
+
+export default function AgentUserAccountPage({
+  params,
+}: {
+  params: { userId: string };
+}) {
+  return <UserAccountPage userId={params.userId} />;
+}
+
+

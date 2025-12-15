@@ -23,7 +23,8 @@ export default function PostLoginPage() {
 
         if (userError || !user) {
           // اگر کاربر پیدا نشد، به صفحه login برگردان
-          router.push("/auth/login");
+          // (route group ها در URL حساب نمی‌شوند، پس مسیر صحیح همان /login است)
+          router.push("/login");
           return;
         }
 
