@@ -20,7 +20,7 @@ export default function RecoveryPage() {
 
     try {
       const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/login`,
+        redirectTo: `${window.location.origin}/login`,
       });
       
       if (recoveryError) throw recoveryError;
@@ -74,7 +74,7 @@ export default function RecoveryPage() {
           <button
             type="button"
             onClick={() => {
-              router.push("/auth/login");
+              router.push("/login");
             }}
             className={styles.secondaryLink}
           >

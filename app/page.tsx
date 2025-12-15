@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
  * صفحه اصلی (root)
  * بررسی می‌کند که کاربر لاگین کرده یا نه
  * - اگر لاگین کرده: به /post-login هدایت می‌شود (برای role-based routing)
- * - اگر لاگین نکرده: به /auth/login هدایت می‌شود
+ * - اگر لاگین نکرده: به /login هدایت می‌شود
  */
 export default function HomePage() {
   const router = useRouter();
@@ -20,14 +20,14 @@ export default function HomePage() {
         
         if (error || !session) {
           // کاربر لاگین نکرده است
-          router.push("/auth/login");
+          router.push("/login");
         } else {
           // کاربر لاگین کرده است، به post-login برای role-based routing
           router.push("/post-login");
         }
       } catch (error) {
         console.error("Error checking auth:", error);
-        router.push("/auth/login");
+        router.push("/login");
       }
     }
 

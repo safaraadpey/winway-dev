@@ -252,7 +252,7 @@ export default function SignupForm() {
           <div className={styles.loginLink}>
             <button
               type="button"
-              onClick={() => router.push("/auth/login")}
+              onClick={() => router.push("/login")}
               className={styles.loginButton}
               disabled={loading}
             >
