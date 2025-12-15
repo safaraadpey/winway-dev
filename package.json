@@ -1,0 +1,32 @@
+{
+  "name": "dingmoney-bingo",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test:supabase": "node scripts/test-connection.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.81.1",
+    "framer-motion": "^12.23.24",
+    "next": "^14.2.5",
+    "react": "^18.3.1",
+    "react-confetti": "^6.4.0",
+    "react-dom": "^18.3.1",
+    "react-hot-toast": "^2.6.0",
+    "use-sound": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.19",
+    "dotenv": "^17.2.3",
+    "postcss": "^8.4.39",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.5.3"
+  }
+}

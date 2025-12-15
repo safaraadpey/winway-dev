@@ -1,0 +1,166 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { loadActiveBannersForUser } from "@/services/entry-banner";
+import type { EntryBanner } from "@/src/types/entry-banner";
+
+export default function EntryBannerModal() {
+  const [banners, setBanners] = useState<EntryBanner[]>([]);
+  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+  const [confirmed, setConfirmed] = useState(false);
+  const [dismissedBanners, setDismissedBanners] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchBanners() {
+      try {
+        setLoading(true);
+        const activeBanners = await loadActiveBannersForUser();
+        
+        if (!isMounted) return;
+
+        // فیلتر کردن بنرهایی که قبلاً dismiss شده‌اند
+        const notDismissed = activeBanners.filter(
+          (banner) => !dismissedBanners.has(banner.id)
+        );
+        setBanners(notDismissed);
+        if (notDismissed.length > 0) {
+          setCurrentBannerIndex(0);
+        }
+      } catch (error) {
+        console.error("EntryBannerModal: error fetching banners", error);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    // کمی تاخیر برای اطمینان از اینکه صفحه کاملاً لود شده است
+    const timeoutId = setTimeout(() => {
+      fetchBanners();
+    }, 300);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, []);
+
+  const currentBanner = banners[currentBannerIndex];
+
+  // اگر در حال بارگذاری است یا بنری وجود ندارد، چیزی نمایش نده
+  if (loading || !currentBanner || banners.length === 0) {
+    return null;
+  }
+
+  const handleClose = () => {
+    // اضافه کردن به لیست dismiss شده‌ها
+    setDismissedBanners((prev) => new Set([...prev, currentBanner.id]));
+    
+    // اگر بنر دیگری وجود دارد، به بعدی برو
+    if (currentBannerIndex < banners.length - 1) {
+      setCurrentBannerIndex(currentBannerIndex + 1);
+      setConfirmed(false);
+    } else {
+      // همه بنرها نمایش داده شدند
+      setBanners([]);
+    }
+  };
+
+  const handleConfirm = () => {
+    if (currentBanner.requireConfirmation && !confirmed) {
+      setConfirmed(true);
+    } else {
+      handleClose();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+      <div className="bg-[#0b1120] rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+        {/* تیتر */}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-white">{currentBanner.title}</h2>
+          {!currentBanner.requireConfirmation && (
+            <button
+              onClick={handleClose}
+              className="text-gray-400 hover:text-white transition-colors"
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
+        </div>
+
+        {/* محتوا */}
+        <div className="mb-4">
+          {currentBanner.contentType === "text" ? (
+            <div className="text-gray-300 whitespace-pre-wrap">
+              {currentBanner.textContent}
+            </div>
+          ) : currentBanner.imageUrl ? (
+            <div>
+              <img
+                src={currentBanner.imageUrl}
+                alt={currentBanner.title}
+                className="w-full rounded-lg"
+              />
+            </div>
+          ) : null}
+        </div>
+
+        {/* تایید (اگر نیاز باشد) */}
+        {currentBanner.requireConfirmation && (
+          <div className="mb-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={confirmed}
+                onChange={(e) => setConfirmed(e.target.checked)}
+                className="w-5 h-5 rounded bg-[#1f2933] border-gray-600 text-teal-600 focus:ring-teal-500"
+              />
+              <span className="text-sm text-gray-300">
+                {currentBanner.confirmationText}
+              </span>
+            </label>
+          </div>
+        )}
+
+        {/* دکمه بستن/تایید */}
+        <button
+          onClick={handleConfirm}
+          disabled={currentBanner.requireConfirmation && !confirmed}
+          className="w-full py-3 rounded-xl bg-teal-600 text-white font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {currentBanner.requireConfirmation
+            ? confirmed
+              ? "تایید و بستن"
+              : "لطفاً تایید کنید"
+            : "بستن"}
+        </button>
+
+        {/* نمایش تعداد بنرها (اگر بیشتر از یکی باشد) */}
+        {banners.length > 1 && (
+          <div className="mt-3 text-center text-sm text-gray-400">
+            {currentBannerIndex + 1} از {banners.length}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+

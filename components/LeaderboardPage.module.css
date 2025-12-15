@@ -1,0 +1,255 @@
+/* LeaderboardPage.module.css */
+
+.container {
+  min-height: 100vh;
+  background-color: #0E0E0F;
+  padding: 1rem;
+  padding-bottom: 2rem;
+}
+
+.content {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.tab {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  background-color: rgba(236, 238, 241, 1);
+  color: rgba(0, 0, 0, 1);
+  border-style: solid;
+  border-width: 1px;
+  border-color: rgba(73, 72, 76, 1);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  background-color: rgba(236, 238, 241, 1);
+}
+
+.tabActive {
+  background-color: #00d4aa;
+  color: #ffffff;
+}
+
+.tabActive:hover {
+  background-color: #00c49a;
+}
+
+/* Section */
+.section {
+  background-color: #1a1a1a;
+  border-radius: 0.75rem;
+  padding: 0;
+  margin-bottom: 1.5rem;
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  background-color: rgba(236, 238, 241, 1);
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.sectionTitle {
+  font-size: 0.875rem;
+  color: #2d2d2d;
+  font-weight: 500;
+}
+
+.sectionValue {
+  font-size: 1rem;
+  color: #2d2d2d;
+  font-weight: 600;
+}
+
+/* Table */
+.table {
+  width: 100%;
+}
+
+.tableHeader {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background-color: rgba(23, 26, 38, 1);
+  border-width: 1px;
+  border-style: solid;
+  border-color: rgba(73, 72, 76, 1);
+  border-radius: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.tableHeaderCell {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  font-weight: 600;
+  text-align: center;
+}
+
+.tableBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.tableRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background-color: rgba(24, 26, 38, 1);
+  border-width: 1px;
+  border-style: solid;
+  border-color: rgba(73, 72, 76, 1);
+  border-radius: 0.5rem;
+}
+
+.tableCell {
+  font-size: 0.875rem;
+  color: #ffffff;
+  text-align: center;
+}
+
+.emptyTable {
+  text-align: center;
+  padding: 2rem;
+  color: #9ca3af;
+  font-size: 0.875rem;
+  background-color: #2d2d2d;
+  border-radius: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.loading {
+  text-align: center;
+  padding: 2rem;
+  color: #9ca3af;
+  font-size: 0.875rem;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 2rem;
+  color: #9ca3af;
+  font-size: 0.875rem;
+}
+
+/* Ranking Section */
+.rankingSection {
+  background-color: #1a1a1a;
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+.rankingTable {
+  width: 100%;
+}
+
+.rankingHeader {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr 2fr 0.8fr;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background-color: #f5f5dc;
+  border-radius: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.rankingHeaderCell {
+  font-size: 0.75rem;
+  color: #2d2d2d;
+  font-weight: 600;
+  text-align: right;
+  direction: rtl;
+  white-space: nowrap;
+}
+
+.rankingBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.rankingRow {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr 2fr 0.8fr;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background-color: #2d2d2d;
+  border-radius: 0.5rem;
+  align-items: center;
+}
+
+.rankingCell {
+  font-size: 0.875rem;
+  color: #ffffff;
+  text-align: right;
+  direction: rtl;
+}
+
+.playerInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  direction: rtl;
+}
+
+.playerAvatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.playerAvatarPlaceholder {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #00d4aa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+}
+
+.playerName {
+  font-size: 0.875rem;
+  color: #ffffff;
+  text-align: right;
+}
+
+.emptyRanking {
+  text-align: center;
+  padding: 2rem;
+  color: #9ca3af;
+  font-size: 0.875rem;
+  background-color: #2d2d2d;
+  border-radius: 0.5rem;
+  margin-top: 0.5rem;
+}
+

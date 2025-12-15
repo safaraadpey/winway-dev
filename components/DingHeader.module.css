@@ -1,0 +1,63 @@
+/* Ding Header Component - Mobile Portrait Only */
+
+.dingHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.25rem;
+  /* هماهنگ با صفحات جدید مدیریت (پس‌زمینه مشکی) */
+  background-color: #0E0E0F;
+  width: 100%;
+  max-width: 390px;
+  margin: 0 auto;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.leftSection {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.logo {
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: #3b82f6;
+  font-family: sans-serif;
+}
+
+.backButtonPlaceholder {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.backButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0.25rem;
+  cursor: pointer;
+  color: #ffffff;
+  transition: opacity 0.2s;
+  width: 100%;
+  height: 100%;
+}
+
+.backButton:active {
+  opacity: 0.7;
+}
+
+.backIcon {
+  width: 24px;
+  height: 24px;
+  color: #ffffff;
+}
+

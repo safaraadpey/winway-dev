@@ -1,0 +1,36 @@
+/* Ding Balance Capsule Component - Mobile Portrait Only */
+
+.balanceCapsule {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  background-color: rgba(59, 130, 246, 0.1);
+  padding: 3px 6px 3px 0.75rem;
+  border-radius: 8px 24px 24px 8px;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  min-width: 130px;
+}
+
+.balanceAmount {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fbbf24; /* طلایی */
+  font-family: sans-serif;
+  direction: ltr;
+  text-align: left;
+}
+
+.coinIcon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.loadingText {
+  font-size: 1rem;
+  color: #9ca3af;
+  font-family: sans-serif;
+}
+

@@ -1,0 +1,88 @@
+.lobbyContainer {
+  min-height: 100vh;
+  background-color: #0E0E0F;
+  padding: 0 1rem;
+  padding-top: 0px;
+  padding-bottom: 0px;
+}
+
+.lobbyHeader {
+  margin-bottom: 0.45rem;
+}
+
+.roomsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.emptyText {
+  font-size: 1.125rem;
+}
+
+.errorMessage {
+  margin: 0.5rem 0 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  background: rgba(220, 38, 38, 0.15);
+  color: #fecaca;
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.loadingContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  gap: 1rem;
+}
+
+.loadingSpinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #fbbf24;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loadingText {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 1rem;
+}
+
+@media (max-width: 640px) {
+  .lobbyContainer {
+    padding: 0 0.75rem;
+  }
+
+  .roomImageContainer {
+    height: 150px;
+  }
+
+  .roomPrice {
+    font-size: 1.25rem;
+  }
+
+  .roomStats {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}
+

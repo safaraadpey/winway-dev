@@ -1,0 +1,194 @@
+.roomCard {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 1rem;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.roomCard.minimal {
+  /* در حالت minimal فقط عکس نمایش داده می‌شود */
+}
+
+.roomCard.expanded {
+  /* در حالت expanded همه اطلاعات نمایش داده می‌شود */
+}
+
+.roomCard:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.roomCard:active {
+  transform: translateY(-2px);
+}
+
+.roomCard:focus {
+  outline: 2px solid rgba(251, 191, 36, 0.5);
+  outline-offset: 2px;
+}
+
+.roomImageContainer {
+  width: 100%;
+  min-height: 100px;
+  height: 100px;
+  position: relative;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.roomImage {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+  object-position: center;
+  background-color: rgba(225, 71, 71, 1);
+}
+
+.playersBadge {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+  padding: 0.375rem 0.625rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.playerIcon {
+  width: 16px;
+  height: 16px;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.playersCount {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #ffffff;
+  font-family: 'Arial', sans-serif;
+  line-height: 1;
+}
+
+.priceBadge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+  padding: 0.375rem 0.625rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 70px;
+  color: rgba(0, 0, 0, 0.22);
+}
+
+.priceCount {
+  font-size: 32px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 1);
+  font-family: 'Arial', sans-serif;
+  line-height: 1;
+}
+
+.roomInfo {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.roomPrice {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fbbf24;
+  text-align: center;
+  font-family: 'Arial', sans-serif;
+}
+
+.roomStats {
+  display: flex;
+  justify-content: space-around;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.statItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.statLabel {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.statValue {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  font-family: 'Arial', sans-serif;
+}
+
+.roomStatus {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.statusBadge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.statusBadge.playing {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.statusBadge.waiting {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.statusBadge.unavailable {
+  background: rgba(107, 114, 128, 0.2);
+  color: #9ca3af;
+  border: 1px solid rgba(107, 114, 128, 0.3);
+}
+
+@media (max-width: 640px) {
+  .roomImageContainer {
+    height: 100px;
+  }
+
+  .roomPrice {
+    font-size: 1.25rem;
+  }
+
+  .roomStats {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}
+
+

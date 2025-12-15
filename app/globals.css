@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root, html, body {
+  font-family: 'Vazirmatn', 'Inter', 'Segoe UI', sans-serif;
+}
+
+body, button, input, textarea, select, * {
+  font-family: inherit;
+}
+
+/* اعداد لاتین با فونت جداگانه و خط فاصله صفر */
+.latin-number {
+  font-family: 'Inter', 'Segoe UI', sans-serif !important;
+  font-variant-numeric: lining-nums;
+  line-height: 1 !important; /* leading-none */
+}

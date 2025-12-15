@@ -1,0 +1,207 @@
+/* BingoCard.module.css */
+
+/* CSS Variables برای Scalable Design */
+.container {
+  --card-scale: 1; /* ضریب scale - قابل تنظیم */
+  
+  /* اندازه‌های پایه (large) */
+  --base-cell-width: 37px;
+  --base-cell-height: 27px;
+  --base-gap: 6px; /* همیشه 6 پیکسل */
+  --base-border-radius: 0.5rem;
+  --base-border-width: 2px;
+  --base-font-size: 0.875rem;
+  --base-header-font-size: 0.875rem;
+  --base-padding: 0.5rem;
+  
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(0.5rem * var(--card-scale));
+  width: 100%;
+  max-width: 100%;
+  font-size: calc(1rem * var(--card-scale));
+  box-sizing: border-box;
+}
+
+.wrapper {
+  background-color: #d1d5db; /* gray-300 */
+  border-radius: var(--base-border-radius);
+  padding: calc(4px * var(--card-scale));
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.outer {
+  background-color: #6b4000;
+  padding: calc(4px * var(--card-scale));
+  border-radius: calc(0.75rem * var(--card-scale));
+  width: 100%;
+  max-width: 100%;
+  box-shadow: 0 calc(8px * var(--card-scale)) calc(20px * var(--card-scale)) rgba(0, 0, 0, 0.25);
+  box-sizing: border-box;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding-left: calc(var(--base-padding) * var(--card-scale));
+  padding-right: calc(var(--base-padding) * var(--card-scale));
+  margin-bottom: calc(0.5rem * var(--card-scale));
+}
+
+.headerLabel {
+  font-weight: 600;
+  color: #000000; /* text-black */
+}
+
+.headerLabelLarge {
+  font-size: calc(var(--base-header-font-size) * var(--card-scale));
+  line-height: calc(1.25rem * var(--card-scale));
+}
+
+.headerLabelSmall {
+  font-size: calc(0.8571 * var(--base-header-font-size) * var(--card-scale)); /* 0.75/0.875 = 0.8571 */
+  line-height: calc(1rem * var(--card-scale));
+}
+
+.cardGrid {
+  position: relative;
+  display: grid;
+  /* از auto استفاده می‌کنیم تا اندازه خانه‌ها بر اساس width تعریف شده در cell باشد */
+  grid-template-columns: repeat(9, auto);
+  /* عرض Grid بر اساس اندازه خانه‌ها محاسبه می‌شود */
+  width: fit-content;
+  transition: all 0.3s;
+  /* gap با scale همگام می‌شود اما نسبت ثابت می‌ماند */
+  /* نسبت gap به عرض خانه: 6/37 ≈ 0.162 */
+  gap: calc(var(--base-gap) * var(--card-scale));
+  /* برای چسبیدن به لبه‌ها */
+  margin-left: auto;
+  margin-right: auto;
+  /* اجازه می‌دهد سکه از grid بیرون بزند */
+  overflow: visible;
+  box-sizing: border-box;
+}
+
+/* cardGridLarge و cardGridSmall کلاس‌های placeholder هستند */
+/* gap در cardGrid با CSS variable تعریف شده */
+
+.cardGridWinner {
+  box-shadow: 0 0 0 calc(4px * var(--card-scale)) rgba(250, 204, 21, 1),
+              0 calc(25px * var(--card-scale)) calc(50px * var(--card-scale)) calc(-12px * var(--card-scale)) rgba(250, 204, 21, 0.5);
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border-radius: calc(var(--base-border-radius) * var(--card-scale));
+  border-width: calc(var(--base-border-width) * var(--card-scale));
+  border-style: solid;
+  overflow: visible; /* اجازه می‌دهد سکه از قاب بیرون بزند */
+  box-shadow: 0 calc(1px * var(--card-scale)) calc(2px * var(--card-scale)) 0 rgba(0, 0, 0, 0.05);
+  /* ابعاد ثابت - بدون aspect-ratio */
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.cellLarge {
+  /* عرض و ارتفاع ثابت */
+  width: calc(var(--base-cell-width) * var(--card-scale));
+  height: calc(var(--base-cell-height) * var(--card-scale));
+  font-size: calc(var(--base-font-size) * var(--card-scale));
+  line-height: calc(1.25rem * var(--card-scale));
+}
+
+.cellSmall {
+  /* نسبت کوچک: 28/20 ≈ 1.4 vs 37/27 ≈ 1.37 */
+  width: calc(0.7568 * var(--base-cell-width) * var(--card-scale)); /* 28/37 = 0.7568 */
+  height: calc(0.7407 * var(--base-cell-height) * var(--card-scale)); /* 20/27 = 0.7407 */
+  font-size: calc(0.8571 * var(--base-font-size) * var(--card-scale)); /* 0.75/0.875 = 0.8571 */
+  line-height: calc(1rem * var(--card-scale));
+}
+
+.cellEmpty {
+  border-color: #000000; /* border-black */
+  background-color: transparent;
+}
+
+.cellFilled {
+  border-color: #000000; /* border-black */
+  background-color: #ffffff; /* bg-white */
+}
+
+.cellMarked {
+  border-color: rgba(0, 0, 0, 0.3); /* border-black/30 */
+  background-color: #ffffff; /* bg-white */
+}
+
+.cellFlashing {
+  /* رنگ طلایی برای فلاش */
+  background-color: #fef3c7 !important; /* amber-100 */
+  border-color: #fbbf24 !important; /* amber-400 */
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.5) !important; /* amber-400 با opacity */
+}
+
+.cellCompleteRow {
+  /* کادر طلایی برای سطر کامل شده */
+  border-color: #fbbf24 !important; /* amber-400 */
+  border-width: 3px !important;
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.6) !important;
+}
+
+.cellNumber {
+  font-weight: 700; /* font-bold */
+  line-height: 1;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+.cellNumberNormal {
+  color: #000000; /* text-black */
+}
+
+.cellNumberMarked {
+  color: #d1d5db; /* text-gray-300 */
+}
+
+.coinAnimation {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.bingoOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.bingoText {
+  font-size: calc(3.75rem * var(--card-scale)); /* text-6xl */
+  font-weight: 900; /* font-black */
+  color: #facc15; /* text-yellow-400 */
+  filter: drop-shadow(0 calc(25px * var(--card-scale)) calc(25px * var(--card-scale)) rgba(0, 0, 0, 0.15));
+}
+
