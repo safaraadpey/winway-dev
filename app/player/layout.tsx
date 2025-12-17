@@ -8,7 +8,7 @@ import EntryBannerModal from "@/components/EntryBannerModal";
 
 /**
  * Layout برای بخش پلیر
- * شامل DingHeader (پیش‌فرض: نمایش) + PlayerStatusBar
+ * هدر پلیر از این به بعد فقط `MergedPlayerHeader` است (در `PlayerLayoutClient`)
  * 
  * این layout سروری است و فقط Provider و wrapper کلاینت را رندر می‌کند.
  * منطق کلاینت (useBalances, subscription) در PlayerLayoutClient است.

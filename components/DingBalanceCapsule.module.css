@@ -5,11 +5,17 @@
   align-items: center;
   justify-content: flex-end;
   gap: 0.5rem;
-  background-color: rgba(59, 130, 246, 0.1);
+  background-color: transparent !important;
+  background-image: url("../src/assets/logo/ding_BG.png");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
   padding: 3px 6px 3px 0.75rem;
-  border-radius: 8px 24px 24px 8px;
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  min-width: 130px;
+  border-radius: 0;
+  border: none;
+  width: 150px;
+  height: 40px;
+  box-sizing: border-box;
 }
 
 .balanceAmount {

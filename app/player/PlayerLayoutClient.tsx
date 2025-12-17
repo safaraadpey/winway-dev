@@ -3,8 +3,7 @@
 import React, { useEffect } from 'react';
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
-import DingHeader from "@/components/DingHeader";
-import PlayerStatusBar from "@/components/PlayerStatusBar";
+import MergedPlayerHeader from "@/components/MergedPlayerHeader";
 import MyActiveGames from "@/components/MyActiveGames";
 
 /**
@@ -16,7 +15,7 @@ export default function PlayerLayoutClient({
 }: {
   children: React.ReactNode;
 }) {
-  const { showHeader, showBackButton, onBackClick, showStatusBar } = useHeaderVisibility();
+  const { showHeader, showBackButton, onBackClick } = useHeaderVisibility();
   const { dingBalance, tomanBalance, lockedTomanBalance, loading, isAnimating } = useBalancesContext();
 
   // نکته: در بک‌اند، هنگام hold برای join، هم balance کم می‌شود و هم locked_amount زیاد.
@@ -49,20 +48,15 @@ export default function PlayerLayoutClient({
 
   return (
     <>
-      {showHeader && (
-        <DingHeader 
-          dingBalance={dingBalance} 
-          loading={loading}
-          isAnimating={isAnimating}
-          showBackButton={showBackButton}
-          onBackClick={onBackClick || undefined}
-        />
-      )}
-      <div className="sticky top-0 z-40 bg-[#0E0E0F]">
-        {showStatusBar && (
-          <PlayerStatusBar
+      <div className="sticky top-0 z-50 bg-[#0E0E0F]">
+        {showHeader && (
+          <MergedPlayerHeader
+            dingBalance={dingBalance || 0}
             tomanBalance={availableTomanBalance}
             loading={loading}
+            isAnimating={isAnimating}
+            showBackButton={showBackButton}
+            onBackClick={onBackClick || undefined}
           />
         )}
         <MyActiveGames />

@@ -31,12 +31,6 @@ export default function DingBalanceCapsule({
       animate={
         isAnimating
           ? {
-              backgroundColor: [
-                'rgba(59, 130, 246, 0.1)',
-                'rgba(251, 191, 36, 0.3)',
-                'rgba(251, 191, 36, 0.2)',
-                'rgba(59, 130, 246, 0.1)',
-              ],
               boxShadow: [
                 '0 0 0px rgba(251, 191, 36, 0)',
                 '0 0 20px rgba(251, 191, 36, 0.6)',
