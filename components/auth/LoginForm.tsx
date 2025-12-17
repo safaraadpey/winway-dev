@@ -246,7 +246,7 @@ export default function LoginForm() {
                     opacity="0.75"
                   />
                 </svg>
-                در حال ورود...
+                درحال ورود
               </span>
             ) : (
               "ورود"

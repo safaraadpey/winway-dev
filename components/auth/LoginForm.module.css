@@ -231,9 +231,14 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  white-space: nowrap;
   box-shadow:
     0 12px 26px rgba(0, 0, 0, 0.55),
     0 0 22px rgba(255, 193, 7, 0.25);
+}
+
+.submitButton > span {
+  white-space: nowrap;
 }
 
 .submitButton:hover:not(:disabled) {
