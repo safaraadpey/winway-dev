@@ -2,10 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { supabase } from "@/lib/supabaseClient";
 import { usernameToEmail, validateUsername } from "@/lib/auth-helpers";
 import toast from "react-hot-toast";
 import styles from "./SignupForm.module.css";
+
+import logo from "@/src/assets/logo/logo.png";
 
 /**
  * کامپوننت فرم ثبت‌نام با Username + Password
@@ -138,8 +141,12 @@ export default function SignupForm() {
         {/* Logo */}
         <div className={styles.logoContainer}>
           <h1 className={styles.logo}>
-            <span className={styles.logoLine1}>dingmoney</span>
-            <span className={styles.logoLine2}>دینگ مانی</span>
+            <Image
+              src={logo}
+              alt="dingmoney دینگ مانی"
+              className={styles.logoImage}
+              priority
+            />
           </h1>
         </div>
 
@@ -150,18 +157,20 @@ export default function SignupForm() {
             <label htmlFor="username" className={styles.label}>
               نام کاربری
             </label>
-            <input
-              id="username"
-              name="username"
-              type="text"
-              autoComplete="username"
-              required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className={styles.input}
-              placeholder="مثلاً: alipro"
-              disabled={loading}
-            />
+            <div className={styles.inputFrame}>
+              <input
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className={`${styles.input} ${styles.latinInput}`}
+                placeholder="مثلاً: alipro"
+                disabled={loading}
+              />
+            </div>
             <p className={styles.helperText}>
               3 تا 20 کاراکتر، فقط حروف، اعداد و زیرخط
             </p>
@@ -172,18 +181,20 @@ export default function SignupForm() {
             <label htmlFor="password" className={styles.label}>
               پسورد
             </label>
-            <input
-              id="password"
-              name="password"
-              type="text"
-              autoComplete="new-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={styles.input}
-              placeholder="رمز عبور خود را وارد کنید"
-              disabled={loading}
-            />
+            <div className={styles.inputFrame}>
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={`${styles.input} ${styles.latinInput}`}
+                placeholder="رمز عبور خود را وارد کنید"
+                disabled={loading}
+              />
+            </div>
             <p className={styles.helperText}>
               حداقل 6 کاراکتر
             </p>
@@ -194,18 +205,19 @@ export default function SignupForm() {
             <label htmlFor="referralCode" className={styles.label}>
               کد معرف
             </label>
-            <input
-              id="referralCode"
-              name="referralCode"
-              type="text"
-              required
-              value={referralCode}
-              onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
-              className={styles.input}
-              placeholder="کد معرف خود را وارد کنید"
-              disabled={loading}
-              style={{ textTransform: 'uppercase' }}
-            />
+            <div className={styles.inputFrame}>
+              <input
+                id="referralCode"
+                name="referralCode"
+                type="text"
+                required
+                value={referralCode}
+                onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                className={`${styles.input} ${styles.latinInput} ${styles.uppercaseInput}`}
+                placeholder="کد معرف خود را وارد کنید"
+                disabled={loading}
+              />
+            </div>
             <p className={styles.helperText}>
               ثبت‌نام بدون کد معرف امکان‌پذیر نیست
             </p>
@@ -256,7 +268,10 @@ export default function SignupForm() {
               className={styles.loginButton}
               disabled={loading}
             >
-              قبلاً ثبت‌نام کرده‌اید؟ وارد شوید
+              <span className={styles.loginText}>
+                قبلاً ثبت‌نام کرده‌اید؟{" "}
+                <span className={styles.loginAccent}>وارد شوید</span>
+              </span>
             </button>
           </div>
         </form>

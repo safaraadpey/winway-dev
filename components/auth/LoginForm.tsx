@@ -2,10 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { supabase } from "@/lib/supabaseClient";
 import { usernameToEmail, validateUsername } from "@/lib/auth-helpers";
 import toast from "react-hot-toast";
 import styles from "./LoginForm.module.css";
+
+import logo from "@/src/assets/logo/logo.png";
 
 /**
  * کامپوننت فرم ورود با Username + Password
@@ -103,8 +106,12 @@ export default function LoginForm() {
         {/* Logo */}
         <div className={styles.logoContainer}>
           <h1 className={styles.logo}>
-            <span className={styles.logoLine1}>dingmoney</span>
-            <span className={styles.logoLine2}>دینگ مانی</span>
+            <Image
+              src={logo}
+              alt="dingmoney دینگ مانی"
+              className={styles.logoImage}
+              priority
+            />
           </h1>
         </div>
 
@@ -115,18 +122,20 @@ export default function LoginForm() {
             <label htmlFor="username" className={styles.label}>
               نام کاربری
             </label>
-            <input
-              id="username"
-              name="username"
-              type="text"
-              autoComplete="username"
-              required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className={styles.input}
-              placeholder="مثلاً: alipro"
-              disabled={loading}
-            />
+            <div className={styles.inputFrame}>
+              <input
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className={`${styles.input} ${styles.latinInput}`}
+                placeholder="مثلاً: alipro"
+                disabled={loading}
+              />
+            </div>
             <p className={styles.helperText}>
               3 تا 20 کاراکتر، فقط حروف، اعداد و زیرخط
             </p>
@@ -137,7 +146,7 @@ export default function LoginForm() {
             <label htmlFor="password" className={styles.label}>
               پسورد
             </label>
-            <div className={styles.passwordWrapper}>
+            <div className={`${styles.inputFrame} ${styles.passwordWrapper}`}>
               <input
                 id="password"
                 name="password"
@@ -149,7 +158,6 @@ export default function LoginForm() {
                 className={styles.input}
                 placeholder="رمز عبور خود را وارد کنید"
                 disabled={loading}
-                style={{ paddingRight: '3rem' }}
               />
               <button
                 type="button"
@@ -198,11 +206,13 @@ export default function LoginForm() {
           <div className={styles.forgotPasswordLink}>
             <button
               type="button"
-              onClick={() => router.push("/auth/recovery")}
+              onClick={() => router.push("/recovery")}
               className={styles.forgotPasswordButton}
               disabled={loading}
             >
-              فراموشی رمز عبور
+              <span className={styles.forgotPasswordText}>
+                فراموشی <span className={styles.forgotPasswordAccent}>رمز عبور</span>
+              </span>
             </button>
           </div>
 
@@ -247,11 +257,14 @@ export default function LoginForm() {
           <div className={styles.signupLink}>
             <button
               type="button"
-              onClick={() => router.push("/auth/signup")}
+              onClick={() => router.push("/signup")}
               className={styles.signupButton}
               disabled={loading}
             >
-              حساب کاربری ندارید؟ ثبت‌نام کنید
+              <span className={styles.signupText}>
+                حساب کاربری ندارید؟{" "}
+                <span className={styles.signupAccent}>ثبت‌نام کنید</span>
+              </span>
             </button>
           </div>
         </form>
