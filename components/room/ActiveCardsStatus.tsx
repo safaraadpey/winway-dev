@@ -2,6 +2,7 @@
 
 import React from "react";
 import ActiveCardRow from "@/components/ActiveCardRow";
+import activeCardsBg from "@/src/assets/logo/ActiveCardsBG.png";
 
 export interface ActiveCardStatus {
   id: string;
@@ -20,7 +21,6 @@ export default function ActiveCardsStatus({
   secondsRemaining,
   waitingListMessage = "شما اولین نفر لیست انتظار خواهید بود",
 }: ActiveCardsStatusProps) {
-  const maxHeight = "146px"; // 3.5 rows based on existing spacing
   const totalCount = cards.reduce((sum, card) => sum + card.count, 0);
   const formatTime = (seconds: number): string => {
     const safeSeconds = Math.max(0, Math.floor(seconds));
@@ -33,8 +33,17 @@ export default function ActiveCardsStatus({
   const timerLabel = formatTime(secondsRemaining ?? 0);
 
   return (
-    <div className="space-y-3 bg-[#161A26] border border-[rgba(98,103,111,1)] rounded-2xl p-3 mt-3">
-      <div className="flex items-center justify-between">
+    <div
+      className="space-y-3 border border-transparent rounded-2xl px-3 pt-5 pb-5 mt-3 h-[200px] min-h-[200px] flex flex-col"
+      style={{
+        backgroundImage: `url(${activeCardsBg.src})`,
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "center",
+        backgroundSize: "100% 100%",
+        backgroundColor: "#161A26",
+      }}
+    >
+      <div className="flex items-center justify-between h-[39px] max-h-[40px]">
         <div className="flex items-center gap-2">
           <span className="text-green-500 font-medium text-[2.5rem]">
             {timerLabel}
@@ -60,8 +69,7 @@ export default function ActiveCardsStatus({
       </div>
 
       <div
-        className="space-y-2 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-        style={{ maxHeight }}
+        className="flex-1 space-y-2 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
       >
         {cards.length === 0 ? (
           <div className="bg-white rounded-lg px-4 py-2 text-center text-gray-500">
@@ -75,7 +83,7 @@ export default function ActiveCardsStatus({
       </div>
 
       {cards.length === 0 && (
-        <div className="bg-gray-300 rounded-xl px-4 py-3 text-center">
+        <div className="bg-gray-300 rounded-xl px-4 py-[13px] text-center !mt-0">
           <span className="text-[#2d2f36] text-sm font-medium">
             {waitingListMessage}
           </span>

@@ -74,8 +74,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding-left: 28px;
-  padding-right: 28px;
+  padding-left: 31px;
+  padding-right: 16px;
 }
 
 .row2NoBackButton {

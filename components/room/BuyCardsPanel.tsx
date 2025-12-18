@@ -1,6 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Image from "next/image";
+import ticktBuyBg from "@/src/assets/logo/TicktBuy_BG.png";
+import buyCardButtonBg from "@/src/assets/logo/BuyCardBotton.png";
+import minusButtonImg from "@/src/assets/logo/minusBotton.png";
+import plusButtonImg from "@/src/assets/logo/plusBotton.png";
 
 type PanelMode = "purchase" | "cancel";
 
@@ -66,13 +71,30 @@ export default function BuyCardsPanel({
   const buttonDisabled = disabled || isSubmitting;
   const buttonClass = isCancelMode
     ? "w-full py-4 rounded-xl bg-red-600 text-white font-bold text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-98 transition-transform"
-    : "w-full py-4 rounded-xl bg-[#32cd32] text-[#006400] font-bold text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-98 transition-transform";
+    : "w-full py-4 rounded-xl bg-transparent text-[#006400] font-bold text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-98 transition-transform";
+  const purchaseButtonStyle = !isCancelMode
+    ? {
+        backgroundImage: `url(${buyCardButtonBg.src})`,
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "center",
+        backgroundSize: "100% 100%",
+      }
+    : undefined;
   const ctaLabel = isCancelMode
     ? actionLabel || "لغو رزرو"
     : `تایید ${totalPrice.toLocaleString("en-US")} تومن`;
 
   return (
-    <div className="bg-[#151A26] border border-[rgba(95,89,89,1)] rounded-2xl p-3 space-y-4">
+    <div
+      className="border border-transparent rounded-2xl p-3 space-y-4"
+      style={{
+        backgroundImage: `url(${ticktBuyBg.src})`,
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "center",
+        backgroundSize: "100% 100%",
+        backgroundColor: "#151A26",
+      }}
+    >
       <div className="flex items-center justify-between gap-4">
         <div className="inline-flex flex-col items-center rounded-full border border-gray-600 px-3 py-1 text-white">
           <span className="text-xs leading-tight">حداکثر خرید</span>
@@ -85,20 +107,10 @@ export default function BuyCardsPanel({
           <button
             onClick={handleDecrease}
             disabled={quantity <= minQuantity || controlsDisabled}
-            className="w-12 h-12 rounded-full bg-red-500 flex items-center justify-center shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-transform"
+            aria-label="کاهش"
+            className="w-12 h-12 rounded-full bg-transparent p-0 flex items-center justify-center shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-transform overflow-hidden"
           >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="white"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
+            <Image src={minusButtonImg} alt="" width={48} height={48} priority={false} />
           </button>
 
           <span className="text-white text-3xl font-semibold min-w-[60px] text-center">
@@ -108,26 +120,20 @@ export default function BuyCardsPanel({
           <button
             onClick={handleIncrease}
             disabled={quantity >= maxQuantity || controlsDisabled}
-            className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-transform"
+            aria-label="افزایش"
+            className="w-12 h-12 rounded-full bg-transparent p-0 flex items-center justify-center shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-transform overflow-hidden"
           >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="white"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
+            <Image src={plusButtonImg} alt="" width={48} height={48} priority={false} />
           </button>
         </div>
       </div>
 
-      <button onClick={handleConfirm} disabled={buttonDisabled} className={buttonClass}>
+      <button
+        onClick={handleConfirm}
+        disabled={buttonDisabled}
+        className={buttonClass}
+        style={purchaseButtonStyle}
+      >
         {isSubmitting ? (
           <span className="flex items-center justify-center gap-2">
             <svg

@@ -1,3 +1,6 @@
+import loginBg from "@/src/assets/logo/login_BG.png";
+import bg002 from "@/src/assets/logo/BG002.png";
+
 export type Winner = {
   id: string;
   avatarUrl: string;
@@ -11,7 +14,7 @@ interface WinnerRowProps {
 
 function WinnerRow({ winner }: WinnerRowProps) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl bg-[#2A3242] px-4 py-3">
+    <div className="flex items-center gap-3 rounded-2xl bg-black/60 border border-[rgba(101,79,150,1)] px-4 py-3">
       <div className="flex h-12 w-12 flex-none items-center justify-center overflow-hidden rounded-full bg-[#1f2735] border border-[#3a4356]">
         {winner.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -46,7 +49,16 @@ interface WinnersSectionProps {
 
 function WinnersSection({ title, winners }: WinnersSectionProps) {
   return (
-    <div className="rounded-3xl bg-[#1f2735] border border-[#2f3849] px-4 py-4 space-y-3">
+    <div
+      className="rounded-3xl px-4 py-4 space-y-3"
+      style={{
+        backgroundImage: `url(${bg002.src})`,
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "center center",
+        backgroundSize: "100% 100%",
+        backgroundColor: "#1f2735",
+      }}
+    >
       <div className="flex items-center justify-center gap-2 text-[#fbbf24] text-base font-semibold">
         <span>🏆</span>
         <span>{title}</span>
@@ -92,7 +104,16 @@ export default function GameResultsDialog({
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 px-4">
-      <div className="w-full max-w-md rounded-3xl bg-[#0f1720] p-5 shadow-2xl border border-[#1f2837] text-white space-y-4">
+      <div
+        className="w-full max-w-md rounded-3xl p-5 shadow-2xl border border-[#1f2837] text-white space-y-4"
+        style={{
+          backgroundImage: `url(${loginBg.src})`,
+          backgroundRepeat: "no-repeat",
+          backgroundPosition: "center center",
+          backgroundSize: "100% 100%",
+          backgroundColor: "#0f1720",
+        }}
+      >
         <div className="flex flex-col items-center text-center space-y-2">
           {isWinner && (
             <div className="flex items-center gap-2 text-lg font-bold text-[#fbbf24]">

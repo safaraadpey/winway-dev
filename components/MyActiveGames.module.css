@@ -2,7 +2,7 @@
 
 .container {
   width: 100%;
-  padding: 8px 1rem;
+  padding: 0 1rem;
   background-color: #0E0E0F;
   overflow-x: auto;
   overflow-y: hidden;
@@ -32,7 +32,10 @@
   padding: 8px 16px;
   min-width: fit-content;
   border-radius: 8px;
-  background: linear-gradient(90deg, #0f172a 0%, #111c2f 100%);
+  background-image: url("../src/assets/logo/MyActiveGame.png");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
   border: 2px solid rgba(237, 237, 237, 0);
   border-image: none;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
@@ -42,15 +45,16 @@
 }
 
 .chip:hover {
-  background: linear-gradient(90deg, #1e293b 0%, #1e3a5f 100%);
   border-color: rgba(237, 237, 237, 0);
   transform: translateY(-1px);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  filter: brightness(1.05);
 }
 
 .chip:active {
   transform: translateY(0);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  filter: brightness(0.98);
 }
 
 .chipText {

@@ -208,6 +208,12 @@ export default function MergedPlayerHeader({
       }
     : {};
 
+  // فقط کپسول Ding باید انیمیشن glow داشته باشد؛ کپسول Toman ثابت بماند
+  const dingCapsuleAnimate = capsuleAnimate;
+  const dingAmountAnimate = amountAnimate;
+  const tomanCapsuleAnimate = {};
+  const tomanAmountAnimate = {};
+
   return (
     <div className={styles.container}>
       {/* Row 1: Avatar + Player name (with header.png background) + Brand logo */}
@@ -233,7 +239,7 @@ export default function MergedPlayerHeader({
         {/* Toman Capsule */}
         <motion.div
           className={`${styles.balanceCapsule} ${styles.tomanBg}`}
-          animate={capsuleAnimate}
+          animate={tomanCapsuleAnimate}
           transition={{ duration: 0.8, ease: "easeInOut" }}
         >
           {loading ? (
@@ -241,7 +247,7 @@ export default function MergedPlayerHeader({
           ) : (
             <motion.span
               className={styles.balanceAmount}
-              animate={amountAnimate}
+              animate={tomanAmountAnimate}
               transition={{ duration: 0.8, ease: "easeInOut" }}
             >
               {formatBalance(tomanBalance)}
@@ -252,7 +258,7 @@ export default function MergedPlayerHeader({
         {/* Ding Capsule */}
         <motion.div
           className={`${styles.balanceCapsule} ${styles.dingBg}`}
-          animate={capsuleAnimate}
+          animate={dingCapsuleAnimate}
           transition={{ duration: 0.8, ease: "easeInOut" }}
         >
           {loading ? (
@@ -261,7 +267,7 @@ export default function MergedPlayerHeader({
             <>
               <motion.span
                 className={styles.balanceAmount}
-                animate={amountAnimate}
+                animate={dingAmountAnimate}
                 transition={{ duration: 0.8, ease: "easeInOut" }}
               >
                 {formatBalance(dingBalance)}

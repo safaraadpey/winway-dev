@@ -713,7 +713,7 @@ export default function GameRoomScreen({ roomId, templateId }: GameRoomScreenPro
 
   return (
     <div className="overflow-hidden bg-[#0E0E0F] min-h-screen">
-      <div className="px-4 space-y-1 pt-4">
+      <div className="px-4 space-y-1 pt-2">
         {/* پنل انتخاب کارت */}
         <BuyCardsPanel
           price={roomInfo.cardPrice}

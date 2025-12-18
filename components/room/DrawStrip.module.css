@@ -4,8 +4,12 @@
   align-items: flex-end;
   gap: 12px;
   padding: 12px 16px;
-  background: #161b28;
-  border: 1px solid #393D48;
+  background-image: url("../../src/assets/logo/BG002.png");
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: 100% 100%;
+  background-color: #161b28;
+  border: 1px solid transparent;
   border-radius: 16px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   margin-top: 0;

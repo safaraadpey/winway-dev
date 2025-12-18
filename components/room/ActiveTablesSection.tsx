@@ -3,6 +3,7 @@
 import React from "react";
 import ActiveTableRow from "@/components/ActiveTableRow";
 import { ActiveTable } from "@/components/ActiveTablesPanel";
+import activeCardsBg from "@/src/assets/logo/ActiveCardsBG.png";
 
 interface ActiveTablesSectionProps {
   title?: string;
@@ -21,7 +22,16 @@ export default function ActiveTablesSection({
   const maxHeight = "146px"; // 3.5 rows based on existing spacing
 
   return (
-    <div className="space-y-3 bg-[#171A26] border border-[rgba(115,118,135,1)] rounded-lg p-3 mt-3">
+    <div
+      className="space-y-3 border border-transparent rounded-lg px-3 pt-[4px] pb-[6px] mt-[9px] min-h-[200px]"
+      style={{
+        backgroundImage: `url(${activeCardsBg.src})`,
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "center",
+        backgroundSize: "100% 100%",
+        backgroundColor: "#171A26",
+      }}
+    >
       <h3 className="text-green-400 font-semibold text-base text-center">
         {title}
       </h3>
