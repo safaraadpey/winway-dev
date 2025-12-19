@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { loadManagedUsers } from "@/services/users";
 import {
   adjustWalletForUsersBulk,
+  transferWalletForUsersBulk,
   loadTransactionHistory,
 } from "@/services/transactions";
 import { supabase } from "@/lib/supabaseClient";
+import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import type {
   ManagedUserRoleFilter,
   ManagedUserSummary,
@@ -259,6 +261,7 @@ async function fetchTotalBalances(): Promise<{
 }
 
 export default function TransactionsManager({ pageTitle }: TransactionsManagerProps) {
+  const { refreshWalletBalances } = useBalancesContext();
   const [tab, setTab] = useState<TabMode>("cashdesk");
   const [users, setUsers] = useState<ManagedUserSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -464,7 +467,7 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
 
     try {
       setSubmitting(true);
-      await adjustWalletForUsersBulk({
+      await transferWalletForUsersBulk({
         userIds: Array.from(selectedIds),
         amount: parsedAmount,
         action,
@@ -476,6 +479,14 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
           ? "واریز با موفقیت انجام شد"
           : "برداشت با موفقیت انجام شد"
       );
+
+      // Important: update the actor's own wallet balance shown in the header immediately.
+      // Relying only on realtime can feel delayed/unreliable.
+      try {
+        await refreshWalletBalances?.();
+      } catch (err) {
+        console.warn("[TransactionsManager] refreshWalletBalances failed", err);
+      }
 
       // بعد از موفقیت، لیست را دوباره بارگذاری می‌کنیم
       const result = await loadManagedUsers({ roleFilter, search });

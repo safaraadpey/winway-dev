@@ -95,6 +95,7 @@ export function useBalances(): Balances {
   // Refs برای مدیریت mount و hydration
   const isMountedRef = useRef<boolean>(false);
   const hasHydratedRef = useRef<boolean>(false);
+  const walletChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const balanceUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -215,8 +216,6 @@ export function useBalances(): Balances {
   }, []);
 
   useEffect(() => {
-    let walletChannel: ReturnType<typeof supabase.channel> | null = null;
-
     async function fetchBalances() {
       try {
         console.log('[useBalances] fetchBalances started');
@@ -239,21 +238,10 @@ export function useBalances(): Balances {
 
         console.log('[useBalances] User found:', user.id);
 
-        // مرحله 1: دریافت موجودی Ding اولیه (hydration)
-        // منبع: API (نه realtime)
-        const ding = (await fetchDingBalanceFromApi()).balance ?? (await getMyDingBalance());
-        console.log('[useBalances] Initial ding balance fetched:', ding);
-        
-        if (isMountedRef.current) {
-          setDingBalance(ding);
-          currentBalanceRef.current = ding;
-          hasHydratedRef.current = true;
-          console.log('[useBalances] ✅ Hydration complete, hasHydratedRef.current = true, balance:', ding);
-        }
-        // مرحله 2: realtime برای ding_balances حذف شده است؛
-        // DingBalance فقط با API و از روی draw sync می‌شود.
+        // NOTE: Admin/Super/Agent ممکن است به ding-balance endpoint دسترسی نداشته باشند.
+        // بنابراین failure در Ding نباید مانع دریافت موجودی تومان (wallets) شود.
 
-        // دریافت موجودی تومان از wallets
+        // مرحله 1: دریافت موجودی تومان از wallets (IRR)
         const { data: walletData, error: walletError } = await supabase
           .from('wallets')
           .select('balance, locked_amount')
@@ -276,15 +264,46 @@ export function useBalances(): Balances {
           }
         } else {
           if (isMountedRef.current) {
-            const balance = walletData?.balance || 0;
-            const locked = walletData?.locked_amount || 0;
+            const balance = Number((walletData as any)?.balance ?? 0) || 0;
+            const locked = Number((walletData as any)?.locked_amount ?? 0) || 0;
             setTomanBalance(balance);
             setLockedTomanBalance(locked);
           }
         }
 
+        // مرحله 2: دریافت موجودی Ding اولیه (hydration) - best effort
+        try {
+          const ding =
+            (await fetchDingBalanceFromApi()).balance ?? (await getMyDingBalance());
+          console.log('[useBalances] Initial ding balance fetched:', ding);
+
+          if (isMountedRef.current) {
+            setDingBalance(ding);
+            currentBalanceRef.current = ding;
+            hasHydratedRef.current = true;
+            console.log(
+              '[useBalances] ✅ Hydration complete, hasHydratedRef.current = true, balance:',
+              ding
+            );
+          }
+        } catch (dingErr) {
+          console.warn('[useBalances] Ding hydration skipped (non-fatal):', dingErr);
+          if (isMountedRef.current) {
+            // keep dingBalance as-is (default 0), but do not fail overall balances
+            hasHydratedRef.current = true;
+          }
+        }
+
+        // مرحله 3: realtime برای ding_balances حذف شده است؛
+        // DingBalance فقط با API و از روی draw sync می‌شود.
+
         // Subscribe به تغییرات wallet balance
-        walletChannel = supabase
+        if (walletChannelRef.current) {
+          supabase.removeChannel(walletChannelRef.current);
+          walletChannelRef.current = null;
+        }
+
+        walletChannelRef.current = supabase
           .channel(`wallet_balance_changes_${user.id}`)
           .on(
             'postgres_changes',
@@ -296,9 +315,9 @@ export function useBalances(): Balances {
             },
             (payload) => {
               if (isMountedRef.current) {
-                const newBalance = payload.new.balance as number;
-                const locked = (payload.new as any).locked_amount || 0;
-                setTomanBalance(newBalance || 0);
+                const newBalance = Number((payload.new as any)?.balance ?? 0) || 0;
+                const locked = Number((payload.new as any)?.locked_amount ?? 0) || 0;
+                setTomanBalance(newBalance);
                 setLockedTomanBalance(locked);
               }
             }
@@ -319,13 +338,45 @@ export function useBalances(): Balances {
       }
     }
 
+    // Initial fetch (might be unauthenticated on login page; auth listener below will refetch on sign-in)
     fetchBalances();
+
+    // Critical: refetch balances when auth state becomes available (first login / first navigation)
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (!isMountedRef.current) return;
+
+      if (
+        event === "INITIAL_SESSION" ||
+        event === "SIGNED_IN" ||
+        event === "TOKEN_REFRESHED" ||
+        event === "USER_UPDATED"
+      ) {
+        void fetchBalances();
+      }
+
+      if (event === "SIGNED_OUT") {
+        setDingBalance(0);
+        setTomanBalance(0);
+        setLockedTomanBalance(0);
+        setLoading(false);
+        setError(null);
+        hasHydratedRef.current = false;
+        currentBalanceRef.current = 0;
+
+        if (walletChannelRef.current) {
+          supabase.removeChannel(walletChannelRef.current);
+          walletChannelRef.current = null;
+        }
+      }
+    });
 
     return () => {
       console.log('[useBalances] Cleanup: unsubscribing and removing channels');
-      if (walletChannel) {
-        supabase.removeChannel(walletChannel);
+      if (walletChannelRef.current) {
+        supabase.removeChannel(walletChannelRef.current);
+        walletChannelRef.current = null;
       }
+      data?.subscription?.unsubscribe();
       if (pendingTimerRef.current) {
         clearTimeout(pendingTimerRef.current);
         pendingTimerRef.current = null;
