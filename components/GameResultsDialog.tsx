@@ -70,8 +70,8 @@ function WinnersSection({ title, winners }: WinnersSectionProps) {
         </div>
       ) : (
         <div className="space-y-3">
-          {winners.map((w) => (
-            <WinnerRow key={w.id} winner={w} />
+          {winners.map((w, idx) => (
+            <WinnerRow key={`${w.id}-${idx}`} winner={w} />
           ))}
         </div>
       )}
