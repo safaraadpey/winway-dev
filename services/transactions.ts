@@ -5,6 +5,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import type {
   BulkAdjustRequest,
+  BulkTransferRequest,
   TransactionAction,
   TransactionHistoryItem,
   TransactionHistoryResult,
@@ -97,6 +98,100 @@ export async function adjustWalletForUsersBulk(req: BulkAdjustRequest): Promise<
     console.warn('[adjustWalletForUsersBulk] Unexpected response format:', result)
     // اگر هیچ خطایی نیست، احتمالاً موفق است
     // اما برای اطمینان، بررسی می‌کنیم
+  }
+}
+
+/**
+ * انتقال دوطرفه (اتومیک) بین wallet های actor و پایین‌دستی (فقط IRR).
+ *
+ * این تابع فقط route جدید را صدا می‌زند و مسیر قدیمی adjust را دست نمی‌زند.
+ */
+export async function transferWalletForUsersBulk(
+  req: BulkTransferRequest
+): Promise<void> {
+  const { userIds, amount, action, currency = "IRR", description } = req;
+
+  if (!userIds || userIds.length === 0) {
+    throw new Error("هیچ کاربری انتخاب نشده است");
+  }
+
+  if (!amount || amount <= 0) {
+    throw new Error("مبلغ باید بزرگ‌تر از صفر باشد");
+  }
+
+  if (!Number.isInteger(amount)) {
+    throw new Error("مبلغ باید عدد صحیح باشد");
+  }
+
+  if (currency !== "IRR") {
+    throw new Error("فقط IRR پشتیبانی می‌شود");
+  }
+
+  if (action !== "deposit" && action !== "withdraw") {
+    throw new Error("نوع تراکنش نامعتبر است");
+  }
+
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+  if (sessionError || !session) {
+    throw new Error("خطا در احراز هویت - لطفاً دوباره وارد شوید");
+  }
+
+  const response = await fetch("/api/admin/wallet/transfer", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      userIds,
+      amount,
+      action,
+      currency: "IRR",
+      description,
+    }),
+  });
+
+  if (!response.ok) {
+    let errorData: any;
+    try {
+      errorData = await response.json();
+    } catch (parseError) {
+      console.error(
+        "[transferWalletForUsersBulk] Failed to parse error response:",
+        parseError
+      );
+      throw new Error(`خطا در ارتباط با سرور (کد: ${response.status})`);
+    }
+
+    console.error("[transferWalletForUsersBulk] API error response:", errorData);
+    if (errorData.ok === false) {
+      throw new Error(
+        errorData.message || errorData.error || "خطا در انجام انتقال"
+      );
+    }
+    throw new Error(
+      errorData.error ||
+        errorData.message ||
+        `خطا در انجام انتقال (کد: ${response.status})`
+    );
+  }
+
+  let result: any;
+  try {
+    result = await response.json();
+  } catch (parseError) {
+    console.error(
+      "[transferWalletForUsersBulk] Failed to parse success response:",
+      parseError
+    );
+    throw new Error("خطا در خواندن پاسخ سرور");
+  }
+
+  if (result.ok === false || result.success === false) {
+    throw new Error(result.message || result.error || "خطا در انجام انتقال");
   }
 }
 

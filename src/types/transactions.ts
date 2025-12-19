@@ -2,6 +2,15 @@
 
 export type TransactionAction = "deposit" | "withdraw";
 
+// Two-sided transfer (panel cashdesk) request type
+export interface BulkTransferRequest {
+  userIds: string[];
+  amount: number; // integer (IRR)
+  action: TransactionAction; // deposit/withdraw UI action
+  currency?: "IRR";
+  description?: string;
+}
+
 export interface BulkAdjustRequest {
   userIds: string[];
   amount: number;

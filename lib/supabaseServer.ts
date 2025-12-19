@@ -164,6 +164,108 @@ export async function getUserFromRequest(
 }
 
 /**
+ * Extracts and verifies the Bearer access token and returns the verified user + token.
+ * IMPORTANT: This guarantees a single identity: the returned token is the only token we should
+ * use for downstream user-scoped DB/RPC calls in that request.
+ */
+export async function getVerifiedUserAndTokenFromRequestOrThrow(request: Request): Promise<{
+  user: { id: string };
+  accessToken: string;
+}> {
+  const rawHeader =
+    request.headers.get("authorization") ?? request.headers.get("Authorization");
+
+  if (!rawHeader || !rawHeader.startsWith("Bearer ")) {
+    throw new Error("UNAUTHORIZED");
+  }
+
+  const accessToken = rawHeader.replace("Bearer ", "");
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("UNAUTHORIZED");
+  }
+
+  const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  const {
+    data: { user },
+    error,
+  } = await anonClient.auth.getUser(accessToken);
+
+  if (error || !user) {
+    throw new Error("UNAUTHORIZED");
+  }
+
+  return { user, accessToken };
+}
+
+/**
+ * Creates a user-scoped server Supabase client that uses the verified Bearer token
+ * as the only identity for DB operations (auth.uid() in Postgres will match).
+ */
+export function createUserClientFromAccessToken(accessToken: string) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  }
+
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  });
+}
+
+/**
+ * Single-identity admin context:
+ * - Verifies the Bearer token once
+ * - Uses service_role ONLY to read role metadata (never to execute user-scoped finance RPC)
+ * - Returns the verified user id, role, and the verified access token
+ */
+export async function getAdminJwtContextOrThrow(request: Request): Promise<{
+  user: { id: string };
+  adminUser: { id: string; role: string; admin_sub_role: string | null };
+  role: string;
+  adminSubRole: string | null;
+  accessToken: string;
+}> {
+  const { user, accessToken } = await getVerifiedUserAndTokenFromRequestOrThrow(
+    request
+  );
+
+  const adminInfo = await verifyAdminAccess(user.id);
+  if (!adminInfo) {
+    throw new Error("FORBIDDEN");
+  }
+
+  const allowedRoles = ["admin", "super", "agent"];
+  if (!allowedRoles.includes(adminInfo.user.role)) {
+    throw new Error("FORBIDDEN");
+  }
+
+  return {
+    user,
+    accessToken,
+    adminUser: adminInfo.user,
+    role: adminInfo.user.role,
+    adminSubRole: adminInfo.adminSubRole,
+  };
+}
+
+/**
  * Helper function برای استخراج session از request و بررسی admin بودن
  * از Authorization header (Bearer token) استفاده می‌کند
  * 
