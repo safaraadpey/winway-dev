@@ -449,11 +449,15 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
   const allSelected = totalUsers > 0 && selectedCount === totalUsers;
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value.replace(/[^0-9]/g, "");
-    setAmountInput(raw);
+    // Keep internal state as digits only; render with thousands separators.
+    const rawDigits = e.target.value.replace(/[^0-9]/g, "");
+    setAmountInput(rawDigits);
   };
 
   const parsedAmount = amountInput ? parseInt(amountInput, 10) : 0;
+  const formattedAmountValue = amountInput
+    ? Number(amountInput).toLocaleString("en-US")
+    : "";
 
   const handleAction = async (action: TransactionAction) => {
     if (selectedIds.size === 0) {
@@ -841,7 +845,7 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
-                  value={amountInput}
+                  value={formattedAmountValue}
                   onChange={handleAmountChange}
                   className="bg-transparent outline-none text-right text-sm font-mono text-white w-28"
                   placeholder="0"
