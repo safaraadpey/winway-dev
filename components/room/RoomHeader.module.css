@@ -1,15 +1,11 @@
 .container {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   padding: 8px 0;
-}
-
-.left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
 }
 
 .muteButton {
@@ -23,19 +19,15 @@
   font-size: 18px;
   color: #f3f4f6;
   border: 1px solid rgba(255, 255, 255, 0.08);
+  flex: 0 0 auto;
 }
 
-.roomName {
-  font-size: 14px;
-  font-weight: 600;
-  color: #e5e7eb;
-}
-
-.right {
+.prizes {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 8px;
-  align-items: flex-end;
+  align-items: center;
+  flex: 0 0 auto;
 }
 
 .prizeChip {
@@ -43,7 +35,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  min-width: 150px;
+  min-width: 145px;
   padding: 8px 12px;
   border-radius: 12px;
   background-image: url("../../src/assets/logo/lobbyInfo.png");
@@ -53,6 +45,8 @@
   background-color: #111c2f;
   border: 1px solid transparent;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .prizeValue {

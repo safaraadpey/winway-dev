@@ -2,8 +2,11 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import styles from "./MyActiveGames.module.css";
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
+import playPng from "../src/assets/logo/play.png";
+import hourglassPng from "../src/assets/logo/hourglass.png";
 
 /**
  * کامپوننت نمایش روم‌های فعال پلیر
@@ -28,28 +31,25 @@ export default function MyActiveGames() {
       case "live":
       case "playing":
         return (
-          <svg
+          <Image
+            src={playPng}
             className={styles.playIcon}
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path d="M8 5v14l11-7z" />
-          </svg>
+            alt="play"
+            width={24}
+            height={24}
+            priority={false}
+          />
         );
       case "waiting":
         return (
-          <svg
+          <Image
+            src={hourglassPng}
             className={styles.waitingIcon}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <path d="M12 6v6l4 2" />
-          </svg>
+            alt="waiting"
+            width={16}
+            height={16}
+            priority={false}
+          />
         );
       case "settling":
         return (

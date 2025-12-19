@@ -1,8 +1,10 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 import ActiveCardRow from "@/components/ActiveCardRow";
 import activeCardsBg from "@/src/assets/logo/ActiveCardsBG.png";
+import hourglassPng from "@/src/assets/logo/hourglass.png";
 
 export interface ActiveCardStatus {
   id: string;
@@ -48,19 +50,14 @@ export default function ActiveCardsStatus({
           <span className="text-green-500 font-medium text-[2.5rem]">
             {timerLabel}
           </span>
-          <svg
-            className="w-6 h-6 text-white"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
+          <Image
+            src={hourglassPng}
+            alt="hourglass"
+            width={24}
+            height={24}
+            className="w-6 h-6"
+            priority={false}
+          />
         </div>
 
         <span className="text-white text-sm font-medium">

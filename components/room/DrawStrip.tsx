@@ -2,6 +2,7 @@ import styles from "./DrawStrip.module.css";
 import { useEffect, useRef, useState } from "react";
 
 interface DrawStripProps {
+  roomName?: string;
   currentNumber: number | null;
   history: number[];
   /** مجموع اعداد قرعه‌کشی‌شده (برای نمایش 90/x) */
@@ -11,6 +12,7 @@ interface DrawStripProps {
 }
 
 export default function DrawStrip({
+  roomName,
   currentNumber,
   history,
   totalDraws,
@@ -52,6 +54,12 @@ export default function DrawStrip({
   return (
     <div className={styles.container}>
       <div className={styles.labelRow}>
+        {roomName && (
+          <span className={styles.roomBadge}>
+            <span className={`${styles.roomBadgeValue} latin-number`}>{roomName}</span>
+            <span className={styles.roomBadgeLabel}>شماره میز</span>
+          </span>
+        )}
         <span className={styles.label}>اعداد قبلی</span>
         <span className={`${styles.badge} latin-number`}>90/{drawsCount}</span>
       </div>

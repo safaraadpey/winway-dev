@@ -103,7 +103,7 @@ export default function BuyCardsPanel({
           </span>
         </div>
 
-        <div className="bg-[#111111] rounded-full px-1 py-1 flex items-center justify-center gap-4 border border-gray-600">
+        <div className="bg-[#111111]/60 rounded-full px-1 py-1 flex items-center justify-center gap-4 border border-gray-600">
           <button
             onClick={handleDecrease}
             disabled={quantity <= minQuantity || controlsDisabled}

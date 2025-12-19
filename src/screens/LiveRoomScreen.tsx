@@ -438,13 +438,13 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     <div className="min-h-screen bg-[#0E0E0F] text-white overflow-y-auto pb-10">
       <div className="max-w-3xl mx-auto px-4 pt-6 space-y-4">
         <RoomHeader
-          roomName={roomName}
           linePrize={linePrize}
           fullPrize={fullPrize}
           isMuted={false}
         />
 
         <DrawStrip
+          roomName={roomName}
           currentNumber={latestNumber ?? null}
           history={previousNumbers}
           totalDraws={calledNumbers.length}

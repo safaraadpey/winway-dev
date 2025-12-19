@@ -43,6 +43,29 @@
   line-height: 1;
 }
 
+.roomBadge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #253046;
+  border: 1px solid #2e3a4f;
+  color: #e5e7eb;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1;
+}
+
+.roomBadgeLabel {
+  font-weight: 700;
+}
+
+.roomBadgeValue {
+  font-weight: 400;
+}
+
 .current {
   width: 64px;
   height: 64px;
