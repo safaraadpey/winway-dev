@@ -618,6 +618,7 @@ export interface LiveRoomSnapshot {
     id: string;
     status: string | null;
     room_code: string | null;
+    room_seed_hash?: string | null;
     card_price: number;
     currency: string;
     min_players: number | null;
@@ -674,6 +675,8 @@ export type Winner = {
 export type RoomResultsResponse = {
   lineWinners: Winner[];
   fullWinners: Winner[];
+  seed: string | null;
+  commitHash: string | null;
 };
 
 export async function fetchRoomResults(

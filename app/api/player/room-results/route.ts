@@ -11,6 +11,8 @@ type Winner = {
 type RoomResultsResponse = {
   lineWinners: Winner[];
   fullWinners: Winner[];
+  seed: string | null;
+  commitHash: string | null;
 };
 
 export async function GET(request: NextRequest) {
@@ -97,9 +99,24 @@ export async function GET(request: NextRequest) {
       .filter((r) => r.win_type === "full")
       .map(mapWinner);
 
+    // As requested: show BOTH room_seed and room_seed_hash without enforcing "finished-only" reveal.
+    // (Service role is used here; this intentionally bypasses the security gating RPC.)
+    const { data: roomRow, error: roomError } = await supabase
+      .from("rooms")
+      .select("room_seed, room_seed_hash")
+      .eq("id", roomId)
+      .maybeSingle();
+    if (roomError) {
+      console.error("room-results room fetch error:", roomError);
+    }
+    const seed: string | null = (roomRow as any)?.room_seed ?? null;
+    const commitHash: string | null = (roomRow as any)?.room_seed_hash ?? null;
+
     const payload: RoomResultsResponse = {
       lineWinners,
       fullWinners,
+      seed,
+      commitHash,
     };
 
     return NextResponse.json(payload);

@@ -446,13 +446,17 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   const linePrize = roundToCurrency(totalPool * linePct);
   const fullPrize = roundToCurrency(Math.max(totalPool - linePrize, 0));
   const roomName = data.room.room_code || `اتاق ${data.room.card_price}`;
+  const roomCommitHash = (data.room as any)?.room_seed_hash ?? null;
   const orderedCards = [...data.cards].sort(
     (a, b) => Number(b.is_my_card) - Number(a.is_my_card)
   );
 
   return (
-    <div className="min-h-screen bg-black/40 text-white overflow-y-auto pb-10">
-      <div className="max-w-3xl mx-auto px-4 pt-6 space-y-4">
+    <div
+      className="min-h-screen bg-black/40 text-white overflow-hidden"
+      style={{ height: "100dvh" }}
+    >
+      <div className="max-w-3xl mx-auto px-4 pt-6 flex flex-col h-full gap-1">
         <RoomHeader
           linePrize={linePrize}
           fullPrize={fullPrize}
@@ -461,6 +465,8 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
 
         <DrawStrip
           roomName={roomName}
+          showRoomBadge={false}
+          commitHash={roomCommitHash}
           currentNumber={latestNumber ?? null}
           history={previousNumbers}
           totalDraws={calledNumbers.length}
@@ -473,10 +479,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
           </div>
         )}
 
-        <div
-          className="space-y-2 overflow-y-auto pr-1"
-          style={{ maxHeight: "70vh" }}
-        >
+        <div className="space-y-2 pr-1 flex-1 overflow-y-auto pb-10 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           {orderedCards.map((card) => (
             <div key={card.ticket_id} className="bg-transparent rounded-3xl">
               <BingoCardDemo
@@ -501,6 +504,16 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
           setShowResultsDialog(false);
           router.push("/player/lobby");
         }}
+        title={
+          <span dir="rtl">
+            نتیجه بازی شماره :{" "}
+            <span dir="ltr" className="latin-number">
+              {roomName}
+            </span>
+          </span>
+        }
+        proofSeed={(results as any)?.seed ?? null}
+        proofCommitHash={(results as any)?.commitHash ?? null}
         currentUserId={currentUserId}
         lineWinners={results?.lineWinners ?? []}
         fullWinners={results?.fullWinners ?? []}

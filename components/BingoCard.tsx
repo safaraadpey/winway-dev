@@ -6,6 +6,7 @@ import useSound from 'use-sound';
 import Confetti from 'react-confetti';
 import Image from 'next/image';
 import dingCoinIcon from '@/src/assets/icons/ding-coin.png';
+import logoWatermark from "@/src/assets/logo/logo.webp";
 import styles from './BingoCard.module.css';
 import { getAlmostCompleteRowNumber, getAlmostCompleteCardNumber, getCompleteRows } from '@/lib/bingo-logic';
 
@@ -397,6 +398,11 @@ export default function BingoCard({
       <div className={styles.outer}>
         {/* Wrapper با بکگراند اصلی کارت */}
         <div className={styles.wrapper}>
+          <div
+            className={styles.watermark}
+            aria-hidden="true"
+            style={{ backgroundImage: `url(${logoWatermark.src})` }}
+          />
           {/* Header: نام کاربر و شماره کارت */}
           <div className={styles.header}>
             <div className={`${styles.headerLabel} ${labelSizeClass}`}>

@@ -3,6 +3,7 @@ import bg002 from "@/src/assets/logo/BG002.png";
 import buyCardButtonBg from "@/src/assets/logo/BuyCardBotton.png";
 import ingameLogo from "@/src/assets/logo/ingamelogo.png";
 import Image from "next/image";
+import React from "react";
 
 export type Winner = {
   id: string;
@@ -104,7 +105,9 @@ interface GameResultsDialogProps {
   currentUserId: string | null;
   lineWinners: Winner[];
   fullWinners: Winner[];
-  title?: string;
+  title?: React.ReactNode;
+  proofSeed?: string | null;
+  proofCommitHash?: string | null;
   primaryActionLabel?: string;
   onPrimaryAction?: () => void;
 }
@@ -116,6 +119,8 @@ export default function GameResultsDialog({
   lineWinners,
   fullWinners,
   title,
+  proofSeed,
+  proofCommitHash,
   primaryActionLabel,
   onPrimaryAction,
 }: GameResultsDialogProps) {
@@ -126,6 +131,51 @@ export default function GameResultsDialog({
       (lineWinners.some((w) => w.id === currentUserId) ||
         fullWinners.some((w) => w.id === currentUserId))) ||
     false;
+
+  const seedRaw = proofSeed ? String(proofSeed) : null;
+  const seedHex = seedRaw
+    ? seedRaw.startsWith("\\x")
+      ? seedRaw.slice(2)
+      : seedRaw
+    : null;
+
+  const commitRaw = proofCommitHash ? String(proofCommitHash) : null;
+
+  const proofFull =
+    seedHex && commitRaw
+      ? `${seedHex}|${commitRaw}`
+      : commitRaw
+        ? commitRaw
+        : null;
+
+  const proofDisplay =
+    seedHex && commitRaw
+      ? `${seedHex.slice(0, 6)}...${seedHex.slice(-6)}|${commitRaw.slice(0, 4)}...${commitRaw.slice(-4)}`
+      : commitRaw
+        ? `${commitRaw.slice(0, 6)}...${commitRaw.slice(-6)}`
+        : null;
+
+  const copyProof = async () => {
+    if (!proofFull) return;
+    try {
+      await navigator.clipboard.writeText(proofFull);
+    } catch {
+      // fallback
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = proofFull;
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      } catch {
+        // ignore
+      }
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 px-4">
@@ -140,29 +190,40 @@ export default function GameResultsDialog({
         }}
       >
         <div className="flex flex-col items-center text-center space-y-2">
-          {isWinner && (
-            <div className="flex items-center gap-2 text-lg font-bold">
-              <span
-                style={{
-                  color: "rgba(254, 238, 180, 1)",
-                  textShadow: "0 1px 0 rgba(0, 0, 0, 0.6)",
-                }}
-              >
-                🏆 تبریک 🏆
+          <Image
+            src={ingameLogo}
+            alt="ingame logo"
+            width={220}
+            height={100}
+            style={{ height: 100, width: "auto" }}
+            priority={false}
+          />
+          <div
+            className="text-[14px] font-extrabold max-w-full truncate"
+            style={{
+              unicodeBidi: "plaintext",
+              color: "rgba(254, 238, 180, 1)",
+              textShadow: "0 1px 0 rgba(0, 0, 0, 0.6)",
+            }}
+          >
+            {title ?? "بازی تمام شد!"}
+          </div>
+
+          {proofDisplay && (
+            <div className="w-full flex items-center justify-center gap-2 text-[12px]">
+              <span className="text-white/70">seed|commit</span>
+              <span dir="ltr" className="latin-number text-white/90">
+                {proofDisplay}
               </span>
+              <button
+                type="button"
+                onClick={copyProof}
+                className="rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-white/90 active:opacity-80"
+              >
+                کپی
+              </button>
             </div>
           )}
-          {isWinner && (
-            <Image
-              src={ingameLogo}
-              alt="ingame logo"
-              width={220}
-              height={100}
-              style={{ height: 100, width: "auto" }}
-              priority={false}
-            />
-          )}
-          <div className="text-xl font-extrabold">{title ?? "بازی تمام شد!"}</div>
         </div>
 
         <div className="space-y-4">

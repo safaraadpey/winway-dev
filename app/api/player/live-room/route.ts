@@ -6,6 +6,7 @@ type LiveRoomResponse = {
     id: string;
     status: string | null;
     room_code: string | null;
+    room_seed_hash: string | null;
     card_price: number;
     currency: string;
     min_players: number | null;
@@ -58,6 +59,7 @@ export async function GET(request: Request) {
         id,
         status,
         room_code,
+        room_seed_hash,
         card_price,
         currency,
         min_players,
@@ -248,6 +250,7 @@ export async function GET(request: Request) {
         id: room.id,
         status: room.status,
         room_code: room.room_code,
+        room_seed_hash: (room as any)?.room_seed_hash ?? null,
         card_price: Number(room.card_price || 0),
         currency: room.currency || "IRR",
         min_players: room.min_players,

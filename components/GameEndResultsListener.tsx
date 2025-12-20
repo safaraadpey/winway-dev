@@ -316,7 +316,18 @@ export default function GameEndResultsListener() {
         currentUserId={currentUserId}
         lineWinners={results?.lineWinners ?? []}
         fullWinners={results?.fullWinners ?? []}
-        title={dialogRoomName ? `نتیجه بازی ${dialogRoomName}` : undefined}
+        title={
+          dialogRoomName ? (
+            <span dir="rtl">
+              نتیجه بازی شماره :{" "}
+              <span dir="ltr" className="latin-number">
+                {dialogRoomName}
+              </span>
+            </span>
+          ) : undefined
+        }
+        proofSeed={(results as any)?.seed ?? null}
+        proofCommitHash={(results as any)?.commitHash ?? null}
       />
     </>
   );

@@ -31,6 +31,20 @@
   padding: calc(4px * var(--card-scale));
   width: 100%;
   box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+}
+
+.watermark {
+  position: absolute;
+  inset: 0;
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: contain;
+  opacity: 0.23;
+  pointer-events: none;
+  z-index: 2;
+  mix-blend-mode: multiply;
 }
 
 .outer {
@@ -51,6 +65,8 @@
   padding-left: calc(var(--base-padding) * var(--card-scale));
   padding-right: calc(var(--base-padding) * var(--card-scale));
   margin-bottom: calc(0.5rem * var(--card-scale));
+  position: relative;
+  z-index: 1;
 }
 
 .headerLabel {
@@ -85,6 +101,7 @@
   /* اجازه می‌دهد سکه از grid بیرون بزند */
   overflow: visible;
   box-sizing: border-box;
+  z-index: 1;
 }
 
 /* cardGridLarge و cardGridSmall کلاس‌های placeholder هستند */
