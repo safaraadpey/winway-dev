@@ -1,6 +1,7 @@
 .lobbyContainer {
   min-height: 100vh;
-  background-color: #0E0E0F;
+  /* Let the shared /player layout background show through */
+  background-color: rgba(14, 14, 15, 0.55);
   padding: 0 1rem;
   padding-top: 0px;
   padding-bottom: 0px;

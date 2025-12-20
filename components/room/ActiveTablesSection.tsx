@@ -51,7 +51,7 @@ export default function ActiveTablesSection({
             />
           ))
         ) : (
-          <div className="bg-amber-50 rounded-lg px-4 py-8 text-center text-gray-500">
+          <div className="bg-amber-50 rounded-lg px-4 py-0 h-[50px] flex items-center justify-center text-center text-gray-500">
             {emptyMessage}
           </div>
         )}

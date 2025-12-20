@@ -11,6 +11,11 @@ import BingoCardDemo from "@/components/BingoCardDemo";
 import RoomHeader from "@/components/room/RoomHeader";
 import DrawStrip from "@/components/room/DrawStrip";
 import GameResultsDialog from "@/components/GameResultsDialog";
+import {
+  buildGameResultsKey,
+  hasSeenGameResults,
+  markSeenGameResults,
+} from "@/lib/gameResultsDedupe";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
@@ -344,6 +349,17 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     if (resultsRequested) return;
 
     console.log("[LiveRoom] room finished with status:", status);
+    // Dedup across the app: if a global listener already handled this room's result popup,
+    // avoid double overlay here.
+    const roomName = data?.room?.room_code || `اتاق ${data?.room?.card_price ?? ""}`;
+    // Treat settling/finished as a single end-state (prevents duplicate popups).
+    // Rely on short-term uniqueness of roomName to keep the key stable.
+    const key = buildGameResultsKey({ roomName, status: "finished", finishedAtHint: null });
+    if (hasSeenGameResults(key)) {
+      setResultsRequested(true);
+      return;
+    }
+    markSeenGameResults(key);
     setResultsRequested(true);
 
     fetchRoomResults(roomId)
@@ -362,7 +378,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
 
   if (loading && !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0E0E0F] text-white">
+      <div className="min-h-screen flex items-center justify-center bg-black/40 text-white">
         در حال بارگذاری بازی زنده...
       </div>
     );
@@ -370,7 +386,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
 
   if (error && !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0E0E0F] text-white">
+      <div className="min-h-screen flex items-center justify-center bg-black/40 text-white">
         {error}
       </div>
     );
@@ -435,7 +451,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   );
 
   return (
-    <div className="min-h-screen bg-[#0E0E0F] text-white overflow-y-auto pb-10">
+    <div className="min-h-screen bg-black/40 text-white overflow-y-auto pb-10">
       <div className="max-w-3xl mx-auto px-4 pt-6 space-y-4">
         <RoomHeader
           linePrize={linePrize}

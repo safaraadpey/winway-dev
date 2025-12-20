@@ -1,5 +1,8 @@
 import loginBg from "@/src/assets/logo/login_BG.png";
 import bg002 from "@/src/assets/logo/BG002.png";
+import buyCardButtonBg from "@/src/assets/logo/BuyCardBotton.png";
+import ingameLogo from "@/src/assets/logo/ingamelogo.png";
+import Image from "next/image";
 
 export type Winner = {
   id: string;
@@ -14,7 +17,7 @@ interface WinnerRowProps {
 
 function WinnerRow({ winner }: WinnerRowProps) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl bg-black/60 border border-[rgba(101,79,150,1)] px-4 py-3">
+    <div className="flex items-center gap-3 rounded-2xl bg-black/60 border border-[rgba(101,79,150,1)] px-4 py-1 h-[39px] max-h-[40px]">
       <div className="flex h-12 w-12 flex-none items-center justify-center overflow-hidden rounded-full bg-[#1f2735] border border-[#3a4356]">
         {winner.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -43,14 +46,23 @@ function WinnerRow({ winner }: WinnerRowProps) {
 }
 
 interface WinnersSectionProps {
-  title: string;
+  kind: "line" | "full";
   winners: Winner[];
 }
 
-function WinnersSection({ title, winners }: WinnersSectionProps) {
+function WinnersSection({ kind, winners }: WinnersSectionProps) {
+  const title =
+    kind === "line"
+      ? winners.length === 1
+        ? "برنده خطی"
+        : "برندگان خطی"
+      : winners.length === 1
+        ? "برنده دبرنا"
+        : "برندگان دبرنا";
+
   return (
     <div
-      className="rounded-3xl px-4 py-4 space-y-3"
+      className="rounded-none px-4 py-4 space-y-3"
       style={{
         backgroundImage: `url(${bg002.src})`,
         backgroundRepeat: "no-repeat",
@@ -59,9 +71,16 @@ function WinnersSection({ title, winners }: WinnersSectionProps) {
         backgroundColor: "#1f2735",
       }}
     >
-      <div className="flex items-center justify-center gap-2 text-[#fbbf24] text-base font-semibold">
+      <div className="flex items-center justify-center gap-2 text-base font-semibold">
         <span>🏆</span>
-        <span>{title}</span>
+        <span
+          style={{
+            color: "rgba(254, 238, 180, 1)",
+            textShadow: "0 1px 0 rgba(0, 0, 0, 0.6)",
+          }}
+        >
+          {title}
+        </span>
         <span>🏆</span>
       </div>
       {winners.length === 0 ? (
@@ -85,6 +104,9 @@ interface GameResultsDialogProps {
   currentUserId: string | null;
   lineWinners: Winner[];
   fullWinners: Winner[];
+  title?: string;
+  primaryActionLabel?: string;
+  onPrimaryAction?: () => void;
 }
 
 export default function GameResultsDialog({
@@ -93,6 +115,9 @@ export default function GameResultsDialog({
   currentUserId,
   lineWinners,
   fullWinners,
+  title,
+  primaryActionLabel,
+  onPrimaryAction,
 }: GameResultsDialogProps) {
   if (!isOpen) return null;
 
@@ -116,25 +141,47 @@ export default function GameResultsDialog({
       >
         <div className="flex flex-col items-center text-center space-y-2">
           {isWinner && (
-            <div className="flex items-center gap-2 text-lg font-bold text-[#fbbf24]">
-              <span className="text-3xl">🏆</span>
-              <span>تبریک!</span>
+            <div className="flex items-center gap-2 text-lg font-bold">
+              <span
+                style={{
+                  color: "rgba(254, 238, 180, 1)",
+                  textShadow: "0 1px 0 rgba(0, 0, 0, 0.6)",
+                }}
+              >
+                🏆 تبریک 🏆
+              </span>
             </div>
           )}
-          <div className="text-xl font-extrabold">بازی تمام شد!</div>
+          {isWinner && (
+            <Image
+              src={ingameLogo}
+              alt="ingame logo"
+              width={220}
+              height={100}
+              style={{ height: 100, width: "auto" }}
+              priority={false}
+            />
+          )}
+          <div className="text-xl font-extrabold">{title ?? "بازی تمام شد!"}</div>
         </div>
 
         <div className="space-y-4">
-          <WinnersSection title="برندگان خطی" winners={lineWinners} />
-          <WinnersSection title="برنده کامل" winners={fullWinners} />
+          <WinnersSection kind="line" winners={lineWinners} />
+          <WinnersSection kind="full" winners={fullWinners} />
         </div>
 
         <button
           type="button"
-          onClick={onClose}
-          className="mt-2 w-full rounded-2xl bg-[#22c55e] py-3 text-center text-white font-bold shadow-lg active:opacity-90 transition"
+          onClick={onPrimaryAction ?? onClose}
+          className="mt-2 w-full rounded-2xl py-3 text-center text-white font-bold shadow-lg active:opacity-90 transition"
+          style={{
+            backgroundImage: `url(${buyCardButtonBg.src})`,
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "center center",
+            backgroundSize: "100% 100%",
+          }}
         >
-          بازگشت به لیست اتاق‌ها
+          {primaryActionLabel ?? "بازگشت به لیست اتاق‌ها"}
         </button>
       </div>
     </div>

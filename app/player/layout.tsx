@@ -20,7 +20,10 @@ export default function PlayerLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-[#0E0E0F]">
+    <div
+      className="min-h-screen bg-[#0E0E0F] bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: "url(/backgrounds/layout_BG.webp)" }}
+    >
       <HeaderVisibilityProvider>
         <ActiveGamesOrchestratorProvider>
           <ActiveGamesProvider>

@@ -3,6 +3,7 @@
 import React from "react";
 import { BalancesProvider } from "@/lib/contexts/BalancesContext";
 import { SessionProvider } from "@/lib/contexts/SessionContext";
+import GameEndResultsListener from "@/components/GameEndResultsListener";
 
 export default function GlobalUserStateClient({
   children,
@@ -11,7 +12,10 @@ export default function GlobalUserStateClient({
 }) {
   return (
     <SessionProvider>
-      <BalancesProvider>{children}</BalancesProvider>
+      <BalancesProvider>
+        {children}
+        <GameEndResultsListener />
+      </BalancesProvider>
     </SessionProvider>
   );
 }
