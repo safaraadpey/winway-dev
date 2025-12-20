@@ -288,7 +288,7 @@ function createOrchestrator(): ActiveGamesOrchestrator {
       }
     }
 
-    return { skip: false, reason: null as const, waitMs: 0 };
+    return { skip: false, reason: null, waitMs: 0 };
   };
 
   const scheduleRealtimeCooldownFlush = (localRunId: number) => {
