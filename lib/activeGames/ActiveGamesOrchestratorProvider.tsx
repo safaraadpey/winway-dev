@@ -8,14 +8,14 @@
  */
 
 import React, { type ReactNode, useEffect, useRef } from "react";
-import { createActiveGamesOrchestrator } from "@/lib/activeGames/ActiveGamesOrchestrator";
+import { getActiveGamesOrchestrator } from "@/lib/activeGames/ActiveGamesOrchestrator";
 
 export function ActiveGamesOrchestratorProvider({ children }: { children: ReactNode }) {
-  const orchestratorRef = useRef<ReturnType<typeof createActiveGamesOrchestrator> | null>(null);
+  const orchestratorRef = useRef<ReturnType<typeof getActiveGamesOrchestrator> | null>(null);
 
   useEffect(() => {
     if (!orchestratorRef.current) {
-      orchestratorRef.current = createActiveGamesOrchestrator();
+      orchestratorRef.current = getActiveGamesOrchestrator();
     }
 
     orchestratorRef.current.start();

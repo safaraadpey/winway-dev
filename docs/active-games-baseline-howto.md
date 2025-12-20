@@ -23,11 +23,14 @@
 ## گرفتن snapshot قابل کپی
 در console این را اجرا کنید:
 - `window.__activeGamesMetricsPrint("baseline-20s")`
+- اگر Phase C فعال است، snapshot orchestrator را هم بگیرید:
+  - `window.__activeGamesOrchestratorMetricsPrint("baseline-20s")`
 
 یا برای گرفتن object خام:
 - `window.__activeGamesMetrics()`
 
 برای صفر کردن شمارنده‌ها قبل از شروع سناریو:
 - `window.__activeGamesMetricsReset()`
+- (اختیاری) `window.__activeGamesOrchestratorMetricsReset()`
 
 
