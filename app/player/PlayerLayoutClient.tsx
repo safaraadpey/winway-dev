@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect } from 'react';
+import { usePathname } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import MergedPlayerHeader from "@/components/MergedPlayerHeader";
@@ -15,6 +16,7 @@ export default function PlayerLayoutClient({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
   const { showHeader, showBackButton, onBackClick } = useHeaderVisibility();
   const { dingBalance, tomanBalance, lockedTomanBalance, loading, isAnimating } = useBalancesContext();
 
@@ -34,6 +36,12 @@ export default function PlayerLayoutClient({
       isAnimating,
     });
   }, []);
+
+  // Dev-only lifecycle log for route transitions inside /player
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+    console.log("[ActiveGames][Lifecycle] route-change", { pathname });
+  }, [pathname]);
 
   useEffect(() => {
     console.log('[PlayerLayoutClient] Balance updated:', {

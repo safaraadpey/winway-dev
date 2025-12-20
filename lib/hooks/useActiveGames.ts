@@ -2,6 +2,11 @@
 
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabaseClient";
+import {
+  activeGamesMetrics,
+  installActiveGamesMetricsOnWindow,
+  type ActiveGamesFetchSource,
+} from "@/lib/metrics/activeGamesMetrics";
 
 export interface ActiveRoom {
   roomId: string;
@@ -38,16 +43,26 @@ export function useActiveGames(): ActiveGames {
   const etagRef = useRef<string | null>(null);
 
   // Fetch function
-  const fetchActiveRooms = async (skipEtag = false): Promise<void> => {
+  const fetchActiveRooms = async (
+    skipEtag = false,
+    source: ActiveGamesFetchSource = "manual"
+  ): Promise<void> => {
+    activeGamesMetrics.fetchStart(source, { skipEtag });
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       
       if (userError || !user) {
+        activeGamesMetrics.lifecycle("auth-missing", {
+          stage: "fetchActiveRooms:getUser",
+          userError: userError ? String((userError as any)?.message ?? userError) : null,
+        });
         if (isMountedRef.current) {
           setError("کاربر پیدا نشد");
           setRooms([]);
           setLoading(false);
+          activeGamesMetrics.patch({ reason: "no-user", action: "setEmptyRooms" });
         }
+        activeGamesMetrics.fetchEnd(source, 200, { note: "no-user-early-return" });
         return;
       }
 
@@ -76,6 +91,7 @@ export function useActiveGames(): ActiveGames {
           // ensure loading won't get stuck in edge cases
           setLoading(false);
         }
+        activeGamesMetrics.fetchEnd(source, 304);
         return;
       }
 
@@ -93,19 +109,31 @@ export function useActiveGames(): ActiveGames {
         if (newEtag) {
           etagRef.current = newEtag;
         }
+        activeGamesMetrics.patch({
+          reason: "fetch-success",
+          roomsCount: Array.isArray(data?.rooms) ? data.rooms.length : null,
+          hasEtag: Boolean(newEtag),
+        });
       }
+      activeGamesMetrics.fetchEnd(source, 200, {
+        roomsCount: Array.isArray(data?.rooms) ? data.rooms.length : null,
+      });
     } catch (err: any) {
       console.error("[useActiveGames] Fetch error:", err);
       if (isMountedRef.current) {
         setError(err.message || "خطا در دریافت روم‌های فعال");
         setLoading(false);
       }
+      activeGamesMetrics.fetchEnd(source, "errored", { error: String(err?.message ?? err) });
     }
   };
 
   // Setup subscription
   useEffect(() => {
     console.log('[useActiveGames] useEffect triggered - setting up...');
+    installActiveGamesMetricsOnWindow();
+    activeGamesMetrics.lifecycle("mount");
+    activeGamesMetrics.init();
     isMountedRef.current = true;
 
     const setupSubscription = async () => {
@@ -114,6 +142,10 @@ export function useActiveGames(): ActiveGames {
       
       if (userError || !user) {
         console.log('[useActiveGames] No user found:', userError);
+        activeGamesMetrics.lifecycle("auth-missing", {
+          stage: "setupSubscription:getUser",
+          userError: userError ? String((userError as any)?.message ?? userError) : null,
+        });
         if (isMountedRef.current) {
           setLoading(false);
         }
@@ -122,7 +154,7 @@ export function useActiveGames(): ActiveGames {
 
       console.log('[useActiveGames] User found, fetching active rooms...');
       // Initial fetch
-      await fetchActiveRooms(true);
+      await fetchActiveRooms(true, "initial");
 
       // Setup realtime subscription
       const channel = supabase
@@ -141,7 +173,7 @@ export function useActiveGames(): ActiveGames {
             setTimeout(() => {
               if (isMountedRef.current) {
                 // Realtime event is a strong signal; bypass ETag to avoid 304 collisions/stale validators.
-                fetchActiveRooms(true);
+                fetchActiveRooms(true, "realtime");
               }
             }, 500);
           }
@@ -169,7 +201,7 @@ export function useActiveGames(): ActiveGames {
                 setTimeout(() => {
                   if (isMountedRef.current) {
                     // Realtime event is a strong signal; bypass ETag to avoid 304 collisions/stale validators.
-                    fetchActiveRooms(true);
+                    fetchActiveRooms(true, "realtime");
                   }
                 }, 500);
               }
@@ -181,29 +213,35 @@ export function useActiveGames(): ActiveGames {
         });
 
       subscriptionRef.current = channel;
+      activeGamesMetrics.channelAdded({ name: `my_active_rooms_${user.id}` });
 
       // Setup polling as safety-net
       pollingIntervalRef.current = setInterval(() => {
         if (isMountedRef.current) {
-          fetchActiveRooms();
+          fetchActiveRooms(false, "polling");
         }
       }, POLLING_INTERVAL);
+      activeGamesMetrics.pollingStart(POLLING_INTERVAL);
     };
 
     setupSubscription();
 
     return () => {
       isMountedRef.current = false;
+      activeGamesMetrics.lifecycle("cleanup");
       
       if (subscriptionRef.current) {
         supabase.removeChannel(subscriptionRef.current);
         subscriptionRef.current = null;
+        activeGamesMetrics.channelRemoved();
       }
       
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
+        activeGamesMetrics.pollingStop();
       }
+      activeGamesMetrics.lifecycle("unmount");
     };
   }, []); // Empty deps - setup once
 

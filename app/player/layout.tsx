@@ -3,6 +3,7 @@
 import React from 'react';
 import { HeaderVisibilityProvider } from "@/lib/contexts/HeaderVisibilityContext";
 import { ActiveGamesProvider } from "@/lib/contexts/ActiveGamesContext";
+import { ActiveGamesOrchestratorProvider } from "@/lib/activeGames/ActiveGamesOrchestratorProvider";
 import PlayerLayoutClient from "./PlayerLayoutClient";
 import EntryBannerModal from "@/components/EntryBannerModal";
 
@@ -21,10 +22,12 @@ export default function PlayerLayout({
   return (
     <div className="min-h-screen bg-[#0E0E0F]">
       <HeaderVisibilityProvider>
-        <ActiveGamesProvider>
-          <PlayerLayoutClient>{children}</PlayerLayoutClient>
-          <EntryBannerModal />
-        </ActiveGamesProvider>
+        <ActiveGamesOrchestratorProvider>
+          <ActiveGamesProvider>
+            <PlayerLayoutClient>{children}</PlayerLayoutClient>
+            <EntryBannerModal />
+          </ActiveGamesProvider>
+        </ActiveGamesOrchestratorProvider>
       </HeaderVisibilityProvider>
     </div>
   );
