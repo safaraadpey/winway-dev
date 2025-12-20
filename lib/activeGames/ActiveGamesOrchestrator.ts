@@ -176,10 +176,11 @@ export function installActiveGamesOrchestratorMetricsOnWindow(): void {
 }
 
 export interface ActiveGamesOrchestrator {
-  start(): void;
-  stop(): void;
   getSnapshot(): ActiveGames;
   subscribe(listener: () => void): () => void;
+  setAuthContext(ctx: { userId: string | null; accessToken: string | null; authReady: boolean; tokenVersion: number }): void;
+  setEnabled(enabled: boolean, reason?: string): void;
+  invalidate(reason: ActiveGamesFetchSource): void;
 }
 
 function createOrchestrator(): ActiveGamesOrchestrator {
@@ -188,11 +189,23 @@ function createOrchestrator(): ActiveGamesOrchestrator {
 
   let active = false;
   let runId = 0;
+  let enabled = false;
+  let authCtx: { userId: string | null; accessToken: string | null; authReady: boolean; tokenVersion: number } = {
+    userId: null,
+    accessToken: null,
+    authReady: false,
+    tokenVersion: 0,
+  };
+  let lastUserId: string | null = null;
+  let lastTokenVersion = 0;
 
   let channel: ReturnType<typeof supabase.channel> | null = null;
   let pollTimer: NodeJS.Timeout | null = null;
   let realtimeCooldownTimer: NodeJS.Timeout | null = null;
+  let realtimeDebounceTimer: NodeJS.Timeout | null = null;
+  let fetchAbortController: AbortController | null = null;
   let etag: string | null = null;
+  const roomStatusById = new Map<string, string>();
 
   // single-flight / coalescing
   let pending = false;
@@ -202,6 +215,7 @@ function createOrchestrator(): ActiveGamesOrchestrator {
   // guards
   const BASE_POLL_INTERVAL_MS = 12000; // legacy
   const REALTIME_COOLDOWN_MS = 2000; // coalesce realtime bursts
+  const REALTIME_DEBOUNCE_MS = 400; // debounce invalidate -> requestFetch
   const UNCHANGED_COOLDOWN_MS = 2000; // don't refetch repeatedly on 304/unchanged
   let realtimeCooldownUntilMs = 0;
 
@@ -248,7 +262,10 @@ function createOrchestrator(): ActiveGamesOrchestrator {
   };
 
   const recomputeTimerCount = () => {
-    store.timerCount = Number(Boolean(pollTimer)) + Number(Boolean(realtimeCooldownTimer));
+    store.timerCount =
+      Number(Boolean(pollTimer)) +
+      Number(Boolean(realtimeCooldownTimer)) +
+      Number(Boolean(realtimeDebounceTimer));
     touch(store);
   };
 
@@ -329,6 +346,12 @@ function createOrchestrator(): ActiveGamesOrchestrator {
       return;
     }
 
+    // Cooldown is applied AFTER debounce (here), so we don't spam skip logs per realtime event.
+    // This allows one fetch now, then blocks further realtime-triggered fetches for a window.
+    if (source === "realtime") {
+      realtimeCooldownUntilMs = Math.max(realtimeCooldownUntilMs, Date.now() + REALTIME_COOLDOWN_MS);
+    }
+
     if (store.inFlight > 0) {
       pending = true;
       pendingSkipEtag = pendingSkipEtag || opts.skipEtag;
@@ -340,6 +363,28 @@ function createOrchestrator(): ActiveGamesOrchestrator {
     pending = true;
     pendingSkipEtag = pendingSkipEtag || opts.skipEtag;
     void doFetch(localRunId);
+  };
+
+  const invalidateRealtime = (localRunId: number) => {
+    if (!enabled || !active) return;
+    if (localRunId !== runId) return;
+
+    pendingReasons.add("realtime");
+    store.pendingReasons = new Set(pendingReasons);
+    touch(store);
+
+    if (realtimeDebounceTimer) {
+      clearTimeout(realtimeDebounceTimer);
+      realtimeDebounceTimer = null;
+    }
+    realtimeDebounceTimer = setTimeout(() => {
+      realtimeDebounceTimer = null;
+      recomputeTimerCount();
+      if (!active) return;
+      if (localRunId !== runId) return;
+      requestFetch("realtime", { skipEtag: true }, localRunId);
+    }, REALTIME_DEBOUNCE_MS);
+    recomputeTimerCount();
   };
 
   const scheduleNextPoll = (delayMs: number, localRunId: number, reason: string) => {
@@ -403,41 +448,44 @@ function createOrchestrator(): ActiveGamesOrchestrator {
     activeGamesMetrics.fetchStart(source, { component: "orchestrator", skipEtag });
 
     try {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+      // D3: Orchestrator must NOT call supabase.auth.getUser/getSession.
+      // It relies purely on injected auth context.
+      const userId = authCtx.userId;
+      const token = authCtx.accessToken;
 
-      if (!active || localRunId !== runId) return;
-
-      if (userError || !user) {
-        // match legacy setupSubscription behavior: no error, just stop loading
-        setData({ rooms: [], loading: false, error: null }, { reason: "fetch:no-user" });
+      if (!authCtx.authReady || !userId || !token) {
+        setData({ rooms: [], loading: false, error: null }, { reason: "fetch:auth-not-ready" });
         store.lastEtagStatus = 200;
         store.lastUnchanged = false;
         store.lastFetchEndAt = nowIso();
         touch(store);
-        activeGamesMetrics.fetchEnd(source, 200, { component: "orchestrator", note: "no-user" });
+        activeGamesMetrics.fetchEnd(source, 200, { component: "orchestrator", note: "auth-not-ready" });
         return;
       }
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token || null;
-
       const headers: HeadersInit = {
         "Cache-Control": "no-cache",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        Authorization: `Bearer ${token}`,
       };
       if (!skipEtag && etag) {
         headers["If-None-Match"] = etag;
       }
 
       // Unified fetch path: Next internal API only
+      // Abortable fetch (stop() must be able to cancel in-flight request)
+      if (fetchAbortController) {
+        try {
+          fetchAbortController.abort();
+        } catch {
+          // ignore
+        }
+      }
+      fetchAbortController = new AbortController();
+
       const res = await fetch("/api/player/my-active-rooms", {
         headers,
         cache: "no-store",
+        signal: fetchAbortController.signal,
       });
 
       if (!active || localRunId !== runId) return;
@@ -466,6 +514,13 @@ function createOrchestrator(): ActiveGamesOrchestrator {
       store.lastRoomsSig = sig;
       store.lastUnchanged = unchanged;
 
+      // Update room status map from server truth
+      for (const r of rooms) {
+        if (r?.roomId && r?.status) {
+          roomStatusById.set(r.roomId, r.status);
+        }
+      }
+
       // If unchanged content (even with 200), avoid churn: keep current rooms reference if identical.
       const nextRooms = unchanged ? store.data.rooms : rooms;
       setData(
@@ -487,6 +542,15 @@ function createOrchestrator(): ActiveGamesOrchestrator {
       }
     } catch (err: any) {
       if (!active || localRunId !== runId) return;
+      // Abort is expected during stop(); do not treat as a failure/backoff trigger.
+      if (err?.name === "AbortError") {
+        logMetrics("fetch:aborted", { source });
+        store.lastFetchEndAt = nowIso();
+        touch(store);
+        activeGamesMetrics.fetchEnd(source, "errored", { component: "orchestrator", error: "AbortError" });
+        return;
+      }
+
       const msg = String(err?.message ?? err);
       setData({ rooms: store.data.rooms, loading: false, error: msg }, { reason: "fetch-error" });
       store.lastEtagStatus = "errored";
@@ -506,6 +570,7 @@ function createOrchestrator(): ActiveGamesOrchestrator {
         scheduleNextPoll(next, localRunId, "failure-backoff");
       }
     } finally {
+      fetchAbortController = null;
       store.inFlight = Math.max(0, store.inFlight - 1);
       touch(store);
       // If new triggers arrived during the fetch, run at most one follow-up,
@@ -546,17 +611,10 @@ function createOrchestrator(): ActiveGamesOrchestrator {
     if (!active) return;
     if (localRunId !== runId) return;
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (!active) return;
-    if (localRunId !== runId) return;
-
-    if (userError || !user) {
-      setData({ rooms: [], loading: false, error: null }, { reason: "init:no-user" });
-      logLifecycle("auth-missing", { stage: "init:getUser" });
+    const userId = authCtx.userId;
+    if (!authCtx.authReady || !userId) {
+      setData({ rooms: [], loading: false, error: null }, { reason: "init:auth-not-ready" });
+      logLifecycle("auth-missing", { stage: "init:authCtx" });
       return;
     }
 
@@ -583,22 +641,22 @@ function createOrchestrator(): ActiveGamesOrchestrator {
     }
 
     channel = supabase
-      .channel(`my_active_rooms_${user.id}`)
+      .channel(`my_active_rooms_${userId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "tickets",
-          filter: `player_user_id=eq.${user.id}`,
+          filter: `player_user_id=eq.${userId}`,
         },
         (payload) => {
           if (!active) return;
           if (localRunId !== runId) return;
           logMetrics("realtime:tickets", { eventType: (payload as any)?.eventType });
-          // Coalesce realtime bursts via cooldown + requestFetch
-          realtimeCooldownUntilMs = Math.max(realtimeCooldownUntilMs, Date.now() + REALTIME_COOLDOWN_MS);
-          requestFetch("realtime", { skipEtag: true }, localRunId);
+          // Realtime should only invalidate; debounce/coalesce happens in invalidate()
+          // (No direct fetch here)
+          invalidateRealtime(localRunId);
         }
       )
       .on(
@@ -609,16 +667,23 @@ function createOrchestrator(): ActiveGamesOrchestrator {
           if (localRunId !== runId) return;
           const roomId = (payload.new as any)?.id;
           const newStatus = (payload.new as any)?.status;
-          const oldStatus = (payload.old as any)?.status;
-          if (roomId && newStatus && newStatus !== oldStatus) {
-            const isActiveStatus = ["waiting", "playing", "live", "settling"].includes(newStatus);
-            const wasActiveStatus =
-              oldStatus && ["waiting", "playing", "live", "settling"].includes(oldStatus);
-            if (isActiveStatus || wasActiveStatus) {
-              logMetrics("realtime:rooms", { roomId, oldStatus, newStatus });
-              realtimeCooldownUntilMs = Math.max(realtimeCooldownUntilMs, Date.now() + REALTIME_COOLDOWN_MS);
-              requestFetch("realtime", { skipEtag: true }, localRunId);
-            }
+          if (!roomId || !newStatus) return;
+
+          const prevStatus = roomStatusById.get(roomId);
+          if (prevStatus === newStatus) {
+            logMetrics("realtime:rooms:duplicate", { roomId, prevStatus, newStatus });
+            return;
+          }
+
+          // Update our stable map so oldStatus is real after the first event
+          roomStatusById.set(roomId, newStatus);
+          logMetrics("realtime:rooms", { roomId, oldStatus: prevStatus ?? null, newStatus });
+
+          const isActiveStatus = ["waiting", "playing", "live", "settling"].includes(newStatus);
+          const wasActiveStatus = prevStatus ? ["waiting", "playing", "live", "settling"].includes(prevStatus) : false;
+          if (isActiveStatus || wasActiveStatus) {
+            // Realtime should only invalidate; debounce/coalesce happens in invalidate()
+            invalidateRealtime(localRunId);
           }
         }
       )
@@ -675,11 +740,24 @@ function createOrchestrator(): ActiveGamesOrchestrator {
       clearTimeout(realtimeCooldownTimer);
       realtimeCooldownTimer = null;
     }
+    if (realtimeDebounceTimer) {
+      clearTimeout(realtimeDebounceTimer);
+      realtimeDebounceTimer = null;
+    }
+    if (fetchAbortController) {
+      try {
+        fetchAbortController.abort();
+      } catch {
+        // ignore
+      }
+      fetchAbortController = null;
+    }
     pending = false;
     pendingSkipEtag = false;
     pendingReasons = new Set();
     realtimeCooldownUntilMs = 0;
     etag = null;
+    roomStatusById.clear();
     recomputeTimerCount();
     store.nextPollAt = null;
     store.pendingReasons = new Set<ActiveGamesFetchSource>();
@@ -694,12 +772,92 @@ function createOrchestrator(): ActiveGamesOrchestrator {
   }
 
   return {
-    start,
-    stop,
     getSnapshot: () => getStore().data,
     subscribe: (listener: () => void) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
+    },
+    setAuthContext: (ctx) => {
+      authCtx = ctx;
+      if (IS_DEV) {
+        logMetrics("auth", {
+          authReady: ctx.authReady,
+          userId: ctx.userId,
+          hasToken: Boolean(ctx.accessToken),
+          tokenVersion: ctx.tokenVersion,
+        });
+      }
+
+      // If user identity changed, restart lifecycle (clean slate)
+      const userChanged = lastUserId !== ctx.userId;
+      const tokenBumped = lastTokenVersion !== ctx.tokenVersion;
+      lastUserId = ctx.userId;
+      lastTokenVersion = ctx.tokenVersion;
+
+      if (!enabled) return;
+
+      if (!ctx.authReady || !ctx.userId) {
+        stop();
+        setData({ rooms: [], loading: false, error: null }, { reason: "auth->disabled" });
+        return;
+      }
+
+      // If we were not active yet, start.
+      if (!active) {
+        start();
+        return;
+      }
+
+      // On user change, restart resources.
+      if (userChanged) {
+        stop();
+        start();
+        return;
+      }
+
+      // On token refresh, keep running but allow next fetch to use fresh token.
+      if (tokenBumped) {
+        // no-op (fetch uses latest authCtx)
+      }
+    },
+    setEnabled: (nextEnabled: boolean, reason?: string) => {
+      if (enabled === nextEnabled) {
+        if (IS_DEV) {
+          logLifecycle("enabled:ignored", { enabled: nextEnabled, reason: reason ?? null });
+        }
+        return;
+      }
+
+      enabled = nextEnabled;
+      if (IS_DEV) {
+        logLifecycle("enabled", { enabled: nextEnabled, reason: reason ?? null });
+      }
+
+      const shouldRun = enabled && authCtx.authReady && Boolean(authCtx.userId);
+      if (!shouldRun) {
+        stop();
+        if (enabled && authCtx.authReady && !authCtx.userId) {
+          setData({ rooms: [], loading: false, error: null }, { reason: "enabled-no-user" });
+        }
+        return;
+      }
+
+      if (!active) {
+        start();
+      }
+    },
+    invalidate: (reason: ActiveGamesFetchSource) => {
+      if (!enabled || !active) return;
+      const localRunId = runId;
+
+      // Realtime: debounce invalidate (do not fetch immediately)
+      if (reason === "realtime") {
+        invalidateRealtime(localRunId);
+        return;
+      }
+
+      // Other reasons route immediately into existing coalescing pipeline
+      requestFetch(reason, { skipEtag: reason === "initial" }, localRunId);
     },
   };
 }

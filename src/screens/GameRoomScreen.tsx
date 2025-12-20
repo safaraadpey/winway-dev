@@ -217,15 +217,18 @@ export default function GameRoomScreen({ roomId, templateId }: GameRoomScreenPro
           return;
         }
 
-        console.log("[POLL][ROOM]", {
-          roomId,
-          at: new Date().toISOString(),
-          activeCardsCount: view.active_cards?.length,
-          players: view.active_cards?.map((card) => ({
-            playerId: card.user_id,
-            cards: card.card_count,
-          })),
-        });
+        // Poll log فقط زمانی که roomId معتبر داریم (جلوگیری از نویز: roomId undefined)
+        if (roomId) {
+          console.log("[POLL][ROOM]", {
+            roomId,
+            at: new Date().toISOString(),
+            activeCardsCount: view.active_cards?.length,
+            players: view.active_cards?.map((card) => ({
+              playerId: card.user_id,
+              cards: card.card_count,
+            })),
+          });
+        }
 
         setRoomInfo(mappedRoom);
 
@@ -291,6 +294,11 @@ export default function GameRoomScreen({ roomId, templateId }: GameRoomScreenPro
 
     // بارگذاری اولیه با spinner
     fetchRoomData(true);
+
+    // Polling فقط وقتی roomId داریم (اگر undefined باشد، interval ساخته نمی‌شود)
+    if (!roomId) {
+      return;
+    }
 
     // به‌روزرسانی هر 20 ثانیه بدون نمایش spinner تمام‌صفحه
     const interval = setInterval(() => fetchRoomData(false), 20000);
