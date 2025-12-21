@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import { useSession } from "@/lib/contexts/SessionContext";
+import { traceFetch } from "@/lib/debug/netTrace";
 import {
   activeGamesMetrics,
   installActiveGamesMetricsOnWindow,
@@ -66,6 +67,12 @@ export function useActiveGames(): ActiveGames {
     pollTimerRef.current = setTimeout(() => {
       pollTimerRef.current = null;
       if (!isMountedRef.current) return;
+      traceFetch("useActiveGames:fetch", {
+        reason,
+        delayMs,
+        emptyBackoffStep: emptyBackoffStepRef.current,
+        trackedRooms: trackedRoomIdsRef.current.size,
+      });
       void fetchActiveRooms(false, "polling");
     }, delayMs);
     activeGamesMetrics.pollingStart(delayMs);
@@ -107,6 +114,12 @@ export function useActiveGames(): ActiveGames {
         headers["If-None-Match"] = etagRef.current;
       }
 
+      traceFetch("useActiveGames:fetch", {
+        reason: source,
+        skipEtag,
+        emptyBackoffStep: emptyBackoffStepRef.current,
+        trackedRooms: trackedRoomIdsRef.current.size,
+      });
       const response = await fetch("/api/player/my-active-rooms", {
         headers,
         cache: "no-store",

@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useSession } from "@/lib/contexts/SessionContext";
+import { traceFetch } from "@/lib/debug/netTrace";
 import GameResultsDialog, { type Winner } from "@/components/GameResultsDialog";
 import { fetchRoomResults } from "@/services/rooms";
 import {
@@ -54,6 +55,7 @@ export default function GameEndResultsListener() {
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
   const refreshDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(false);
+  const pollEnabledRef = useRef(false);
 
   const currentUserId = session.userId;
 
@@ -109,6 +111,20 @@ export default function GameEndResultsListener() {
     for (const r of rooms) nextMap.set(r.roomId, r);
     activeRoomsRef.current = nextMap;
 
+    // Polling must be 100% dormant when there are no active rooms.
+    const hasActiveRooms = nextMap.size > 0;
+    if (!hasActiveRooms) {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+      pollEnabledRef.current = false;
+      if (refreshDebounceRef.current) {
+        clearTimeout(refreshDebounceRef.current);
+        refreshDebounceRef.current = null;
+      }
+    }
+
     // unsubscribe removed rooms
     for (const [roomId, ch] of Array.from(roomChannelsRef.current.entries())) {
       if (!nextMap.has(roomId)) {
@@ -160,10 +176,28 @@ export default function GameEndResultsListener() {
 
       roomChannelsRef.current.set(roomId, channel);
     }
+
+    // Start polling only when we actually have active rooms.
+    // (If the user has no active rooms, this listener should be fully dormant.)
+    if (hasActiveRooms && !pollEnabledRef.current) {
+      pollEnabledRef.current = true;
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+      pollTimerRef.current = setInterval(() => {
+        scheduleRefreshRooms(0);
+      }, ACTIVE_ROOMS_POLL_MS);
+    }
   };
 
   const fetchActiveRooms = async (): Promise<ActiveRoomLite[]> => {
-    if (!session.accessToken) return [];
+    if (!session.authReady || !session.userId || !session.accessToken) return [];
+    traceFetch("GameEndResultsListener:fetch", {
+      action: "my-active-rooms",
+      pathname,
+      userId: session.userId,
+    });
     const res = await fetch("/api/player/my-active-rooms", {
       headers: { Authorization: `Bearer ${session.accessToken}` },
       cache: "no-store",
@@ -179,6 +213,8 @@ export default function GameEndResultsListener() {
   };
 
   const scheduleRefreshRooms = (delayMs: number) => {
+    if (!enabled) return;
+    if (!session.authReady || !session.userId || !session.accessToken) return;
     if (refreshDebounceRef.current) {
       clearTimeout(refreshDebounceRef.current);
       refreshDebounceRef.current = null;
@@ -187,6 +223,13 @@ export default function GameEndResultsListener() {
       refreshDebounceRef.current = null;
       if (!isMountedRef.current) return;
       if (!enabled) return;
+      if (!session.authReady || !session.userId || !session.accessToken) return;
+      traceFetch("GameEndResultsListener:fetch", {
+        action: "my-active-rooms",
+        pathname,
+        reason: "scheduleRefreshRooms",
+        delayMs,
+      });
       const rooms = await fetchActiveRooms();
       if (!isMountedRef.current) return;
       syncRoomSubscriptions(rooms);
@@ -210,11 +253,6 @@ export default function GameEndResultsListener() {
 
     // initial load
     scheduleRefreshRooms(0);
-
-    // polling: keeps room list fresh if realtime fails
-    pollTimerRef.current = setInterval(() => {
-      scheduleRefreshRooms(0);
-    }, ACTIVE_ROOMS_POLL_MS);
 
     // tickets realtime: any change in tickets => refresh active rooms list immediately
     if (ticketsChannelRef.current) {
@@ -248,6 +286,7 @@ export default function GameEndResultsListener() {
         clearInterval(pollTimerRef.current);
         pollTimerRef.current = null;
       }
+      pollEnabledRef.current = false;
       if (refreshDebounceRef.current) {
         clearTimeout(refreshDebounceRef.current);
         refreshDebounceRef.current = null;
@@ -285,6 +324,11 @@ export default function GameEndResultsListener() {
     setResults(null);
     setDialogOpen(true);
 
+    traceFetch("GameEndResultsListener:fetch", {
+      action: "room-results",
+      roomId: next.roomId,
+      pathname,
+    });
     fetchRoomResults(next.roomId)
       .then((r) => {
         if (!isMountedRef.current) return;

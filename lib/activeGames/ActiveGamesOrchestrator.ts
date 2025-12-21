@@ -15,6 +15,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import type { ActiveGames, ActiveRoom } from "@/lib/hooks/useActiveGames";
 import { activeGamesMetrics, type ActiveGamesFetchSource } from "@/lib/metrics/activeGamesMetrics";
+import { traceFetch } from "@/lib/debug/netTrace";
 
 const IS_DEV = process.env.NODE_ENV !== "production";
 const PREFIX_METRICS = "[ActiveGames][Metrics]";
@@ -332,6 +333,7 @@ function createOrchestrator(): ActiveGamesOrchestrator {
       if (localRunId !== runId) return;
       // after cooldown, run a single coalesced fetch if pending reasons exist
       if (pending) {
+        traceFetch("ActiveGamesOrchestrator:schedule", { reason: "realtimeCooldownFlush", delayMs: waitMs });
         void doFetch(localRunId);
       }
     }, waitMs);
@@ -393,6 +395,7 @@ function createOrchestrator(): ActiveGamesOrchestrator {
       recomputeTimerCount();
       if (!active) return;
       if (localRunId !== runId) return;
+      traceFetch("ActiveGamesOrchestrator:schedule", { reason: "realtimeDebounce", delayMs: REALTIME_DEBOUNCE_MS });
       requestFetch("realtime", { skipEtag: true }, localRunId);
     }, REALTIME_DEBOUNCE_MS);
     recomputeTimerCount();
@@ -419,6 +422,7 @@ function createOrchestrator(): ActiveGamesOrchestrator {
       recomputeTimerCount();
       if (!active) return;
       if (localRunId !== runId) return;
+      traceFetch("ActiveGamesOrchestrator:schedule", { reason, nextAt, delayMs });
       requestFetch("polling", { skipEtag: false }, localRunId);
       // schedule next poll (will be adjusted after fetch outcome)
       scheduleNextPoll(
@@ -497,6 +501,21 @@ function createOrchestrator(): ActiveGamesOrchestrator {
       }
       fetchAbortController = new AbortController();
 
+      const nextAt = store.nextPollAt;
+      const delayMsToNextPoll = nextAt ? Math.max(0, Date.parse(nextAt) - Date.now()) : null;
+      traceFetch("ActiveGamesOrchestrator:my-active-rooms", {
+        source,
+        reasons,
+        skipEtag,
+        inFlight: store.inFlight,
+        runId,
+        localRunId,
+        roomCount: store.data.rooms.length,
+        nextAt,
+        delayMsToNextPoll,
+        backoffMs: store.backoffMs,
+        emptyBackoffMs: store.emptyBackoffMs,
+      });
       const res = await fetch("/api/player/my-active-rooms", {
         headers,
         cache: "no-store",

@@ -1,13 +1,15 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import LobbyInfo from '@/components/LobbyInfo';
 import LobbyRoomCard from '@/components/LobbyRoomCard';
 import toast from 'react-hot-toast';
 import styles from './lobby.module.css';
 import { supabase } from "@/lib/supabaseClient";
+import { useSession } from "@/lib/contexts/SessionContext";
+import { traceFetch } from "@/lib/debug/netTrace";
 
 interface RoomPriceGroup {
   price: number;
@@ -26,6 +28,8 @@ interface RoomPriceGroup {
  */
 export default function LobbyPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const sessionSnap = useSession();
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
   const [roomGroups, setRoomGroups] = useState<RoomPriceGroup[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -48,40 +52,39 @@ export default function LobbyPage() {
     async function fetchRooms() {
       let nextError: string | null = null;
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const token = session?.access_token || null;
+        // Prefer Session SSOT (avoids auth spam). Fallback kept for Phase 1.2.
+        let token = sessionSnap.accessToken || null;
+        if (!token) {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          token = session?.access_token || null;
+        }
 
-        const res = await fetch("/api/player/lobby-room-groups", {
+        traceFetch("LobbyPage:fetch", { action: "lobby-snapshot", pathname });
+
+        const res = await fetch("/api/player/lobby-snapshot", {
           method: "GET",
           headers: token ? { Authorization: `Bearer ${token}` } : {},
           cache: "no-store",
         });
 
         if (!res.ok) {
-          console.error("fetchRooms: lobby-room-groups failed", res.status);
+          console.error("fetchRooms: lobby-snapshot failed", res.status);
           nextError = "خطا در دریافت اطلاعات لابی";
           setRoomGroups([]);
           return;
         }
 
-        const json = (await res.json()) as { groups: RoomPriceGroup[] };
-        const groups = Array.isArray(json?.groups) ? json.groups : [];
+        const json = (await res.json()) as {
+          roomGroups?: { groups?: RoomPriceGroup[] };
+          onlineCount?: { onlinePlayers?: number };
+        };
+        const groups = Array.isArray(json?.roomGroups?.groups) ? (json.roomGroups!.groups as RoomPriceGroup[]) : [];
         setRoomGroups(groups.sort((a, b) => a.price - b.price));
 
-        // Fetch online players count (presence)
-        const onlineRes = await fetch("/api/player/lobby-online-count", {
-          method: "GET",
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          cache: "no-store",
-        });
-        if (onlineRes.ok) {
-          const onlineJson = (await onlineRes.json()) as { onlinePlayers: number };
-          setOnlinePlayersCount(Number(onlineJson?.onlinePlayers ?? 0) || 0);
-        } else {
-          console.warn("fetchRooms: lobby-online-count failed", onlineRes.status);
-        }
+        const onlinePlayers = Number(json?.onlineCount?.onlinePlayers ?? 0) || 0;
+        setOnlinePlayersCount(onlinePlayers);
       } catch (error) {
         console.error('Error in fetchRooms:', error);
         setRoomGroups([]);
@@ -97,7 +100,7 @@ export default function LobbyPage() {
     // به‌روزرسانی هر 10 ثانیه
     const interval = setInterval(fetchRooms, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [pathname, sessionSnap.accessToken, sessionSnap.tokenVersion]);
 
   // Presence ping: update last_seen_at periodically while user is on lobby
   useEffect(() => {
