@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabaseClient";
+import { useSession } from "@/lib/contexts/SessionContext";
 import {
   activeGamesMetrics,
   installActiveGamesMetricsOnWindow,
@@ -25,36 +26,65 @@ export interface ActiveGames {
 }
 
 const POLLING_INTERVAL = 12000; // 12 seconds
+const EMPTY_BACKOFF_STEPS_MS = [60000, 120000, 300000] as const;
 
 /**
  * Hook برای دریافت روم‌های فعال پلیر
  * شامل realtime subscription و polling fallback
  */
 export function useActiveGames(): ActiveGames {
-  console.log('[useActiveGames] Hook initialized');
-  
+  const session = useSession();
+
+  const didInitLogRef = useRef(false);
+  useEffect(() => {
+    if (didInitLogRef.current) return;
+    didInitLogRef.current = true;
+    console.log("[useActiveGames] Hook initialized");
+  }, []);
+
   const [rooms, setRooms] = useState<ActiveRoom[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   const isMountedRef = useRef<boolean>(false);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const emptyBackoffStepRef = useRef<number>(0);
   const subscriptionRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const etagRef = useRef<string | null>(null);
+  const trackedRoomIdsRef = useRef<Set<string>>(new Set());
+
+  const clearPollTimer = () => {
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+      activeGamesMetrics.pollingStop();
+    }
+  };
+
+  const scheduleNextPoll = (delayMs: number, reason: string) => {
+    clearPollTimer();
+    pollTimerRef.current = setTimeout(() => {
+      pollTimerRef.current = null;
+      if (!isMountedRef.current) return;
+      void fetchActiveRooms(false, "polling");
+    }, delayMs);
+    activeGamesMetrics.pollingStart(delayMs);
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[useActiveGames] poll:scheduled", { delayMs, reason });
+    }
+  };
 
   // Fetch function
   const fetchActiveRooms = async (
     skipEtag = false,
     source: ActiveGamesFetchSource = "manual"
-  ): Promise<void> => {
+  ): Promise<number | null> => {
     activeGamesMetrics.fetchStart(source, { skipEtag });
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
-      if (userError || !user) {
+      if (!session.authReady || !session.userId) {
         activeGamesMetrics.lifecycle("auth-missing", {
-          stage: "fetchActiveRooms:getUser",
-          userError: userError ? String((userError as any)?.message ?? userError) : null,
+          stage: "fetchActiveRooms:session",
+          userError: null,
         });
         if (isMountedRef.current) {
           setError("کاربر پیدا نشد");
@@ -63,13 +93,11 @@ export function useActiveGames(): ActiveGames {
           activeGamesMetrics.patch({ reason: "no-user", action: "setEmptyRooms" });
         }
         activeGamesMetrics.fetchEnd(source, 200, { note: "no-user-early-return" });
-        return;
+        clearPollTimer();
+        return 0;
       }
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token || null;
+      const token = session.accessToken || null;
 
       const headers: HeadersInit = {
         "Cache-Control": "no-cache",
@@ -92,7 +120,17 @@ export function useActiveGames(): ActiveGames {
           setLoading(false);
         }
         activeGamesMetrics.fetchEnd(source, 304);
-        return;
+        const currentCount = trackedRoomIdsRef.current.size;
+        // keep polling cadence consistent with current "empty/non-empty" state
+        if (currentCount === 0) {
+          emptyBackoffStepRef.current = Math.min(emptyBackoffStepRef.current + 1, EMPTY_BACKOFF_STEPS_MS.length);
+          const delay = EMPTY_BACKOFF_STEPS_MS[Math.max(0, emptyBackoffStepRef.current - 1)] ?? EMPTY_BACKOFF_STEPS_MS[0];
+          scheduleNextPoll(delay, "etag-304-empty");
+        } else {
+          emptyBackoffStepRef.current = 0;
+          scheduleNextPoll(POLLING_INTERVAL, "etag-304-nonempty");
+        }
+        return currentCount;
       }
 
       if (!response.ok) {
@@ -103,21 +141,38 @@ export function useActiveGames(): ActiveGames {
       const newEtag = response.headers.get("ETag");
 
       if (isMountedRef.current) {
-        setRooms(data.rooms || []);
+        const nextRooms: ActiveRoom[] = data.rooms || [];
+        setRooms(nextRooms);
         setError(null);
         setLoading(false);
         if (newEtag) {
           etagRef.current = newEtag;
         }
+
+        // Track current rooms so `rooms` realtime doesn't wake us when empty.
+        trackedRoomIdsRef.current = new Set(nextRooms.map((r) => r.roomId).filter(Boolean));
+
         activeGamesMetrics.patch({
           reason: "fetch-success",
           roomsCount: Array.isArray(data?.rooms) ? data.rooms.length : null,
           hasEtag: Boolean(newEtag),
         });
+
+        // Adjust polling: when empty -> heavy backoff; when non-empty -> normal polling.
+        const count = nextRooms.length;
+        if (count === 0) {
+          emptyBackoffStepRef.current = Math.min(emptyBackoffStepRef.current + 1, EMPTY_BACKOFF_STEPS_MS.length);
+          const delay = EMPTY_BACKOFF_STEPS_MS[Math.max(0, emptyBackoffStepRef.current - 1)] ?? EMPTY_BACKOFF_STEPS_MS[0];
+          scheduleNextPoll(delay, "empty-backoff");
+        } else {
+          emptyBackoffStepRef.current = 0;
+          scheduleNextPoll(POLLING_INTERVAL, "nonempty");
+        }
       }
       activeGamesMetrics.fetchEnd(source, 200, {
         roomsCount: Array.isArray(data?.rooms) ? data.rooms.length : null,
       });
+      return Array.isArray(data?.rooms) ? data.rooms.length : 0;
     } catch (err: any) {
       console.error("[useActiveGames] Fetch error:", err);
       if (isMountedRef.current) {
@@ -125,6 +180,8 @@ export function useActiveGames(): ActiveGames {
         setLoading(false);
       }
       activeGamesMetrics.fetchEnd(source, "errored", { error: String(err?.message ?? err) });
+      // On failures, keep current timer (don't tighten loops).
+      return null;
     }
   };
 
@@ -138,13 +195,11 @@ export function useActiveGames(): ActiveGames {
 
     const setupSubscription = async () => {
       console.log('[useActiveGames] setupSubscription started');
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
-      if (userError || !user) {
-        console.log('[useActiveGames] No user found:', userError);
+      if (!session.authReady || !session.userId) {
+        console.log("[useActiveGames] No user found (session not ready / missing userId)");
         activeGamesMetrics.lifecycle("auth-missing", {
-          stage: "setupSubscription:getUser",
-          userError: userError ? String((userError as any)?.message ?? userError) : null,
+          stage: "setupSubscription:session",
+          userError: null,
         });
         if (isMountedRef.current) {
           setLoading(false);
@@ -158,14 +213,14 @@ export function useActiveGames(): ActiveGames {
 
       // Setup realtime subscription
       const channel = supabase
-        .channel(`my_active_rooms_${user.id}`)
+        .channel(`my_active_rooms_${session.userId}`)
         .on(
           "postgres_changes",
           {
             event: "*",
             schema: "public",
             table: "tickets",
-            filter: `player_user_id=eq.${user.id}`,
+            filter: `player_user_id=eq.${session.userId}`,
           },
           (payload) => {
             console.log("[useActiveGames] Tickets change detected:", payload.eventType);
@@ -173,7 +228,7 @@ export function useActiveGames(): ActiveGames {
             setTimeout(() => {
               if (isMountedRef.current) {
                 // Realtime event is a strong signal; bypass ETag to avoid 304 collisions/stale validators.
-                fetchActiveRooms(true, "realtime");
+                void fetchActiveRooms(true, "realtime");
               }
             }, 500);
           }
@@ -192,6 +247,8 @@ export function useActiveGames(): ActiveGames {
             
             // فقط اگر status تغییر کرده باشد
             if (roomId && newStatus && newStatus !== oldStatus) {
+              // Only react to rooms we currently track; prevents waking when rooms list is empty.
+              if (!trackedRoomIdsRef.current.has(roomId)) return;
               const isActiveStatus = ["waiting", "playing", "live", "settling"].includes(newStatus);
               const wasActiveStatus = oldStatus && ["waiting", "playing", "live", "settling"].includes(oldStatus);
               
@@ -201,7 +258,7 @@ export function useActiveGames(): ActiveGames {
                 setTimeout(() => {
                   if (isMountedRef.current) {
                     // Realtime event is a strong signal; bypass ETag to avoid 304 collisions/stale validators.
-                    fetchActiveRooms(true, "realtime");
+                    void fetchActiveRooms(true, "realtime");
                   }
                 }, 500);
               }
@@ -213,15 +270,7 @@ export function useActiveGames(): ActiveGames {
         });
 
       subscriptionRef.current = channel;
-      activeGamesMetrics.channelAdded({ name: `my_active_rooms_${user.id}` });
-
-      // Setup polling as safety-net
-      pollingIntervalRef.current = setInterval(() => {
-        if (isMountedRef.current) {
-          fetchActiveRooms(false, "polling");
-        }
-      }, POLLING_INTERVAL);
-      activeGamesMetrics.pollingStart(POLLING_INTERVAL);
+      activeGamesMetrics.channelAdded({ name: `my_active_rooms_${session.userId}` });
     };
 
     setupSubscription();
@@ -235,15 +284,11 @@ export function useActiveGames(): ActiveGames {
         subscriptionRef.current = null;
         activeGamesMetrics.channelRemoved();
       }
-      
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-        activeGamesMetrics.pollingStop();
-      }
+
+      clearPollTimer();
       activeGamesMetrics.lifecycle("unmount");
     };
-  }, []); // Empty deps - setup once
+  }, [session.authReady, session.userId]); // Session SSOT drives setup
 
   return {
     rooms,

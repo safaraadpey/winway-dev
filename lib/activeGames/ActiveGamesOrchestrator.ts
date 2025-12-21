@@ -34,6 +34,8 @@ export interface ActiveGamesOrchestratorMetricsSnapshot {
   timerCount: number;
   nextPollAt: string | null;
   backoffMs: number;
+  emptyBackoffMs: number;
+  emptyBackoffStep: number;
   pendingReasons: ActiveGamesFetchSource[];
   lastFetchAt: string | null;
   lastUpdatedAt: string | null;
@@ -55,6 +57,8 @@ type Store = {
   timerCount: number;
   nextPollAt: string | null;
   backoffMs: number;
+  emptyBackoffMs: number;
+  emptyBackoffStep: number;
   pendingReasons: Set<ActiveGamesFetchSource>;
   lastFetchAt: string | null;
   lastEtagStatus: 200 | 304 | "errored" | null;
@@ -85,6 +89,8 @@ function getStore(): Store {
       timerCount: 0,
       nextPollAt: null,
       backoffMs: 0,
+      emptyBackoffMs: 0,
+      emptyBackoffStep: 0,
       pendingReasons: new Set<ActiveGamesFetchSource>(),
       lastFetchAt: null,
       lastEtagStatus: null,
@@ -119,6 +125,8 @@ function metricsSnapshot(): ActiveGamesOrchestratorMetricsSnapshot {
     timerCount: s.timerCount,
     nextPollAt: s.nextPollAt,
     backoffMs: s.backoffMs,
+    emptyBackoffMs: s.emptyBackoffMs,
+    emptyBackoffStep: s.emptyBackoffStep,
     pendingReasons: Array.from(s.pendingReasons),
     lastFetchAt: s.lastFetchAt,
     lastUpdatedAt: s.lastUpdatedAt,
@@ -155,6 +163,8 @@ export function installActiveGamesOrchestratorMetricsOnWindow(): void {
     s.timerCount = 0;
     s.nextPollAt = null;
     s.backoffMs = 0;
+    s.emptyBackoffMs = 0;
+    s.emptyBackoffStep = 0;
     s.pendingReasons = new Set<ActiveGamesFetchSource>();
     s.lastFetchAt = null;
     s.lastEtagStatus = null;
@@ -214,6 +224,7 @@ function createOrchestrator(): ActiveGamesOrchestrator {
 
   // guards
   const BASE_POLL_INTERVAL_MS = 12000; // legacy
+  const EMPTY_BACKOFF_STEPS_MS = [60000, 120000, 300000] as const;
   const REALTIME_COOLDOWN_MS = 2000; // coalesce realtime bursts
   const REALTIME_DEBOUNCE_MS = 400; // debounce invalidate -> requestFetch
   const UNCHANGED_COOLDOWN_MS = 2000; // don't refetch repeatedly on 304/unchanged
@@ -410,7 +421,11 @@ function createOrchestrator(): ActiveGamesOrchestrator {
       if (localRunId !== runId) return;
       requestFetch("polling", { skipEtag: false }, localRunId);
       // schedule next poll (will be adjusted after fetch outcome)
-      scheduleNextPoll(store.backoffMs > 0 ? store.backoffMs : BASE_POLL_INTERVAL_MS, localRunId, "tick");
+      scheduleNextPoll(
+        store.backoffMs > 0 ? store.backoffMs : store.emptyBackoffMs > 0 ? store.emptyBackoffMs : BASE_POLL_INTERVAL_MS,
+        localRunId,
+        "tick"
+      );
     }, delayMs);
 
     recomputeTimerCount();
@@ -520,6 +535,11 @@ function createOrchestrator(): ActiveGamesOrchestrator {
           roomStatusById.set(r.roomId, r.status);
         }
       }
+      // When there are no active rooms, do NOT allow global `rooms` realtime to wake the system.
+      // The only wake signal should be `tickets` changes for this user.
+      if (rooms.length === 0) {
+        roomStatusById.clear();
+      }
 
       // If unchanged content (even with 200), avoid churn: keep current rooms reference if identical.
       const nextRooms = unchanged ? store.data.rooms : rooms;
@@ -535,10 +555,26 @@ function createOrchestrator(): ActiveGamesOrchestrator {
 
       // Reset polling backoff on success
       store.backoffMs = 0;
+
+      // Heavy backoff when there are no active rooms (60s -> 120s -> 300s).
+      // Realtime tickets can still invalidate+fetch sooner.
+      if (rooms.length === 0) {
+        store.emptyBackoffStep = Math.min(store.emptyBackoffStep + 1, EMPTY_BACKOFF_STEPS_MS.length);
+        store.emptyBackoffMs = EMPTY_BACKOFF_STEPS_MS[Math.max(0, store.emptyBackoffStep - 1)] ?? EMPTY_BACKOFF_STEPS_MS[0];
+      } else {
+        store.emptyBackoffStep = 0;
+        store.emptyBackoffMs = 0;
+      }
       touch(store);
       if (store.pollingState.active) {
-        // ensure scheduler follows the reset backoff
-        scheduleNextPoll(BASE_POLL_INTERVAL_MS, localRunId, "success-reset");
+        const nextDelay =
+          store.backoffMs > 0
+            ? store.backoffMs
+            : store.emptyBackoffMs > 0
+              ? store.emptyBackoffMs
+              : BASE_POLL_INTERVAL_MS;
+        setPollingState(true, nextDelay, rooms.length === 0 ? "empty-backoff" : "success-reset");
+        scheduleNextPoll(nextDelay, localRunId, rooms.length === 0 ? "empty-backoff" : "success-reset");
       }
     } catch (err: any) {
       if (!active || localRunId !== runId) return;
@@ -669,6 +705,10 @@ function createOrchestrator(): ActiveGamesOrchestrator {
           const newStatus = (payload.new as any)?.status;
           if (!roomId || !newStatus) return;
 
+          // Only react to room updates for rooms we currently track.
+          // When the active rooms list is empty, this prevents `rooms` realtime from waking us.
+          if (!roomStatusById.has(roomId)) return;
+
           const prevStatus = roomStatusById.get(roomId);
           if (prevStatus === newStatus) {
             logMetrics("realtime:rooms:duplicate", { roomId, prevStatus, newStatus });
@@ -692,9 +732,14 @@ function createOrchestrator(): ActiveGamesOrchestrator {
       });
     setChannelCount(1, "subscribed");
 
-    // polling scheduler (base interval is legacy; backoff is applied on failures)
-    setPollingState(true, BASE_POLL_INTERVAL_MS, "started");
-    scheduleNextPoll(BASE_POLL_INTERVAL_MS, localRunId, "start");
+    // polling scheduler:
+    // - base interval is legacy (12s) when rooms are non-empty
+    // - heavy backoff (60/120/300s) when rooms are empty
+    // - error backoff can still override via store.backoffMs
+    const initialDelay =
+      store.backoffMs > 0 ? store.backoffMs : store.emptyBackoffMs > 0 ? store.emptyBackoffMs : BASE_POLL_INTERVAL_MS;
+    setPollingState(true, initialDelay, store.emptyBackoffMs > 0 ? "empty-backoff-start" : "started");
+    scheduleNextPoll(initialDelay, localRunId, store.emptyBackoffMs > 0 ? "empty-backoff-start" : "start");
   }
 
   function start() {
@@ -762,6 +807,8 @@ function createOrchestrator(): ActiveGamesOrchestrator {
     store.nextPollAt = null;
     store.pendingReasons = new Set<ActiveGamesFetchSource>();
     store.backoffMs = 0;
+    store.emptyBackoffMs = 0;
+    store.emptyBackoffStep = 0;
     touch(store);
     setPollingState(false, null, "cleanup");
 
