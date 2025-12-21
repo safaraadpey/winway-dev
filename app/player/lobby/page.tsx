@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import LobbyInfo from '@/components/LobbyInfo';
@@ -36,6 +36,43 @@ export default function LobbyPage() {
   const [loading, setLoading] = useState(true);
   const [onlinePlayersCount, setOnlinePlayersCount] = useState<number>(0);
 
+  const hasToken = Boolean(sessionSnap.authReady && sessionSnap.accessToken);
+  const visibilityState = typeof document !== "undefined" ? document.visibilityState : "visible";
+
+  // Smart polling refs (Phase 1.2)
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const stableCountRef = useRef(0);
+  const lastSnapshotHashRef = useRef<string | null>(null);
+  const nextDelayMsRef = useRef<number>(10000);
+
+  const clearTimer = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const computeSnapshotHash = (groups: RoomPriceGroup[], onlinePlayers: number): string => {
+    const parts: string[] = [String(onlinePlayers)];
+    // Keep it deterministic and cheap; include all fields that affect UI.
+    for (const g of groups) {
+      parts.push(
+        [
+          g.templateId ?? "",
+          String(g.price ?? 0),
+          g.currency ?? "",
+          String(g.waitingRooms ?? 0),
+          String(g.playingRooms ?? 0),
+          String(g.totalRooms ?? 0),
+          String(g.players ?? 0),
+          String(g.waitingPlayers ?? 0),
+          String(g.playingPlayers ?? 0),
+        ].join("|")
+      );
+    }
+    return parts.join(";");
+  };
+
   // فعال کردن دکمه back در header
   useEffect(() => {
     setShowBackButton(true);
@@ -49,23 +86,54 @@ export default function LobbyPage() {
   }, [setShowBackButton, setOnBackClick, router]);
 
   useEffect(() => {
-    async function fetchRooms() {
+    let stopped = false;
+
+    const schedule = (delayMs: number, reason: string) => {
+      if (stopped) return;
+      clearTimer();
+
+      // Pause polling while tab is hidden.
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
+
+      nextDelayMsRef.current = delayMs;
+      timerRef.current = setTimeout(() => {
+        void tick(reason, delayMs);
+      }, delayMs);
+    };
+
+    async function tick(reason: string, delayMs: number) {
+      if (stopped) return;
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        clearTimer();
+        return;
+      }
+
+      // If no token, do NOT fetch. Keep rescheduling to check again.
+      if (!sessionSnap.authReady || !sessionSnap.accessToken) {
+        traceFetch("LobbyPage:lobby-snapshot", {
+          reason: "no-token",
+          delayMs,
+          visibilityState: typeof document !== "undefined" ? document.visibilityState : "unknown",
+          hasToken: false,
+        });
+        schedule(5000, "no-token");
+        return;
+      }
+
       let nextError: string | null = null;
       try {
-        // Prefer Session SSOT (avoids auth spam). Fallback kept for Phase 1.2.
-        let token = sessionSnap.accessToken || null;
-        if (!token) {
-          const {
-            data: { session },
-          } = await supabase.auth.getSession();
-          token = session?.access_token || null;
-        }
-
-        traceFetch("LobbyPage:fetch", { action: "lobby-snapshot", pathname });
+        traceFetch("LobbyPage:lobby-snapshot", {
+          reason,
+          delayMs,
+          visibilityState: typeof document !== "undefined" ? document.visibilityState : "unknown",
+          hasToken: true,
+        });
 
         const res = await fetch("/api/player/lobby-snapshot", {
           method: "GET",
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          headers: { Authorization: `Bearer ${sessionSnap.accessToken}` },
           cache: "no-store",
         });
 
@@ -73,6 +141,9 @@ export default function LobbyPage() {
           console.error("fetchRooms: lobby-snapshot failed", res.status);
           nextError = "خطا در دریافت اطلاعات لابی";
           setRoomGroups([]);
+          // keep polling, but back off to 30s on errors to avoid hammering
+          stableCountRef.current = Math.min(stableCountRef.current + 1, 2);
+          schedule(stableCountRef.current === 1 ? 30000 : 60000, "error");
           return;
         }
 
@@ -81,26 +152,63 @@ export default function LobbyPage() {
           onlineCount?: { onlinePlayers?: number };
         };
         const groups = Array.isArray(json?.roomGroups?.groups) ? (json.roomGroups!.groups as RoomPriceGroup[]) : [];
-        setRoomGroups(groups.sort((a, b) => a.price - b.price));
+        const sortedGroups = [...groups].sort((a, b) => a.price - b.price);
+        setRoomGroups(sortedGroups);
 
         const onlinePlayers = Number(json?.onlineCount?.onlinePlayers ?? 0) || 0;
         setOnlinePlayersCount(onlinePlayers);
+
+        // Backoff logic based on snapshot stability
+        const hash = computeSnapshotHash(sortedGroups, onlinePlayers);
+        const prev = lastSnapshotHashRef.current;
+        const unchanged = Boolean(prev) && prev === hash;
+        lastSnapshotHashRef.current = hash;
+
+        if (unchanged) {
+          stableCountRef.current += 1;
+          const nextDelay = stableCountRef.current === 1 ? 30000 : 60000;
+          schedule(nextDelay, "stable");
+        } else {
+          stableCountRef.current = 0;
+          schedule(10000, "changed");
+        }
       } catch (error) {
         console.error('Error in fetchRooms:', error);
         setRoomGroups([]);
         nextError = 'خطای غیرمنتظره در بارگذاری لابی';
+        stableCountRef.current = Math.min(stableCountRef.current + 1, 2);
+        schedule(stableCountRef.current === 1 ? 30000 : 60000, "exception");
       } finally {
         setErrorMessage(nextError);
         setLoading(false);
       }
     }
 
-    fetchRooms();
-    
-    // به‌روزرسانی هر 10 ثانیه
-    const interval = setInterval(fetchRooms, 10000);
-    return () => clearInterval(interval);
-  }, [pathname, sessionSnap.accessToken, sessionSnap.tokenVersion]);
+    // start immediately
+    schedule(0, "mount");
+
+    const onVisibilityChange = () => {
+      if (stopped) return;
+      if (typeof document === "undefined") return;
+      if (document.visibilityState === "hidden") {
+        clearTimer();
+        return;
+      }
+      // When visible again, run immediately.
+      schedule(0, "visible");
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibilityChange);
+    }
+
+    return () => {
+      stopped = true;
+      clearTimer();
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+      }
+    };
+  }, [pathname, sessionSnap.authReady, sessionSnap.accessToken, sessionSnap.tokenVersion]);
 
   // Presence ping: update last_seen_at periodically while user is on lobby
   useEffect(() => {
@@ -109,10 +217,7 @@ export default function LobbyPage() {
 
     async function ping() {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const token = session?.access_token || null;
+        const token = sessionSnap.accessToken || null;
         if (!token) return;
         await fetch("/api/me/ping-presence", {
           method: "POST",
@@ -132,7 +237,7 @@ export default function LobbyPage() {
       stopped = true;
       if (interval) clearInterval(interval);
     };
-  }, []);
+  }, [sessionSnap.accessToken]);
 
   // تابع برای کلیک روی روم
   const handleRoomClick = async (price: number, templateId?: string) => {
