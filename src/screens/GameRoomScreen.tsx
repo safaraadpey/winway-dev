@@ -679,7 +679,7 @@ export default function GameRoomScreen({ roomId, templateId }: GameRoomScreenPro
   if (loading || !roomInfo) {
     return (
       <div className="overflow-hidden bg-black/40 min-h-screen">
-        <div className="px-4 space-y-1 pt-2">
+        <div className="px-4 space-y-1 pt-1">
           {/* Panel 1: BuyCardsPanel skeleton (no images, UI-only) */}
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 space-y-4">
             <div className="flex items-center justify-between gap-4">
@@ -810,7 +810,7 @@ export default function GameRoomScreen({ roomId, templateId }: GameRoomScreenPro
 
   return (
     <div className="overflow-hidden bg-black/40 min-h-screen">
-      <div className="px-4 space-y-1 pt-2">
+      <div className="px-4 space-y-1 pt-1">
         {/* پنل انتخاب کارت */}
         <BuyCardsPanel
           price={roomInfo.cardPrice}

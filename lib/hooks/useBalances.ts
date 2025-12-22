@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { getMyDingBalance } from '../features/ding/ding';
+import { isDingEnabled } from "@/lib/audio-settings";
 
 /**
  * تابع پخش صدای دینگ (منتقل شده از BingoCard)
@@ -462,7 +463,10 @@ export function useBalances(): Balances {
               if (!isMountedRef.current) return;
               setDingBalance(serverBalance);
               currentBalanceRef.current = serverBalance;
-              playDingSound(audioContextRef);
+              // Respect user setting (sound controls popup)
+              if (isDingEnabled()) {
+                playDingSound(audioContextRef);
+              }
 
               if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current);
               setIsAnimating(true);

@@ -11,6 +11,7 @@ import BingoCardDemo from "@/components/BingoCardDemo";
 import RoomHeader from "@/components/room/RoomHeader";
 import DrawStrip from "@/components/room/DrawStrip";
 import GameResultsDialog from "@/components/GameResultsDialog";
+import gameHeaderBg from "@/src/assets/logo/gameheader.webp";
 import {
   buildGameResultsKey,
   hasSeenGameResults,
@@ -20,6 +21,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
+import { playNumber, unlockAndPreloadOnUserGesture } from "@/lib/number-audio";
 
 type LineWinner = {
   ticketId: string;
@@ -97,6 +99,12 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     setShowStatusBar(false);
     return () => setShowStatusBar(true);
   }, [setShowStatusBar]);
+
+  // One-time user gesture to unlock WebAudio + start preloading number sounds
+  useEffect(() => {
+    const cleanup = unlockAndPreloadOnUserGesture(window);
+    return cleanup;
+  }, []);
 
   // لود اسنپ‌شات اولیه
   useEffect(() => {
@@ -181,6 +189,9 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
           if (oldProcessed !== null && oldProcessed !== undefined) return;
           if (!newProcessed) return;
           if (number == null) return;
+
+          // Play number audio with minimal latency (client-only, Web Audio API)
+          void playNumber(number);
 
           // اگر این draw روی یکی از کارت‌های کاربر mark دارد، sync موجودی Ding را schedule کن
           try {
@@ -456,22 +467,31 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       className="min-h-screen bg-black/40 text-white overflow-hidden"
       style={{ height: "100dvh" }}
     >
-      <div className="max-w-3xl mx-auto px-4 pt-6 flex flex-col h-full gap-1">
-        <RoomHeader
-          linePrize={linePrize}
-          fullPrize={fullPrize}
-          isMuted={false}
-        />
+      <div className="max-w-3xl mx-auto px-4 pt-1.5 flex flex-col h-full gap-1">
+        <div
+          className="rounded-2xl overflow-hidden bg-cover bg-center bg-no-repeat p-2 flex flex-col gap-1"
+          style={{
+            backgroundImage: `linear-gradient(rgba(0,0,0,0.28), rgba(0,0,0,0.28)), url(${gameHeaderBg.src})`,
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "center center",
+            backgroundSize: "100% 100%",
+          }}
+        >
+          <RoomHeader
+            linePrize={linePrize}
+            fullPrize={fullPrize}
+          />
 
-        <DrawStrip
-          roomName={roomName}
-          showRoomBadge={false}
-          commitHash={roomCommitHash}
-          currentNumber={latestNumber ?? null}
-          history={previousNumbers}
-          totalDraws={calledNumbers.length}
-          countdownSeconds={latestNumber == null ? firstDrawCountdownSec : null}
-        />
+          <DrawStrip
+            roomName={roomName}
+            showRoomBadge={false}
+            commitHash={roomCommitHash}
+            currentNumber={latestNumber ?? null}
+            history={previousNumbers}
+            totalDraws={calledNumbers.length}
+            countdownSeconds={latestNumber == null ? firstDrawCountdownSec : null}
+          />
+        </div>
 
         {error && (
           <div className="bg-red-500/20 border border-red-500 text-red-200 rounded-2xl p-3 text-sm">

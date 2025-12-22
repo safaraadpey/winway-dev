@@ -154,7 +154,7 @@ function ActiveTablesSectionSkeleton() {
 export default function Loading() {
   return (
     <div className="overflow-hidden bg-[#0E0E0F] min-h-screen">
-      <div className="px-4 space-y-1 pt-2">
+      <div className="px-4 space-y-1 pt-1">
         <BuyCardsPanelSkeleton />
         <ActiveCardsStatusSkeleton />
         <ActiveTablesSectionSkeleton />

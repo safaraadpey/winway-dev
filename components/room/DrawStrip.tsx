@@ -22,6 +22,21 @@ export default function DrawStrip({
   totalDraws,
   countdownSeconds,
 }: DrawStripProps) {
+  const [copyToast, setCopyToast] = useState<null | "success" | "error">(null);
+  const copyToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showCopyToast = (status: "success" | "error") => {
+    setCopyToast(status);
+    if (copyToastTimerRef.current) {
+      clearTimeout(copyToastTimerRef.current);
+      copyToastTimerRef.current = null;
+    }
+    copyToastTimerRef.current = setTimeout(() => {
+      setCopyToast(null);
+      copyToastTimerRef.current = null;
+    }, 1500);
+  };
+
   const drawsCount = totalDraws ?? (history.length + (currentNumber ? 1 : 0));
   const display =
     currentNumber != null
@@ -37,8 +52,10 @@ export default function DrawStrip({
 
   const copyCommit = async () => {
     if (!commitHash) return;
+    let copied = false;
     try {
       await navigator.clipboard.writeText(String(commitHash));
+      copied = true;
     } catch {
       try {
         const ta = document.createElement("textarea");
@@ -50,10 +67,13 @@ export default function DrawStrip({
         ta.select();
         document.execCommand("copy");
         document.body.removeChild(ta);
+        copied = true;
       } catch {
         // ignore
       }
     }
+
+    showCopyToast(copied ? "success" : "error");
   };
 
   const [isFlashing, setIsFlashing] = useState(false);
@@ -81,6 +101,15 @@ export default function DrawStrip({
     };
   }, [display]);
 
+  useEffect(() => {
+    return () => {
+      if (copyToastTimerRef.current) {
+        clearTimeout(copyToastTimerRef.current);
+        copyToastTimerRef.current = null;
+      }
+    };
+  }, []);
+
   return (
     <div className={styles.container}>
       <div className={styles.labelRow}>
@@ -92,7 +121,20 @@ export default function DrawStrip({
         )}
         <span className={`${styles.badge} latin-number`}>90/{drawsCount}</span>
         {roomName && commitShort && (
-          <span className="inline-flex flex-wrap items-center justify-center gap-2 rounded-full border border-[rgba(101,79,150,1)] bg-black/40 pl-[6px] pr-[2px] py-[2px] text-[12px] text-white/90">
+          <span className="relative inline-flex flex-wrap items-center justify-center gap-2 rounded-full border border-[rgba(101,79,150,1)] bg-black/40 pl-[6px] pr-[2px] py-[2px] text-[12px] text-white/90">
+            {copyToast && (
+              <span
+                role="status"
+                aria-live="polite"
+                className={`pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg border px-2 py-1 text-[12px] shadow-lg ${
+                  copyToast === "success"
+                    ? "border-emerald-300 bg-emerald-600 text-white"
+                    : "border-red-300 bg-red-600 text-white"
+                }`}
+              >
+                {copyToast === "success" ? "کپی شد" : "خطا در کپی"}
+              </span>
+            )}
             <span className="whitespace-nowrap">
               <span dir="ltr" className="latin-number">
                 {roomName}
@@ -106,7 +148,7 @@ export default function DrawStrip({
             <button
               type="button"
               onClick={copyCommit}
-              className="rounded-full border border-[#22c55e] bg-[#22c55e] px-2 py-[2px] text-[11px] text-white font-semibold active:opacity-80"
+              className="rounded-full border border-[rgba(42,146,178,1)] bg-[rgba(42,146,178,1)] px-2 py-[2px] text-[11px] text-white font-semibold active:opacity-80"
             >
               کپی
             </button>
