@@ -16,6 +16,7 @@ import {
   setDingEnabled,
   setMusicVolume,
 } from "@/lib/audio-settings";
+import { setMusicVolumeValue } from "@/lib/audio/music";
 
 type Props = {
   open: boolean;
@@ -164,6 +165,7 @@ export default function SoundControlsPopup({ open, onClose, anchorRef, onSetting
             const v = Number(e.target.value) / 100;
             setMusicVolState(v);
             setMusicVolume(v);
+            setMusicVolumeValue(v); // Update the actual music audio element
             onSettingsChange?.({
               musicVolume: v,
               numbersVolume: numbersVol,

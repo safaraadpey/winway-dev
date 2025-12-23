@@ -22,6 +22,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import { playNumber, unlockAndPreloadOnUserGesture } from "@/lib/number-audio";
+import { playLiveRoomMusic, stopLiveRoomMusic } from "@/lib/audio/music";
 
 type LineWinner = {
   ticketId: string;
@@ -104,6 +105,14 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   useEffect(() => {
     const cleanup = unlockAndPreloadOnUserGesture(window);
     return cleanup;
+  }, []);
+
+  // Start background music when entering LiveRoom, stop when leaving
+  useEffect(() => {
+    playLiveRoomMusic();
+    return () => {
+      stopLiveRoomMusic();
+    };
   }, []);
 
   // لود اسنپ‌شات اولیه
