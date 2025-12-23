@@ -8,6 +8,10 @@
 const LS_KEYS = {
   musicVolume: "music_volume",
   dingEnabled: "ding_sound_enabled",
+  masterMuted: "master_muted",
+  previousMusicVolume: "previous_music_volume",
+  previousNumbersMuted: "previous_numbers_muted",
+  previousDingEnabled: "previous_ding_enabled",
 } as const;
 
 function isBrowser() {
@@ -54,6 +58,86 @@ export function setDingEnabled(enabled: boolean) {
   if (!isBrowser()) return;
   try {
     window.localStorage.setItem(LS_KEYS.dingEnabled, String(Boolean(enabled)));
+  } catch {
+    // ignore
+  }
+}
+
+export function isMasterMuted(): boolean {
+  if (!isBrowser()) return false;
+  try {
+    const raw = window.localStorage.getItem(LS_KEYS.masterMuted);
+    if (raw == null) return false;
+    return raw === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function setMasterMuted(muted: boolean) {
+  if (!isBrowser()) return;
+  try {
+    window.localStorage.setItem(LS_KEYS.masterMuted, String(Boolean(muted)));
+  } catch {
+    // ignore
+  }
+}
+
+export function getPreviousMusicVolume(): number | null {
+  if (!isBrowser()) return null;
+  try {
+    const raw = window.localStorage.getItem(LS_KEYS.previousMusicVolume);
+    if (raw == null) return null;
+    return clamp01(Number(raw));
+  } catch {
+    return null;
+  }
+}
+
+export function setPreviousMusicVolume(v: number) {
+  if (!isBrowser()) return;
+  try {
+    window.localStorage.setItem(LS_KEYS.previousMusicVolume, String(clamp01(v)));
+  } catch {
+    // ignore
+  }
+}
+
+export function getPreviousNumbersMuted(): boolean | null {
+  if (!isBrowser()) return null;
+  try {
+    const raw = window.localStorage.getItem(LS_KEYS.previousNumbersMuted);
+    if (raw == null) return null;
+    return raw === "true";
+  } catch {
+    return null;
+  }
+}
+
+export function setPreviousNumbersMuted(muted: boolean) {
+  if (!isBrowser()) return;
+  try {
+    window.localStorage.setItem(LS_KEYS.previousNumbersMuted, String(Boolean(muted)));
+  } catch {
+    // ignore
+  }
+}
+
+export function getPreviousDingEnabled(): boolean | null {
+  if (!isBrowser()) return null;
+  try {
+    const raw = window.localStorage.getItem(LS_KEYS.previousDingEnabled);
+    if (raw == null) return null;
+    return raw === "true";
+  } catch {
+    return null;
+  }
+}
+
+export function setPreviousDingEnabled(enabled: boolean) {
+  if (!isBrowser()) return;
+  try {
+    window.localStorage.setItem(LS_KEYS.previousDingEnabled, String(Boolean(enabled)));
   } catch {
     // ignore
   }

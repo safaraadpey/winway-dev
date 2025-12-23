@@ -12,9 +12,10 @@ import gameRoomImage from '../assets/menu/menu-game-room.png';
 import leaderboardImage from '../assets/menu/menu-leaderboard.png';
 import myProfileImage from '../assets/menu/menu-my-profile.png';
 import reportsImage from '../assets/menu/menu-reports.png';
+import supportImage from '../assets/menu/support.png';
 import logoutImage from '../assets/menu/menu-logout.png';
 
-type MenuName = 'Game Room' | 'Leaderboard' | 'My Profile' | 'Financial Reports' | 'Logout';
+type MenuName = 'Game Room' | 'Leaderboard' | 'My Profile' | 'Financial Reports' | 'Support' | 'Logout';
 
 const MainMenuScreen: React.FC = () => {
   const router = useRouter();
@@ -137,27 +138,55 @@ const MainMenuScreen: React.FC = () => {
             </div>
           </Link>
 
-          <div 
-            className={styles.menuItem}
-            onClick={handleLogout}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                handleLogout();
-              }
-            }}
-          >
-            <Image 
-              src={logoutImage} 
-              alt="Logout" 
-              className={styles.menuImage}
-              width={320}
-              height={120}
-              style={{ width: '100%', height: 'auto' }}
-              priority
-            />
+          {/* Support and Logout buttons side by side */}
+          <div className={styles.menuItemRow}>
+            <div 
+              className={`${styles.menuItemHalf} ${styles.menuItem}`}
+              onClick={handleLogout}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleLogout();
+                }
+              }}
+            >
+              <Image 
+                src={logoutImage} 
+                alt="Logout" 
+                className={styles.menuImage}
+                width={320}
+                height={120}
+                style={{ width: '100%', height: 'auto' }}
+                priority
+              />
+            </div>
+
+            <Link href="/player/support" className={styles.menuItemHalf}>
+              <div 
+                className={styles.menuItem}
+                onClick={() => handleMenuClick('Support')}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleMenuClick('Support');
+                  }
+                }}
+              >
+                <Image 
+                  src={supportImage} 
+                  alt="Support" 
+                  className={styles.menuImage}
+                  width={320}
+                  height={120}
+                  style={{ width: '100%', height: 'auto' }}
+                  priority
+                />
+              </div>
+            </Link>
           </div>
         </div>
       </div>

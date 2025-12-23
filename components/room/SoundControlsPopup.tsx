@@ -15,6 +15,14 @@ import {
   isDingEnabled,
   setDingEnabled,
   setMusicVolume,
+  isMasterMuted,
+  setMasterMuted,
+  getPreviousMusicVolume,
+  setPreviousMusicVolume,
+  getPreviousNumbersMuted,
+  setPreviousNumbersMuted,
+  getPreviousDingEnabled,
+  setPreviousDingEnabled,
 } from "@/lib/audio-settings";
 import { setMusicVolumeValue } from "@/lib/audio/music";
 
@@ -39,9 +47,12 @@ export default function SoundControlsPopup({ open, onClose, anchorRef, onSetting
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
   const [musicVol, setMusicVolState] = useState<number>(1);
+  const [musicMuted, setMusicMutedState] = useState<boolean>(false);
+  const [previousMusicVol, setPreviousMusicVol] = useState<number>(0.15);
   const [numbersVol, setNumbersVolState] = useState<number>(1);
   const [numbersMuted, setNumbersMutedState] = useState<boolean>(false);
   const [dingEnabled, setDingEnabledState] = useState<boolean>(true);
+  const [masterMuted, setMasterMutedState] = useState<boolean>(false);
 
   const overallMuted = useMemo(() => {
     const musicMuted = musicVol <= 0.001;
@@ -56,11 +67,18 @@ export default function SoundControlsPopup({ open, onClose, anchorRef, onSetting
     const nv = getNumberVolume();
     const nm = isNumberMuted();
     const de = isDingEnabled();
+    const mm = isMasterMuted();
 
+    const musicIsMuted = mv <= 0.001;
+    const prevMv = getPreviousMusicVolume();
+    
     setMusicVolState(mv);
+    setMusicMutedState(musicIsMuted);
+    setPreviousMusicVol(prevMv !== null ? prevMv : (mv > 0.001 ? mv : 0.15));
     setNumbersVolState(nv);
     setNumbersMutedState(nm);
     setDingEnabledState(de);
+    setMasterMutedState(mm);
 
     onSettingsChange?.({
       musicVolume: mv,
@@ -148,10 +166,127 @@ export default function SoundControlsPopup({ open, onClose, anchorRef, onSetting
         تنظیمات صدا {overallMuted ? "(خاموش)" : ""}
       </div>
 
+      {/* Master Mute Toggle */}
+      <div className={styles.section}>
+        <div className={styles.row}>
+          <div className={styles.label}>خاموش کردن همه صداها</div>
+          <button
+            type="button"
+            className={`${styles.toggle} ${masterMuted ? styles.toggleOff : ""}`}
+            onClick={() => {
+              const next = !masterMuted;
+              setMasterMutedState(next);
+              setMasterMuted(next);
+
+              if (next) {
+                // Save current settings before muting
+                if (musicVol > 0.001) {
+                  setPreviousMusicVolume(musicVol);
+                }
+                setPreviousNumbersMuted(numbersMuted);
+                setPreviousDingEnabled(dingEnabled);
+
+                // Mute everything
+                setMusicVolState(0);
+                setMusicVolume(0);
+                setMusicVolumeValue(0);
+                setMusicMutedState(true);
+                setNumbersMutedState(true);
+                setNumberMuted(true);
+                setDingEnabledState(false);
+                setDingEnabled(false);
+
+                onSettingsChange?.({
+                  musicVolume: 0,
+                  numbersVolume: numbersVol,
+                  numbersMuted: true,
+                  dingEnabled: false,
+                });
+              } else {
+                // Restore previous settings
+                const prevMv = getPreviousMusicVolume();
+                const prevNm = getPreviousNumbersMuted();
+                const prevDe = getPreviousDingEnabled();
+
+                const restoredMv = prevMv !== null ? prevMv : musicVol;
+                const restoredNm = prevNm !== null ? prevNm : numbersMuted;
+                const restoredDe = prevDe !== null ? prevDe : dingEnabled;
+
+                setMusicVolState(restoredMv);
+                setMusicVolume(restoredMv);
+                setMusicVolumeValue(restoredMv);
+                setMusicMutedState(restoredMv <= 0.001);
+                setPreviousMusicVol(restoredMv > 0.001 ? restoredMv : 0.15);
+                setNumbersMutedState(restoredNm);
+                setNumberMuted(restoredNm);
+                setDingEnabledState(restoredDe);
+                setDingEnabled(restoredDe);
+
+                onSettingsChange?.({
+                  musicVolume: restoredMv,
+                  numbersVolume: numbersVol,
+                  numbersMuted: restoredNm,
+                  dingEnabled: restoredDe,
+                });
+              }
+            }}
+            aria-label="Toggle master mute"
+          >
+            {masterMuted ? "خاموش" : "روشن"}
+          </button>
+        </div>
+      </div>
+
       {/* Music */}
       <div className={styles.section}>
         <div className={styles.row}>
           <div className={styles.label}>موزیک</div>
+          <button
+            type="button"
+            className={`${styles.toggle} ${musicMuted ? styles.toggleOff : ""}`}
+            disabled={masterMuted}
+            onPointerDown={unlock}
+            onClick={() => {
+              const next = !musicMuted;
+              setMusicMutedState(next);
+              
+              if (next) {
+                // Mute: save current volume and set to 0
+                if (musicVol > 0.001) {
+                  setPreviousMusicVol(musicVol);
+                  setPreviousMusicVolume(musicVol);
+                }
+                setMusicVolState(0);
+                setMusicVolume(0);
+                setMusicVolumeValue(0);
+              } else {
+                // Unmute: restore previous volume or use default
+                const restoredVol = previousMusicVol > 0.001 ? previousMusicVol : 0.15;
+                setMusicVolState(restoredVol);
+                setMusicVolume(restoredVol);
+                setMusicVolumeValue(restoredVol);
+              }
+              
+              // If master muted and user unmutes music, disable master mute
+              if (masterMuted && !next) {
+                setMasterMutedState(false);
+                setMasterMuted(false);
+              }
+              
+              onSettingsChange?.({
+                musicVolume: next ? 0 : (previousMusicVol > 0.001 ? previousMusicVol : 0.15),
+                numbersVolume: numbersVol,
+                numbersMuted,
+                dingEnabled,
+              });
+            }}
+            aria-label="Toggle music mute"
+          >
+            {musicMuted ? "خاموش" : "روشن"}
+          </button>
+        </div>
+        <div className={styles.row}>
+          <div className={styles.label}></div>
           <div className={styles.value}>{pct(musicVol)}%</div>
         </div>
         <input
@@ -160,12 +295,29 @@ export default function SoundControlsPopup({ open, onClose, anchorRef, onSetting
           min={0}
           max={100}
           value={pct(musicVol)}
+          disabled={masterMuted}
           onPointerDown={unlock}
           onChange={(e) => {
             const v = Number(e.target.value) / 100;
             setMusicVolState(v);
             setMusicVolume(v);
             setMusicVolumeValue(v); // Update the actual music audio element
+            
+            // Update mute state based on volume
+            if (v <= 0.001) {
+              setMusicMutedState(true);
+            } else {
+              setMusicMutedState(false);
+              setPreviousMusicVol(v);
+              setPreviousMusicVolume(v);
+            }
+            
+            // If master muted and user changes volume, disable master mute
+            if (masterMuted && v > 0) {
+              setMasterMutedState(false);
+              setMasterMuted(false);
+            }
+            
             onSettingsChange?.({
               musicVolume: v,
               numbersVolume: numbersVol,
@@ -175,9 +327,6 @@ export default function SoundControlsPopup({ open, onClose, anchorRef, onSetting
           }}
           aria-label="Music volume"
         />
-        <div className={styles.hint}>
-          اگر موزیک در بازی فعال باشد، از همین مقدار استفاده می‌کند.
-        </div>
       </div>
 
       {/* Numbers */}
@@ -187,11 +336,19 @@ export default function SoundControlsPopup({ open, onClose, anchorRef, onSetting
           <button
             type="button"
             className={`${styles.toggle} ${numbersMuted ? styles.toggleOff : ""}`}
+            disabled={masterMuted}
             onPointerDown={unlock}
             onClick={() => {
               const next = !numbersMuted;
               setNumbersMutedState(next);
               setNumberMuted(next);
+              
+              // If master muted and user unmutes numbers, disable master mute
+              if (masterMuted && !next) {
+                setMasterMutedState(false);
+                setMasterMuted(false);
+              }
+              
               onSettingsChange?.({
                 musicVolume: musicVol,
                 numbersVolume: numbersVol,
@@ -201,7 +358,7 @@ export default function SoundControlsPopup({ open, onClose, anchorRef, onSetting
             }}
             aria-label="Toggle numbers mute"
           >
-            {numbersMuted ? "Mute" : "On"}
+            {numbersMuted ? "خاموش" : "روشن"}
           </button>
         </div>
         <input
@@ -210,11 +367,19 @@ export default function SoundControlsPopup({ open, onClose, anchorRef, onSetting
           min={0}
           max={100}
           value={pct(numbersVol)}
+          disabled={masterMuted}
           onPointerDown={unlock}
           onChange={(e) => {
             const v = Number(e.target.value) / 100;
             setNumbersVolState(v);
             setNumberVolume(v);
+            
+            // If master muted and user changes volume, disable master mute
+            if (masterMuted && v > 0 && !numbersMuted) {
+              setMasterMutedState(false);
+              setMasterMuted(false);
+            }
+            
             onSettingsChange?.({
               musicVolume: musicVol,
               numbersVolume: v,
@@ -224,7 +389,6 @@ export default function SoundControlsPopup({ open, onClose, anchorRef, onSetting
           }}
           aria-label="Numbers volume"
         />
-        <div className={styles.hint}>حجم صدای اعلام شماره‌ها</div>
       </div>
 
       {/* Ding */}
@@ -234,10 +398,18 @@ export default function SoundControlsPopup({ open, onClose, anchorRef, onSetting
           <button
             type="button"
             className={`${styles.toggle} ${!dingEnabled ? styles.toggleOff : ""}`}
+            disabled={masterMuted}
             onClick={() => {
               const next = !dingEnabled;
               setDingEnabledState(next);
               setDingEnabled(next);
+              
+              // If master muted and user enables ding, disable master mute
+              if (masterMuted && next) {
+                setMasterMutedState(false);
+                setMasterMuted(false);
+              }
+              
               onSettingsChange?.({
                 musicVolume: musicVol,
                 numbersVolume: numbersVol,
@@ -247,11 +419,8 @@ export default function SoundControlsPopup({ open, onClose, anchorRef, onSetting
             }}
             aria-label="Toggle ding sound"
           >
-            {dingEnabled ? "On" : "Off"}
+            {dingEnabled ? "روشن" : "خاموش"}
           </button>
-        </div>
-        <div className={styles.hint}>
-          صدای دینگ هنگام افزایش موجودی Ding پخش می‌شود.
         </div>
       </div>
     </div>,

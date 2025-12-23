@@ -18,6 +18,9 @@ interface BuyCardsPanelProps {
   mode?: PanelMode;
   actionLabel?: string;
   initialQuantity?: number;
+  musicEnabled?: boolean;
+  onToggleMusic?: () => void;
+  showMusicToggle?: boolean;
   onConfirm: (quantity: number) => Promise<void> | void;
 }
 
@@ -30,6 +33,9 @@ export default function BuyCardsPanel({
   mode = "purchase",
   actionLabel,
   initialQuantity,
+  musicEnabled,
+  onToggleMusic,
+  showMusicToggle,
   onConfirm,
 }: BuyCardsPanelProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -95,12 +101,26 @@ export default function BuyCardsPanel({
         backgroundColor: "#151A26",
       }}
     >
-      <div className="flex items-center justify-between gap-4">
-        <div className="inline-flex flex-col items-center rounded-full border border-gray-600 px-3 py-1 text-white">
-          <span className="text-xs leading-tight">حداکثر خرید</span>
-          <span className="text-base font-semibold">
-            {maxBuy ?? maxQuantity}
-          </span>
+        <div className="flex items-center justify-between gap-0.5">
+          <div className="flex items-center gap-2">
+            {(showMusicToggle || onToggleMusic) && (
+              <button
+                type="button"
+                onClick={onToggleMusic}
+                aria-label={`موسیقی ${musicEnabled ? "روشن" : "خاموش"}`}
+                disabled={!onToggleMusic}
+                className="inline-flex items-center gap-2 rounded-full border border-gray-600 px-1.5 py-1 text-white bg-black/40 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className="text-lg">{musicEnabled ? "🔊" : "🔇"}</span>
+              </button>
+            )}
+
+          <div className="inline-flex flex-col items-center rounded-full border border-gray-600 px-3 py-1 text-white">
+            <span className="text-xs leading-tight">حداکثر خرید</span>
+            <span className="text-base font-semibold">
+              {maxBuy ?? maxQuantity}
+            </span>
+          </div>
         </div>
 
         <div className="bg-[#111111]/60 rounded-full px-1 py-1 flex items-center justify-center gap-4 border border-gray-600">

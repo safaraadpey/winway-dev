@@ -2,7 +2,7 @@
   min-height: 100vh;
   /* Let the shared /player layout background show through */
   background-color: rgba(14, 14, 15, 0.55);
-  padding: 0 1rem;
+  padding: 0 21px 0 25px;
   padding-top: 0px;
   padding-bottom: 0px;
 }
@@ -70,7 +70,7 @@
 
 @media (max-width: 640px) {
   .lobbyContainer {
-    padding: 0 0.75rem;
+    padding: 0 20px 0 0.75rem;
   }
 
   .roomImageContainer {

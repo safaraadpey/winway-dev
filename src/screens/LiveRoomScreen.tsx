@@ -476,7 +476,10 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       className="min-h-screen bg-black/40 text-white overflow-hidden"
       style={{ height: "100dvh" }}
     >
-      <div className="max-w-3xl mx-auto px-4 pt-1.5 flex flex-col h-full gap-1">
+      <div
+        className="max-w-3xl mx-auto px-4 pb-[9px] flex flex-col h-full gap-1"
+        style={{ paddingTop: "8px" }}
+      >
         <div
           className="rounded-2xl overflow-hidden bg-cover bg-center bg-no-repeat p-2 flex flex-col gap-1"
           style={{
