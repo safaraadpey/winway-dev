@@ -16,6 +16,7 @@ import { supabase } from "@/lib/supabaseClient";
 import type { ActiveGames, ActiveRoom } from "@/lib/hooks/useActiveGames";
 import { activeGamesMetrics, type ActiveGamesFetchSource } from "@/lib/metrics/activeGamesMetrics";
 import { traceFetch } from "@/lib/debug/netTrace";
+import { noteSnapshotFetched } from "@/lib/activeGames/snapshotGate";
 
 const IS_DEV = process.env.NODE_ENV !== "production";
 const PREFIX_METRICS = "[ActiveGames][Metrics]";
@@ -531,6 +532,7 @@ function createOrchestrator(): ActiveGamesOrchestrator {
         store.lastFetchEndAt = nowIso();
         touch(store);
         activeGamesMetrics.fetchEnd(source, 304, { component: "orchestrator" });
+        noteSnapshotFetched("orchestrator");
         return;
       }
 
@@ -571,6 +573,7 @@ function createOrchestrator(): ActiveGamesOrchestrator {
       store.lastFetchEndAt = nowIso();
       touch(store);
       activeGamesMetrics.fetchEnd(source, 200, { component: "orchestrator", roomsCount: rooms.length });
+      noteSnapshotFetched("orchestrator");
 
       // Reset polling backoff on success
       store.backoffMs = 0;

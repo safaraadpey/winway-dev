@@ -1,0 +1,379 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+
+export type TournamentFormValues = {
+  title: string;
+  status: string;
+  start_at: string | null;
+  currency: string;
+  ticket_price: number | null;
+  min_tickets_per_player: number | null;
+  max_tickets_per_player: number | null;
+  table_size_mode: string;
+  table_size_fixed: number | null;
+  table_size_min: number | null;
+  table_size_max: number | null;
+  remainder_policy: string;
+  guaranteed_prize: number | null;
+};
+
+export type TournamentFormProps = {
+  mode: "create" | "edit";
+  initialValues?: Partial<TournamentFormValues>;
+  onSubmit: (values: TournamentFormValues) => Promise<void> | void;
+  submitting?: boolean;
+  readOnly?: boolean;
+  lockedMessage?: string;
+};
+
+const STATUS_OPTIONS = [
+  { value: "draft", label: "پیش‌نویس" },
+  { value: "registration_open", label: "ثبت‌نام باز" },
+  { value: "running", label: "در حال اجرا" },
+  { value: "settling", label: "در حال تسویه" },
+  { value: "finished", label: "پایان‌یافته" },
+  { value: "cancelled", label: "لغوشده" },
+];
+
+const TABLE_SIZE_MODE_OPTIONS = [
+  { value: "fixed", label: "سایز ثابت" },
+  { value: "range", label: "بازه‌ای" },
+];
+
+const REMAINDER_POLICY_OPTIONS = [
+  { value: "adaptive_tables", label: "تقسیم تطبیقی میزها" },
+  { value: "uniform_with_bye", label: "یکنواخت + بای" },
+  { value: "uniform_with_ghost", label: "یکنواخت + گوست" },
+];
+
+function toDateTimeLocal(value: string | null): string {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
+}
+
+export function TournamentForm({
+  mode,
+  initialValues,
+  onSubmit,
+  submitting,
+  readOnly = false,
+  lockedMessage,
+}: TournamentFormProps) {
+  const defaults: TournamentFormValues = useMemo(
+    () => ({
+      title: "",
+      status: "draft",
+      start_at: null,
+      currency: "IRR",
+      ticket_price: null,
+      min_tickets_per_player: 1,
+      max_tickets_per_player: 1,
+      table_size_mode: "fixed",
+      table_size_fixed: 10,
+      table_size_min: 8,
+      table_size_max: 12,
+      remainder_policy: "adaptive_tables",
+      guaranteed_prize: 0,
+    }),
+    []
+  );
+
+  const [values, setValues] = useState<TournamentFormValues>({
+    ...defaults,
+    ...initialValues,
+  });
+  const [error, setError] = useState<string | null>(null);
+  const startInputRef = useRef<HTMLInputElement | null>(null);
+  const minStartLocal = useMemo(() => toDateTimeLocal(new Date().toISOString()), []);
+
+  useEffect(() => {
+    setValues((prev) => ({ ...prev, ...initialValues }));
+  }, [initialValues]);
+
+  const handleChange = (key: keyof TournamentFormValues, val: any) => {
+    setValues((prev) => ({ ...prev, [key]: val }));
+  };
+
+  const handleNumber = (key: keyof TournamentFormValues, val: string) => {
+    const num = val === "" ? null : Number(val);
+    handleChange(key, Number.isNaN(num) ? null : num);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (readOnly) return;
+    setError(null);
+    if (!values.title.trim()) {
+      setError("عنوان الزامی است.");
+      return;
+    }
+    if (!values.ticket_price || values.ticket_price <= 0) {
+      setError("قیمت بلیت باید بیشتر از صفر باشد.");
+      return;
+    }
+    if (
+      values.min_tickets_per_player &&
+      values.max_tickets_per_player &&
+      values.min_tickets_per_player > values.max_tickets_per_player
+    ) {
+      setError("حداقل بلیت نمی‌تواند بیشتر از حداکثر باشد.");
+      return;
+    }
+    if (values.table_size_mode === "fixed" && (!values.table_size_fixed || values.table_size_fixed <= 0)) {
+      setError("سایز ثابت میز باید بیشتر از صفر باشد.");
+      return;
+    }
+    if (
+      values.table_size_mode === "range" &&
+      values.table_size_min &&
+      values.table_size_max &&
+      values.table_size_min > values.table_size_max
+    ) {
+      setError("حداقل سایز میز نمی‌تواند بیشتر از حداکثر باشد.");
+      return;
+    }
+    if (values.start_at) {
+      const now = new Date();
+      const start = new Date(values.start_at);
+      if (start.getTime() < now.getTime()) {
+        setError("زمان شروع باید در آینده باشد.");
+        return;
+      }
+    }
+    await onSubmit(values);
+  };
+
+  const isRange = values.table_size_mode === "range";
+
+  const inputClass =
+    "rounded-lg bg-[#1f1f1f] border border-gray-700 px-3 py-2 text-white disabled:opacity-60 disabled:cursor-not-allowed";
+
+  const statusLabel = (v: string) => {
+    const found = STATUS_OPTIONS.find((opt) => opt.value === v);
+    return found?.label ?? v;
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {error && <div className="text-sm text-red-400">{error}</div>}
+      {lockedMessage && (
+        <div className="text-sm text-amber-400 bg-[#241a0a] border border-amber-700 rounded-lg px-3 py-2">
+          {lockedMessage}
+        </div>
+      )}
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <label className="flex flex-col gap-1 text-sm">
+          <span>عنوان</span>
+          <input
+            type="text"
+            value={values.title}
+            onChange={(e) => handleChange("title", e.target.value)}
+            className={inputClass}
+            required
+            disabled={readOnly}
+          />
+        </label>
+
+        {mode === "create" ? (
+          <label className="flex flex-col gap-1 text-sm">
+            <span>وضعیت</span>
+            <select
+              value={values.status}
+              onChange={(e) => handleChange("status", e.target.value)}
+              className={inputClass}
+              disabled={readOnly}
+            >
+              {STATUS_OPTIONS.filter((opt) => ["draft", "registration_open"].includes(opt.value)).map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <div className="flex flex-col gap-1 text-sm">
+            <span>وضعیت</span>
+            <div className="rounded-lg bg-[#1f1f1f] border border-gray-700 px-3 py-2 text-white">
+              {statusLabel(values.status)}
+            </div>
+          </div>
+        )}
+
+        <label
+          className="flex flex-col gap-1 text-sm cursor-pointer"
+          onClick={() => {
+            if (readOnly) return;
+            startInputRef.current?.focus();
+          }}
+        >
+          <span>زمان شروع</span>
+          <input
+            type="datetime-local"
+            ref={startInputRef}
+            value={toDateTimeLocal(values.start_at)}
+            onChange={(e) =>
+              handleChange("start_at", e.target.value ? new Date(e.target.value).toISOString() : null)
+            }
+            className={inputClass}
+            min={minStartLocal}
+            style={{ colorScheme: "dark" }}
+            disabled={readOnly}
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm">
+          <span>ارز</span>
+          <input
+            type="text"
+            value={values.currency}
+            onChange={(e) => handleChange("currency", e.target.value)}
+            className={inputClass}
+            disabled={readOnly}
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm">
+          <span>قیمت بلیت</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={values.ticket_price ?? ""}
+            onChange={(e) => handleNumber("ticket_price", e.target.value)}
+            className={inputClass}
+            required
+            disabled={readOnly}
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm">
+          <span>گارانتی</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={values.guaranteed_prize ?? ""}
+            onChange={(e) => handleNumber("guaranteed_prize", e.target.value)}
+            className={inputClass}
+            disabled={readOnly}
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm">
+          <span>حداقل تعداد کارت پلیر</span>
+          <input
+            type="number"
+            min="1"
+            value={values.min_tickets_per_player ?? ""}
+            onChange={(e) => handleNumber("min_tickets_per_player", e.target.value)}
+            className={inputClass}
+            disabled={readOnly}
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm">
+          <span>حداکثر تعداد کارت پلیر</span>
+          <input
+            type="number"
+            min="1"
+            value={values.max_tickets_per_player ?? ""}
+            onChange={(e) => handleNumber("max_tickets_per_player", e.target.value)}
+            className={inputClass}
+            disabled={readOnly}
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm">
+          <span>مد سایز میز</span>
+          <select
+            value={values.table_size_mode}
+            onChange={(e) => handleChange("table_size_mode", e.target.value)}
+            className={inputClass}
+            disabled={readOnly}
+          >
+            {TABLE_SIZE_MODE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {!isRange && (
+          <label className="flex flex-col gap-1 text-sm">
+            <span>سایز ثابت میز</span>
+            <input
+              type="number"
+              min="1"
+              value={values.table_size_fixed ?? ""}
+              onChange={(e) => handleNumber("table_size_fixed", e.target.value)}
+              className={inputClass}
+              disabled={readOnly}
+            />
+          </label>
+        )}
+
+        {isRange && (
+          <>
+            <label className="flex flex-col gap-1 text-sm">
+              <span>حداقل سایز میز</span>
+              <input
+                type="number"
+                min="1"
+                value={values.table_size_min ?? ""}
+                onChange={(e) => handleNumber("table_size_min", e.target.value)}
+              className={inputClass}
+              disabled={readOnly}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span>حداکثر سایز میز</span>
+              <input
+                type="number"
+                min="1"
+                value={values.table_size_max ?? ""}
+                onChange={(e) => handleNumber("table_size_max", e.target.value)}
+              className={inputClass}
+              disabled={readOnly}
+              />
+            </label>
+          </>
+        )}
+
+        <label className="flex flex-col gap-1 text-sm">
+          <span>سیاست باقی‌مانده</span>
+          <select
+            value={values.remainder_policy}
+            onChange={(e) => handleChange("remainder_policy", e.target.value)}
+            className={inputClass}
+            disabled={readOnly}
+          >
+            {REMAINDER_POLICY_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="flex gap-3">
+        <button
+          type="submit"
+          disabled={submitting || readOnly}
+          className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white text-sm font-semibold disabled:opacity-60"
+        >
+          {submitting ? "در حال ذخیره..." : mode === "create" ? "ایجاد تورنومنت" : "ذخیره تغییرات"}
+        </button>
+      </div>
+    </form>
+  );
+}
+

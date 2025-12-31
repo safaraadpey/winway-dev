@@ -1,10 +1,8 @@
 "use client";
 
 import React from "react";
-import Image from "next/image";
 import ActiveCardRow from "@/components/ActiveCardRow";
 import activeCardsBg from "@/src/assets/logo/ActiveCardsBG.png";
-import hourglassPng from "@/src/assets/logo/hourglass.png";
 
 export interface ActiveCardStatus {
   id: string;
@@ -16,16 +14,31 @@ interface ActiveCardsStatusProps {
   cards: ActiveCardStatus[];
   secondsRemaining?: number;
   waitingListMessage?: string;
+  useLongCountdown?: boolean; // روز:ساعت:دقیقه:ثانیه
 }
 
 export default function ActiveCardsStatus({
   cards,
   secondsRemaining,
   waitingListMessage = "شما اولین نفر لیست انتظار خواهید بود",
+  useLongCountdown = false,
 }: ActiveCardsStatusProps) {
   const totalCount = cards.reduce((sum, card) => sum + card.count, 0);
   const formatTime = (seconds: number): string => {
     const safeSeconds = Math.max(0, Math.floor(seconds));
+    if (useLongCountdown) {
+      const days = Math.floor(safeSeconds / 86400);
+      const hours = Math.floor((safeSeconds % 86400) / 3600)
+        .toString()
+        .padStart(2, "0");
+      const mins = Math.floor((safeSeconds % 3600) / 60)
+        .toString()
+        .padStart(2, "0");
+      const secs = Math.floor(safeSeconds % 60)
+        .toString()
+        .padStart(2, "0");
+      return `${days}:${hours}:${mins}:${secs}`;
+    }
     const mins = Math.floor(safeSeconds / 60)
       .toString()
       .padStart(2, "0");
@@ -47,21 +60,29 @@ export default function ActiveCardsStatus({
     >
       <div className="flex items-center justify-between h-[39px] max-h-[40px]">
         <div className="flex items-center gap-2">
-          <span className="text-green-500 font-medium text-[2.5rem]">
+          <span className="text-green-500 font-medium text-[25px]">
             {timerLabel}
           </span>
-          <Image
-            src={hourglassPng}
-            alt="hourglass"
-            width={24}
-            height={24}
-            className="w-6 h-6"
-            priority={false}
-          />
+          <svg
+            className="w-6 h-6 text-green-400"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+            <path
+              d="M12 7v5l3 2"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </div>
 
         <span className="text-white text-sm font-medium">
-          تعداد کارت فعال {totalCount}
+          مجموع کارتها {totalCount}
         </span>
       </div>
 

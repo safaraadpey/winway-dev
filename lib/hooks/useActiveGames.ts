@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import { supabase } from "../supabaseClient";
 import { useSession } from "@/lib/contexts/SessionContext";
 import { traceFetch } from "@/lib/debug/netTrace";
@@ -9,6 +9,7 @@ import {
   installActiveGamesMetricsOnWindow,
   type ActiveGamesFetchSource,
 } from "@/lib/metrics/activeGamesMetrics";
+import { getActiveGamesOrchestrator } from "@/lib/activeGames/ActiveGamesOrchestrator";
 
 export interface ActiveRoom {
   roomId: string;
@@ -34,6 +35,25 @@ const EMPTY_BACKOFF_STEPS_MS = [60000, 120000, 300000] as const;
  * شامل realtime subscription و polling fallback
  */
 export function useActiveGames(): ActiveGames {
+  /**
+   * Phase C feature flag (same as context/provider):
+   * dev default: orchestrator, prod default: legacy
+   * Override via NEXT_PUBLIC_ACTIVE_GAMES_SOURCE.
+   */
+  const source =
+    process.env.NEXT_PUBLIC_ACTIVE_GAMES_SOURCE ??
+    (process.env.NODE_ENV === "production" ? "legacy" : "orchestrator");
+
+  // When orchestrator is enabled, this hook becomes a thin reader and must not
+  // create its own fetch/poll/realtime side-effects.
+  if (source === "orchestrator") {
+    return useSyncExternalStore(
+      getActiveGamesOrchestrator().subscribe,
+      getActiveGamesOrchestrator().getSnapshot,
+      getActiveGamesOrchestrator().getSnapshot
+    );
+  }
+
   const session = useSession();
 
   const didInitLogRef = useRef(false);

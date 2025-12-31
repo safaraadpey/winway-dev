@@ -71,6 +71,7 @@ export default function AdminDashboardPage() {
   
   // بررسی دسترسی‌ها: مدیر کل همه دسترسی‌ها را دارد، سایر مدیران بر اساس permissions
   const canAccessRooms = isAdmin && (permissions?.rooms ?? true);
+  const canAccessTournaments = isAdmin;
   const canAccessUsers = isAdmin && (permissions?.users ?? true);
   const canAccessTransactions = isAdmin && (permissions?.transactions ?? true);
   const canAccessEntryBanner = isAdmin && (permissions?.entry_banner ?? true);
@@ -191,6 +192,16 @@ export default function AdminDashboardPage() {
               className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
             >
               <span>اتاق ها</span>
+              <span className="text-xl">›</span>
+            </button>
+          )}
+          {/* منوی "تورنومنت‌ها" */}
+          {canAccessTournaments && (
+            <button
+              onClick={() => router.push("/admin/tournaments")}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
+            >
+              <span>تورنومنت‌ها</span>
               <span className="text-xl">›</span>
             </button>
           )}

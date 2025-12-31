@@ -9,13 +9,21 @@ import styles from './MainMenuScreen.module.css';
 
 // Import menu banner images
 import gameRoomImage from '../assets/menu/menu-game-room.png';
+import tournamentImage from '../assets/menu/tournament.png';
 import leaderboardImage from '../assets/menu/menu-leaderboard.png';
 import myProfileImage from '../assets/menu/menu-my-profile.png';
 import reportsImage from '../assets/menu/menu-reports.png';
 import supportImage from '../assets/menu/support.png';
 import logoutImage from '../assets/menu/menu-logout.png';
 
-type MenuName = 'Game Room' | 'Leaderboard' | 'My Profile' | 'Financial Reports' | 'Support' | 'Logout';
+type MenuName =
+  | 'Game Room'
+  | 'Tournaments'
+  | 'Leaderboard'
+  | 'My Profile'
+  | 'Financial Reports'
+  | 'Support'
+  | 'Logout';
 
 const MainMenuScreen: React.FC = () => {
   const router = useRouter();
@@ -54,6 +62,31 @@ const MainMenuScreen: React.FC = () => {
               <Image 
                 src={gameRoomImage} 
                 alt="Game Room" 
+                className={styles.menuImage}
+                width={320}
+                height={120}
+                style={{ width: '100%', height: 'auto' }}
+                priority
+              />
+            </div>
+          </Link>
+
+          <Link href="/player/tournaments">
+            <div 
+              className={styles.menuItem}
+              onClick={() => handleMenuClick('Tournaments')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleMenuClick('Tournaments');
+                }
+              }}
+            >
+              <Image 
+                src={tournamentImage} 
+                alt="Tournaments" 
                 className={styles.menuImage}
                 width={320}
                 height={120}

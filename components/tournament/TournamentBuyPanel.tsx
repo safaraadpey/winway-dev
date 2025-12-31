@@ -9,11 +9,13 @@ import plusButtonImg from "@/src/assets/logo/plusBotton.png";
 
 type PanelMode = "purchase" | "cancel";
 
-interface BuyCardsPanelProps {
+interface TournamentBuyPanelProps {
   price: number;
   minQuantity?: number;
   maxQuantity?: number;
   maxBuy?: number;
+  displayMin?: number;
+  displayMax?: number;
   disabled?: boolean;
   mode?: PanelMode;
   actionLabel?: string;
@@ -27,11 +29,13 @@ interface BuyCardsPanelProps {
   onSecondaryAction?: () => Promise<void> | void;
 }
 
-export default function BuyCardsPanel({
+export default function TournamentBuyPanel({
   price,
   minQuantity = 1,
   maxQuantity = 10,
   maxBuy,
+  displayMin,
+  displayMax,
   disabled = false,
   mode = "purchase",
   actionLabel,
@@ -43,7 +47,7 @@ export default function BuyCardsPanel({
   secondaryActionLabel,
   secondaryDisabled,
   onSecondaryAction,
-}: BuyCardsPanelProps) {
+}: TournamentBuyPanelProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [quantity, setQuantity] = useState(() => {
     const safeInitial = initialQuantity ?? minQuantity;
@@ -109,24 +113,24 @@ export default function BuyCardsPanel({
         backgroundColor: "#151A26",
       }}
     >
-        <div className="flex items-center justify-between gap-0.5">
-          <div className="flex items-center gap-2">
-            {(showMusicToggle || onToggleMusic) && (
-              <button
-                type="button"
-                onClick={onToggleMusic}
-                aria-label={`موسیقی ${musicEnabled ? "روشن" : "خاموش"}`}
-                disabled={!onToggleMusic}
-                className="inline-flex items-center gap-2 rounded-full border border-gray-600 px-1.5 py-1 text-white bg-black/40 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <span className="text-lg">{musicEnabled ? "🔊" : "🔇"}</span>
-              </button>
-            )}
+      <div className="flex items-center justify-between gap-0.5">
+        <div className="flex items-center gap-2">
+          {(showMusicToggle || onToggleMusic) && (
+            <button
+              type="button"
+              onClick={onToggleMusic}
+              aria-label={`موسیقی ${musicEnabled ? "روشن" : "خاموش"}`}
+              disabled={!onToggleMusic}
+              className="inline-flex items-center gap-2 rounded-full border border-gray-600 px-1.5 py-1 text-white bg-black/40 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className="text-lg">{musicEnabled ? "🔊" : "🔇"}</span>
+            </button>
+          )}
 
           <div className="inline-flex flex-col items-center rounded-full border border-gray-600 px-3 py-1 text-white">
             <span className="text-xs leading-tight">تعداد خرید</span>
             <span className="text-base font-semibold">
-              {`${minQuantity} ~ ${maxBuy ?? maxQuantity}`}
+              {`${displayMin ?? minQuantity} ~ ${displayMax ?? maxBuy ?? maxQuantity}`}
             </span>
           </div>
         </div>
@@ -205,3 +209,5 @@ export default function BuyCardsPanel({
     </div>
   );
 }
+
+

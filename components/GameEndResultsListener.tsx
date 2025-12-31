@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useSession } from "@/lib/contexts/SessionContext";
 import { traceFetch } from "@/lib/debug/netTrace";
+import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 import GameResultsDialog, { type Winner } from "@/components/GameResultsDialog";
 import { fetchRoomResults } from "@/services/rooms";
 import {
@@ -33,6 +34,17 @@ function normalizeRoomName(roomCode: string | null, cardPrice: number): string {
 export default function GameEndResultsListener() {
   const pathname = usePathname();
   const session = useSession();
+  let activeGames: ReturnType<typeof useActiveGamesContext> | null = null;
+  try {
+    activeGames = useActiveGamesContext();
+  } catch {
+    // If provider is missing, fail-safe to no-op.
+    activeGames = null;
+  }
+  const activeRoomsFromContext = activeGames?.rooms ?? [];
+  const source =
+    process.env.NEXT_PUBLIC_ACTIVE_GAMES_SOURCE ??
+    (process.env.NODE_ENV === "production" ? "legacy" : "orchestrator");
 
   // Keep this listener lightweight on auth/public routes
   const enabled = Boolean(session.authReady && session.userId && session.accessToken);
@@ -179,7 +191,7 @@ export default function GameEndResultsListener() {
 
     // Start polling only when we actually have active rooms.
     // (If the user has no active rooms, this listener should be fully dormant.)
-    if (hasActiveRooms && !pollEnabledRef.current) {
+    if (source !== "orchestrator" && hasActiveRooms && !pollEnabledRef.current) {
       pollEnabledRef.current = true;
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);
@@ -188,10 +200,30 @@ export default function GameEndResultsListener() {
       pollTimerRef.current = setInterval(() => {
         scheduleRefreshRooms(0);
       }, ACTIVE_ROOMS_POLL_MS);
+    } else if (source === "orchestrator") {
+      // In orchestrator mode, polling must stay off.
+      pollEnabledRef.current = false;
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
     }
   };
 
+  const activeRoomsFromContextLite = useMemo<ActiveRoomLite[]>(() => {
+    return activeRoomsFromContext.map((r) => ({
+      roomId: String(r.roomId),
+      roomCode: r.roomCode ?? null,
+      cardPrice: Number(r.cardPrice ?? 0),
+    }));
+  }, [activeRoomsFromContext]);
+
   const fetchActiveRooms = async (): Promise<ActiveRoomLite[]> => {
+    // Orchestrator path: consume shared state, no fetch/poll.
+    if (source === "orchestrator") {
+      return activeRoomsFromContextLite;
+    }
+
     if (!session.authReady || !session.userId || !session.accessToken) return [];
     traceFetch("GameEndResultsListener:fetch", {
       action: "my-active-rooms",
@@ -213,6 +245,8 @@ export default function GameEndResultsListener() {
   };
 
   const scheduleRefreshRooms = (delayMs: number) => {
+    // Orchestrator owns snapshot fetching; listener must not fetch.
+    if (source === "orchestrator") return;
     if (!enabled) return;
     if (!session.authReady || !session.userId || !session.accessToken) return;
     if (refreshDebounceRef.current) {
@@ -238,6 +272,7 @@ export default function GameEndResultsListener() {
 
   // lifecycle: setup polling + tickets subscription + per-room subscriptions
   useEffect(() => {
+    if (source === "orchestrator") return;
     isMountedRef.current = true;
 
     if (!enabled) {
@@ -312,6 +347,71 @@ export default function GameEndResultsListener() {
     // Re-init on identity/token changes
   }, [enabled, session.userId, session.accessToken, session.tokenVersion]);
 
+  // Orchestrator path: react to shared state, no direct fetch/poll.
+  useEffect(() => {
+    if (source !== "orchestrator") return;
+    isMountedRef.current = true;
+
+    if (!enabled) {
+      setQueue([]);
+      setDialogOpen(false);
+      setDialogRoomName(null);
+      setResults(null);
+      return () => {
+        isMountedRef.current = false;
+        if (pollTimerRef.current) {
+          clearInterval(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
+        pollEnabledRef.current = false;
+        if (refreshDebounceRef.current) {
+          clearTimeout(refreshDebounceRef.current);
+          refreshDebounceRef.current = null;
+        }
+        for (const ch of Array.from(roomChannelsRef.current.values())) {
+          try {
+            supabase.removeChannel(ch);
+          } catch {
+            // ignore
+          }
+        }
+        roomChannelsRef.current.clear();
+        activeRoomsRef.current.clear();
+      };
+    }
+
+    syncRoomSubscriptions(activeRoomsFromContextLite);
+
+    return () => {
+      isMountedRef.current = false;
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+      pollEnabledRef.current = false;
+      if (refreshDebounceRef.current) {
+        clearTimeout(refreshDebounceRef.current);
+        refreshDebounceRef.current = null;
+      }
+      for (const ch of Array.from(roomChannelsRef.current.values())) {
+        try {
+          supabase.removeChannel(ch);
+        } catch {
+          // ignore
+        }
+      }
+      roomChannelsRef.current.clear();
+      activeRoomsRef.current.clear();
+    };
+  }, [
+    source,
+    enabled,
+    activeRoomsFromContextLite,
+    session.userId,
+    session.accessToken,
+    session.tokenVersion,
+  ]);
+
   // queue consumer: show one popup at a time
   useEffect(() => {
     if (!enabled) return;
@@ -348,6 +448,8 @@ export default function GameEndResultsListener() {
   };
 
   if (!enabled) return null;
+  // If ActiveGames context is absent (e.g., mis-wrapped tree), fail-safe.
+  if (!activeGames) return null;
 
   // Render the global dialog (overlay) on top of any page
   return (
