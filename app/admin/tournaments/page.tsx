@@ -20,6 +20,7 @@ type TournamentRow = {
   table_size_min: number | null;
   table_size_max: number | null;
   remainder_policy: string | null;
+  commission_rate: number | null;
   guaranteed_prize: number | null;
   created_at: string | null;
   optimizer_weights?: Record<string, unknown> | null;
@@ -41,6 +42,7 @@ function mapToFormValues(row: TournamentRow): TournamentFormValues {
     table_size_min: row.table_size_min ?? null,
     table_size_max: row.table_size_max ?? null,
     remainder_policy: row.remainder_policy || "adaptive_tables",
+    commission_rate: row.commission_rate ?? 0,
     guaranteed_prize: row.guaranteed_prize ?? 0,
   };
 }
