@@ -146,7 +146,13 @@ export default function TournamentsPage() {
                       </span>
                     </div>
 
-                    <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-sm text-gray-200">
+                    <div
+                      className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-sm text-gray-200"
+                      style={{
+                        gridTemplateColumns: "repeat(2, 1fr)",
+                        gridTemplateRows: "repeat(2, 1fr)",
+                      }}
+                    >
                       <div className="flex flex-col gap-0.5">
                         <span className="text-xs font-bold text-[#212121]">شروع</span>
                         <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-gray-500/60 bg-black/40 font-medium text-gray-100">

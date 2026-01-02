@@ -72,7 +72,7 @@ DECLARE
   v_allowed_keys  text[] := ARRAY[
     'title','start_at','currency','ticket_price','min_tickets_per_player',
     'max_tickets_per_player','table_size_mode','table_size_fixed','table_size_min',
-    'table_size_max','remainder_policy','guaranteed_prize','meta'
+    'table_size_max','remainder_policy','guaranteed_prize','commission_rate','meta'
   ];
   v_bad_keys      text[];
 BEGIN
@@ -140,6 +140,7 @@ BEGIN
                                     NULLIF(p_patch->>'remainder_policy','')::public.tournament_remainder_policy,
                                     t.remainder_policy
                                   ),
+         commission_rate         = COALESCE(NULLIF(p_patch->>'commission_rate','')::numeric, t.commission_rate),
          guaranteed_prize        = COALESCE(NULLIF(p_patch->>'guaranteed_prize','')::numeric, t.guaranteed_prize),
          updated_at              = v_now
    WHERE t.id = p_tournament_id
@@ -361,6 +362,7 @@ BEGIN
     table_size_min,
     table_size_max,
     remainder_policy,
+    commission_rate,
     guaranteed_prize,
     created_at,
     updated_at
@@ -378,6 +380,7 @@ BEGIN
     NULLIF(p_payload->>'table_size_min','')::int,
     NULLIF(p_payload->>'table_size_max','')::int,
     COALESCE(NULLIF(p_payload->>'remainder_policy','')::public.tournament_remainder_policy, 'adaptive_tables'),
+    NULLIF(p_payload->>'commission_rate','')::numeric,
     NULLIF(p_payload->>'guaranteed_prize','')::numeric,
     v_now,
     v_now

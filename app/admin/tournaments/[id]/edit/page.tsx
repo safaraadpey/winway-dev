@@ -33,6 +33,7 @@ export default function AdminTournamentEditPage() {
       table_size_min: data.table_size_min ?? null,
       table_size_max: data.table_size_max ?? null,
       remainder_policy: data.remainder_policy || "adaptive_tables",
+      commission_rate: data.commission_rate ?? null,
       guaranteed_prize: data.guaranteed_prize ?? 0,
     };
   }, []);
@@ -95,6 +96,7 @@ export default function AdminTournamentEditPage() {
       table_size_min: values.table_size_min,
       table_size_max: values.table_size_max,
       remainder_policy: values.remainder_policy,
+      commission_rate: values.commission_rate,
       guaranteed_prize: values.guaranteed_prize,
     };
 

@@ -38,8 +38,9 @@ export async function GET(request: Request) {
     // 1) Active templates (exclude inactive)
     const { data: templates, error: templatesError } = await supabase
       .from("room_templates")
-      .select("id, price, currency, status")
+      .select("id, price, currency, status, room_type")
       .neq("status", "inactive")
+      .eq("room_type", "normal")
       .order("price", { ascending: true });
 
     if (templatesError) {
@@ -55,9 +56,15 @@ export async function GET(request: Request) {
       price: any;
       currency: string | null;
       status: string | null;
+      room_type: string | null;
     }>;
 
-    const templateIds = templateRows.map((t) => t.id);
+    // Only show normal rooms in lobby; hide tournament templates/rooms.
+    const normalTemplateRows = templateRows.filter(
+      (t) => (t.room_type ?? "normal") === "normal"
+    );
+    const templateIds = normalTemplateRows.map((t) => t.id);
+    const allowedTemplateIds = new Set(templateIds);
 
     // 2) Active rooms (waiting/playing/live)
     const { data: rooms, error: roomsError } = await supabase
@@ -81,7 +88,13 @@ export async function GET(request: Request) {
       currency: string | null;
     }>;
 
-    const roomIds = roomRows.map((r) => r.id);
+    // Drop tournament rooms (only keep rooms whose template is normal or has no template)
+    const filteredRoomRows = roomRows.filter((r) => {
+      if (!r.room_template_id) return true;
+      return allowedTemplateIds.has(r.room_template_id);
+    });
+
+    const roomIds = filteredRoomRows.map((r) => r.id);
 
     // 3) Tickets for those rooms (service role => bypass RLS)
     const { data: tickets, error: ticketsError } = roomIds.length
@@ -106,7 +119,7 @@ export async function GET(request: Request) {
     const waitingPlayersSetByGroup = new Map<string, Set<string>>();
     const playingPlayersSetByGroup = new Map<string, Set<string>>();
 
-    for (const t of templateRows) {
+    for (const t of normalTemplateRows) {
       const key = `tpl_${t.id}`;
       groups.set(key, {
         templateId: t.id,
@@ -126,7 +139,8 @@ export async function GET(request: Request) {
 
     // Rooms contribute to waiting/playing/live totals
     // If a room has no templateId, fallback group by price/currency (keeps old behavior)
-    for (const r of roomRows) {
+
+    for (const r of filteredRoomRows) {
       const templateId = r.room_template_id;
       const price = Number(r.card_price || 0);
       const currency = (r.currency || "IRR") as string;
@@ -159,7 +173,7 @@ export async function GET(request: Request) {
     // Tickets contribute to distinct player counts per group (distinct across all rooms in that group)
     const roomIdToKey = new Map<string, string>();
     const roomIdToStatus = new Map<string, string>();
-    for (const r of roomRows) {
+    for (const r of filteredRoomRows) {
       const templateId = r.room_template_id;
       const price = Number(r.card_price || 0);
       const currency = (r.currency || "IRR") as string;

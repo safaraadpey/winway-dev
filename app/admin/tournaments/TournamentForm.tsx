@@ -15,6 +15,7 @@ export type TournamentFormValues = {
   table_size_min: number | null;
   table_size_max: number | null;
   remainder_policy: string;
+  commission_rate: number | null;
   guaranteed_prize: number | null;
 };
 
@@ -79,6 +80,7 @@ export function TournamentForm({
       table_size_min: 8,
       table_size_max: 12,
       remainder_policy: "adaptive_tables",
+      commission_rate: null,
       guaranteed_prize: 0,
     }),
     []
@@ -136,6 +138,10 @@ export function TournamentForm({
       values.table_size_min > values.table_size_max
     ) {
       setError("حداقل سایز میز نمی‌تواند بیشتر از حداکثر باشد.");
+      return;
+    }
+    if (values.commission_rate != null && (values.commission_rate < 0 || values.commission_rate > 100)) {
+      setError("کمیسیون باید بین 0 تا 100 باشد.");
       return;
     }
     if (values.start_at) {
@@ -261,6 +267,20 @@ export function TournamentForm({
             step="0.01"
             value={values.guaranteed_prize ?? ""}
             onChange={(e) => handleNumber("guaranteed_prize", e.target.value)}
+            className={inputClass}
+            disabled={readOnly}
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm">
+          <span>درصد کمیسیون (0 تا 100)</span>
+          <input
+            type="number"
+            min="0"
+            max="100"
+            step="0.01"
+            value={values.commission_rate ?? ""}
+            onChange={(e) => handleNumber("commission_rate", e.target.value)}
             className={inputClass}
             disabled={readOnly}
           />

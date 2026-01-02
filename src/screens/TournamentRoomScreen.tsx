@@ -140,12 +140,10 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     tournament?.guaranteed_prize != null
       ? `${tournament.guaranteed_prize.toLocaleString("fa-IR")}`
       : "-";
+  const hasGuarantee = (tournament?.guaranteed_prize ?? 0) > 0;
   const buyInLabel = `${price.toLocaleString("fa-IR")}`;
-  const playersLabel =
-    tournament?.table_size_fixed ??
-    tournament?.table_size_max ??
-    tournament?.table_size_min ??
-    null;
+  const playersCount = entries?.length ?? 0;
+  const playersLabel = playersCount.toLocaleString("fa-IR");
 
   // شمارش معکوس تا زمان شروع تورنومنت
   useEffect(() => {
@@ -363,6 +361,8 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     ];
   }, [minQty, tournament]);
 
+  const isRegistrationOpen = tournament?.status === "registration_open";
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black/40 text-white">
@@ -417,36 +417,45 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
           }}
         >
           <div className="flex items-center justify-between">
-            <span className="text-gray-300">جایزه کل</span>
+            <span className="text-gray-200 text-sm">
+              {tournament?.title ?? ""}
+            </span>
+            <div className="flex items-center gap-2 text-right">
+              <span className="text-gray-300">بازیکن‌ها</span>
+              <span className="text-emerald-300 font-semibold">
+                {playersLabel != null ? playersLabel : "-"}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-gray-300">
+              جایزه کل {hasGuarantee ? "(گارانتی)" : ""}
+            </span>
             <span className="text-amber-300 font-semibold">{prizeLabel}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-gray-300">ورودی (Buy-in)</span>
+            <span className="text-gray-300">(Buy-in) ورودی</span>
             <span className="text-gray-100 font-semibold">{buyInLabel}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-gray-300">بازیکن‌ها</span>
-            <span className="text-emerald-300 font-semibold">
-              {playersLabel != null ? playersLabel : "-"}
-            </span>
           </div>
         </div>
 
-        <TournamentBuyPanel
-          price={price}
-          minQuantity={panelMinQty}
-          maxQuantity={panelMaxQty}
-          maxBuy={panelMaxQty}
-          displayMin={minQty}
-          displayMax={maxQty}
-          initialQuantity={panelMinQty}
-          disabled={submitting || !tournament || remainingQty <= 0}
-          onConfirm={handleRegister}
-          actionLabel={submitting ? "در حال ثبت..." : undefined}
-          secondaryActionLabel={currentEntry ? (submitting ? "در حال لغو..." : "لغو خرید") : undefined}
-          secondaryDisabled={submitting}
-          onSecondaryAction={currentEntry ? handleCancelRegister : undefined}
-        />
+        {isRegistrationOpen && (
+          <TournamentBuyPanel
+            price={price}
+            minQuantity={panelMinQty}
+            maxQuantity={panelMaxQty}
+            maxBuy={panelMaxQty}
+            displayMin={minQty}
+            displayMax={maxQty}
+            initialQuantity={panelMinQty}
+            disabled={submitting || !tournament || remainingQty <= 0}
+            onConfirm={handleRegister}
+            actionLabel={submitting ? "در حال ثبت..." : undefined}
+            secondaryActionLabel={currentEntry ? (submitting ? "در حال لغو..." : "لغو خرید") : undefined}
+            secondaryDisabled={submitting}
+            onSecondaryAction={currentEntry ? handleCancelRegister : undefined}
+          />
+        )}
 
         <TournamentActiveCardsStatus
           cards={previewCards}

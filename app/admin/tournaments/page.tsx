@@ -45,6 +45,25 @@ function mapToFormValues(row: TournamentRow): TournamentFormValues {
   };
 }
 
+const statusDisplay = (status: string | null) => {
+  switch (status) {
+    case "draft":
+      return { label: "پیش‌نویس", className: "bg-gray-700/70 text-gray-50 border-gray-500/50" };
+    case "registration_open":
+      return { label: "ثبت‌نام باز", className: "bg-emerald-500/20 text-emerald-200 border-emerald-400/50" };
+    case "running":
+      return { label: "در حال اجرا", className: "bg-blue-500/20 text-blue-200 border-blue-400/50" };
+    case "settling":
+      return { label: "در حال تسویه", className: "bg-amber-500/20 text-amber-200 border-amber-400/50" };
+    case "finished":
+      return { label: "پایان‌یافته", className: "bg-slate-600/40 text-slate-100 border-slate-400/50" };
+    case "cancelled":
+      return { label: "لغوشده", className: "bg-red-600/20 text-red-100 border-red-500/60" };
+    default:
+      return { label: status || "-", className: "bg-gray-600/30 text-gray-100 border-gray-500/50" };
+  }
+};
+
 export default function AdminTournamentsPage() {
   const router = useRouter();
   const { setShowHeader, setShowBackButton, setOnBackClick } = useHeaderVisibility();
@@ -85,24 +104,7 @@ export default function AdminTournamentsPage() {
   const hasData = rows.length > 0;
 
   const renderSettings = (t: TournamentRow) => {
-    const statusLabel = (() => {
-      switch (t.status) {
-        case "draft":
-          return "پیش‌نویس";
-        case "registration_open":
-          return "ثبت‌نام باز";
-        case "running":
-          return "در حال اجرا";
-        case "settling":
-          return "در حال تسویه";
-        case "finished":
-          return "پایان‌یافته";
-        case "cancelled":
-          return "لغوشده";
-        default:
-          return t.status || "-";
-      }
-    })();
+    const statusLabel = statusDisplay(t.status).label;
 
     const tableSizeModeLabel = (() => {
       switch (t.table_size_mode) {
@@ -220,11 +222,19 @@ export default function AdminTournamentsPage() {
                 className="rounded-2xl border border-gray-800 bg-[#151515] px-4 py-2 space-y-3"
               >
                 <div className="flex items-center justify-between gap-3">
-                  <div>
+                  <div className="flex flex-wrap items-center gap-2">
                     <div className="text-lg font-semibold">{t.title || "بدون عنوان"}</div>
-                    <div className="text-xs text-gray-400">
+                    {(() => {
+                      const { label, className } = statusDisplay(t.status);
+                      return (
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${className}`}>
+                          {label}
+                        </span>
+                      );
+                    })()}
+                    <span className="text-xs text-gray-400">
                       شروع: {t.start_at ? new Date(t.start_at).toLocaleString("fa-IR") : "نامشخص"}
-                    </div>
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
