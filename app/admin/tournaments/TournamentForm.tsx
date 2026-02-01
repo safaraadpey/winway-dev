@@ -48,14 +48,30 @@ const REMAINDER_POLICY_OPTIONS = [
   { value: "uniform_with_ghost", label: "یکنواخت + گوست" },
 ];
 
-function toDateTimeLocal(value: string | null): string {
+const pad2 = (n: number) => n.toString().padStart(2, "0");
+
+function toDateLocal(value?: Date): string {
   if (!value) return "";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
-    d.getHours()
-  )}:${pad(d.getMinutes())}`;
+  if (Number.isNaN(value.getTime())) return "";
+  return `${value.getFullYear()}-${pad2(value.getMonth() + 1)}-${pad2(value.getDate())}`;
+}
+
+function toTimeLocal(value?: Date): string {
+  if (!value) return "";
+  if (Number.isNaN(value.getTime())) return "";
+  return `${pad2(value.getHours())}:${pad2(value.getMinutes())}`;
+}
+
+function buildTimeValue(hour: string, minute: string): string {
+  if (!hour || !minute) return "";
+  return `${pad2(Number(hour))}:${pad2(Number(minute))}`;
+}
+
+function toIsoFromLocal(dateValue: string, timeValue: string): string | null {
+  if (!dateValue || !timeValue) return null;
+  const local = new Date(`${dateValue}T${timeValue}`);
+  if (Number.isNaN(local.getTime())) return null;
+  return local.toISOString();
 }
 
 export function TournamentForm({
@@ -92,10 +108,38 @@ export function TournamentForm({
   });
   const [error, setError] = useState<string | null>(null);
   const startInputRef = useRef<HTMLInputElement | null>(null);
-  const minStartLocal = useMemo(() => toDateTimeLocal(new Date().toISOString()), []);
+  const minDateLocal = useMemo(() => toDateLocal(new Date()), []);
+  const [startDateLocal, setStartDateLocal] = useState("");
+  const [startHour, setStartHour] = useState("");
+  const [startMinute, setStartMinute] = useState("");
+  const startTimeLocal = useMemo(
+    () => buildTimeValue(startHour, startMinute),
+    [startHour, startMinute]
+  );
+  const sanitizeTwoDigit = (raw: string, max: number) => {
+    const digits = raw.replace(/\D/g, "").slice(0, 2);
+    if (!digits) return "";
+    const num = Math.min(max, Math.max(0, Number(digits)));
+    return num.toString();
+  };
+  const updateStartAt = (nextDate: string, nextHour: string, nextMinute: string) => {
+    const nextTime = buildTimeValue(nextHour, nextMinute);
+    const startAtValue = toIsoFromLocal(nextDate, nextTime);
+    handleChange("start_at", startAtValue);
+  };
 
   useEffect(() => {
     setValues((prev) => ({ ...prev, ...initialValues }));
+    if (initialValues?.start_at) {
+      const parsed = new Date(initialValues.start_at);
+      setStartDateLocal(toDateLocal(parsed));
+      setStartHour(pad2(parsed.getHours()));
+      setStartMinute(pad2(parsed.getMinutes()));
+    } else {
+      setStartDateLocal("");
+      setStartHour("");
+      setStartMinute("");
+    }
   }, [initialValues]);
 
   const handleChange = (key: keyof TournamentFormValues, val: any) => {
@@ -111,6 +155,11 @@ export function TournamentForm({
     e.preventDefault();
     if (readOnly) return;
     setError(null);
+    if ((startDateLocal && !startTimeLocal) || (!startDateLocal && startTimeLocal)) {
+      setError("تاریخ و ساعت شروع باید کامل باشند.");
+      return;
+    }
+    const startAtValue = toIsoFromLocal(startDateLocal, startTimeLocal);
     if (!values.title.trim()) {
       setError("عنوان الزامی است.");
       return;
@@ -144,15 +193,18 @@ export function TournamentForm({
       setError("کمیسیون باید بین 0 تا 100 باشد.");
       return;
     }
-    if (values.start_at) {
+    if (startAtValue) {
       const now = new Date();
-      const start = new Date(values.start_at);
+      const start = new Date(startAtValue);
       if (start.getTime() < now.getTime()) {
         setError("زمان شروع باید در آینده باشد.");
         return;
       }
     }
-    await onSubmit(values);
+    await onSubmit({
+      ...values,
+      start_at: startAtValue,
+    });
   };
 
   const isRange = values.table_size_mode === "range";
@@ -212,27 +264,72 @@ export function TournamentForm({
           </div>
         )}
 
-        <label
-          className="flex flex-col gap-1 text-sm cursor-pointer"
-          onClick={() => {
-            if (readOnly) return;
-            startInputRef.current?.focus();
-          }}
-        >
+        <div className="flex flex-col gap-1 text-sm">
           <span>زمان شروع</span>
-          <input
-            type="datetime-local"
-            ref={startInputRef}
-            value={toDateTimeLocal(values.start_at)}
-            onChange={(e) =>
-              handleChange("start_at", e.target.value ? new Date(e.target.value).toISOString() : null)
-            }
-            className={inputClass}
-            min={minStartLocal}
-            style={{ colorScheme: "dark" }}
-            disabled={readOnly}
-          />
-        </label>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="date"
+              ref={startInputRef}
+              value={startDateLocal}
+              onChange={(e) => {
+                const nextDate = e.target.value;
+                setStartDateLocal(nextDate);
+                if (!nextDate) {
+                  setStartHour("");
+                  setStartMinute("");
+                  handleChange("start_at", null);
+                  return;
+                }
+                updateStartAt(nextDate, startHour, startMinute);
+              }}
+              className={inputClass}
+              min={minDateLocal}
+              style={{ colorScheme: "dark" }}
+              disabled={readOnly}
+            />
+            <div className={`${inputClass} flex items-center justify-center gap-2 px-2`}>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="--"
+                value={startHour}
+                onChange={(e) => {
+                  const nextHour = sanitizeTwoDigit(e.target.value, 23);
+                  setStartHour(nextHour);
+                  updateStartAt(startDateLocal, nextHour, startMinute);
+                }}
+                onBlur={() => {
+                  if (!startHour) return;
+                  const nextHour = pad2(Number(startHour));
+                  setStartHour(nextHour);
+                  updateStartAt(startDateLocal, nextHour, startMinute);
+                }}
+                className="w-10 bg-transparent text-center text-white placeholder:text-gray-500 outline-none focus:outline-none appearance-none [-moz-appearance:textfield]"
+                disabled={readOnly}
+              />
+              <span className="text-gray-400">:</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="--"
+                value={startMinute}
+                onChange={(e) => {
+                  const nextMinute = sanitizeTwoDigit(e.target.value, 59);
+                  setStartMinute(nextMinute);
+                  updateStartAt(startDateLocal, startHour, nextMinute);
+                }}
+                onBlur={() => {
+                  if (!startMinute) return;
+                  const nextMinute = pad2(Number(startMinute));
+                  setStartMinute(nextMinute);
+                  updateStartAt(startDateLocal, startHour, nextMinute);
+                }}
+                className="w-10 bg-transparent text-center text-white placeholder:text-gray-500 outline-none focus:outline-none appearance-none [-moz-appearance:textfield]"
+                disabled={readOnly}
+              />
+            </div>
+          </div>
+        </div>
 
         <label className="flex flex-col gap-1 text-sm">
           <span>ارز</span>

@@ -60,8 +60,16 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   const [tournament, setTournament] = useState<TournamentRow | null>(null);
   const [startCountdown, setStartCountdown] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [tournamentTables, setTournamentTables] = useState<ActiveTable[]>([]);
+  const [tablesLoading, setTablesLoading] = useState(false);
+  const [winnerName, setWinnerName] = useState<string | null>(null);
   const [entries, setEntries] = useState<
-    { user_id: string; tickets_count: number | null; users?: { username?: string | null; email?: string | null } | null }[]
+    {
+      id: string;
+      user_id: string;
+      tickets_count: number | null;
+      users?: { username?: string | null; email?: string | null } | null;
+    }[]
   >([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
@@ -103,7 +111,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
           .single(),
         supabase
           .from("tournament_entries")
-          .select("user_id,tickets_count,users:users(username,email)")
+          .select("id,user_id,tickets_count,users:users(username,email)")
           .eq("tournament_id", tournamentId)
           .eq("status", "created"),
       ]);
@@ -123,6 +131,205 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
       active = false;
     };
   }, [tournamentId]);
+
+  useEffect(() => {
+    const shouldShowWinner =
+      tournament?.status === "finished" || tournament?.status === "settling";
+
+    if (!tournament?.id || !shouldShowWinner) {
+      setWinnerName(null);
+      return;
+    }
+
+    let active = true;
+
+    const resolveWinnerName = (row: any) =>
+      row?.users?.username || row?.users?.email || row?.user_id || null;
+
+    const loadWinner = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("tournament_payouts")
+          .select("user_id, users:users(username,email)")
+          .eq("tournament_id", tournament.id)
+          .eq("rank", 1)
+          .limit(1);
+
+        if (!error && data && data.length > 0) {
+          const name = resolveWinnerName(data[0]);
+          if (active) setWinnerName(name);
+          return;
+        }
+
+        // Fallback: derive winner from final round room_winners
+        const { data: lastRoundRows, error: lastRoundErr } = await supabase
+          .from("tournament_round_rooms")
+          .select("round_no")
+          .eq("tournament_id", tournament.id)
+          .order("round_no", { ascending: false })
+          .limit(1);
+
+        if (lastRoundErr || !lastRoundRows || lastRoundRows.length === 0) {
+          if (active) setWinnerName(null);
+          return;
+        }
+
+        const lastRoundNo = lastRoundRows[0]?.round_no;
+        if (!lastRoundNo) {
+          if (active) setWinnerName(null);
+          return;
+        }
+
+        const { data: finalRooms, error: finalRoomsErr } = await supabase
+          .from("tournament_round_rooms")
+          .select("room_id")
+          .eq("tournament_id", tournament.id)
+          .eq("round_no", lastRoundNo)
+          .not("room_id", "is", null);
+
+        if (finalRoomsErr || !finalRooms || finalRooms.length === 0) {
+          if (active) setWinnerName(null);
+          return;
+        }
+
+        const roomIds = finalRooms
+          .map((row: any) => row.room_id)
+          .filter(Boolean) as string[];
+
+        if (roomIds.length === 0) {
+          if (active) setWinnerName(null);
+          return;
+        }
+
+        const { data: roomWinners, error: roomWinnersErr } = await supabase
+          .from("room_winners")
+          .select("user_id, users:users(username,email)")
+          .in("room_id", roomIds)
+          .limit(1);
+
+        if (roomWinnersErr || !roomWinners || roomWinners.length === 0) {
+          if (active) setWinnerName(null);
+          return;
+        }
+
+        const name = resolveWinnerName(roomWinners[0]);
+        if (active) setWinnerName(name);
+      } catch (err) {
+        console.error("load tournament winner error:", err);
+        if (active) setWinnerName(null);
+      }
+    };
+
+    void loadWinner();
+    return () => {
+      active = false;
+    };
+  }, [tournament?.id, tournament?.status]);
+
+  useEffect(() => {
+    if (!tournamentId) return;
+
+    let active = true;
+    const ticketPrice = tournament?.ticket_price ?? 0;
+
+    const loadTables = async () => {
+      setTablesLoading(true);
+      try {
+        const { data: roundRooms, error: roundErr } = await supabase
+          .from("tournament_round_rooms")
+          .select("room_id, round_no, table_no")
+          .eq("tournament_id", tournamentId)
+          .not("room_id", "is", null)
+          .order("round_no", { ascending: false })
+          .order("table_no", { ascending: true });
+
+        if (roundErr || !roundRooms || roundRooms.length === 0) {
+          if (active) {
+            setTournamentTables([]);
+          }
+          return;
+        }
+
+        const roomIds = roundRooms
+          .map((row: any) => row.room_id)
+          .filter(Boolean) as string[];
+
+        if (roomIds.length === 0) {
+          if (active) {
+            setTournamentTables([]);
+          }
+          return;
+        }
+
+        const { data: assignments, error: assignmentsErr } = await supabase
+          .from("tournament_round_assignments")
+          .select("room_id, user_id, cards_count")
+          .eq("tournament_id", tournamentId)
+          .in("room_id", roomIds);
+
+        if (assignmentsErr) {
+          console.error("load tournament tables assignments error:", assignmentsErr);
+          if (active) {
+            setTournamentTables([]);
+          }
+          return;
+        }
+
+        const roomStats = new Map<
+          string,
+          {
+            players: Set<string>;
+            cards: number;
+          }
+        >();
+
+        assignments?.forEach((row: any) => {
+          const roomId = row.room_id as string | null;
+          if (!roomId) return;
+          if (!roomStats.has(roomId)) {
+            roomStats.set(roomId, { players: new Set(), cards: 0 });
+          }
+          const stats = roomStats.get(roomId)!;
+          if (row.user_id) {
+            stats.players.add(row.user_id as string);
+          }
+          stats.cards += Number(row.cards_count || 0);
+        });
+
+        const mappedTables: ActiveTable[] = roundRooms.map((row: any) => {
+          const roomId = row.room_id as string;
+          const stats = roomStats.get(roomId) || { players: new Set(), cards: 0 };
+          const cardCount = stats.cards;
+          return {
+            id: roomId,
+            prize: Number(ticketPrice) * cardCount,
+            players: stats.players.size,
+            cardCount,
+          };
+        });
+
+        if (active) {
+          setTournamentTables(mappedTables);
+        }
+      } catch (err) {
+        console.error("load tournament tables error:", err);
+        if (active) {
+          setTournamentTables([]);
+        }
+      } finally {
+        if (active) {
+          setTablesLoading(false);
+        }
+      }
+    };
+
+    void loadTables();
+    const interval = setInterval(loadTables, 20000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [tournamentId, tournament?.ticket_price]);
 
   const minQty = useMemo(
     () => tournament?.min_tickets_per_player ?? 1,
@@ -195,8 +402,8 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
       return;
     }
     const newTickets = currentCount + qty;
-    const amountHold = qty * price;
     const amountTotal = newTickets * price;
+    const entryId = currentEntry?.id ?? null;
     setSubmitting(true);
     try {
       const {
@@ -211,9 +418,9 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
       // Hold funds
       const { error: holdErr } = await supabase.rpc("fn_tournament_wallet_hold", {
         p_tournament_id: tournament.id,
-        p_amount: amountHold,
+        p_qty: qty,
         p_currency: currency,
-        p_entry_id: null,
+        p_entry_id: entryId,
       });
       if (holdErr) {
         toast.error(holdErr.message || "خطا در هولد مبلغ");
@@ -237,9 +444,8 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
         // rollback hold
         void supabase.rpc("fn_tournament_wallet_release", {
           p_tournament_id: tournament.id,
-          p_amount: amountHold,
+          p_entry_id: entryId,
           p_currency: currency,
-          p_entry_id: null,
         });
         toast.error(error.message || "خطا در ثبت‌نام تورنومنت");
         return;
@@ -259,7 +465,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     if (!tournament?.id) return;
     const { data, error } = await supabase
       .from("tournament_entries")
-      .select("user_id,tickets_count,users:users(username,email)")
+      .select("id,user_id,tickets_count,users:users(username,email)")
       .eq("tournament_id", tournament.id)
       .eq("status", "created");
     if (error) {
@@ -279,14 +485,12 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
       toast.error("ثبت‌نامی برای لغو یافت نشد");
       return;
     }
-    const amount = Math.max(1, userEntry.tickets_count ?? 1) * price;
     setSubmitting(true);
     try {
       const { error: relErr } = await supabase.rpc("fn_tournament_wallet_release", {
         p_tournament_id: tournament.id,
-        p_amount: amount,
+        p_entry_id: userEntry.id,
         p_currency: currency,
-        p_entry_id: null,
       });
       if (relErr) {
         toast.error(relErr.message || "خطا در آزادسازی مبلغ");
@@ -346,20 +550,6 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     if (remainingQty <= 0) return minQty;
     return remainingQty;
   }, [remainingQty, minQty]);
-
-  const previewTables: ActiveTable[] = useMemo(() => {
-    if (!tournament) return [];
-    const prize = tournament.guaranteed_prize ?? 0;
-    const cardCount = minQty > 0 ? minQty : 1;
-    return [
-      {
-        id: `tournament-table-${tournament.id}`,
-        prize,
-        players: 0,
-        cardCount,
-      },
-    ];
-  }, [minQty, tournament]);
 
   const isRegistrationOpen = tournament?.status === "registration_open";
 
@@ -463,7 +653,17 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
           useLongCountdown
         />
 
-        <ActiveTablesSection tables={previewTables} onTableClick={() => {}} />
+        {tournament?.status === "finished" && winnerName && (
+          <div className="text-center text-sm text-emerald-300">
+            برنده: {winnerName}
+          </div>
+        )}
+
+        <ActiveTablesSection
+          tables={tournamentTables}
+          emptyMessage={tablesLoading ? "در حال بارگذاری..." : "هیچ بازی فعالی وجود ندارد"}
+          onTableClick={() => {}}
+        />
 
       </div>
     </div>

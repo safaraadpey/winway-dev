@@ -64,7 +64,24 @@ export default function TournamentsPage() {
       setError(error.message || "خطا در دریافت لیست تورنومنت‌ها");
       setRows([]);
     } else {
-      setRows((data as TournamentRow[]) ?? []);
+      const items = ((data as TournamentRow[]) ?? []).slice();
+      const statusPriority: Record<string, number> = {
+        registration_open: 0,
+        running: 1,
+        settling: 2,
+        finished: 3,
+        draft: 4,
+      };
+      items.sort((a, b) => {
+        const pa = statusPriority[a.status ?? ""] ?? 99;
+        const pb = statusPriority[b.status ?? ""] ?? 99;
+        if (pa !== pb) return pa - pb;
+        const sa = a.start_at ? new Date(a.start_at).getTime() : Number.MAX_SAFE_INTEGER;
+        const sb = b.start_at ? new Date(b.start_at).getTime() : Number.MAX_SAFE_INTEGER;
+        if (sa !== sb) return sa - sb;
+        return 0;
+      });
+      setRows(items);
     }
     setLoading(false);
   };
