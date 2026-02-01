@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useSession } from "@/lib/contexts/SessionContext";
 import { traceFetch } from "@/lib/debug/netTrace";
@@ -21,7 +21,12 @@ type ActiveRoomLite = {
   cardPrice: number;
 };
 
-type RoomResults = { lineWinners: Winner[]; fullWinners: Winner[] };
+type RoomResults = {
+  lineWinners: Winner[];
+  fullWinners: Winner[];
+  isTournament: boolean;
+  tournamentId: string | null;
+};
 
 const ACTIVE_ROOMS_POLL_MS = 12000;
 
@@ -33,6 +38,7 @@ function normalizeRoomName(roomCode: string | null, cardPrice: number): string {
 
 export default function GameEndResultsListener() {
   const pathname = usePathname();
+  const router = useRouter();
   const session = useSession();
   let activeGames: ReturnType<typeof useActiveGamesContext> | null = null;
   try {
@@ -445,6 +451,12 @@ export default function GameEndResultsListener() {
     setDialogRoomName(null);
     setResults(null);
     setQueue((prev) => prev.slice(1));
+    if (results?.isTournament && results?.tournamentId) {
+      const tournamentId = results.tournamentId;
+      router.push(
+        `/player/tournaments/${tournamentId}?tournamentId=${tournamentId}&templateId=${tournamentId}`
+      );
+    }
   };
 
   if (!enabled) return null;
@@ -462,6 +474,7 @@ export default function GameEndResultsListener() {
         currentUserId={currentUserId}
         lineWinners={results?.lineWinners ?? []}
         fullWinners={results?.fullWinners ?? []}
+        isTournament={results?.isTournament ?? false}
         title={
           dialogRoomName ? (
             <span dir="rtl">

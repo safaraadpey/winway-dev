@@ -14,9 +14,10 @@ export type Winner = {
 
 interface WinnerRowProps {
   winner: Winner;
+  showPrize: boolean;
 }
 
-function WinnerRow({ winner }: WinnerRowProps) {
+function WinnerRow({ winner, showPrize }: WinnerRowProps) {
   return (
     <div className="flex items-center gap-3 rounded-2xl bg-black/60 border border-[rgba(101,79,150,1)] px-4 py-1 h-[39px] max-h-[40px]">
       <div className="flex h-12 w-12 flex-none items-center justify-center overflow-hidden rounded-full bg-[#1f2735] border border-[#3a4356]">
@@ -34,14 +35,16 @@ function WinnerRow({ winner }: WinnerRowProps) {
       <div className="flex flex-1 flex-col text-white">
         <span className="text-base font-semibold">{winner.nickname}</span>
       </div>
-      <div className="flex flex-col items-end">
-        <div className="flex items-baseline gap-1">
-          <span className="latin-number text-lg font-extrabold text-[#fbbf24]">
-            {winner.prizeAmount.toLocaleString("en-US")}
-          </span>
-          <span className="text-sm font-semibold text-[#fbbf24]">تومان</span>
+      {showPrize && (
+        <div className="flex flex-col items-end">
+          <div className="flex items-baseline gap-1">
+            <span className="latin-number text-lg font-extrabold text-[#fbbf24]">
+              {winner.prizeAmount.toLocaleString("en-US")}
+            </span>
+            <span className="text-sm font-semibold text-[#fbbf24]">تومان</span>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -49,9 +52,10 @@ function WinnerRow({ winner }: WinnerRowProps) {
 interface WinnersSectionProps {
   kind: "line" | "full";
   winners: Winner[];
+  showPrize: boolean;
 }
 
-function WinnersSection({ kind, winners }: WinnersSectionProps) {
+function WinnersSection({ kind, winners, showPrize }: WinnersSectionProps) {
   const title =
     kind === "line"
       ? winners.length === 1
@@ -91,7 +95,7 @@ function WinnersSection({ kind, winners }: WinnersSectionProps) {
       ) : (
         <div className="space-y-3">
           {winners.map((w, idx) => (
-            <WinnerRow key={`${w.id}-${idx}`} winner={w} />
+            <WinnerRow key={`${w.id}-${idx}`} winner={w} showPrize={showPrize} />
           ))}
         </div>
       )}
@@ -105,6 +109,7 @@ interface GameResultsDialogProps {
   currentUserId: string | null;
   lineWinners: Winner[];
   fullWinners: Winner[];
+  isTournament?: boolean;
   title?: React.ReactNode;
   proofSeed?: string | null;
   proofCommitHash?: string | null;
@@ -118,6 +123,7 @@ export default function GameResultsDialog({
   currentUserId,
   lineWinners,
   fullWinners,
+  isTournament = false,
   title,
   proofSeed,
   proofCommitHash,
@@ -131,6 +137,8 @@ export default function GameResultsDialog({
       (lineWinners.some((w) => w.id === currentUserId) ||
         fullWinners.some((w) => w.id === currentUserId))) ||
     false;
+  const effectivePrimaryActionLabel =
+    primaryActionLabel ?? (isTournament ? "بازگشت به لابی تورنومنت" : "بازگشت به لیست اتاق‌ها");
 
   const seedRaw = proofSeed ? String(proofSeed) : null;
   const seedHex = seedRaw
@@ -227,8 +235,8 @@ export default function GameResultsDialog({
         </div>
 
         <div className="space-y-4">
-          <WinnersSection kind="line" winners={lineWinners} />
-          <WinnersSection kind="full" winners={fullWinners} />
+          {!isTournament && <WinnersSection kind="line" winners={lineWinners} showPrize />}
+          <WinnersSection kind="full" winners={fullWinners} showPrize={!isTournament} />
         </div>
 
         <button
@@ -242,7 +250,7 @@ export default function GameResultsDialog({
             backgroundSize: "100% 100%",
           }}
         >
-          {primaryActionLabel ?? "بازگشت به لیست اتاق‌ها"}
+          {effectivePrimaryActionLabel}
         </button>
       </div>
     </div>

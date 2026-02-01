@@ -13,6 +13,8 @@ type RoomResultsResponse = {
   fullWinners: Winner[];
   seed: string | null;
   commitHash: string | null;
+  isTournament: boolean;
+  tournamentId: string | null;
 };
 
 export async function GET(request: NextRequest) {
@@ -103,7 +105,7 @@ export async function GET(request: NextRequest) {
     // (Service role is used here; this intentionally bypasses the security gating RPC.)
     const { data: roomRow, error: roomError } = await supabase
       .from("rooms")
-      .select("room_seed, room_seed_hash")
+      .select("room_seed, room_seed_hash, room_template_id")
       .eq("id", roomId)
       .maybeSingle();
     if (roomError) {
@@ -111,12 +113,42 @@ export async function GET(request: NextRequest) {
     }
     const seed: string | null = (roomRow as any)?.room_seed ?? null;
     const commitHash: string | null = (roomRow as any)?.room_seed_hash ?? null;
+    const roomTemplateId: string | null = (roomRow as any)?.room_template_id ?? null;
+
+    let isTournament = false;
+    if (roomTemplateId) {
+      const { data: templateRow, error: templateError } = await supabase
+        .from("room_templates")
+        .select("room_type")
+        .eq("id", roomTemplateId)
+        .maybeSingle();
+      if (templateError) {
+        console.error("room-results template fetch error:", templateError);
+      }
+      isTournament = (templateRow as any)?.room_type === "tournament";
+    }
+
+    let tournamentId: string | null = null;
+    if (isTournament) {
+      const { data: trrRow, error: trrError } = await supabase
+        .from("tournament_round_rooms")
+        .select("tournament_id")
+        .eq("room_id", roomId)
+        .limit(1)
+        .maybeSingle();
+      if (trrError) {
+        console.error("room-results tournament lookup error:", trrError);
+      }
+      tournamentId = (trrRow as any)?.tournament_id ?? null;
+    }
 
     const payload: RoomResultsResponse = {
       lineWinners,
       fullWinners,
       seed,
       commitHash,
+      isTournament,
+      tournamentId,
     };
 
     return NextResponse.json(payload);

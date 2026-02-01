@@ -677,6 +677,8 @@ export type RoomResultsResponse = {
   fullWinners: Winner[];
   seed: string | null;
   commitHash: string | null;
+  isTournament: boolean;
+  tournamentId: string | null;
 };
 
 export async function fetchRoomResults(

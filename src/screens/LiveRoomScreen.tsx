@@ -534,7 +534,12 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
         isOpen={showResultsDialog}
         onClose={() => {
           setShowResultsDialog(false);
-          router.push("/player/lobby");
+          const tournamentId = results?.tournamentId ?? null;
+          const destination =
+            results?.isTournament && tournamentId
+              ? `/player/tournaments/${tournamentId}?tournamentId=${tournamentId}&templateId=${tournamentId}`
+              : "/player/lobby";
+          router.push(destination);
         }}
         title={
           <span dir="rtl">
@@ -549,6 +554,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
         currentUserId={currentUserId}
         lineWinners={results?.lineWinners ?? []}
         fullWinners={results?.fullWinners ?? []}
+        isTournament={results?.isTournament ?? false}
       />
     </div>
   );
