@@ -62,7 +62,15 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   const [submitting, setSubmitting] = useState(false);
   const [tournamentTables, setTournamentTables] = useState<ActiveTable[]>([]);
   const [tablesLoading, setTablesLoading] = useState(false);
-  const [winnerName, setWinnerName] = useState<string | null>(null);
+  const [winnersLoading, setWinnersLoading] = useState(false);
+  const [winners, setWinners] = useState<
+    {
+      userId: string;
+      name: string;
+      rank: number | null;
+      amount: number | null;
+    }[]
+  >([]);
   const [entries, setEntries] = useState<
     {
       id: string;
@@ -137,27 +145,32 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
       tournament?.status === "finished" || tournament?.status === "settling";
 
     if (!tournament?.id || !shouldShowWinner) {
-      setWinnerName(null);
+      setWinners([]);
       return;
     }
 
     let active = true;
 
     const resolveWinnerName = (row: any) =>
-      row?.users?.username || row?.users?.email || row?.user_id || null;
+      row?.users?.username || row?.users?.email || row?.user_id || "بازیکن";
 
     const loadWinner = async () => {
+      setWinnersLoading(true);
       try {
         const { data, error } = await supabase
           .from("tournament_payouts")
-          .select("user_id, users:users(username,email)")
+          .select("user_id, amount, rank, users:users(username,email)")
           .eq("tournament_id", tournament.id)
-          .eq("rank", 1)
-          .limit(1);
+          .order("rank", { ascending: true });
 
         if (!error && data && data.length > 0) {
-          const name = resolveWinnerName(data[0]);
-          if (active) setWinnerName(name);
+          const mapped = (data as any[]).map((row) => ({
+            userId: row.user_id,
+            name: resolveWinnerName(row),
+            rank: row.rank ?? null,
+            amount: row.amount != null ? Number(row.amount) : null,
+          }));
+          if (active) setWinners(mapped);
           return;
         }
 
@@ -170,13 +183,13 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
           .limit(1);
 
         if (lastRoundErr || !lastRoundRows || lastRoundRows.length === 0) {
-          if (active) setWinnerName(null);
+          if (active) setWinners([]);
           return;
         }
 
         const lastRoundNo = lastRoundRows[0]?.round_no;
         if (!lastRoundNo) {
-          if (active) setWinnerName(null);
+          if (active) setWinners([]);
           return;
         }
 
@@ -188,7 +201,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
           .not("room_id", "is", null);
 
         if (finalRoomsErr || !finalRooms || finalRooms.length === 0) {
-          if (active) setWinnerName(null);
+          if (active) setWinners([]);
           return;
         }
 
@@ -197,26 +210,44 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
           .filter(Boolean) as string[];
 
         if (roomIds.length === 0) {
-          if (active) setWinnerName(null);
+          if (active) setWinners([]);
           return;
         }
 
         const { data: roomWinners, error: roomWinnersErr } = await supabase
           .from("room_winners")
-          .select("user_id, users:users(username,email)")
-          .in("room_id", roomIds)
-          .limit(1);
+          .select("user_id, weight, users:users(username,email)")
+          .in("room_id", roomIds);
 
         if (roomWinnersErr || !roomWinners || roomWinners.length === 0) {
-          if (active) setWinnerName(null);
+          if (active) setWinners([]);
           return;
         }
 
-        const name = resolveWinnerName(roomWinners[0]);
-        if (active) setWinnerName(name);
+        const uniqueWinners = new Map<string, { name: string; weight: number }>();
+        (roomWinners as any[]).forEach((row) => {
+          const userId = row.user_id as string | null;
+          if (!userId) return;
+          const weight = Number(row.weight ?? 0);
+          const existing = uniqueWinners.get(userId);
+          if (!existing || weight > existing.weight) {
+            uniqueWinners.set(userId, { name: resolveWinnerName(row), weight });
+          }
+        });
+        const mapped = Array.from(uniqueWinners.entries())
+          .sort((a, b) => b[1].weight - a[1].weight)
+          .map(([userId, info], idx) => ({
+            userId,
+            name: info.name,
+            rank: idx + 1,
+            amount: null,
+          }));
+        if (active) setWinners(mapped);
       } catch (err) {
         console.error("load tournament winner error:", err);
-        if (active) setWinnerName(null);
+        if (active) setWinners([]);
+      } finally {
+        if (active) setWinnersLoading(false);
       }
     };
 
@@ -551,6 +582,10 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     return remainingQty;
   }, [remainingQty, minQty]);
 
+  const handleTableClick = (roomId: string) => {
+    router.push(`/player/gameroom?roomId=${roomId}`);
+  };
+
   const isRegistrationOpen = tournament?.status === "registration_open";
 
   if (loading) {
@@ -629,6 +664,42 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
           </div>
         </div>
 
+        {(tournament?.status === "finished" || tournament?.status === "settling") && (
+          <div
+            className="rounded-2xl border border-transparent px-4 py-3 text-sm"
+            style={{
+              backgroundImage: `url(${require("@/src/assets/logo/TicktBuy_BG.png").default.src})`,
+              backgroundRepeat: "no-repeat",
+              backgroundPosition: "center center",
+              backgroundSize: "100% 100%",
+              backgroundColor: "#151A26",
+            }}
+          >
+            <div className="font-semibold text-emerald-200">برنده‌ها</div>
+            {winnersLoading ? (
+              <div className="mt-2 text-emerald-200/70">در حال دریافت برنده‌ها...</div>
+            ) : winners.length === 0 ? (
+              <div className="mt-2 text-emerald-200/70">برنده‌ای ثبت نشده است.</div>
+            ) : (
+              <div className="mt-2 space-y-2">
+                {winners.map((winner, index) => (
+                  <div key={`${winner.userId}-${index}`} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-emerald-300 font-semibold">
+                        {winner.rank ?? index + 1}.
+                      </span>
+                      <span>{winner.name}</span>
+                    </div>
+                    <div className="text-emerald-200">
+                      {winner.amount != null ? winner.amount.toLocaleString("fa-IR") : "-"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {isRegistrationOpen && (
           <TournamentBuyPanel
             price={price}
@@ -653,16 +724,10 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
           useLongCountdown
         />
 
-        {tournament?.status === "finished" && winnerName && (
-          <div className="text-center text-sm text-emerald-300">
-            برنده: {winnerName}
-          </div>
-        )}
-
         <ActiveTablesSection
           tables={tournamentTables}
           emptyMessage={tablesLoading ? "در حال بارگذاری..." : "هیچ بازی فعالی وجود ندارد"}
-          onTableClick={() => {}}
+          onTableClick={handleTableClick}
         />
 
       </div>

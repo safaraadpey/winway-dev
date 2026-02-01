@@ -23,6 +23,7 @@ export default function TournamentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<TournamentRow[]>([]);
+  const [viewMode, setViewMode] = useState<"active" | "finished">("active");
 
   useEffect(() => {
     setShowBackButton(true);
@@ -56,7 +57,7 @@ export default function TournamentsPage() {
     const { data, error } = await supabase
       .from("tournaments")
       .select("id,title,status,start_at,currency,ticket_price,guaranteed_prize")
-      .in("status", ["registration_open", "running", "settling"])
+      .in("status", ["registration_open", "running", "settling", "finished"])
       .order("start_at", { ascending: true })
       .order("created_at", { ascending: false });
 
@@ -90,7 +91,15 @@ export default function TournamentsPage() {
     void fetchTournaments();
   }, []);
 
-  const activeCount = useMemo(() => rows.length, [rows]);
+  const { activeRows, finishedRows } = useMemo(() => {
+    const active = rows.filter((row) =>
+      ["registration_open", "running", "settling"].includes(row.status ?? "")
+    );
+    const finished = rows.filter((row) => row.status === "finished");
+    return { activeRows: active, finishedRows: finished };
+  }, [rows]);
+
+  const filteredRows = viewMode === "active" ? activeRows : finishedRows;
 
   const handleTournamentClick = (id: string) => {
     // Pass tournamentId + templateId as query so صفحه مقصد بتواند با دادهٔ فعلی کار کند
@@ -112,6 +121,29 @@ export default function TournamentsPage() {
           </button>
         </div>
 
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setViewMode("active")}
+            className={`px-3 py-1.5 text-sm rounded-full border transition ${
+              viewMode === "active"
+                ? "bg-emerald-500/90 text-black border-emerald-300"
+                : "bg-[#111827] text-gray-200 border-gray-700 hover:bg-[#1F2937]"
+            }`}
+          >
+            در حال اجرا
+          </button>
+          <button
+            onClick={() => setViewMode("finished")}
+            className={`px-3 py-1.5 text-sm rounded-full border transition ${
+              viewMode === "finished"
+                ? "bg-emerald-500/90 text-black border-emerald-300"
+                : "bg-[#111827] text-gray-200 border-gray-700 hover:bg-[#1F2937]"
+            }`}
+          >
+            پایان یافته
+          </button>
+        </div>
+
         {loading ? (
           <div className="flex flex-col items-center justify-center text-white py-16 gap-3">
             <div className="w-8 h-8 border-4 border-gray-700 border-t-emerald-400 rounded-full animate-spin" />
@@ -125,15 +157,17 @@ export default function TournamentsPage() {
               </div>
             )}
 
-            {!error && activeCount === 0 && (
+            {!error && filteredRows.length === 0 && (
               <div className="rounded-lg border border-gray-700 bg-[#111827] text-gray-200 px-4 py-6 text-center">
-                فعلاً تورنومنت فعالی وجود ندارد.
+                {viewMode === "active"
+                  ? "فعلاً تورنومنت فعالی وجود ندارد."
+                  : "فعلاً تورنومنت پایان یافته‌ای وجود ندارد."}
               </div>
             )}
 
-            {!error && activeCount > 0 && (
+            {!error && filteredRows.length > 0 && (
               <div className="space-y-3">
-                {rows.map((t) => (
+                {filteredRows.map((t) => (
                   <div
                     key={t.id}
                     role="button"
