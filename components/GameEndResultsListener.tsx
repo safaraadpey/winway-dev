@@ -442,7 +442,7 @@ export default function GameEndResultsListener() {
       })
       .catch(() => {
         if (!isMountedRef.current) return;
-        setResults({ lineWinners: [], fullWinners: [] });
+        setResults({ lineWinners: [], fullWinners: [], isTournament: false, tournamentId: null });
       });
   }, [enabled, dialogOpen, queue, shouldSuppressBecauseLiveRoomAlreadyHandlesIt]);
 
