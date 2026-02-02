@@ -17,6 +17,11 @@ type LiveRoomResponse = {
     full_reward_percentage: number;
     commission_rate: number;
   };
+  tournament?: {
+    id: string;
+    title: string | null;
+    round_no: number | null;
+  } | null;
   server_now: string;
   draws: Array<{ number: number; created_at: string }>;
   cards: Array<{
@@ -245,6 +250,27 @@ export async function GET(request: Request) {
         };
       }) ?? [];
 
+    let tournament: LiveRoomResponse["tournament"] = null;
+    const { data: roundRow } = await supabase
+      .from("tournament_round_rooms")
+      .select("tournament_id, round_no")
+      .eq("room_id", roomId)
+      .maybeSingle();
+
+    if (roundRow?.tournament_id) {
+      const { data: tournamentRow } = await supabase
+        .from("tournaments")
+        .select("id,title")
+        .eq("id", roundRow.tournament_id)
+        .maybeSingle();
+
+      tournament = {
+        id: roundRow.tournament_id,
+        title: tournamentRow?.title ?? null,
+        round_no: roundRow.round_no ?? null,
+      };
+    }
+
     const response: LiveRoomResponse = {
       room: {
         id: room.id,
@@ -261,6 +287,7 @@ export async function GET(request: Request) {
         full_reward_percentage: resolvedFullPct,
         commission_rate: resolvedCommissionRate,
       },
+      tournament,
       server_now: new Date().toISOString(),
       draws: (draws || []).map((d: any) => ({
         number: d.number,

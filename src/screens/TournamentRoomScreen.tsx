@@ -25,6 +25,7 @@ type TournamentRow = {
   currency: string | null;
   ticket_price: number | null;
   guaranteed_prize: number | null;
+  commission_rate: number | null;
   min_tickets_per_player: number | null;
   max_tickets_per_player: number | null;
   table_size_mode: string | null;
@@ -114,7 +115,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
         supabase
           .from("tournaments")
           .select(
-            "id,title,status,start_at,currency,ticket_price,guaranteed_prize,min_tickets_per_player,max_tickets_per_player,table_size_mode,table_size_fixed,table_size_min,table_size_max,meta"
+            "id,title,status,start_at,currency,ticket_price,guaranteed_prize,commission_rate,min_tickets_per_player,max_tickets_per_player,table_size_mode,table_size_fixed,table_size_min,table_size_max,meta"
           )
           .eq("id", tournamentId)
           .single(),
@@ -375,11 +376,29 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
 
   const price = tournament?.ticket_price ?? 0;
   const currency = tournament?.currency ?? "IRR";
+  const guaranteedPrize = tournament?.guaranteed_prize ?? 0;
+  const normalizeCommissionRate = (value: number | null | undefined) => {
+    if (value == null || Number.isNaN(value)) return 0;
+    if (value < 0) return 0;
+    if (value > 1) return value / 100;
+    return value;
+  };
+  const commissionRate = normalizeCommissionRate(tournament?.commission_rate ?? 0);
+  const hasGuarantee = guaranteedPrize > 0;
+  const totalTickets = useMemo(
+    () => entries.reduce((sum, entry) => sum + (entry.tickets_count ?? 0), 0),
+    [entries]
+  );
+  const prizePoolGross = price * totalTickets;
+  const prizePoolNet = Math.max(0, prizePoolGross * (1 - commissionRate));
+  const displayPrize = hasGuarantee
+    ? Math.max(guaranteedPrize, prizePoolNet)
+    : prizePoolNet;
+  const showGuaranteeLabel = hasGuarantee && prizePoolNet <= guaranteedPrize;
   const prizeLabel =
-    tournament?.guaranteed_prize != null
-      ? `${tournament.guaranteed_prize.toLocaleString("fa-IR")}`
+    Number.isFinite(displayPrize) && displayPrize > 0
+      ? displayPrize.toLocaleString("fa-IR")
       : "-";
-  const hasGuarantee = (tournament?.guaranteed_prize ?? 0) > 0;
   const buyInLabel = `${price.toLocaleString("fa-IR")}`;
   const playersCount = entries?.length ?? 0;
   const playersLabel = playersCount.toLocaleString("fa-IR");
@@ -659,7 +678,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
           </div>
           <div className="flex items-center justify-between">
             <span className="text-gray-300">
-              جایزه کل {hasGuarantee ? "(گارانتی)" : ""}
+              جایزه کل {showGuaranteeLabel ? "(گارانتی)" : ""}
             </span>
             <span className="text-amber-300 font-semibold">{prizeLabel}</span>
           </div>

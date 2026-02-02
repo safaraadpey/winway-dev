@@ -56,6 +56,11 @@
   flex: 0 0 auto;
 }
 
+.tournamentChip {
+  justify-content: flex-end;
+  text-align: right;
+}
+
 .prizeValue {
   color: rgba(63, 146, 180, 1);
   font-weight: 800;

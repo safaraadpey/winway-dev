@@ -492,6 +492,9 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
           <RoomHeader
             linePrize={linePrize}
             fullPrize={fullPrize}
+            isTournament={!!data.tournament?.id}
+            tournamentName={data.tournament?.title ?? null}
+            roundNumber={data.tournament?.round_no ?? null}
           />
 
           <DrawStrip

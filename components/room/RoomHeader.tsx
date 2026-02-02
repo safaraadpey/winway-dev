@@ -9,6 +9,9 @@ import { getVolume as getNumberVolume, isMuted as isNumberMuted } from "@/lib/nu
 interface RoomHeaderProps {
   linePrize: number;
   fullPrize: number;
+  isTournament?: boolean;
+  tournamentName?: string | null;
+  roundNumber?: number | null;
 }
 
 const formatNumber = (value: number) =>
@@ -17,6 +20,9 @@ const formatNumber = (value: number) =>
 export default function RoomHeader({
   linePrize,
   fullPrize,
+  isTournament = false,
+  tournamentName = null,
+  roundNumber = null,
 }: RoomHeaderProps) {
   const [open, setOpen] = useState(false);
   const anchorRef = useRef<HTMLButtonElement | null>(null);
@@ -86,14 +92,35 @@ export default function RoomHeader({
         }}
       />
       <div className={styles.prizes}>
-        <div className={styles.prizeChip}>
-          <span className={`${styles.prizeValue} latin-number`}>{formatNumber(linePrize)}</span>
-          <span className={styles.prizeLabel}>خط</span>
-        </div>
-        <div className={styles.prizeChip}>
-          <span className={`${styles.prizeValue} latin-number`}>{formatNumber(fullPrize)}</span>
-          <span className={styles.prizeLabel}>دبرنا</span>
-        </div>
+        {isTournament ? (
+          <>
+            <div className={`${styles.prizeChip} ${styles.tournamentChip}`}>
+              <span className={styles.prizeValue}>
+                {roundNumber != null ? `راند ${roundNumber}` : "راند -"}
+              </span>
+            </div>
+            <div className={`${styles.prizeChip} ${styles.tournamentChip}`}>
+              <span className={styles.prizeValue}>
+                {tournamentName || "تورنومنت"}
+              </span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className={styles.prizeChip}>
+              <span className={`${styles.prizeValue} latin-number`}>
+                {formatNumber(linePrize)}
+              </span>
+              <span className={styles.prizeLabel}>خط</span>
+            </div>
+            <div className={styles.prizeChip}>
+              <span className={`${styles.prizeValue} latin-number`}>
+                {formatNumber(fullPrize)}
+              </span>
+              <span className={styles.prizeLabel}>دبرنا</span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

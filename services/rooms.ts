@@ -630,6 +630,11 @@ export interface LiveRoomSnapshot {
     full_reward_percentage: number;
     commission_rate: number;
   };
+  tournament?: {
+    id: string;
+    title: string | null;
+    round_no: number | null;
+  } | null;
   server_now?: string;
   draws: Array<{ number: number; created_at: string }>;
   cards: Array<{
