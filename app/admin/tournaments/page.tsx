@@ -44,6 +44,7 @@ function mapToFormValues(row: TournamentRow): TournamentFormValues {
     remainder_policy: row.remainder_policy || "adaptive_tables",
     commission_rate: row.commission_rate ?? 0,
     guaranteed_prize: row.guaranteed_prize ?? 0,
+    final_winners_count: (row.meta as any)?.final_winners_count ?? 1,
   };
 }
 
