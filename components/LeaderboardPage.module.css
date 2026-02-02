@@ -31,12 +31,12 @@
 .tab {
   flex: 1;
   padding: 0.75rem 1rem;
-  background-color: rgba(236, 238, 241, 1);
-  color: rgba(0, 0, 0, 1);
+  background-color: transparent;
+  color: #ffffff;
   border-style: solid;
   border-width: 1px;
   border-color: rgba(73, 72, 76, 1);
-  border-radius: 0.5rem;
+  border-radius: 200px;
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -44,16 +44,21 @@
 }
 
 .tab:hover {
-  background-color: rgba(236, 238, 241, 1);
+  background-color: rgba(0, 0, 0, 0.15);
 }
 
 .tabActive {
-  background-color: #00d4aa;
+  background-image: url("../src/assets/logo/lobbyInfo.png");
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: 100% 100%;
+  background-color: transparent;
   color: #ffffff;
+  border-radius: 200px;
 }
 
 .tabActive:hover {
-  background-color: #00c49a;
+  background-color: transparent;
 }
 
 /* Section */
@@ -69,20 +74,24 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem;
-  background-color: rgba(236, 238, 241, 1);
+  background-image: url("../src/assets/logo/BG002.png");
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: 100% 100%;
+  background-color: transparent;
   border-radius: 0.5rem;
   margin-bottom: 1rem;
 }
 
 .sectionTitle {
   font-size: 0.875rem;
-  color: #2d2d2d;
+  color: #ffffff;
   font-weight: 500;
 }
 
 .sectionValue {
   font-size: 1rem;
-  color: #2d2d2d;
+  color: #ffffff;
   font-weight: 600;
 }
 

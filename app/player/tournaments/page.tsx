@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { supabase } from "@/lib/supabaseClient";
 import tournamentBg from "@/src/assets/tournament/10.png";
+import myActiveGameBg from "@/src/assets/logo/MyActiveGame.png";
 
 type TournamentRow = {
   id: string;
@@ -126,9 +127,19 @@ export default function TournamentsPage() {
             onClick={() => setViewMode("active")}
             className={`px-3 py-1.5 text-sm rounded-full border transition ${
               viewMode === "active"
-                ? "bg-emerald-500/90 text-black border-emerald-300"
-                : "bg-[#111827] text-gray-200 border-gray-700 hover:bg-[#1F2937]"
+                ? "text-white border-transparent"
+                : "bg-[#111827] text-white border-gray-700 hover:bg-[#1F2937]"
             }`}
+            style={
+              viewMode === "active"
+                ? {
+                    backgroundImage: `url(${myActiveGameBg.src})`,
+                    backgroundRepeat: "no-repeat",
+                    backgroundPosition: "center center",
+                    backgroundSize: "100% 100%",
+                  }
+                : undefined
+            }
           >
             در حال اجرا
           </button>
@@ -136,9 +147,19 @@ export default function TournamentsPage() {
             onClick={() => setViewMode("finished")}
             className={`px-3 py-1.5 text-sm rounded-full border transition ${
               viewMode === "finished"
-                ? "bg-emerald-500/90 text-black border-emerald-300"
-                : "bg-[#111827] text-gray-200 border-gray-700 hover:bg-[#1F2937]"
+                ? "text-white border-transparent"
+                : "bg-[#111827] text-white border-gray-700 hover:bg-[#1F2937]"
             }`}
+            style={
+              viewMode === "finished"
+                ? {
+                    backgroundImage: `url(${myActiveGameBg.src})`,
+                    backgroundRepeat: "no-repeat",
+                    backgroundPosition: "center center",
+                    backgroundSize: "100% 100%",
+                  }
+                : undefined
+            }
           >
             پایان یافته
           </button>

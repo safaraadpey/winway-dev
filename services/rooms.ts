@@ -43,6 +43,7 @@ export async function loadRooms(): Promise<RoomTemplatePayload[]> {
         status
       `
     )
+    .eq("room_type", "normal")
     .order("created_at", { ascending: false });
 
   if (error) {

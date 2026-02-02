@@ -11,13 +11,22 @@ import type {
 } from "@/src/types/leaderboard";
 
 /**
- * محاسبه محدوده تاریخ برای امروز
+ * محاسبه محدوده تاریخ برای امروز (UTC)
  */
 function getTodayDateRange(): { from: Date; to: Date } {
   const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const to = new Date(now);
   return { from, to };
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  if (size <= 0) return [items];
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
 }
 
 /**
@@ -59,14 +68,7 @@ export async function loadLeaderboardData(): Promise<LeaderboardData> {
         id,
         reward_amount,
         created_at,
-        room_id,
-        rooms (
-          id,
-          title,
-          room_code,
-          price,
-          card_price
-        )
+        room_id
       `
       )
       .eq("user_id", currentUser.id)
@@ -78,25 +80,6 @@ export async function loadLeaderboardData(): Promise<LeaderboardData> {
       console.error("Error loading results:", resultsError);
     }
 
-    // تبدیل results به WinRecord
-    const wins: WinRecord[] =
-      results?.map((r: any) => {
-        const room = r.rooms;
-        return {
-          id: r.id,
-          gameTime: new Date(r.created_at).toLocaleTimeString("fa-IR", {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          amountWon: Number(r.reward_amount || 0),
-          roomName: room?.title || room?.room_code || "نامشخص",
-          roomCode: room?.room_code,
-        };
-      }) || [];
-
-    // محاسبه مجموع مبلغ برد امروز
-    const totalWinningsToday = wins.reduce((sum, win) => sum + win.amountWon, 0);
-
     // 2. بارگذاری خریدها (tickets + transactions) برای امروز
     // ابتدا tickets را می‌گیریم
     const { data: tickets, error: ticketsError } = await supabase
@@ -106,14 +89,7 @@ export async function loadLeaderboardData(): Promise<LeaderboardData> {
         id,
         room_id,
         transaction_id,
-        created_at,
-        rooms (
-          id,
-          title,
-          room_code,
-          price,
-          card_price
-        )
+        created_at
       `
       )
       .eq("player_user_id", currentUser.id)
@@ -126,64 +102,118 @@ export async function loadLeaderboardData(): Promise<LeaderboardData> {
       console.error("Error loading tickets:", ticketsError);
     }
 
-    // گرفتن transaction_id های منحصر به فرد
-    const transactionIds = new Set<string>();
-    tickets?.forEach((t: any) => {
-      if (t.transaction_id) transactionIds.add(t.transaction_id);
+    const roomIds = new Set<string>();
+    results?.forEach((row: any) => {
+      if (row.room_id) roomIds.add(row.room_id);
+    });
+    tickets?.forEach((row: any) => {
+      if (row.room_id) roomIds.add(row.room_id);
     });
 
-    // بارگذاری transactions برای محاسبه مبلغ خرید
-    let transactionsMap = new Map<string, { amount: number; room_id: string }>();
-    if (transactionIds.size > 0) {
-      const { data: transactions, error: transactionsError } = await supabase
-        .from("transactions")
-        .select("id, amount, related_room")
-        .eq("type", "bet")
-        .eq("user_id", currentUser.id)
-        .in("id", Array.from(transactionIds))
-        .gte("created_at", from.toISOString())
-        .lte("created_at", to.toISOString());
+    const normalTemplateIds = new Set<string>();
+    const { data: templates, error: templatesError } = await supabase
+      .from("room_templates")
+      .select("id")
+      .eq("room_type", "normal");
 
-      if (transactionsError) {
-        console.error("Error loading transactions:", transactionsError);
-      }
-
-      transactions?.forEach((tx: any) => {
-        transactionsMap.set(tx.id, {
-          amount: Number(tx.amount || 0),
-          room_id: tx.related_room || "",
-        });
-      });
+    if (templatesError) {
+      console.error("Error loading normal room templates for leaderboard:", templatesError);
     }
 
-    // گروه‌بندی tickets بر اساس room_id و transaction_id
-    const purchasesMap = new Map<string, PurchaseRecord>();
+    templates?.forEach((row: any) => {
+      if (row?.id) normalTemplateIds.add(row.id);
+    });
+    const normalTemplateIdList = Array.from(normalTemplateIds);
 
-    tickets?.forEach((t: any) => {
-      const room = t.rooms;
-      const roomId = t.room_id;
-      const transactionId = t.transaction_id;
-      const key = `${roomId}_${transactionId}`;
+    // بارگذاری اطلاعات اتاق‌های normal برای نمایش
+    const roomsById = new Map<
+      string,
+      {
+        id: string;
+        title: string | null;
+        room_code: string | null;
+        price: number | null;
+        card_price: number | null;
+        room_template_id: string | null;
+      }
+    >();
+    const normalRoomIds = new Set<string>();
 
-      if (!purchasesMap.has(key)) {
-        const tx = transactionId ? transactionsMap.get(transactionId) : null;
-        purchasesMap.set(key, {
-          id: transactionId || t.id,
-          purchaseAmount: tx?.amount || Number(room?.card_price || room?.price || 0),
-          cardCount: 0,
-          roomName: room?.title || room?.room_code || "نامشخص",
-          roomCode: room?.room_code,
+    if (roomIds.size > 0 && normalTemplateIds.size > 0) {
+      const roomIdBatches = chunkArray(Array.from(roomIds), 200);
+      for (const batch of roomIdBatches) {
+        const { data: roomsData, error: roomsError } = await supabase.rpc(
+          "fn_rooms_by_ids",
+          {
+            p_room_ids: batch,
+            p_template_ids: normalTemplateIdList,
+          }
+        );
+
+        if (roomsError) {
+          console.error("Error loading rooms for leaderboard:", roomsError);
+          continue;
+        }
+
+        roomsData?.forEach((room: any) => {
+          roomsById.set(room.id, {
+            id: room.id,
+            title: room.title ?? null,
+            room_code: room.room_code ?? null,
+            price: room.price != null ? Number(room.price) : null,
+            card_price: room.card_price != null ? Number(room.card_price) : null,
+            room_template_id: room.room_template_id ?? null,
+          });
+          normalRoomIds.add(room.id);
         });
       }
+    }
 
-      // افزایش تعداد کارت
-      const purchase = purchasesMap.get(key);
-      if (purchase) {
-        purchase.cardCount += 1;
+    const isNormalRoom = (roomId?: string | null) =>
+      !!roomId && normalRoomIds.has(roomId);
+
+    // تبدیل results به WinRecord
+    const wins: WinRecord[] =
+      results
+        ?.filter((row: any) => isNormalRoom(row.room_id))
+        .map((row: any) => {
+          const room = row.room_id ? roomsById.get(row.room_id) : null;
+          return {
+            id: row.id,
+            gameTime: new Date(row.created_at).toLocaleTimeString("fa-IR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            amountWon: Number(row.reward_amount || 0),
+            roomName: room?.title || room?.room_code || "نامشخص",
+            roomCode: room?.room_code ?? undefined,
+          };
+        }) || [];
+
+    // محاسبه مجموع مبلغ برد امروز
+    const totalWinningsToday = wins.reduce((sum, win) => sum + win.amountWon, 0);
+
+    const { data: purchaseRows, error: purchaseError } = await supabase.rpc(
+      "fn_player_purchase_history",
+      {
+        p_user_id: currentUser.id,
+        p_from: from.toISOString(),
+        p_to: to.toISOString(),
       }
-    });
+    );
 
-    const purchases: PurchaseRecord[] = Array.from(purchasesMap.values());
+    if (purchaseError) {
+      console.error("Error loading purchases:", purchaseError);
+    }
+
+    const purchases: PurchaseRecord[] =
+      purchaseRows?.map((row: any) => ({
+        id: row.transaction_id || row.room_id,
+        purchaseAmount: Number(row.purchase_amount || 0),
+        cardCount: Number(row.card_count || 0),
+        roomName: row.room_title || row.room_code || "نامشخص",
+        roomCode: row.room_code ?? undefined,
+      })) || [];
 
     // محاسبه مجموع مبلغ خرید امروز
     const totalPurchasesToday = purchases.reduce(
@@ -197,7 +227,13 @@ export async function loadLeaderboardData(): Promise<LeaderboardData> {
     // گرفتن همه results برای محاسبه مجموع برد هر بازیکن
     const { data: allResults, error: allResultsError } = await supabase
       .from("results")
-      .select("user_id, reward_amount")
+      .select(
+        `
+        user_id,
+        reward_amount,
+        room_id
+      `
+      )
       .gte("created_at", from.toISOString())
       .lte("created_at", to.toISOString());
 
@@ -205,18 +241,15 @@ export async function loadLeaderboardData(): Promise<LeaderboardData> {
       console.error("Error loading all results:", allResultsError);
     }
 
-    // محاسبه مجموع برد برای هر بازیکن
-    const winsByPlayer = new Map<string, number>();
-    allResults?.forEach((r: any) => {
-      const userId = r.user_id;
-      const amount = Number(r.reward_amount || 0);
-      winsByPlayer.set(userId, (winsByPlayer.get(userId) || 0) + amount);
-    });
-
     // گرفتن همه tickets برای محاسبه تعداد کارت هر بازیکن
     const { data: allTickets, error: allTicketsError } = await supabase
       .from("tickets")
-      .select("player_user_id")
+      .select(
+        `
+        player_user_id,
+        room_id
+      `
+      )
       .in("reservation_status", ["confirmed", "consumed"])
       .gte("created_at", from.toISOString())
       .lte("created_at", to.toISOString());
@@ -225,12 +258,58 @@ export async function loadLeaderboardData(): Promise<LeaderboardData> {
       console.error("Error loading all tickets:", allTicketsError);
     }
 
+    const allRoomIds = new Set<string>();
+    allResults?.forEach((row: any) => {
+      if (row.room_id) allRoomIds.add(row.room_id);
+    });
+    allTickets?.forEach((row: any) => {
+      if (row.room_id) allRoomIds.add(row.room_id);
+    });
+
+    const normalRoomIdsAll = new Set<string>();
+    if (allRoomIds.size > 0 && normalTemplateIds.size > 0) {
+      const allRoomIdBatches = chunkArray(Array.from(allRoomIds), 200);
+      for (const batch of allRoomIdBatches) {
+        const { data: allRooms, error: allRoomsError } = await supabase.rpc(
+          "fn_rooms_by_ids",
+          {
+            p_room_ids: batch,
+            p_template_ids: normalTemplateIdList,
+          }
+        );
+
+        if (allRoomsError) {
+          console.error("Error loading rooms for leaderboard totals:", allRoomsError);
+          continue;
+        }
+
+        allRooms?.forEach((room: any) => {
+          if (room?.id) normalRoomIdsAll.add(room.id);
+        });
+      }
+    }
+
+    const isNormalRoomAll = (roomId?: string | null) =>
+      !!roomId && normalRoomIdsAll.has(roomId);
+
+    // محاسبه مجموع برد برای هر بازیکن
+    const winsByPlayer = new Map<string, number>();
+    allResults
+      ?.filter((row: any) => isNormalRoomAll(row.room_id))
+      .forEach((row: any) => {
+        const userId = row.user_id;
+        const amount = Number(row.reward_amount || 0);
+        winsByPlayer.set(userId, (winsByPlayer.get(userId) || 0) + amount);
+      });
+
     // محاسبه تعداد کارت برای هر بازیکن
     const cardsByPlayer = new Map<string, number>();
-    allTickets?.forEach((t: any) => {
-      const userId = t.player_user_id;
-      cardsByPlayer.set(userId, (cardsByPlayer.get(userId) || 0) + 1);
-    });
+    allTickets
+      ?.filter((row: any) => isNormalRoomAll(row.room_id))
+      .forEach((row: any) => {
+        const userId = row.player_user_id;
+        cardsByPlayer.set(userId, (cardsByPlayer.get(userId) || 0) + 1);
+      });
 
     // گرفتن اطلاعات کاربران که در رتبه‌بندی هستند
     const playerIds = new Set<string>();
@@ -293,6 +372,7 @@ export async function loadLeaderboardData(): Promise<LeaderboardData> {
     leaderboardEntries.forEach((entry, index) => {
       entry.rank = index + 1;
     });
+
 
     return {
       totalWinningsToday,
