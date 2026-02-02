@@ -31,6 +31,7 @@ type TournamentRow = {
   table_size_fixed: number | null;
   table_size_min: number | null;
   table_size_max: number | null;
+  meta?: { final_winners_count?: number | null } | null;
 };
 
 const statusLabel = (status: string | null) => {
@@ -113,7 +114,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
         supabase
           .from("tournaments")
           .select(
-            "id,title,status,start_at,currency,ticket_price,guaranteed_prize,min_tickets_per_player,max_tickets_per_player,table_size_mode,table_size_fixed,table_size_min,table_size_max"
+            "id,title,status,start_at,currency,ticket_price,guaranteed_prize,min_tickets_per_player,max_tickets_per_player,table_size_mode,table_size_fixed,table_size_min,table_size_max,meta"
           )
           .eq("id", tournamentId)
           .single(),
@@ -382,6 +383,10 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   const buyInLabel = `${price.toLocaleString("fa-IR")}`;
   const playersCount = entries?.length ?? 0;
   const playersLabel = playersCount.toLocaleString("fa-IR");
+  const winnersCount =
+    tournament?.meta?.final_winners_count != null
+      ? Number(tournament.meta.final_winners_count)
+      : 1;
 
   // شمارش معکوس تا زمان شروع تورنومنت
   useEffect(() => {
@@ -661,6 +666,12 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
           <div className="flex items-center justify-between">
             <span className="text-gray-300">(Buy-in) ورودی</span>
             <span className="text-gray-100 font-semibold">{buyInLabel}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-gray-300">تعداد برنده نهایی</span>
+            <span className="text-emerald-300 font-semibold">
+              {Number.isFinite(winnersCount) ? winnersCount.toLocaleString("fa-IR") : "-"}
+            </span>
           </div>
         </div>
 

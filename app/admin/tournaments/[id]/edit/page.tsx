@@ -35,6 +35,7 @@ export default function AdminTournamentEditPage() {
       remainder_policy: data.remainder_policy || "adaptive_tables",
       commission_rate: data.commission_rate ?? null,
       guaranteed_prize: data.guaranteed_prize ?? 0,
+      final_winners_count: data?.meta?.final_winners_count ?? 1,
     };
   }, []);
 
@@ -98,6 +99,9 @@ export default function AdminTournamentEditPage() {
       remainder_policy: values.remainder_policy,
       commission_rate: values.commission_rate,
       guaranteed_prize: values.guaranteed_prize,
+      meta: {
+        final_winners_count: values.final_winners_count,
+      },
     };
 
     const { error, data } = await supabase.rpc("fn_admin_update_tournament", {

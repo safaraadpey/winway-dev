@@ -17,6 +17,7 @@ export type TournamentFormValues = {
   remainder_policy: string;
   commission_rate: number | null;
   guaranteed_prize: number | null;
+  final_winners_count: number | null;
 };
 
 export type TournamentFormProps = {
@@ -98,6 +99,7 @@ export function TournamentForm({
       remainder_policy: "adaptive_tables",
       commission_rate: null,
       guaranteed_prize: 0,
+      final_winners_count: 1,
     }),
     []
   );
@@ -187,6 +189,13 @@ export function TournamentForm({
       values.table_size_min > values.table_size_max
     ) {
       setError("حداقل سایز میز نمی‌تواند بیشتر از حداکثر باشد.");
+      return;
+    }
+    if (
+      values.final_winners_count != null &&
+      (values.final_winners_count < 1 || values.final_winners_count > 4)
+    ) {
+      setError("تعداد برنده‌های نهایی باید بین 1 تا 4 باشد.");
       return;
     }
     if (values.commission_rate != null && (values.commission_rate < 0 || values.commission_rate > 100)) {
@@ -478,6 +487,20 @@ export function TournamentForm({
               </option>
             ))}
           </select>
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm">
+          <span>تعداد برنده‌های نهایی (۱ تا ۴)</span>
+          <input
+            type="number"
+            min="1"
+            max="4"
+            step="1"
+            value={values.final_winners_count ?? ""}
+            onChange={(e) => handleNumber("final_winners_count", e.target.value)}
+            className={inputClass}
+            disabled={readOnly}
+          />
         </label>
       </div>
 

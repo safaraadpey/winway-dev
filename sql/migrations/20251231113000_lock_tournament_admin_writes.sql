@@ -142,6 +142,10 @@ BEGIN
                                   ),
          commission_rate         = COALESCE(NULLIF(p_patch->>'commission_rate','')::numeric, t.commission_rate),
          guaranteed_prize        = COALESCE(NULLIF(p_patch->>'guaranteed_prize','')::numeric, t.guaranteed_prize),
+         meta                    = CASE
+                                     WHEN p_patch ? 'meta' THEN COALESCE(t.meta, '{}'::jsonb) || COALESCE(p_patch->'meta','{}'::jsonb)
+                                     ELSE t.meta
+                                   END,
          updated_at              = v_now
    WHERE t.id = p_tournament_id
    RETURNING * INTO v_row;
@@ -331,6 +335,7 @@ DECLARE
                          NULLIF(p_payload->>'status','')::public.tournament_status,
                          'draft'::public.tournament_status
                        );
+  v_final_winners int := NULLIF(p_payload->>'final_winners_count','')::int;
 BEGIN
   IF v_actor IS NULL THEN
     RAISE EXCEPTION 'UNAUTHORIZED';
@@ -349,6 +354,10 @@ BEGIN
     RAISE EXCEPTION 'invalid initial status';
   END IF;
 
+  IF v_final_winners IS NOT NULL AND (v_final_winners < 1 OR v_final_winners > 4) THEN
+    RAISE EXCEPTION 'final_winners_count must be between 1 and 4';
+  END IF;
+
   INSERT INTO public.tournaments(
     title,
     status,
@@ -364,6 +373,7 @@ BEGIN
     remainder_policy,
     commission_rate,
     guaranteed_prize,
+    meta,
     created_at,
     updated_at
   )
@@ -382,6 +392,10 @@ BEGIN
     COALESCE(NULLIF(p_payload->>'remainder_policy','')::public.tournament_remainder_policy, 'adaptive_tables'),
     NULLIF(p_payload->>'commission_rate','')::numeric,
     NULLIF(p_payload->>'guaranteed_prize','')::numeric,
+    CASE
+      WHEN v_final_winners IS NULL THEN NULL
+      ELSE jsonb_build_object('final_winners_count', v_final_winners)
+    END,
     v_now,
     v_now
   )
