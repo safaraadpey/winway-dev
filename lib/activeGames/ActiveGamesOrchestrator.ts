@@ -216,6 +216,7 @@ function createOrchestrator(): ActiveGamesOrchestrator {
   let realtimeCooldownTimer: NodeJS.Timeout | null = null;
   let realtimeDebounceTimer: NodeJS.Timeout | null = null;
   let fetchAbortController: AbortController | null = null;
+  let visibilityHandler: (() => void) | null = null;
   let etag: string | null = null;
   const roomStatusById = new Map<string, string>();
 
@@ -225,7 +226,7 @@ function createOrchestrator(): ActiveGamesOrchestrator {
   let pendingReasons = new Set<ActiveGamesFetchSource>();
 
   // guards
-  const BASE_POLL_INTERVAL_MS = 12000; // legacy
+  const BASE_POLL_INTERVAL_MS = 60000; // fallback (realtime is primary)
   const EMPTY_BACKOFF_STEPS_MS = [60000, 120000, 300000] as const;
   const REALTIME_COOLDOWN_MS = 2000; // coalesce realtime bursts
   const REALTIME_DEBOUNCE_MS = 400; // debounce invalidate -> requestFetch
@@ -273,6 +274,9 @@ function createOrchestrator(): ActiveGamesOrchestrator {
     touch(store);
     logMetrics("polling", { pollingState: store.pollingState, reason });
   };
+
+  const isTabHidden = () =>
+    typeof document !== "undefined" && document.visibilityState === "hidden";
 
   const recomputeTimerCount = () => {
     store.timerCount =
@@ -409,6 +413,14 @@ function createOrchestrator(): ActiveGamesOrchestrator {
     if (pollTimer) {
       clearTimeout(pollTimer);
       pollTimer = null;
+    }
+
+    if (isTabHidden()) {
+      store.nextPollAt = null;
+      touch(store);
+      recomputeTimerCount();
+      setPollingState(false, null, "hidden");
+      return;
     }
 
     const nextAt = new Date(Date.now() + delayMs).toISOString();
@@ -779,6 +791,31 @@ function createOrchestrator(): ActiveGamesOrchestrator {
     logLifecycle("mount");
     logMetrics("init", { initCount: store.initCount });
 
+    if (typeof document !== "undefined" && !visibilityHandler) {
+      visibilityHandler = () => {
+        if (!active) return;
+        if (isTabHidden()) {
+          if (pollTimer) {
+            clearTimeout(pollTimer);
+            pollTimer = null;
+          }
+          store.nextPollAt = null;
+          touch(store);
+          recomputeTimerCount();
+          setPollingState(false, null, "hidden");
+          return;
+        }
+
+        // Tab is visible again → refresh and resume polling
+        requestFetch("manual", { skipEtag: true }, runId);
+        const nextDelay =
+          store.backoffMs > 0 ? store.backoffMs : store.emptyBackoffMs > 0 ? store.emptyBackoffMs : BASE_POLL_INTERVAL_MS;
+        setPollingState(true, nextDelay, "visible");
+        scheduleNextPoll(nextDelay, runId, "visible");
+      };
+      document.addEventListener("visibilitychange", visibilityHandler);
+    }
+
     void initAsync(localRunId);
   }
 
@@ -802,6 +839,10 @@ function createOrchestrator(): ActiveGamesOrchestrator {
     if (pollTimer) {
       clearTimeout(pollTimer);
       pollTimer = null;
+    }
+    if (visibilityHandler && typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", visibilityHandler);
+      visibilityHandler = null;
     }
     if (realtimeCooldownTimer) {
       clearTimeout(realtimeCooldownTimer);

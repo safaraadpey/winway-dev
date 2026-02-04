@@ -172,7 +172,8 @@
 .rankingSection {
   background-color: #1a1a1a;
   border-radius: 0.75rem;
-  padding: 1rem;
+  padding: 0;
+  margin-bottom: 1.5rem;
 }
 
 .rankingTable {
@@ -184,14 +185,17 @@
   grid-template-columns: 0.8fr 1.2fr 2fr 0.8fr;
   gap: 0.5rem;
   padding: 0.75rem;
-  background-color: #f5f5dc;
+  background-color: rgba(23, 26, 38, 1);
+  border-width: 1px;
+  border-style: solid;
+  border-color: rgba(73, 72, 76, 1);
   border-radius: 0.5rem;
   margin-bottom: 0.5rem;
 }
 
 .rankingHeaderCell {
   font-size: 0.75rem;
-  color: #2d2d2d;
+  color: #9ca3af;
   font-weight: 600;
   text-align: right;
   direction: rtl;
@@ -209,7 +213,10 @@
   grid-template-columns: 0.8fr 1.2fr 2fr 0.8fr;
   gap: 0.5rem;
   padding: 0.75rem;
-  background-color: #2d2d2d;
+  background-color: rgba(24, 26, 38, 1);
+  border-width: 1px;
+  border-style: solid;
+  border-color: rgba(73, 72, 76, 1);
   border-radius: 0.5rem;
   align-items: center;
 }
@@ -225,7 +232,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  justify-content: flex-end;
+  justify-content: flex-start;
   direction: rtl;
 }
 

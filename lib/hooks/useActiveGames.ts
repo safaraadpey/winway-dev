@@ -27,7 +27,7 @@ export interface ActiveGames {
   error: string | null;
 }
 
-const POLLING_INTERVAL = 12000; // 12 seconds
+const POLLING_INTERVAL = 60000; // 60 seconds fallback (realtime is primary)
 const EMPTY_BACKOFF_STEPS_MS = [60000, 120000, 300000] as const;
 
 /**
@@ -40,9 +40,7 @@ export function useActiveGames(): ActiveGames {
    * dev default: orchestrator, prod default: legacy
    * Override via NEXT_PUBLIC_ACTIVE_GAMES_SOURCE.
    */
-  const source =
-    process.env.NEXT_PUBLIC_ACTIVE_GAMES_SOURCE ??
-    (process.env.NODE_ENV === "production" ? "legacy" : "orchestrator");
+  const source = process.env.NEXT_PUBLIC_ACTIVE_GAMES_SOURCE ?? "orchestrator";
 
   // When orchestrator is enabled, this hook becomes a thin reader and must not
   // create its own fetch/poll/realtime side-effects.

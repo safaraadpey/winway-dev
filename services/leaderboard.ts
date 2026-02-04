@@ -20,6 +20,15 @@ function getTodayDateRange(): { from: Date; to: Date } {
   return { from, to };
 }
 
+/**
+ * محاسبه محدوده تاریخ برای 7 روز گذشته (UTC)
+ */
+function getLastWeekDateRange(): { from: Date; to: Date } {
+  const now = new Date();
+  const from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  return { from, to: now };
+}
+
 function chunkArray<T>(items: T[], size: number): T[][] {
   if (size <= 0) return [items];
   const chunks: T[][] = [];
@@ -59,6 +68,7 @@ export async function loadLeaderboardData(): Promise<LeaderboardData> {
     }
 
     const { from, to } = getTodayDateRange();
+    const { from: weekFrom, to: weekTo } = getLastWeekDateRange();
 
     // 1. بارگذاری بردها (results) برای امروز
     const { data: results, error: resultsError } = await supabase
@@ -221,144 +231,29 @@ export async function loadLeaderboardData(): Promise<LeaderboardData> {
       0
     );
 
-    // 3. بارگذاری رتبه‌بندی (Leaderboard)
-    // محاسبه مجموع برد و تعداد کارت برای هر بازیکن
-
-    // گرفتن همه results برای محاسبه مجموع برد هر بازیکن
-    const { data: allResults, error: allResultsError } = await supabase
-      .from("results")
-      .select(
-        `
-        user_id,
-        reward_amount,
-        room_id
-      `
-      )
-      .gte("created_at", from.toISOString())
-      .lte("created_at", to.toISOString());
-
-    if (allResultsError) {
-      console.error("Error loading all results:", allResultsError);
-    }
-
-    // گرفتن همه tickets برای محاسبه تعداد کارت هر بازیکن
-    const { data: allTickets, error: allTicketsError } = await supabase
-      .from("tickets")
-      .select(
-        `
-        player_user_id,
-        room_id
-      `
-      )
-      .in("reservation_status", ["confirmed", "consumed"])
-      .gte("created_at", from.toISOString())
-      .lte("created_at", to.toISOString());
-
-    if (allTicketsError) {
-      console.error("Error loading all tickets:", allTicketsError);
-    }
-
-    const allRoomIds = new Set<string>();
-    allResults?.forEach((row: any) => {
-      if (row.room_id) allRoomIds.add(row.room_id);
-    });
-    allTickets?.forEach((row: any) => {
-      if (row.room_id) allRoomIds.add(row.room_id);
-    });
-
-    const normalRoomIdsAll = new Set<string>();
-    if (allRoomIds.size > 0 && normalTemplateIds.size > 0) {
-      const allRoomIdBatches = chunkArray(Array.from(allRoomIds), 200);
-      for (const batch of allRoomIdBatches) {
-        const { data: allRooms, error: allRoomsError } = await supabase.rpc(
-          "fn_rooms_by_ids",
-          {
-            p_room_ids: batch,
-            p_template_ids: normalTemplateIdList,
-          }
-        );
-
-        if (allRoomsError) {
-          console.error("Error loading rooms for leaderboard totals:", allRoomsError);
-          continue;
-        }
-
-        allRooms?.forEach((room: any) => {
-          if (room?.id) normalRoomIdsAll.add(room.id);
-        });
+    // 3. بارگذاری رتبه‌بندی (Leaderboard) برای ۷ روز گذشته (normal rooms)
+    const { data: leaderboardRows, error: leaderboardError } = await supabase.rpc(
+      "fn_leaderboard_weekly",
+      {
+        p_from: weekFrom.toISOString(),
+        p_to: weekTo.toISOString(),
       }
+    );
+
+    if (leaderboardError) {
+      console.error("Error loading leaderboard:", leaderboardError);
     }
 
-    const isNormalRoomAll = (roomId?: string | null) =>
-      !!roomId && normalRoomIdsAll.has(roomId);
-
-    // محاسبه مجموع برد برای هر بازیکن
-    const winsByPlayer = new Map<string, number>();
-    allResults
-      ?.filter((row: any) => isNormalRoomAll(row.room_id))
-      .forEach((row: any) => {
-        const userId = row.user_id;
-        const amount = Number(row.reward_amount || 0);
-        winsByPlayer.set(userId, (winsByPlayer.get(userId) || 0) + amount);
-      });
-
-    // محاسبه تعداد کارت برای هر بازیکن
-    const cardsByPlayer = new Map<string, number>();
-    allTickets
-      ?.filter((row: any) => isNormalRoomAll(row.room_id))
-      .forEach((row: any) => {
-        const userId = row.player_user_id;
-        cardsByPlayer.set(userId, (cardsByPlayer.get(userId) || 0) + 1);
-      });
-
-    // گرفتن اطلاعات کاربران که در رتبه‌بندی هستند
-    const playerIds = new Set<string>();
-    winsByPlayer.forEach((_, userId) => playerIds.add(userId));
-    cardsByPlayer.forEach((_, userId) => playerIds.add(userId));
-
-    // بارگذاری اطلاعات کاربران
-    const { data: players, error: playersError } = await supabase
-      .from("users")
-      .select(
-        `
-        id,
-        username,
-        user_profiles (
-          nickname,
-          avatar_url
-        )
-      `
-      )
-      .eq("role", "player")
-      .in("id", Array.from(playerIds));
-
-    if (playersError) {
-      console.error("Error loading players:", playersError);
-    }
-
-    // ساخت لیست رتبه‌بندی
-    const leaderboardEntries: LeaderboardEntry[] = [];
-
-    players?.forEach((player: any) => {
-      const userId = player.id;
-      const totalWins = winsByPlayer.get(userId) || 0;
-      const cardCount = cardsByPlayer.get(userId) || 0;
-
-      // فقط بازیکنانی که حداقل یک برد یا کارت داشته‌اند
-      if (totalWins > 0 || cardCount > 0) {
-        const profile = player.user_profiles;
-
-        leaderboardEntries.push({
-          rank: 0, // بعداً محاسبه می‌شود
-          playerId: userId,
-          playerName: player.username || "نامشخص",
-          displayName: profile?.nickname,
-          avatarUrl: profile?.avatar_url,
-          totalWins,
-          cardCount,
-        });
-      }
-    });
+    const leaderboardEntries: LeaderboardEntry[] =
+      leaderboardRows?.map((row: any) => ({
+        rank: 0,
+        playerId: row.player_id,
+        playerName: row.player_name || "نامشخص",
+        displayName: row.display_name ?? undefined,
+        avatarUrl: row.avatar_url ?? undefined,
+        totalWins: Number(row.total_wins || 0),
+        cardCount: Number(row.card_count || 0),
+      })) || [];
 
     // مرتب‌سازی بر اساس مجموع برد (نزولی)، سپس تعداد کارت (نزولی)
     leaderboardEntries.sort((a, b) => {
