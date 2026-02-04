@@ -25,6 +25,7 @@ export default function AdminTournamentEditPage() {
       status: data.status || "draft",
       start_at: data.start_at,
       currency: data.currency || "IRR",
+      entry_currency: data?.meta?.entry_currency || "IRR",
       ticket_price: data.ticket_price ?? null,
       min_tickets_per_player: data.min_tickets_per_player ?? 1,
       max_tickets_per_player: data.max_tickets_per_player ?? 1,
@@ -35,6 +36,7 @@ export default function AdminTournamentEditPage() {
       remainder_policy: data.remainder_policy || "adaptive_tables",
       commission_rate: data.commission_rate ?? null,
       guaranteed_prize: data.guaranteed_prize ?? 0,
+      min_players_for_guarantee: data?.meta?.min_players_for_guarantee ?? null,
       final_winners_count: data?.meta?.final_winners_count ?? 1,
     };
   }, []);
@@ -101,6 +103,8 @@ export default function AdminTournamentEditPage() {
       guaranteed_prize: values.guaranteed_prize,
       meta: {
         final_winners_count: values.final_winners_count,
+        min_players_for_guarantee: values.min_players_for_guarantee,
+        entry_currency: values.entry_currency,
       },
     };
 

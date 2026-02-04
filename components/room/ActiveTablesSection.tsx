@@ -47,6 +47,7 @@ export default function ActiveTablesSection({
               prize={table.prize}
               players={table.players}
               cardCount={table.cardCount}
+              roundNo={table.roundNo}
               onClick={onTableClick ? () => onTableClick(table.id) : undefined}
             />
           ))

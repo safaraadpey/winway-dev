@@ -15,6 +15,12 @@ type TournamentRow = {
   currency: string | null;
   ticket_price: number | null;
   guaranteed_prize: number | null;
+  meta?: {
+    min_players_for_guarantee?: number | null;
+    final_winners_count?: number | null;
+    entry_currency?: string | null;
+  } | null;
+  tournament_entries?: { count: number }[] | null;
 };
 
 export default function TournamentsPage() {
@@ -57,7 +63,9 @@ export default function TournamentsPage() {
     setError(null);
     const { data, error } = await supabase
       .from("tournaments")
-      .select("id,title,status,start_at,currency,ticket_price,guaranteed_prize")
+      .select(
+        "id,title,status,start_at,currency,ticket_price,guaranteed_prize,meta,tournament_entries(count)"
+      )
       .in("status", ["registration_open", "running", "settling", "finished"])
       .order("start_at", { ascending: true })
       .order("created_at", { ascending: false });
@@ -103,7 +111,6 @@ export default function TournamentsPage() {
   const filteredRows = viewMode === "active" ? activeRows : finishedRows;
 
   const handleTournamentClick = (id: string) => {
-    // Pass tournamentId + templateId as query so صفحه مقصد بتواند با دادهٔ فعلی کار کند
     router.push(`/player/tournaments/${id}?tournamentId=${id}&templateId=${id}`);
   };
 
@@ -188,70 +195,97 @@ export default function TournamentsPage() {
 
             {!error && filteredRows.length > 0 && (
               <div className="space-y-3">
-                {filteredRows.map((t) => (
-                  <div
-                    key={t.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => handleTournamentClick(t.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        handleTournamentClick(t.id);
-                      }
-                    }}
-                    className="rounded-xl border border-transparent px-4 py-3 text-white shadow-lg shadow-black/30 cursor-pointer transition transform hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-emerald-400/60"
-                    style={{
-                      backgroundImage: `url(${tournamentBg.src})`,
-                      backgroundRepeat: "no-repeat",
-                      backgroundPosition: "center center",
-                      backgroundSize: "100% 100%",
-                      backgroundColor: "#111827",
-                    }}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                    <div className="font-extrabold text-xl text-[#212121]">
-                        {t.title || "بدون عنوان"}
-                      </div>
-                    <span className="text-xs px-2 py-1 rounded-full bg-[rgba(0,255,170,0.6)] text-[rgba(49,63,56,1)] border border-[rgba(0,0,0,0.3)] font-semibold">
-                        {statusLabel(t.status)}
-                      </span>
-                    </div>
+                {filteredRows.map((t) => {
+                  const entriesCount = t.tournament_entries?.[0]?.count ?? 0;
+                  const minPlayersForGuarantee =
+                    t.meta?.min_players_for_guarantee ?? null;
+                  const finalWinnersCount = t.meta?.final_winners_count ?? null;
+                  const entryCurrency =
+                    (t.meta?.entry_currency || t.currency || "IRR").toString();
 
+                  return (
                     <div
-                      className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-sm text-gray-200"
+                      key={t.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => handleTournamentClick(t.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          handleTournamentClick(t.id);
+                        }
+                      }}
+                      className="rounded-xl border border-transparent px-4 py-3 text-white shadow-lg shadow-black/30 cursor-pointer transition transform hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-emerald-400/60"
                       style={{
-                        gridTemplateColumns: "repeat(2, 1fr)",
-                        gridTemplateRows: "repeat(2, 1fr)",
+                        backgroundImage: `url(${tournamentBg.src})`,
+                        backgroundRepeat: "no-repeat",
+                        backgroundPosition: "center center",
+                        backgroundSize: "100% 100%",
+                        backgroundColor: "#111827",
                       }}
                     >
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-xs font-bold text-[#212121]">شروع</span>
-                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-gray-500/60 bg-black/40 font-medium text-gray-100">
-                          {t.start_at
-                            ? new Date(t.start_at).toLocaleString("fa-IR")
-                            : "نامشخص"}
-                        </span>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-extrabold text-xl text-[#212121]">
+                          {t.title || "بدون عنوان"}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs px-2 py-1 rounded-full border border-gray-500/60 bg-black/40 font-medium text-gray-100">
+                            {t.start_at
+                              ? new Date(t.start_at).toLocaleString("fa-IR")
+                              : "نامشخص"}
+                          </span>
+                          <span className="text-xs px-2 py-1 rounded-full bg-[rgba(0,255,170,0.6)] text-[rgba(49,63,56,1)] border border-[rgba(0,0,0,0.3)] font-semibold">
+                            {statusLabel(t.status)}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[#212121] text-xs font-bold">قیمت بلیت</span>
-                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-gray-500/60 bg-black/40 font-medium text-gray-100">
-                          {t.ticket_price != null
-                            ? `${t.ticket_price.toLocaleString("fa-IR")} ${t.currency ?? ""}`
-                            : "-"}
-                        </span>
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[#212121] text-xs font-bold">جایزه تضمینی</span>
-                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-gray-500/60 bg-black/40 font-medium text-gray-100">
-                          {t.guaranteed_prize != null
-                            ? `${t.guaranteed_prize.toLocaleString("fa-IR")} ${t.currency ?? ""}`
-                            : "-"}
-                        </span>
+
+                      <div
+                        className="mt-2 grid gap-x-3 gap-y-1 text-sm text-gray-200"
+                        style={{ gridTemplateColumns: "repeat(3, 1fr)" }}
+                      >
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[#212121] text-xs font-bold">قیمت بلیت</span>
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-gray-500/60 bg-black/40 font-medium text-gray-100">
+                            {t.ticket_price != null
+                              ? `${t.ticket_price.toLocaleString("fa-IR")} ${entryCurrency}`
+                              : "-"}
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[#212121] text-xs font-bold">تعداد شرکت‌کننده</span>
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-gray-500/60 bg-black/40 font-medium text-gray-100">
+                            {entriesCount.toLocaleString("fa-IR")}
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-[#212121]">تعداد برنده نهایی</span>
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-gray-500/60 bg-black/40 font-medium text-gray-100">
+                            {finalWinnersCount != null
+                              ? finalWinnersCount.toLocaleString("fa-IR")
+                              : "-"}
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-[#212121]">جایزه تضمینی</span>
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-gray-500/60 bg-black/40 font-medium text-gray-100">
+                            {t.guaranteed_prize != null
+                              ? `${t.guaranteed_prize.toLocaleString("fa-IR")} ${t.currency ?? ""}`
+                              : "-"}
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-bold text-[#212121]">حداقل بازیکن</span>
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-gray-500/60 bg-black/40 font-medium text-gray-100">
+                            {minPlayersForGuarantee != null
+                              ? minPlayersForGuarantee.toLocaleString("fa-IR")
+                              : "-"}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </>
@@ -260,5 +294,4 @@ export default function TournamentsPage() {
     </div>
   );
 }
-
 

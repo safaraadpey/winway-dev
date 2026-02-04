@@ -20,6 +20,7 @@ interface TournamentBuyPanelProps {
   mode?: PanelMode;
   actionLabel?: string;
   initialQuantity?: number;
+  currencyLabel?: string;
   musicEnabled?: boolean;
   onToggleMusic?: () => void;
   showMusicToggle?: boolean;
@@ -40,6 +41,7 @@ export default function TournamentBuyPanel({
   mode = "purchase",
   actionLabel,
   initialQuantity,
+  currencyLabel = "تومن",
   musicEnabled,
   onToggleMusic,
   showMusicToggle,
@@ -98,7 +100,7 @@ export default function TournamentBuyPanel({
     : undefined;
   const ctaLabel = isCancelMode
     ? actionLabel || "لغو رزرو"
-    : `تایید ${totalPrice.toLocaleString("en-US")} تومن`;
+    : `تایید ${totalPrice.toLocaleString("en-US")} ${currencyLabel}`;
 
   const hasSecondary = Boolean(onSecondaryAction && secondaryActionLabel);
 

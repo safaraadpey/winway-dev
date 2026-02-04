@@ -32,7 +32,11 @@ type TournamentRow = {
   table_size_fixed: number | null;
   table_size_min: number | null;
   table_size_max: number | null;
-  meta?: { final_winners_count?: number | null } | null;
+  meta?: {
+    final_winners_count?: number | null;
+    min_players_for_guarantee?: number | null;
+    entry_currency?: string | null;
+  } | null;
 };
 
 const statusLabel = (status: string | null) => {
@@ -64,6 +68,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   const [submitting, setSubmitting] = useState(false);
   const [tournamentTables, setTournamentTables] = useState<ActiveTable[]>([]);
   const [tablesLoading, setTablesLoading] = useState(false);
+  const [currentRoundNo, setCurrentRoundNo] = useState<number | null>(null);
   const [winnersLoading, setWinnersLoading] = useState(false);
   const [winners, setWinners] = useState<
     {
@@ -279,6 +284,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
         if (roundErr || !roundRooms || roundRooms.length === 0) {
           if (active) {
             setTournamentTables([]);
+            setCurrentRoundNo(null);
           }
           return;
         }
@@ -290,6 +296,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
         if (roomIds.length === 0) {
           if (active) {
             setTournamentTables([]);
+            setCurrentRoundNo(null);
           }
           return;
         }
@@ -304,6 +311,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
           console.error("load tournament tables assignments error:", assignmentsErr);
           if (active) {
             setTournamentTables([]);
+            setCurrentRoundNo(null);
           }
           return;
         }
@@ -338,16 +346,24 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
             prize: Number(ticketPrice) * cardCount,
             players: stats.players.size,
             cardCount,
+            roundNo: row.round_no ?? null,
           };
         });
 
         if (active) {
           setTournamentTables(mappedTables);
+          const latestRound =
+            roundRooms
+              .map((row: any) => row.round_no)
+              .filter((value: any) => value != null)
+              .sort((a: number, b: number) => b - a)[0] ?? null;
+          setCurrentRoundNo(latestRound);
         }
       } catch (err) {
         console.error("load tournament tables error:", err);
         if (active) {
           setTournamentTables([]);
+          setCurrentRoundNo(null);
         }
       } finally {
         if (active) {
@@ -376,7 +392,14 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
 
   const price = tournament?.ticket_price ?? 0;
   const currency = tournament?.currency ?? "IRR";
+  const entryCurrency =
+    (tournament?.meta?.entry_currency || tournament?.currency || "IRR").toString();
   const guaranteedPrize = tournament?.guaranteed_prize ?? 0;
+  const minPlayersForGuarantee =
+    tournament?.meta?.min_players_for_guarantee != null
+      ? Number(tournament.meta.min_players_for_guarantee)
+      : null;
+  const playersCount = entries?.length ?? 0;
   const normalizeCommissionRate = (value: number | null | undefined) => {
     if (value == null || Number.isNaN(value)) return 0;
     if (value < 0) return 0;
@@ -389,18 +412,23 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     () => entries.reduce((sum, entry) => sum + (entry.tickets_count ?? 0), 0),
     [entries]
   );
-  const prizePoolGross = price * totalTickets;
+  const prizePoolGross = entryCurrency === "DING" ? 0 : price * totalTickets;
   const prizePoolNet = Math.max(0, prizePoolGross * (1 - commissionRate));
-  const displayPrize = hasGuarantee
+  const guaranteeActive =
+    hasGuarantee &&
+    (minPlayersForGuarantee == null ||
+      minPlayersForGuarantee <= 0 ||
+      playersCount >= minPlayersForGuarantee);
+  const displayPrize = guaranteeActive
     ? Math.max(guaranteedPrize, prizePoolNet)
     : prizePoolNet;
-  const showGuaranteeLabel = hasGuarantee && prizePoolNet <= guaranteedPrize;
+  const showGuaranteeLabel = guaranteeActive && prizePoolNet <= guaranteedPrize;
   const prizeLabel =
     Number.isFinite(displayPrize) && displayPrize > 0
       ? displayPrize.toLocaleString("fa-IR")
       : "-";
-  const buyInLabel = `${price.toLocaleString("fa-IR")}`;
-  const playersCount = entries?.length ?? 0;
+  const buyInLabel = `${price.toLocaleString("fa-IR")} ${entryCurrency}`;
+  const entryCurrencyLabel = entryCurrency === "DING" ? "DING" : "تومن";
   const playersLabel = playersCount.toLocaleString("fa-IR");
   const winnersCount =
     tournament?.meta?.final_winners_count != null
@@ -474,7 +502,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
       const { error: holdErr } = await supabase.rpc("fn_tournament_wallet_hold", {
         p_tournament_id: tournament.id,
         p_qty: qty,
-        p_currency: currency,
+        p_currency: entryCurrency,
         p_entry_id: entryId,
       });
       if (holdErr) {
@@ -500,7 +528,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
         void supabase.rpc("fn_tournament_wallet_release", {
           p_tournament_id: tournament.id,
           p_entry_id: entryId,
-          p_currency: currency,
+          p_currency: entryCurrency,
         });
         toast.error(error.message || "خطا در ثبت‌نام تورنومنت");
         return;
@@ -545,7 +573,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
       const { error: relErr } = await supabase.rpc("fn_tournament_wallet_release", {
         p_tournament_id: tournament.id,
         p_entry_id: userEntry.id,
-        p_currency: currency,
+        p_currency: entryCurrency,
       });
       if (relErr) {
         toast.error(relErr.message || "خطا در آزادسازی مبلغ");
@@ -742,6 +770,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
             disabled={submitting || !tournament || remainingQty <= 0}
             onConfirm={handleRegister}
             actionLabel={submitting ? "در حال ثبت..." : undefined}
+            currencyLabel={entryCurrencyLabel}
             secondaryActionLabel={currentEntry ? (submitting ? "در حال لغو..." : "لغو خرید") : undefined}
             secondaryDisabled={submitting}
             onSecondaryAction={currentEntry ? handleCancelRegister : undefined}
@@ -752,9 +781,12 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
           cards={previewCards}
           secondsRemaining={startCountdown}
           useLongCountdown
+          tournamentStatus={tournament?.status ?? null}
+          currentRoundNo={currentRoundNo}
         />
 
         <ActiveTablesSection
+          title="میزهای تورنومنت"
           tables={tournamentTables}
           emptyMessage={tablesLoading ? "در حال بارگذاری..." : "هیچ بازی فعالی وجود ندارد"}
           onTableClick={handleTableClick}

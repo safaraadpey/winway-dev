@@ -15,6 +15,8 @@ export interface TournamentActiveCardStatus {
 interface TournamentActiveCardsStatusProps {
   cards: TournamentActiveCardStatus[];
   secondsRemaining?: number;
+  tournamentStatus?: string | null;
+  currentRoundNo?: number | null;
   waitingListMessage?: string;
   useLongCountdown?: boolean; // روز:ساعت:دقیقه:ثانیه
 }
@@ -22,6 +24,8 @@ interface TournamentActiveCardsStatusProps {
 export default function TournamentActiveCardsStatus({
   cards,
   secondsRemaining,
+  tournamentStatus,
+  currentRoundNo,
   waitingListMessage = "اولین نفر باشید که در تورنومنت ثبت نام میکنید",
   useLongCountdown = false,
 }: TournamentActiveCardsStatusProps) {
@@ -47,7 +51,16 @@ export default function TournamentActiveCardsStatus({
     const secs = (safeSeconds % 60).toString().padStart(2, "0");
     return `${mins}:${secs}`;
   };
-  const timerLabel = formatTime(secondsRemaining ?? 0);
+  const safeSeconds = secondsRemaining ?? 0;
+  const isFinished = tournamentStatus === "finished";
+  const showRoundStatus = safeSeconds <= 0;
+  const timerLabel = formatTime(safeSeconds);
+  const roundLabel = currentRoundNo != null ? `راند ${currentRoundNo}` : "راند";
+  const statusLabel = isFinished
+    ? "پایان یافته"
+    : showRoundStatus
+      ? `${roundLabel} درحال اجرا`
+      : timerLabel;
 
   return (
     <div
@@ -62,17 +75,19 @@ export default function TournamentActiveCardsStatus({
     >
       <div className="flex items-center justify-between h-[39px] max-h-[40px]">
         <div className="flex items-center gap-2">
-          <span className="text-green-500 font-medium text-[25px]">
-            {timerLabel}
+          <span className="text-green-500 font-medium text-[20px]">
+            {statusLabel}
           </span>
-          <Image
-            src={hourglassPng}
-            alt="hourglass"
-            width={24}
-            height={24}
-            className="w-6 h-6"
-            priority={false}
-          />
+          {!showRoundStatus && (
+            <Image
+              src={hourglassPng}
+              alt="hourglass"
+              width={24}
+              height={24}
+              className="w-6 h-6"
+              priority={false}
+            />
+          )}
         </div>
 
         <span className="text-white text-sm font-medium">

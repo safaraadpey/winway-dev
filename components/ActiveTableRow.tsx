@@ -6,6 +6,7 @@ interface ActiveTableRowProps {
   prize: number;
   players: number;
   cardCount: number;
+  roundNo?: number | null;
   onClick?: () => void;
 }
 
@@ -16,6 +17,7 @@ export default function ActiveTableRow({
   prize, 
   players, 
   cardCount,
+  roundNo,
   onClick 
 }: ActiveTableRowProps) {
   const formatNumber = (num: number): string => {
@@ -40,7 +42,7 @@ export default function ActiveTableRow({
       } : undefined}
     >
       <span className="text-gray-800 font-semibold text-sm">
-        {formatNumber(prize)}
+        {roundNo != null ? `راند ${roundNo.toLocaleString("fa-IR")}` : formatNumber(prize)}
       </span>
       <div className="flex items-center gap-4">
         <span className="text-gray-600 text-sm">{players} نفر</span>

@@ -34,6 +34,7 @@ function mapToFormValues(row: TournamentRow): TournamentFormValues {
     status: row.status || "draft",
     start_at: row.start_at,
     currency: row.currency || "IRR",
+    entry_currency: (row.meta as any)?.entry_currency || "IRR",
     ticket_price: row.ticket_price ?? null,
     min_tickets_per_player: row.min_tickets_per_player ?? 1,
     max_tickets_per_player: row.max_tickets_per_player ?? 1,
@@ -44,6 +45,8 @@ function mapToFormValues(row: TournamentRow): TournamentFormValues {
     remainder_policy: row.remainder_policy || "adaptive_tables",
     commission_rate: row.commission_rate ?? 0,
     guaranteed_prize: row.guaranteed_prize ?? 0,
+    min_players_for_guarantee:
+      (row.meta as any)?.min_players_for_guarantee ?? null,
     final_winners_count: (row.meta as any)?.final_winners_count ?? 1,
   };
 }

@@ -7,6 +7,7 @@ export type TournamentFormValues = {
   status: string;
   start_at: string | null;
   currency: string;
+  entry_currency: string;
   ticket_price: number | null;
   min_tickets_per_player: number | null;
   max_tickets_per_player: number | null;
@@ -17,6 +18,7 @@ export type TournamentFormValues = {
   remainder_policy: string;
   commission_rate: number | null;
   guaranteed_prize: number | null;
+  min_players_for_guarantee: number | null;
   final_winners_count: number | null;
 };
 
@@ -89,6 +91,7 @@ export function TournamentForm({
       status: "draft",
       start_at: null,
       currency: "IRR",
+      entry_currency: "IRR",
       ticket_price: null,
       min_tickets_per_player: 1,
       max_tickets_per_player: 1,
@@ -99,6 +102,7 @@ export function TournamentForm({
       remainder_policy: "adaptive_tables",
       commission_rate: null,
       guaranteed_prize: 0,
+      min_players_for_guarantee: null,
       final_winners_count: 1,
     }),
     []
@@ -170,6 +174,10 @@ export function TournamentForm({
       setError("قیمت بلیت باید بیشتر از صفر باشد.");
       return;
     }
+    if (values.entry_currency === "DING" && (!values.guaranteed_prize || values.guaranteed_prize <= 0)) {
+      setError("برای تورنومنت دینگی، مبلغ گارانتی الزامی است.");
+      return;
+    }
     if (
       values.min_tickets_per_player &&
       values.max_tickets_per_player &&
@@ -200,6 +208,13 @@ export function TournamentForm({
     }
     if (values.commission_rate != null && (values.commission_rate < 0 || values.commission_rate > 100)) {
       setError("کمیسیون باید بین 0 تا 100 باشد.");
+      return;
+    }
+    if (
+      values.min_players_for_guarantee != null &&
+      values.min_players_for_guarantee < 1
+    ) {
+      setError("حداقل تعداد بازیکن گارانتی باید حداقل 1 باشد.");
       return;
     }
     if (startAtValue) {
@@ -352,6 +367,19 @@ export function TournamentForm({
         </label>
 
         <label className="flex flex-col gap-1 text-sm">
+          <span>نوع پرداخت ورودی</span>
+          <select
+            value={values.entry_currency}
+            onChange={(e) => handleChange("entry_currency", e.target.value)}
+            className={inputClass}
+            disabled={readOnly}
+          >
+            <option value="IRR">تومان</option>
+            <option value="DING">DING</option>
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm">
           <span>قیمت بلیت</span>
           <input
             type="number"
@@ -373,6 +401,18 @@ export function TournamentForm({
             step="0.01"
             value={values.guaranteed_prize ?? ""}
             onChange={(e) => handleNumber("guaranteed_prize", e.target.value)}
+            className={inputClass}
+            disabled={readOnly}
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm">
+          <span>حداقل بازیکن برای گارانتی</span>
+          <input
+            type="number"
+            min="1"
+            value={values.min_players_for_guarantee ?? ""}
+            onChange={(e) => handleNumber("min_players_for_guarantee", e.target.value)}
             className={inputClass}
             disabled={readOnly}
           />
