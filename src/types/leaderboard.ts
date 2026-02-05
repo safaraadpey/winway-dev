@@ -28,11 +28,24 @@ export interface LeaderboardEntry {
   cardCount: number; // تعداد کارت
 }
 
+export interface PeriodStats {
+  totalWinnings: number; // مجموع مبلغ برد
+  totalPurchases: number; // مجموع مبلغ خرید
+  cardCount: number; // تعداد کارت
+  winCount: number; // تعداد برد
+  purchaseCount: number; // تعداد خرید
+}
+
 export interface LeaderboardData {
   totalWinningsToday: number; // مجموع مبلغ برد امروز
   totalPurchasesToday: number; // مجموع مبلغ خرید امروز
   wins: WinRecord[]; // لیست بردها
   purchases: PurchaseRecord[]; // لیست خریدها
   leaderboard: LeaderboardEntry[]; // لیست رتبه‌بندی
+  stats: {
+    daily: PeriodStats;
+    weekly: PeriodStats;
+    monthly: PeriodStats;
+  };
 }
 

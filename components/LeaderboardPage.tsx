@@ -21,6 +21,7 @@ export default function LeaderboardPage() {
   const [data, setData] = useState<LeaderboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"history" | "ranking">("history");
+  const [activePeriod, setActivePeriod] = useState<"daily" | "weekly" | "monthly">("daily");
 
   useEffect(() => {
     setShowBackButton(true);
@@ -70,7 +71,10 @@ export default function LeaderboardPage() {
     );
   }
 
-  const { totalWinningsToday, totalPurchasesToday, wins, purchases, leaderboard } = data;
+  const { totalWinningsToday, totalPurchasesToday, wins, purchases, leaderboard, stats } = data;
+  
+  // انتخاب آمار بر اساس بازه زمانی انتخاب شده
+  const currentStats = stats[activePeriod];
 
   return (
     <div className={styles.container}>
@@ -97,6 +101,62 @@ export default function LeaderboardPage() {
 
         {activeTab === "history" && (
           <>
+            {/* تب‌های بازه زمانی */}
+            <div className={styles.periodTabs}>
+              <button
+                onClick={() => setActivePeriod("daily")}
+                className={`${styles.periodTab} ${
+                  activePeriod === "daily" ? styles.periodTabActive : ""
+                }`}
+              >
+                روزانه
+              </button>
+              <button
+                onClick={() => setActivePeriod("weekly")}
+                className={`${styles.periodTab} ${
+                  activePeriod === "weekly" ? styles.periodTabActive : ""
+                }`}
+              >
+                هفتگی
+              </button>
+              <button
+                onClick={() => setActivePeriod("monthly")}
+                className={`${styles.periodTab} ${
+                  activePeriod === "monthly" ? styles.periodTabActive : ""
+                }`}
+              >
+                ماهیانه
+              </button>
+            </div>
+
+            {/* نمایش آمار بر اساس بازه زمانی */}
+            <div className={styles.statsGrid}>
+              <div className={styles.statCard}>
+                <div className={styles.statLabel}>مجموع برد</div>
+                <div className={styles.statValue}>
+                  {formatAmount(currentStats.totalWinnings)}
+                </div>
+              </div>
+              <div className={styles.statCard}>
+                <div className={styles.statLabel}>مجموع خرید</div>
+                <div className={styles.statValue}>
+                  {formatAmount(currentStats.totalPurchases)}
+                </div>
+              </div>
+              <div className={styles.statCard}>
+                <div className={styles.statLabel}>تعداد کارت</div>
+                <div className={styles.statValue}>
+                  {formatAmount(currentStats.cardCount)}
+                </div>
+              </div>
+              <div className={styles.statCard}>
+                <div className={styles.statLabel}>تعداد برد</div>
+                <div className={styles.statValue}>
+                  {formatAmount(currentStats.winCount)}
+                </div>
+              </div>
+            </div>
+
             {/* بخش مجموع مبلغ برد امروز */}
             <div className={styles.section}>
               <div className={styles.sectionHeader}>

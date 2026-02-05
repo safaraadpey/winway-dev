@@ -268,6 +268,38 @@ export async function loadLeaderboardData(): Promise<LeaderboardData> {
       entry.rank = index + 1;
     });
 
+    // 4. بارگذاری آمار روزانه، هفتگی و ماهیانه
+    const { data: statsRows, error: statsError } = await supabase.rpc(
+      "fn_player_stats",
+      {
+        p_user_id: currentUser.id,
+        p_date: new Date().toISOString(),
+      }
+    );
+
+    if (statsError) {
+      console.error("Error loading player stats:", statsError);
+    }
+
+    // تبدیل آمار به object
+    const statsMap = new Map<string, any>();
+    statsRows?.forEach((row: any) => {
+      statsMap.set(row.period_type, {
+        totalWinnings: Number(row.total_winnings || 0),
+        totalPurchases: Number(row.total_purchases || 0),
+        cardCount: Number(row.card_count || 0),
+        winCount: Number(row.win_count || 0),
+        purchaseCount: Number(row.purchase_count || 0),
+      });
+    });
+
+    const defaultStats = {
+      totalWinnings: 0,
+      totalPurchases: 0,
+      cardCount: 0,
+      winCount: 0,
+      purchaseCount: 0,
+    };
 
     return {
       totalWinningsToday,
@@ -275,6 +307,11 @@ export async function loadLeaderboardData(): Promise<LeaderboardData> {
       wins,
       purchases,
       leaderboard: leaderboardEntries,
+      stats: {
+        daily: statsMap.get("daily") || defaultStats,
+        weekly: statsMap.get("weekly") || defaultStats,
+        monthly: statsMap.get("monthly") || defaultStats,
+      },
     };
   } catch (error: any) {
     console.error("Error loading leaderboard data:", error);

@@ -61,6 +61,78 @@
   background-color: transparent;
 }
 
+/* Period Tabs */
+.periodTabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.periodTab {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  background-color: transparent;
+  color: #ffffff;
+  border-style: solid;
+  border-width: 1px;
+  border-color: rgba(73, 72, 76, 1);
+  border-radius: 200px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.periodTab:hover {
+  background-color: rgba(0, 0, 0, 0.15);
+}
+
+.periodTabActive {
+  background-image: url("../src/assets/logo/lobbyInfo.png");
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: 100% 100%;
+  background-color: transparent;
+  color: #ffffff;
+  border-radius: 200px;
+}
+
+.periodTabActive:hover {
+  background-color: transparent;
+}
+
+/* Stats Grid */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.statCard {
+  background-color: #1a1a1a;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  border-width: 1px;
+  border-style: solid;
+  border-color: rgba(73, 72, 76, 1);
+}
+
+.statLabel {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+.statValue {
+  font-size: 1.25rem;
+  color: #ffffff;
+  font-weight: 600;
+  text-align: center;
+}
+
 /* Section */
 .section {
   background-color: #1a1a1a;
