@@ -13,6 +13,7 @@ type ActiveRoom = {
   currency: string;
   cardCount: number;
   prize: number; // تخمین جایزه: cardPrice * cardCount
+  roomType: string; // نوع روم: 'normal' | 'tournament' | ...
 };
 
 function parseIfNoneMatch(header: string | null): string[] {
@@ -68,6 +69,7 @@ export async function GET(request: Request) {
       currency: room.currency || "IRR",
       cardCount: Number(room.card_count || 0),
       prize: Number(room.prize || 0),
+      roomType: room.room_type || "normal",
     }));
 
     // Sort: live/playing اول، سپس waiting، سپس settling

@@ -71,7 +71,7 @@ export default function LeaderboardPage() {
     );
   }
 
-  const { totalWinningsToday, totalPurchasesToday, wins, purchases, leaderboard, stats } = data;
+  const { leaderboard, stats } = data;
   
   // انتخاب آمار بر اساس بازه زمانی انتخاب شده
   const currentStats = stats[activePeriod];
@@ -154,74 +154,6 @@ export default function LeaderboardPage() {
                 <div className={styles.statValue}>
                   {formatAmount(currentStats.winCount)}
                 </div>
-              </div>
-            </div>
-
-            {/* بخش مجموع مبلغ برد امروز */}
-            <div className={styles.section}>
-              <div className={styles.sectionHeader}>
-                <span className={styles.sectionTitle}>مجموع مبلغ برد امروز</span>
-                <span className={styles.sectionValue}>
-                  {formatAmount(totalWinningsToday)}
-                </span>
-              </div>
-
-              <div className={styles.table}>
-                <div className={styles.tableHeader}>
-                  <div className={styles.tableHeaderCell}>زمان بازی</div>
-                  <div className={styles.tableHeaderCell}>مبلغ برد</div>
-                  <div className={styles.tableHeaderCell}>نام اتاق</div>
-                </div>
-                {wins.length === 0 ? (
-                  <div className={styles.emptyTable}>هیچ بردی ثبت نشده است</div>
-                ) : (
-                  <div className={styles.tableBody}>
-                    {wins.map((win) => (
-                      <div key={win.id} className={styles.tableRow}>
-                        <div className={styles.tableCell}>{win.gameTime}</div>
-                        <div className={styles.tableCell}>
-                          {formatAmount(win.amountWon)}
-                        </div>
-                        <div className={styles.tableCell}>{win.roomName}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* بخش مجموع مبلغ خرید امروز */}
-            <div className={styles.section}>
-              <div className={styles.sectionHeader}>
-                <span className={styles.sectionTitle}>مجموع مبلغ خرید امروز</span>
-                <span className={styles.sectionValue}>
-                  {formatAmount(totalPurchasesToday)}
-                </span>
-              </div>
-
-              <div className={styles.table}>
-                <div className={styles.tableHeader}>
-                  <div className={styles.tableHeaderCell}>مبلغ خرید</div>
-                  <div className={styles.tableHeaderCell}>تعداد برگ</div>
-                  <div className={styles.tableHeaderCell}>نام اتاق</div>
-                </div>
-                {purchases.length === 0 ? (
-                  <div className={styles.emptyTable}>هیچ خریدی ثبت نشده است</div>
-                ) : (
-                  <div className={styles.tableBody}>
-                    {purchases.map((purchase) => (
-                      <div key={purchase.id} className={styles.tableRow}>
-                        <div className={styles.tableCell}>
-                          {formatAmount(purchase.purchaseAmount)}
-                        </div>
-                        <div className={styles.tableCell}>
-                          {purchase.cardCount}
-                        </div>
-                        <div className={styles.tableCell}>{purchase.roomName}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
           </>

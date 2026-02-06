@@ -19,6 +19,7 @@ export interface ActiveRoom {
   currency: string;
   cardCount: number;
   prize: number;
+  roomType?: string; // نوع روم: 'normal' | 'tournament' | ...
 }
 
 export interface ActiveGames {
