@@ -21,24 +21,32 @@ function makeShortIdFromUuid(id: string): string {
   return num.toString().padStart(10, "0");
 }
 
+function chunkArray<T>(items: T[], size: number): T[][] {
+  if (size <= 0) return [items];
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
 /**
  * محاسبه محدوده تاریخ برای یک دوره
  */
 function getPeriodDateRange(period: ReportPeriod): { from: Date; to: Date } {
   const now = new Date();
   let from: Date;
-  
+
   if (period === "day") {
-    from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   } else if (period === "week") {
-    const dayOfWeek = now.getDay();
-    const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Monday
-    from = new Date(now.getFullYear(), now.getMonth(), diff);
+    // آخرین ۷ روز (شامل امروز) برای جلوگیری از اختلافات شروع هفته
+    from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   } else {
-    // month
-    from = new Date(now.getFullYear(), now.getMonth(), 1);
+    // month (از ابتدای ماه به وقت UTC)
+    from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   }
-  
+
   const to = new Date(now);
   return { from, to };
 }
@@ -50,6 +58,38 @@ export async function loadFinancialReports(
   period: ReportPeriod = "month"
 ): Promise<FinancialReportsData> {
   try {
+    const creditTypes = new Set([
+      "deposit",
+      "win",
+      "payout",
+      "join_refund",
+      "transfer_in",
+    ]);
+    const debitTypes = new Set([
+      "withdraw",
+      "join_hold",
+      "join_capture",
+      "bet",
+      "fee_agent",
+      "fee_super",
+      "fee_admin",
+      "transfer_out",
+    ]);
+    const joinTransactionTypes = new Set([
+      "join",
+      "bet",
+      "join_hold",
+      "join_capture",
+      "join_refund",
+    ]);
+
+    const mapTransactionDirection = (type: string): "deposit" | "withdraw" => {
+      if (creditTypes.has(type)) return "deposit";
+      if (debitTypes.has(type)) return "withdraw";
+      // fallback: keep previous behavior
+      return type === "deposit" ? "deposit" : "withdraw";
+    };
+
     const {
       data: { user: authUser },
       error: authError,
@@ -76,8 +116,7 @@ export async function loadFinancialReports(
 
     const { from, to } = getPeriodDateRange(period);
 
-    // گرفتن تراکنش‌های manual_panel که player در آن‌ها receiver یا sender است
-    // تراکنش‌هایی که source_kind = 'manual_panel' و user_id = player.id (receiver)
+    // گرفتن تراکنش‌ها که player در آن‌ها receiver است
     const { data: transactionsAsReceiver, error: receiverError } = await supabase
       .from("transactions")
       .select(
@@ -89,11 +128,11 @@ export async function loadFinancialReports(
         description,
         created_at,
         source_ref,
-        user_id
+        user_id,
+        room_id
       `
       )
       .eq("user_id", currentUser.id) // player به عنوان receiver
-      .eq("source_kind", "manual_panel")
       .gte("created_at", from.toISOString())
       .lte("created_at", to.toISOString())
       .order("created_at", { ascending: false });
@@ -102,8 +141,7 @@ export async function loadFinancialReports(
       console.error("Error loading transactions as receiver:", receiverError);
     }
 
-    // گرفتن تراکنش‌هایی که player به عنوان sender است (از wallet admin/agent)
-    // این تراکنش‌ها در source_ref ذخیره می‌شوند
+    // گرفتن تراکنش‌هایی که player به عنوان sender است (در source_ref)
     const { data: transactionsAsSender, error: senderError } = await supabase
       .from("transactions")
       .select(
@@ -115,11 +153,11 @@ export async function loadFinancialReports(
         description,
         created_at,
         source_ref,
-        user_id
+        user_id,
+        room_id
       `
       )
       .eq("source_ref", currentUser.id) // player به عنوان sender (در source_ref)
-      .eq("source_kind", "manual_panel")
       .gte("created_at", from.toISOString())
       .lte("created_at", to.toISOString())
       .order("created_at", { ascending: false });
@@ -160,18 +198,88 @@ export async function loadFinancialReports(
       }
     }
 
+    // حذف تراکنش‌های مربوط به روم‌های تورنومنت (join/hold/payout و ...)
+    const roomIdsForTransactions = new Set<string>();
+    transactionsAsReceiver?.forEach((tx: any) => {
+      if (tx.room_id) roomIdsForTransactions.add(tx.room_id);
+    });
+    transactionsAsSender?.forEach((tx: any) => {
+      if (tx.room_id) roomIdsForTransactions.add(tx.room_id);
+    });
+
+    const tournamentRoomIds = new Set<string>();
+    if (roomIdsForTransactions.size > 0) {
+      const batches = chunkArray(Array.from(roomIdsForTransactions), 200);
+      for (const batch of batches) {
+        const { data: roomsData, error: roomsError } = await supabase
+          .from("rooms")
+          .select("id, room_template_id")
+          .in("id", batch);
+
+        if (roomsError) {
+          console.error("Error loading rooms for transactions:", roomsError);
+          continue;
+        }
+
+        const templateIds = Array.from(
+          new Set(
+            (roomsData || [])
+              .map((room: any) => room.room_template_id)
+              .filter(Boolean)
+          )
+        );
+
+        const templateTypeById = new Map<string, string>();
+        if (templateIds.length > 0) {
+          const { data: templatesData, error: templatesError } = await supabase
+            .from("room_templates")
+            .select("id, room_type")
+            .in("id", templateIds);
+
+          if (templatesError) {
+            console.error("Error loading room templates for transactions:", templatesError);
+          } else {
+            templatesData?.forEach((template: any) => {
+              if (template?.id) templateTypeById.set(template.id, template.room_type);
+            });
+          }
+        }
+
+        roomsData?.forEach((room: any) => {
+          const roomType = room.room_template_id
+            ? templateTypeById.get(room.room_template_id)
+            : undefined;
+          if (roomType === "tournament") {
+            tournamentRoomIds.add(room.id);
+          }
+        });
+      }
+    }
+
+    const isTournamentRoomTransaction = (tx: any) =>
+      tx.room_id && tournamentRoomIds.has(tx.room_id);
+
+    const isTournamentCommissionTransaction = (tx: any) => {
+      const desc = String(tx.description || "").toLowerCase();
+      return desc.includes("tournament commission payout");
+    };
+
     // ترکیب و تبدیل تراکنش‌ها
     const allTransactions: FinancialTransaction[] = [];
+    const seenTransactionIds = new Set<string>();
 
     // تراکنش‌های به عنوان receiver
     if (transactionsAsReceiver) {
       for (const tx of transactionsAsReceiver) {
+        if (isTournamentRoomTransaction(tx) || isTournamentCommissionTransaction(tx)) continue;
+        if (seenTransactionIds.has(tx.id)) continue;
+        seenTransactionIds.add(tx.id);
         const actor = tx.source_ref ? actorMap.get(tx.source_ref) : undefined;
 
         allTransactions.push({
           id: tx.id,
           amount: Number(tx.amount),
-          type: tx.type === "deposit" ? "deposit" : "withdraw",
+          type: mapTransactionDirection(String(tx.type)),
           status: tx.status,
           description: tx.description || undefined,
           createdAt: tx.created_at,
@@ -186,12 +294,15 @@ export async function loadFinancialReports(
     // تراکنش‌های به عنوان sender (player به admin/agent واریز کرده)
     if (transactionsAsSender) {
       for (const tx of transactionsAsSender) {
+        if (isTournamentRoomTransaction(tx) || isTournamentCommissionTransaction(tx)) continue;
+        if (seenTransactionIds.has(tx.id)) continue;
+        seenTransactionIds.add(tx.id);
         const actor = tx.user_id ? actorMap.get(tx.user_id) : undefined;
 
         allTransactions.push({
           id: tx.id,
           amount: Number(tx.amount),
-          type: tx.type === "deposit" ? "deposit" : "withdraw",
+          type: mapTransactionDirection(String(tx.type)),
           status: tx.status,
           description: tx.description || undefined,
           createdAt: tx.created_at,
@@ -225,97 +336,30 @@ export async function loadFinancialReports(
       transactionCount: allTransactions.length,
     };
 
-    // محاسبه آمار بازی (از همان from و to که قبلاً تعریف شده)
+    // محاسبه آمار بازی (فقط روم‌های normal) به صورت server-side
+    const { data: gameStatsRows, error: gameStatsError } = await supabase.rpc(
+      "fn_player_game_stats",
+      {
+        p_user_id: currentUser.id,
+        p_from: from.toISOString(),
+        p_to: to.toISOString(),
+      }
+    );
 
-    // 1. مجموع کارت خریده شده (tickets با reservation_status = 'confirmed' یا 'consumed')
-    //    + مجموع مبلغ خرید را ترجیحاً از روی tickets.price محاسبه می‌کنیم (دقیق‌ترین منبع per-ticket).
-    const { data: tickets, error: ticketsError } = await supabase
-      .from("tickets")
-      .select("id, room_id, transaction_id, price")
-      .eq("player_user_id", currentUser.id)
-      .in("reservation_status", ["confirmed", "consumed"])
-      .gte("created_at", from.toISOString())
-      .lte("created_at", to.toISOString());
-
-    if (ticketsError) {
-      console.error("Error loading tickets:", ticketsError);
+    if (gameStatsError) {
+      console.error("Error loading game stats:", gameStatsError);
     }
 
-    const totalCardsPurchased = tickets?.length || 0;
-
-    // 2. مجموع مبلغ خرید
-    // اولویت: جمع tickets.price (اگر موجود و غیر صفر باشد)
-    const totalPurchaseAmountFromTickets =
-      tickets?.reduce((sum, t: any) => sum + Number(t.price || 0), 0) || 0;
-
-    // fallback: جمع تراکنش‌های مرتبط با خرید/ورود (در طراحی مالی ممکن است 'join' یا 'bet' باشد)
-    const { data: purchaseTransactions, error: purchaseError } = await supabase
-      .from("transactions")
-      .select("amount, room_id")
-      .eq("user_id", currentUser.id)
-      .in("type", ["join", "bet"])
-      .gte("created_at", from.toISOString())
-      .lte("created_at", to.toISOString());
-
-    if (purchaseError) {
-      console.error("Error loading purchase transactions (join/bet):", purchaseError);
-    }
-
-    const totalPurchaseAmountFromTransactions =
-      purchaseTransactions?.reduce((sum, tx: any) => sum + Number(tx.amount || 0), 0) || 0;
-
-    const totalPurchaseAmount =
-      totalPurchaseAmountFromTickets > 0
-        ? totalPurchaseAmountFromTickets
-        : totalPurchaseAmountFromTransactions;
-
-    // 3. تعداد برد خطی و پر (results)
-    const { data: results, error: resultsError } = await supabase
-      .from("results")
-      .select("win_type, reward_amount")
-      .eq("user_id", currentUser.id)
-      .gte("created_at", from.toISOString())
-      .lte("created_at", to.toISOString());
-
-    if (resultsError) {
-      console.error("Error loading results:", resultsError);
-    }
-
-    const lineWinsCount = results?.filter((r) => r.win_type === "line").length || 0;
-    const fullWinsCount = results?.filter((r) => r.win_type === "full").length || 0;
-
-    // 4. نرخ برد (درصد)
-    const winRate =
-      totalCardsPurchased > 0
-        ? ((lineWinsCount + fullWinsCount) / totalCardsPurchased) * 100
-        : 0;
-
-    // 5. واریزی و برداشت (از summary که قبلاً محاسبه شده)
-    // استفاده از totalDeposits و totalWithdrawals از summary
-
-    // 6. میانگین کارت/بازی
-    // تعداد روم‌های منحصر به فرد که player در آن‌ها کارت خریده
-    const uniqueRoomIds = new Set<string>();
-    tickets?.forEach((t) => {
-      if (t.room_id) uniqueRoomIds.add(t.room_id);
-    });
-    purchaseTransactions?.forEach((tx: any) => {
-      if (tx.room_id) uniqueRoomIds.add(tx.room_id);
-    });
-
-    const uniqueRoomsCount = uniqueRoomIds.size;
-    const averageCardsPerGame =
-      uniqueRoomsCount > 0 ? totalCardsPurchased / uniqueRoomsCount : 0;
-
+    const rawStats = Array.isArray(gameStatsRows) ? gameStatsRows[0] : null;
     const gameStats: GameStatistics = {
-      totalCardsPurchased,
-      totalPurchaseAmount,
-      lineWinsCount,
-      fullWinsCount,
-      winRate: Math.round(winRate * 100) / 100, // دو رقم اعشار
-      deposits: summary.totalDeposits, // استفاده از همان مقدار summary
-      withdrawals: summary.totalWithdrawals, // استفاده از همان مقدار summary
-      averageCardsPerGame: Math.round(averageCardsPerGame * 100) / 100, // دو رقم اعشار
+      totalCardsPurchased: Number(rawStats?.total_cards_purchased || 0),
+      totalPurchaseAmount: Number(rawStats?.total_purchase_amount || 0),
+      lineWinsCount: Number(rawStats?.line_wins_count || 0),
+      fullWinsCount: Number(rawStats?.full_wins_count || 0),
+      winRate: Number(rawStats?.win_rate || 0),
+      deposits: summary.totalDeposits,
+      withdrawals: summary.totalWithdrawals,
+      averageCardsPerGame: Number(rawStats?.average_cards_per_game || 0),
     };
 
     return {

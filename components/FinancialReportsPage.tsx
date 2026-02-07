@@ -78,6 +78,39 @@ export default function FinancialReportsPage() {
     }
   };
 
+  const translateTransactionDescription = (description: string): string => {
+    const normalized = description.trim();
+    if (!normalized) return description;
+
+    const lower = normalized.toLowerCase();
+    if (lower.startsWith("panel transfer (deposit) by admin")) {
+      return "واریز از پنل توسط ادمین";
+    }
+    if (lower.startsWith("panel transfer (withdraw) by admin")) {
+      return "برداشت از پنل توسط ادمین";
+    }
+    if (lower === "hold for room join") {
+      return "بلوکه برای ورود به روم";
+    }
+    if (lower === "room line prize payout") {
+      return "پرداخت جایزه خطی روم";
+    }
+    if (lower === "room full prize payout") {
+      return "پرداخت جایزه پر روم";
+    }
+    if (lower === "tournament commission payout") {
+      return "پرداخت کمیسیون تورنومنت";
+    }
+    if (lower.startsWith("game payout: line win")) {
+      return "پرداخت جایزه خطی";
+    }
+    if (lower.startsWith("game payout: full win")) {
+      return "پرداخت جایزه پر";
+    }
+
+    return description;
+  };
+
   if (loading) {
     return (
       <div className={styles.container}>
@@ -150,24 +183,6 @@ export default function FinancialReportsPage() {
               </span>
             </div>
             <div className={styles.statsItem}>
-              <span className={styles.statsLabel}>تعداد برد خطی</span>
-              <span className={styles.statsValue}>
-                {safeGameStats.lineWinsCount}
-              </span>
-            </div>
-            <div className={styles.statsItem}>
-              <span className={styles.statsLabel}>تعداد برد پر</span>
-              <span className={styles.statsValue}>
-                {safeGameStats.fullWinsCount}
-              </span>
-            </div>
-            <div className={styles.statsItem}>
-              <span className={styles.statsLabel}>نرخ برد</span>
-              <span className={styles.statsValue}>
-                {safeGameStats.winRate.toFixed(2)}%
-              </span>
-            </div>
-            <div className={styles.statsItem}>
               <span className={styles.statsLabel}>واریزی</span>
               <span className={`${styles.statsValue} ${styles.positive}`}>
                 {formatAmount(safeGameStats.deposits)} تومان
@@ -177,12 +192,6 @@ export default function FinancialReportsPage() {
               <span className={styles.statsLabel}>برداشت</span>
               <span className={`${styles.statsValue} ${styles.negative}`}>
                 {formatAmount(safeGameStats.withdrawals)} تومان
-              </span>
-            </div>
-            <div className={styles.statsItem}>
-              <span className={styles.statsLabel}>میانگین کارت/بازی</span>
-              <span className={styles.statsValue}>
-                {safeGameStats.averageCardsPerGame.toFixed(2)}
               </span>
             </div>
             <div className={styles.statsItem}>
@@ -257,7 +266,7 @@ export default function FinancialReportsPage() {
 
                   {tx.description && (
                     <div className={styles.transactionDescription}>
-                      {tx.description}
+                      {translateTransactionDescription(tx.description)}
                     </div>
                   )}
                 </div>

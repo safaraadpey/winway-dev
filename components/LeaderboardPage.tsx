@@ -138,6 +138,12 @@ export default function LeaderboardPage() {
                 </div>
               </div>
               <div className={styles.statCard}>
+                <div className={styles.statLabel}>مجموع برد تورنومنت</div>
+                <div className={styles.statValue}>
+                  {formatAmount(currentStats.tournamentWinnings)}
+                </div>
+              </div>
+              <div className={styles.statCard}>
                 <div className={styles.statLabel}>مجموع خرید</div>
                 <div className={styles.statValue}>
                   {formatAmount(currentStats.totalPurchases)}
@@ -150,9 +156,15 @@ export default function LeaderboardPage() {
                 </div>
               </div>
               <div className={styles.statCard}>
-                <div className={styles.statLabel}>تعداد برد</div>
+                <div className={styles.statLabel}>تعداد برد خطی</div>
                 <div className={styles.statValue}>
-                  {formatAmount(currentStats.winCount)}
+                  {formatAmount(currentStats.lineWinsCount)}
+                </div>
+              </div>
+              <div className={styles.statCard}>
+                <div className={styles.statLabel}>تعداد برد پر</div>
+                <div className={styles.statValue}>
+                  {formatAmount(currentStats.fullWinsCount)}
                 </div>
               </div>
             </div>

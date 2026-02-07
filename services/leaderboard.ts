@@ -286,18 +286,24 @@ export async function loadLeaderboardData(): Promise<LeaderboardData> {
     statsRows?.forEach((row: any) => {
       statsMap.set(row.period_type, {
         totalWinnings: Number(row.total_winnings || 0),
+        tournamentWinnings: Number(row.tournament_winnings || 0),
         totalPurchases: Number(row.total_purchases || 0),
         cardCount: Number(row.card_count || 0),
         winCount: Number(row.win_count || 0),
+        lineWinsCount: Number(row.line_wins_count || 0),
+        fullWinsCount: Number(row.full_wins_count || 0),
         purchaseCount: Number(row.purchase_count || 0),
       });
     });
 
     const defaultStats = {
       totalWinnings: 0,
+      tournamentWinnings: 0,
       totalPurchases: 0,
       cardCount: 0,
       winCount: 0,
+      lineWinsCount: 0,
+      fullWinsCount: 0,
       purchaseCount: 0,
     };
 

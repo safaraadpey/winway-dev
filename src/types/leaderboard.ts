@@ -30,9 +30,12 @@ export interface LeaderboardEntry {
 
 export interface PeriodStats {
   totalWinnings: number; // مجموع مبلغ برد
+  tournamentWinnings: number; // مجموع برد تورنومنت
   totalPurchases: number; // مجموع مبلغ خرید
   cardCount: number; // تعداد کارت
   winCount: number; // تعداد برد
+  lineWinsCount: number; // تعداد برد خطی
+  fullWinsCount: number; // تعداد برد پر
   purchaseCount: number; // تعداد خرید
 }
 
