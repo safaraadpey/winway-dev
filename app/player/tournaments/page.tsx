@@ -44,7 +44,7 @@ export default function TournamentsPage() {
   const statusLabel = (status: string | null) => {
     switch (status) {
       case "registration_open":
-        return "ثبت‌نام باز";
+        return "ثبت نام";
       case "running":
         return "در حال اجرا";
       case "settling":
