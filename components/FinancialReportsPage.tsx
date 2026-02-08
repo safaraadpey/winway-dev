@@ -146,6 +146,42 @@ export default function FinancialReportsPage() {
     averageCardsPerGame: 0,
   };
 
+  const manualDeposits = transactions.reduce((sum, tx) => {
+    const description = String(tx.description || "").toLowerCase();
+    const isManualPanelDepositByDescription =
+      description.includes("panel transfer (deposit) by admin") ||
+      description.includes("manual deposit by");
+
+    if (
+      tx.type === "deposit" &&
+      (tx.actorRole === "admin" ||
+        tx.actorRole === "agent" ||
+        tx.actorRole === "super" ||
+        isManualPanelDepositByDescription)
+    ) {
+      return sum + tx.amount;
+    }
+    return sum;
+  }, 0);
+
+  const manualWithdrawals = transactions.reduce((sum, tx) => {
+    const description = String(tx.description || "").toLowerCase();
+    const isManualPanelWithdrawByDescription =
+      description.includes("panel transfer (withdraw) by admin") ||
+      description.includes("manual withdraw by");
+
+    if (
+      tx.type === "withdraw" &&
+      (tx.actorRole === "admin" ||
+        tx.actorRole === "agent" ||
+        tx.actorRole === "super" ||
+        isManualPanelWithdrawByDescription)
+    ) {
+      return sum + tx.amount;
+    }
+    return sum;
+  }, 0);
+
   return (
     <div className={styles.container}>
       <div className={styles.content}>
@@ -168,7 +204,7 @@ export default function FinancialReportsPage() {
 
         {/* آمار بازی */}
         <div className={styles.gameStatsSection}>
-          <h2 className={styles.sectionTitle}>آمار بازی</h2>
+          <h2 className={styles.sectionTitle}>آمار مالی</h2>
           <div className={styles.statsList}>
             <div className={styles.statsItem}>
               <span className={styles.statsLabel}>مجموع کارت خریده شده</span>
@@ -183,15 +219,15 @@ export default function FinancialReportsPage() {
               </span>
             </div>
             <div className={styles.statsItem}>
-              <span className={styles.statsLabel}>واریزی</span>
+              <span className={styles.statsLabel}>دریافتی</span>
               <span className={`${styles.statsValue} ${styles.positive}`}>
-                {formatAmount(safeGameStats.deposits)} تومان
+                {formatAmount(manualDeposits)} تومان
               </span>
             </div>
             <div className={styles.statsItem}>
-              <span className={styles.statsLabel}>برداشت</span>
+              <span className={styles.statsLabel}>کش اوت</span>
               <span className={`${styles.statsValue} ${styles.negative}`}>
-                {formatAmount(safeGameStats.withdrawals)} تومان
+                {formatAmount(manualWithdrawals)} تومان
               </span>
             </div>
             <div className={styles.statsItem}>
@@ -204,10 +240,10 @@ export default function FinancialReportsPage() {
               <span className={styles.statsLabel}>بیلان</span>
               <span
                 className={`${styles.statsValue} ${
-                  summary.netBalance >= 0 ? styles.positive : styles.negative
+                  manualDeposits - manualWithdrawals >= 0 ? styles.positive : styles.negative
                 }`}
               >
-                {formatAmount(summary.netBalance)} تومان
+                {formatAmount(manualDeposits - manualWithdrawals)} تومان
               </span>
             </div>
           </div>
