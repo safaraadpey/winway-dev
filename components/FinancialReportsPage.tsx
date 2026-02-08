@@ -90,22 +90,34 @@ export default function FinancialReportsPage() {
       return "برداشت از پنل توسط ادمین";
     }
     if (lower === "hold for room join") {
-      return "بلوکه برای ورود به روم";
+      return "پرداخت برای ورود به روم";
     }
     if (lower === "room line prize payout") {
-      return "پرداخت جایزه خطی روم";
+      return "واریز جایزه خطی روم";
     }
     if (lower === "room full prize payout") {
-      return "پرداخت جایزه پر روم";
+      return "واریز جایزه پر روم";
     }
     if (lower === "tournament commission payout") {
       return "پرداخت کمیسیون تورنومنت";
     }
+    if (lower === "hold for tournament join") {
+      return "پرداخت برای ورود به تورنومنت";
+    }
+    if (lower === "tournament prize payout") {
+      return "واریز جایزه تورنومنت";
+    }
+    if (lower === "admin refund after tournament cancelled") {
+      return "بازپرداخت ادمین پس از لغو تورنومنت";
+    }
+    if (lower.startsWith("manual withdraw by")) {
+      return "برداشت دستی توسط سوپر";
+    }
     if (lower.startsWith("game payout: line win")) {
-      return "پرداخت جایزه خطی";
+      return "واریز جایزه خطی";
     }
     if (lower.startsWith("game payout: full win")) {
-      return "پرداخت جایزه پر";
+      return "واریز جایزه پر";
     }
 
     return description;
@@ -219,21 +231,15 @@ export default function FinancialReportsPage() {
               </span>
             </div>
             <div className={styles.statsItem}>
-              <span className={styles.statsLabel}>دریافتی</span>
+              <span className={styles.statsLabel}>جمع واریزی</span>
               <span className={`${styles.statsValue} ${styles.positive}`}>
                 {formatAmount(manualDeposits)} تومان
               </span>
             </div>
             <div className={styles.statsItem}>
-              <span className={styles.statsLabel}>کش اوت</span>
+              <span className={styles.statsLabel}>جمع برداشت</span>
               <span className={`${styles.statsValue} ${styles.negative}`}>
                 {formatAmount(manualWithdrawals)} تومان
-              </span>
-            </div>
-            <div className={styles.statsItem}>
-              <span className={styles.statsLabel}>تعداد تراکنش‌ها</span>
-              <span className={styles.statsValue}>
-                {summary.transactionCount}
               </span>
             </div>
             <div className={styles.statsItem}>

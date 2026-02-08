@@ -26,18 +26,17 @@
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1.5rem;
-  background-color: rgba(19, 27, 47, 1);
-  padding: 0.5rem;
-  border-radius: 0.75rem;
 }
 
 .periodTab {
   flex: 1;
   padding: 0.75rem 1rem;
-  background-color: rgba(45, 45, 45, 1);
-  color: #9ca3af;
-  border: none;
-  border-radius: 0.5rem;
+  background-color: transparent;
+  color: #ffffff;
+  border-style: solid;
+  border-width: 1px;
+  border-color: rgba(73, 72, 76, 1);
+  border-radius: 200px;
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -45,14 +44,21 @@
 }
 
 .periodTab:hover {
-  background-color: #2d2d2d;
-  color: #ffffff;
+  background-color: rgba(0, 0, 0, 0.15);
 }
 
 .periodTabActive {
-  background-color: #00d4aa;
-  color: #000000;
-  font-weight: 600;
+  background-image: url("../src/assets/logo/lobbyInfo.png");
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: 100% 100%;
+  background-color: transparent;
+  color: #ffffff;
+  border-radius: 200px;
+}
+
+.periodTabActive:hover {
+  background-color: transparent;
 }
 
 /* Summary Section */
@@ -92,7 +98,8 @@
 
 /* Game Stats Section */
 .gameStatsSection {
-  background-color: rgba(20, 27, 48, 1);
+  background-color: rgba(0, 0, 0, 0.25);
+  border: 1px solid #ffffff;
   border-radius: 0.75rem;
   padding: 1.5rem;
   margin-bottom: 2rem;
