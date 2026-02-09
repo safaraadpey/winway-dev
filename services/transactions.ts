@@ -355,12 +355,17 @@ export async function loadTransactionHistory(
       targetUserIds = Array.from(new Set(targetUserIds));
     }
 
-    // اگر کاربر زیرمجموعه‌ای ندارد، لیست خالی برمی‌گردانیم
+    // همیشه خود کاربر فعلی را هم اضافه کن تا تراکنش‌های خودش دیده شود
+    if (!targetUserIds.includes(currentUser.id)) {
+      targetUserIds.push(currentUser.id);
+    }
+
+    // اگر کاربر زیرمجموعه‌ای ندارد، فقط تراکنش‌های خودش را داریم
     if (targetUserIds.length === 0) {
       return { transactions: [], totalCount: 0 };
     }
 
-    // گرفتن تراکنش‌های manual_panel
+    // گرفتن همه تراکنش‌ها
     // باید تراکنش‌هایی که فرستنده (source_ref) یا گیرنده (user_id) در targetUserIds است را بگیریم
     // اما Supabase query builder نمی‌تواند OR پیچیده را handle کند، پس باید از RPC استفاده کنیم
     // یا اینکه دو query جداگانه بگیریم و merge کنیم
@@ -368,9 +373,7 @@ export async function loadTransactionHistory(
     // روش 1: گرفتن تراکنش‌هایی که گیرنده در targetUserIds است
     const { data: transactionsAsReceiver, error: error1 } = await supabase
       .from("transactions")
-      .select("id, user_id, amount, type, created_at, description, source_ref")
-      .eq("source_kind", "manual_panel")
-      .in("type", ["deposit", "withdraw"])
+      .select("id, user_id, amount, type, created_at, description, source_kind, source_ref, meta")
       .in("user_id", targetUserIds)
       .gte("created_at", dateFrom.toISOString())
       .order("created_at", { ascending: false })
@@ -381,9 +384,7 @@ export async function loadTransactionHistory(
     // باید از filter استفاده کنیم چون .in() ممکن است با text درست کار نکند
     let senderQuery = supabase
       .from("transactions")
-      .select("id, user_id, amount, type, created_at, description, source_ref")
-      .eq("source_kind", "manual_panel")
-      .in("type", ["deposit", "withdraw"])
+      .select("id, user_id, amount, type, created_at, description, source_kind, source_ref, meta")
       .gte("created_at", dateFrom.toISOString());
     
     // فیلتر source_ref: باید یکی از targetUserIds باشد
@@ -416,7 +417,35 @@ export async function loadTransactionHistory(
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
     
-    const transactions = uniqueTransactions.slice(0, 100); // limit to 100
+    const targetUserSet = new Set(targetUserIds);
+    const filteredTransactions = uniqueTransactions.filter((t: any) => {
+      if (t.source_kind === "admin_panel_transfer" && t.meta?.actor_id && t.meta?.target_id) {
+        const actorInScope = targetUserSet.has(String(t.meta.actor_id));
+        const targetInScope = targetUserSet.has(String(t.meta.target_id));
+        if (actorInScope && targetInScope && t.type === "transfer_in") {
+          // when both sides are in scope, keep only transfer_out to avoid duplicate rows
+          return false;
+        }
+      }
+      return true;
+    });
+
+    const transferMap = new Map<string, any>();
+    for (const t of filteredTransactions) {
+      if (t.source_kind === "admin_panel_transfer") {
+        const transferKey = String(t.meta?.transfer_id || t.source_ref || t.id);
+        const existing = transferMap.get(transferKey);
+        if (!existing) {
+          transferMap.set(transferKey, t);
+        } else if (existing.type !== "transfer_out" && t.type === "transfer_out") {
+          transferMap.set(transferKey, t);
+        }
+      } else {
+        transferMap.set(String(t.id), t);
+      }
+    }
+
+    const transactions = Array.from(transferMap.values()).slice(0, 100); // limit to 100
 
     if (!transactions || transactions.length === 0) {
       return { transactions: [], totalCount: 0 };
@@ -434,7 +463,24 @@ export async function loadTransactionHistory(
       new Set((transactions || []).map((t: any) => t.user_id))
     );
 
-    const allUserIds = Array.from(new Set([...actorIds, ...targetIds]));
+    const metaActorIds = Array.from(
+      new Set(
+        (transactions || [])
+          .map((t: any) => t.meta?.actor_id)
+          .filter((id: string | null) => !!id)
+      )
+    ) as string[];
+    const metaTargetIds = Array.from(
+      new Set(
+        (transactions || [])
+          .map((t: any) => t.meta?.target_id)
+          .filter((id: string | null) => !!id)
+      )
+    ) as string[];
+
+    const allUserIds = Array.from(
+      new Set([...actorIds, ...targetIds, ...metaActorIds, ...metaTargetIds])
+    );
 
     const { data: users, error: usersError } = await supabase
       .from("users")
@@ -458,12 +504,54 @@ export async function loadTransactionHistory(
     // تبدیل به TransactionHistoryItem
     // همیشه actor (عامل) را در سمت چپ (fromUser) و target را در سمت راست (toUser) نمایش می‌دهیم
     const historyItems: TransactionHistoryItem[] = [];
+    const depositTypes = new Set(["deposit"]);
+    const isUuid = (value?: string | null) =>
+      !!value && /^[0-9a-fA-F-]{36}$/.test(value);
+
+    const getRoleFallbackName = (description?: string | null): string | null => {
+      const desc = (description || "").toLowerCase();
+      if (desc.includes("by admin")) return "ادمین پنل";
+      if (desc.includes("by super")) return "سوپر پنل";
+      if (desc.includes("by agent")) return "ایجنت پنل";
+      return null;
+    };
+
+    const buildFallbackUser = (
+      userId: string,
+      description?: string | null
+    ): { username: string; shortId: string } => {
+      const roleName = getRoleFallbackName(description);
+      if (roleName) {
+        return { username: roleName, shortId: "پنل" };
+      }
+      if (isUuid(userId)) {
+        return { username: "کاربر", shortId: makeShortIdFromUuid(userId) };
+      }
+      return { username: "نامشخص", shortId: "-----" };
+    };
+
     for (const t of transactions || []) {
-      // تعیین actor و target بر اساس type تراکنش
+      const displayAction: TransactionAction =
+        t.source_kind === "admin_panel_transfer" &&
+        (t.meta?.action === "deposit" || t.meta?.action === "withdraw")
+          ? t.meta.action
+          : t.type === "withdraw" || t.type === "transfer_out"
+          ? "withdraw"
+          : "deposit";
+
+      // تعیین actor و target بر اساس اکشن نهایی
       let actorId: string;
       let targetId: string;
-      
-      if (t.type === "deposit") {
+
+      if (t.source_kind === "admin_panel_transfer" && t.meta?.actor_id && t.meta?.target_id) {
+        if (depositTypes.has(displayAction)) {
+          actorId = t.meta.actor_id;
+          targetId = t.meta.target_id;
+        } else {
+          actorId = t.meta.target_id;
+          targetId = t.meta.actor_id;
+        }
+      } else if (depositTypes.has(displayAction)) {
         // در deposit: actor = source_ref (کسی که واریز می‌کند), target = user_id (کسی که دریافت می‌کند)
         actorId = t.source_ref || "";
         targetId = t.user_id;
@@ -473,12 +561,8 @@ export async function loadTransactionHistory(
         targetId = t.source_ref || "";
       }
 
-      const actorUser = userMap.get(actorId);
-      const targetUser = userMap.get(targetId);
-
-      if (!actorUser || !targetUser) {
-        continue;
-      }
+      const actorUser = userMap.get(actorId) || buildFallbackUser(actorId, t.description);
+      const targetUser = userMap.get(targetId) || buildFallbackUser(targetId, t.description);
 
       // فیلتر جستجو
       if (search) {
@@ -503,7 +587,7 @@ export async function loadTransactionHistory(
         toUsername: targetUser.username,
         toShortId: targetUser.shortId,
         amount: Number(t.amount) || 0,
-        type: t.type as TransactionAction,
+        type: displayAction,
         createdAt: t.created_at,
         description: t.description || undefined,
       });

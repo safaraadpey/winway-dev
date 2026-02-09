@@ -147,44 +147,27 @@ async function calculateCommission(
   periodStart: Date
 ): Promise<number> {
   try {
-    let commissionQuery = supabase
-      .from("commissions_log")
-      .select("agent_amount, super_amount, admin_amount")
-      .gte("created_at", periodStart.toISOString());
-
-    // فیلتر بر اساس نقش
-    if (role === "admin") {
-      // admin: همه کمیسیون‌ها
-      // نیازی به فیلتر اضافی نیست
-    } else if (role === "super") {
-      // super: فقط کمیسیون‌های super_id = userId
-      commissionQuery = commissionQuery.eq("super_id", userId);
-    } else if (role === "agent") {
-      // agent: فقط کمیسیون‌های agent_id = userId
-      commissionQuery = commissionQuery.eq("agent_id", userId);
-    } else {
-      // player: هیچ کمیسیونی ندارد
+    if (role !== "admin" && role !== "super" && role !== "agent") {
       return 0;
     }
 
-    const { data, error } = await commissionQuery;
+    // کمیسیون‌های واقعی ثبت‌شده در کیف پول کاربر (fee_* در تراکنش‌ها)
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("amount")
+      .eq("user_id", userId)
+      .in("type", ["fee_admin", "fee_super", "fee_agent"])
+      .gte("created_at", periodStart.toISOString());
 
     if (error) {
       console.error("calculateCommission error:", error);
       return 0;
     }
 
-    // جمع کردن کمیسیون‌ها بر اساس نقش
-    let total = 0;
-    (data || []).forEach((row: any) => {
-      if (role === "admin") {
-        total += Number(row.admin_amount || 0) + Number(row.super_amount || 0) + Number(row.agent_amount || 0);
-      } else if (role === "super") {
-        total += Number(row.super_amount || 0);
-      } else if (role === "agent") {
-        total += Number(row.agent_amount || 0);
-      }
-    });
+    const total = (data || []).reduce(
+      (sum: number, row: any) => sum + Number(row.amount || 0),
+      0
+    );
 
     return total;
   } catch (err) {
@@ -194,7 +177,7 @@ async function calculateCommission(
 }
 
 /**
- * محاسبه واریز و برداشت برای یک کاربر در یک بازه زمانی
+ * محاسبه واریز و برداشت پنلی (actor) برای یک کاربر در یک بازه زمانی
  */
 async function calculateDepositsWithdrawals(
   userId: string,
@@ -202,96 +185,66 @@ async function calculateDepositsWithdrawals(
   periodStart: Date
 ): Promise<{ deposits: number; withdrawals: number }> {
   try {
-    // تعیین کاربران زیرمجموعه برای فیلتر
-    let targetUserIds: string[] = [];
-
-    if (role === "admin") {
-      // admin: همه کاربران
-      const { data: allUsers } = await supabase
-        .from("users")
-        .select("id")
-        .in("role", ["player", "agent", "super"]);
-      targetUserIds = (allUsers || []).map((u: any) => u.id);
-    } else if (role === "super") {
-      // super: agents و players زیر این super
-      // 1. agents مستقیم
-      const { data: agentsData } = await supabase
-        .from("users")
-        .select("id")
-        .eq("parent_id", userId)
-        .eq("role", "agent");
-      const agentIds = (agentsData || []).map((a: any) => a.id);
-      targetUserIds.push(...agentIds);
-
-      // 2. players مستقیم
-      const { data: directPlayersData } = await supabase
-        .from("users")
-        .select("id")
-        .eq("parent_id", userId)
-        .eq("role", "player");
-      const directPlayerIds = (directPlayersData || []).map((p: any) => p.id);
-      targetUserIds.push(...directPlayerIds);
-
-      // 3. players زیر agents
-      if (agentIds.length > 0) {
-        const { data: playersData } = await supabase
-          .from("users")
-          .select("id")
-          .in("parent_id", agentIds)
-          .eq("role", "player");
-        const playerIds = (playersData || []).map((p: any) => p.id);
-        targetUserIds.push(...playerIds);
-      }
-
-      // حذف duplicates
-      targetUserIds = Array.from(new Set(targetUserIds));
-    } else if (role === "agent") {
-      // agent: players زیر این agent
-      // 1. players مستقیم
-      const { data: directPlayersData } = await supabase
-        .from("users")
-        .select("id")
-        .eq("parent_id", userId)
-        .eq("role", "player");
-      const directPlayerIds = (directPlayersData || []).map((p: any) => p.id);
-      targetUserIds.push(...directPlayerIds);
-
-      // حذف duplicates
-      targetUserIds = Array.from(new Set(targetUserIds));
-    }
-
-    if (targetUserIds.length === 0) {
+    if (role !== "admin" && role !== "super" && role !== "agent") {
       return { deposits: 0, withdrawals: 0 };
     }
 
-    // گرفتن واریزها (deposits) از manual_panel
-    const { data: depositsData, error: depositsError } = await supabase
+    // 1) مسیر قدیمی manual_panel: actor در source_ref است
+    const { data: manualDeposits, error: manualDepositsError } = await supabase
       .from("transactions")
       .select("amount")
+      .eq("source_kind", "manual_panel")
       .eq("type", "deposit")
-      .eq("source_kind", "manual_panel")
-      .in("user_id", targetUserIds)
+      .eq("source_ref", userId)
       .gte("created_at", periodStart.toISOString());
 
-    if (depositsError) {
-      console.error("calculateDepositsWithdrawals deposits error:", depositsError);
+    if (manualDepositsError) {
+      console.error("calculateDepositsWithdrawals manual deposits error:", manualDepositsError);
     }
 
-    // گرفتن برداشت‌ها (withdrawals) از manual_panel
-    const { data: withdrawalsData, error: withdrawalsError } = await supabase
+    const { data: manualWithdrawals, error: manualWithdrawalsError } = await supabase
       .from("transactions")
       .select("amount")
-      .eq("type", "withdraw")
       .eq("source_kind", "manual_panel")
-      .in("user_id", targetUserIds)
+      .eq("type", "withdraw")
+      .eq("source_ref", userId)
       .gte("created_at", periodStart.toISOString());
 
-    if (withdrawalsError) {
-      console.error("calculateDepositsWithdrawals withdrawals error:", withdrawalsError);
+    if (manualWithdrawalsError) {
+      console.error("calculateDepositsWithdrawals manual withdrawals error:", manualWithdrawalsError);
     }
 
-    const deposits = (depositsData || []).reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-    const withdrawals = (withdrawalsData || []).reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+    // 2) مسیر جدید admin_panel_transfer: actor در meta.actor_id و اکشن در meta.action است
+    const { data: transferDeposits, error: transferDepositsError } = await supabase
+      .from("transactions")
+      .select("amount")
+      .eq("source_kind", "admin_panel_transfer")
+      .filter("meta->>actor_id", "eq", userId)
+      .filter("meta->>action", "eq", "deposit")
+      .gte("created_at", periodStart.toISOString());
+
+    if (transferDepositsError) {
+      console.error("calculateDepositsWithdrawals transfer deposits error:", transferDepositsError);
+    }
+
+    const { data: transferWithdrawals, error: transferWithdrawalsError } = await supabase
+      .from("transactions")
+      .select("amount")
+      .eq("source_kind", "admin_panel_transfer")
+      .filter("meta->>actor_id", "eq", userId)
+      .filter("meta->>action", "eq", "withdraw")
+      .gte("created_at", periodStart.toISOString());
+
+    if (transferWithdrawalsError) {
+      console.error("calculateDepositsWithdrawals transfer withdrawals error:", transferWithdrawalsError);
+    }
+
+    const deposits =
+      (manualDeposits || []).reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0) +
+      (transferDeposits || []).reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+    const withdrawals =
+      (manualWithdrawals || []).reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0) +
+      (transferWithdrawals || []).reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
 
     return { deposits, withdrawals };
   } catch (err) {
