@@ -477,7 +477,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       style={{ height: "100dvh" }}
     >
       <div
-        className="max-w-3xl mx-auto px-4 pb-[9px] flex flex-col h-full gap-1"
+        className="max-w-3xl mx-auto px-4 pb-[9px] flex flex-col h-full gap-1 min-h-0"
         style={{ paddingTop: "8px" }}
       >
         <div
@@ -514,7 +514,10 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
           </div>
         )}
 
-        <div className="space-y-2 pr-1 flex-1 overflow-y-auto pb-10 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <div
+          className="space-y-2 pr-1 flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+          style={{ paddingBottom: "300px" }}
+        >
           {orderedCards.map((card) => (
             <div key={card.ticket_id} className="bg-transparent rounded-3xl">
               <BingoCardDemo
