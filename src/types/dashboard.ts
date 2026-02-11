@@ -11,12 +11,15 @@ export interface DashboardUserInfo {
   displayName: string;
   role: "admin" | "agent" | "super" | "player";
   referralCode: string | null;
+  parentId?: string | null;
   adminSubRole?: "manager" | "finance" | "support" | "room" | null; // فقط برای role="admin"
 }
 
 export interface FinancialSummary {
   period: DashboardPeriod;
   ticketsVolume: number; // مجموع مبلغ بلیت‌ها / فروش
+  /** مجموع مبلغی که کمیسیون از آن ساخته شده (commission_base) */
+  ticketsVolumeTotal: number;
   deposits: number; // واریزها
   withdrawals: number; // برداشت‌ها
   net: number; // بیلان (deposits - withdrawals یا عدد ترکیبی)

@@ -134,6 +134,10 @@ export default function AgentDashboardPage() {
                 <span className="text-right font-mono">
                   {summary.ticketsVolume.toLocaleString("en-US")}
                 </span>
+                <span>کانیات کل</span>
+                <span className="text-right font-mono">
+                  {summary.ticketsVolumeTotal.toLocaleString("en-US")}
+                </span>
                 <span>واریز</span>
                 <span className="text-right font-mono">
                   {summary.deposits.toLocaleString("en-US")}

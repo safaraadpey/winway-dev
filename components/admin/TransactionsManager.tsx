@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { loadManagedUsers } from "@/services/users";
+import { filterManagedUsers, getCachedManagedUsersBase, loadManagedUsers } from "@/services/users";
 import {
   adjustWalletForUsersBulk,
   transferWalletForUsersBulk,
@@ -280,7 +280,13 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyDateFilter, setHistoryDateFilter] = useState<DateFilter>("month");
   const [historySearch, setHistorySearch] = useState("");
+  const [historySearchDebounced, setHistorySearchDebounced] = useState("");
   const [currentUserRole, setCurrentUserRole] = useState<string>("player");
+
+  const cachedUsersBase = getCachedManagedUsersBase();
+  const [baseUsers, setBaseUsers] = useState<ManagedUserSummary[]>(
+    () => cachedUsersBase?.usersAll ?? []
+  );
 
   // فیلتر کردن تب‌ها بر اساس نقش کاربر فعلی
   const roleTabs = useMemo(() => {
@@ -337,37 +343,48 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
   useEffect(() => {
     let isMounted = true;
 
-    async function fetch() {
+    async function fetchBase() {
       try {
         setLoading(true);
-        const result = await loadManagedUsers({ roleFilter, search });
+        const result = await loadManagedUsers({ roleFilter: "all", search: "", maxAgeMs: 30_000 });
         if (!isMounted) return;
         setCurrentUserRole(result.currentUserRole);
-        setUsers(result.users);
-        // حذف انتخاب‌هایی که دیگر در لیست نیستند
-        setSelectedIds((prev) => {
-          const next = new Set<string>();
-          result.users.forEach((u) => {
-            if (prev.has(u.id)) next.add(u.id);
-          });
-          return next;
-        });
+        setBaseUsers(result.users);
       } catch (err) {
         console.error("Error loading managed users for transactions:", err);
-        if (isMounted) {
-          toast.error("خطا در بارگذاری کاربران");
-        }
+        if (isMounted) toast.error("خطا در بارگذاری کاربران");
       } finally {
         if (isMounted) setLoading(false);
       }
     }
 
-    fetch();
+    if (baseUsers.length === 0) {
+      fetchBase();
+    } else {
+      setLoading(false);
+    }
 
     return () => {
       isMounted = false;
     };
-  }, [roleFilter, search]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const usersFiltered = useMemo(() => {
+    return filterManagedUsers(baseUsers, { roleFilter, search });
+  }, [baseUsers, roleFilter, search]);
+
+  useEffect(() => {
+    setUsers(usersFiltered);
+    // حذف انتخاب‌هایی که دیگر در لیست نیستند
+    setSelectedIds((prev) => {
+      const next = new Set<string>();
+      usersFiltered.forEach((u) => {
+        if (prev.has(u.id)) next.add(u.id);
+      });
+      return next;
+    });
+  }, [usersFiltered]);
 
   const totalUsers = users.length;
   const selectedCount = selectedIds.size;
@@ -380,6 +397,14 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
     setHistorySearch(e.target.value);
   };
 
+  // Debounce history search to avoid refetch per keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setHistorySearchDebounced(historySearch);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [historySearch]);
+
   // بارگذاری تاریخچه تراکنش‌ها
   useEffect(() => {
     if (tab !== "history") return;
@@ -391,7 +416,8 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
         setHistoryLoading(true);
         const result = await loadTransactionHistory({
           dateFilter: historyDateFilter,
-          search: historySearch,
+          search: historySearchDebounced,
+          maxAgeMs: 30_000,
         });
         if (!isMounted) return;
         setHistoryTransactions(result.transactions);
@@ -410,7 +436,7 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
     return () => {
       isMounted = false;
     };
-  }, [tab, historyDateFilter, historySearch]);
+  }, [tab, historyDateFilter, historySearchDebounced]);
 
   // فرمت تاریخ برای نمایش
   const formatTransactionDate = (dateString: string): string => {
@@ -493,8 +519,8 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
       }
 
       // بعد از موفقیت، لیست را دوباره بارگذاری می‌کنیم
-      const result = await loadManagedUsers({ roleFilter, search });
-      setUsers(result.users);
+      const result = await loadManagedUsers({ roleFilter: "all", search: "", force: true });
+      setBaseUsers(result.users);
       setSelectedIds(new Set());
       setAmountInput("");
 

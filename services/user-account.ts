@@ -22,6 +22,49 @@ function makeShortIdFromUuid(id: string): string {
   return num.toString().padStart(10, "0");
 }
 
+export interface LoadUserAccountDataParams {
+  maxAgeMs?: number;
+  force?: boolean;
+}
+
+type UserAccountDataCacheEntry = {
+  userId: string;
+  fetchedAtMs: number;
+  data: UserAccountData | null;
+};
+
+// In-memory cache to avoid full refetch on back/forward navigation.
+// Note: this runs in the browser only; it resets on full refresh.
+const userAccountDataCache = new Map<string, UserAccountDataCacheEntry>();
+
+export function getCachedUserAccountData(
+  userId: string,
+  params: { maxAgeMs?: number } = {}
+): UserAccountData | null {
+  const { maxAgeMs = Infinity } = params;
+  const entry = userAccountDataCache.get(userId);
+  if (!entry) return null;
+  const ageMs = Date.now() - entry.fetchedAtMs;
+  if (ageMs < 0 || ageMs > maxAgeMs) return null;
+  return entry.data;
+}
+
+export function primeUserAccountDataCache(userId: string, data: UserAccountData | null) {
+  userAccountDataCache.set(userId, {
+    userId,
+    fetchedAtMs: Date.now(),
+    data,
+  });
+}
+
+export function clearUserAccountDataCache(userId?: string) {
+  if (userId) {
+    userAccountDataCache.delete(userId);
+  } else {
+    userAccountDataCache.clear();
+  }
+}
+
 /**
  * محاسبه تاریخ شروع برای یک دوره
  */
@@ -39,6 +82,223 @@ function getPeriodStart(period: UserAccountPeriod): Date {
     // month
     return new Date(now.getFullYear(), now.getMonth(), 1);
   }
+}
+
+type MonthlyActivitySource =
+  | {
+      kind: "commissions_log";
+      resultsRows: Array<{ win_type: string; created_at: string }>;
+      commissionRows: Array<Record<string, any>>;
+      manualRows: Array<{ amount: any; type: string; created_at: string }>;
+    }
+  | {
+      kind: "admin_commission_tx";
+      resultsRows: Array<{ win_type: string; created_at: string }>;
+      commissionTxRows: Array<{ amount: any; created_at: string }>;
+      manualRows: Array<{ amount: any; type: string; created_at: string }>;
+    };
+
+async function loadMonthlyActivitySource(
+  userId: string,
+  userRole: UserAccountInfo["role"]
+): Promise<MonthlyActivitySource> {
+  const monthStart = getPeriodStart("month").toISOString();
+
+  const resultsPromise = supabase
+    .from("results")
+    .select("win_type, created_at")
+    .eq("user_id", userId)
+    .gte("created_at", monthStart);
+
+  const manualPromise = supabase
+    .from("transactions")
+    .select("amount, type, created_at")
+    .eq("user_id", userId)
+    .eq("source_kind", "manual_panel")
+    .in("type", ["deposit", "withdraw"])
+    .gte("created_at", monthStart);
+
+  if (userRole === "admin") {
+    const adminCommissionPromise = supabase
+      .from("transactions")
+      .select("amount, created_at")
+      .eq("user_id", userId)
+      .eq("type", "fee_admin")
+      .eq("source_kind", "ticket_commission")
+      .gte("created_at", monthStart);
+
+    const [resultsRes, manualRes, commRes] = await Promise.all([
+      resultsPromise,
+      manualPromise,
+      adminCommissionPromise,
+    ]);
+
+    if (resultsRes.error) {
+      console.error("loadMonthlyActivitySource: results error", resultsRes.error);
+    }
+    if (manualRes.error) {
+      console.error("loadMonthlyActivitySource: manual tx error", manualRes.error);
+    }
+    if (commRes.error) {
+      console.error("loadMonthlyActivitySource: admin commission tx error", commRes.error);
+    }
+
+    return {
+      kind: "admin_commission_tx",
+      resultsRows: (resultsRes.data || []) as any,
+      manualRows: (manualRes.data || []) as any,
+      commissionTxRows: (commRes.data || []) as any,
+    };
+  }
+
+  // commissions_log (player/agent/super)
+  let commissionsQuery = supabase
+    .from("commissions_log")
+    .select("commission_base, created_at");
+
+  if (userRole === "player") {
+    commissionsQuery = commissionsQuery
+      .select("agent_amount, super_amount, admin_amount, commission_base, created_at")
+      .eq("player_id", userId);
+  } else if (userRole === "agent") {
+    commissionsQuery = commissionsQuery
+      .select("agent_amount, commission_base, created_at")
+      .eq("agent_id", userId);
+  } else if (userRole === "super") {
+    commissionsQuery = commissionsQuery
+      .select("super_amount, commission_base, created_at")
+      .eq("super_id", userId);
+  }
+  commissionsQuery = commissionsQuery.gte("created_at", monthStart);
+
+  const [resultsRes, manualRes, commRes] = await Promise.all([
+    resultsPromise,
+    manualPromise,
+    commissionsQuery,
+  ]);
+
+  if (resultsRes.error) {
+    console.error("loadMonthlyActivitySource: results error", resultsRes.error);
+  }
+  if (manualRes.error) {
+    console.error("loadMonthlyActivitySource: manual tx error", manualRes.error);
+  }
+  if (commRes.error) {
+    console.error("loadMonthlyActivitySource: commissions_log error", commRes.error);
+  }
+
+  return {
+    kind: "commissions_log",
+    resultsRows: (resultsRes.data || []) as any,
+    manualRows: (manualRes.data || []) as any,
+    commissionRows: (commRes.data || []) as any,
+  };
+}
+
+function buildActivitiesFromMonthlySource(
+  source: MonthlyActivitySource,
+  userRole: UserAccountInfo["role"]
+): Record<UserAccountPeriod, UserAccountActivity> {
+  const dayStartMs = getPeriodStart("day").getTime();
+  const weekStartMs = getPeriodStart("week").getTime();
+  const monthStartMs = getPeriodStart("month").getTime();
+
+  const results = (source.resultsRows || []).map((r) => ({
+    ms: Date.parse(r.created_at),
+    winType: r.win_type,
+  }));
+
+  const manual = (source.manualRows || []).map((t) => ({
+    ms: Date.parse(t.created_at),
+    amount: Number(t.amount || 0),
+    type: t.type,
+  }));
+
+  const getLineFullWins = (startMs: number) => {
+    let lineWins = 0;
+    let fullWins = 0;
+    for (const r of results) {
+      if (r.ms >= startMs) {
+        if (r.winType === "line") lineWins += 1;
+        else if (r.winType === "full") fullWins += 1;
+      }
+    }
+    return { lineWins, fullWins };
+  };
+
+  const getDepositsWithdrawals = (startMs: number) => {
+    let deposits = 0;
+    let withdrawals = 0;
+    for (const t of manual) {
+      if (t.ms >= startMs) {
+        if (t.type === "deposit") deposits += t.amount;
+        else if (t.type === "withdraw") withdrawals += t.amount;
+      }
+    }
+    return { deposits, withdrawals, net: deposits - withdrawals };
+  };
+
+  const getCommission = (startMs: number) => {
+    let commission = 0;
+    let commissionTotal: number | null = null;
+
+    if (userRole === "admin" && source.kind === "admin_commission_tx") {
+      commission = (source.commissionTxRows || []).reduce((sum, row) => {
+        const ms = Date.parse(row.created_at);
+        if (ms < startMs) return sum;
+        return sum + Number(row.amount || 0);
+      }, 0);
+      commissionTotal = null;
+      return { commission, commissionTotal };
+    }
+
+    if (source.kind !== "commissions_log") {
+      return { commission: 0, commissionTotal: null };
+    }
+
+    commissionTotal = 0;
+    for (const row of source.commissionRows || []) {
+      const ms = Date.parse(String((row as any).created_at));
+      if (ms < startMs) continue;
+
+      if (userRole === "player") {
+        commission +=
+          Number((row as any).agent_amount || 0) +
+          Number((row as any).super_amount || 0) +
+          Number((row as any).admin_amount || 0);
+      } else if (userRole === "agent") {
+        commission += Number((row as any).agent_amount || 0);
+      } else if (userRole === "super") {
+        commission += Number((row as any).super_amount || 0);
+      }
+
+      commissionTotal += Number((row as any).commission_base || 0);
+    }
+
+    return { commission, commissionTotal };
+  };
+
+  const buildOne = (period: UserAccountPeriod, startMs: number): UserAccountActivity => {
+    const { lineWins, fullWins } = getLineFullWins(startMs);
+    const { deposits, withdrawals, net } = getDepositsWithdrawals(startMs);
+    const { commission, commissionTotal } = getCommission(startMs);
+    return {
+      period,
+      lineWins,
+      fullWins,
+      commission,
+      commissionTotal,
+      deposits,
+      withdrawals,
+      net,
+    };
+  };
+
+  return {
+    day: buildOne("day", dayStartMs),
+    week: buildOne("week", weekStartMs),
+    month: buildOne("month", monthStartMs),
+  };
 }
 
 /**
@@ -726,28 +986,47 @@ export async function saveUserCommission(
 /**
  * بارگذاری کامل اطلاعات حساب کاربر
  */
-export async function loadUserAccountData(userId: string): Promise<UserAccountData | null> {
+export async function loadUserAccountData(
+  userId: string,
+  params: LoadUserAccountDataParams = {}
+): Promise<UserAccountData | null> {
   try {
+    const { maxAgeMs = 30_000, force = false } = params;
+
+    if (!force) {
+      const cached = getCachedUserAccountData(userId, { maxAgeMs });
+      if (cached) return cached;
+    }
+
     const user = await loadUserAccountInfo(userId);
     if (!user) {
+      primeUserAccountDataCache(userId, null);
       return null;
     }
 
-    // محاسبه آمار برای هر دوره
-    const activities: Record<UserAccountPeriod, UserAccountActivity> = {
-      day: await calculateUserActivity(userId, "day", user.role),
-      week: await calculateUserActivity(userId, "week", user.role),
-      month: await calculateUserActivity(userId, "month", user.role),
-    };
+    // Fetch "month" sources once and aggregate day/week/month locally.
+    let activities: Record<UserAccountPeriod, UserAccountActivity>;
+    try {
+      const monthly = await loadMonthlyActivitySource(userId, user.role);
+      activities = buildActivitiesFromMonthlySource(monthly, user.role);
+    } catch (err) {
+      console.error("loadUserAccountData: monthly aggregation failed, fallback to per-period", err);
+      activities = {
+        day: await calculateUserActivity(userId, "day", user.role),
+        week: await calculateUserActivity(userId, "week", user.role),
+        month: await calculateUserActivity(userId, "month", user.role),
+      };
+    }
 
-    // بارگذاری تراکنش‌ها
     const transactions = await loadUserTransactions(userId);
 
-    return {
+    const result: UserAccountData = {
       user,
       activities,
       transactions,
     };
+    primeUserAccountDataCache(userId, result);
+    return result;
   } catch (err) {
     console.error("loadUserAccountData unexpected error:", err);
     return null;

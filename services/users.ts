@@ -23,6 +23,64 @@ function makeShortIdFromUuid(id: string): string {
 export interface LoadManagedUsersParams {
   roleFilter?: ManagedUserRoleFilter;
   search?: string;
+  maxAgeMs?: number;
+  force?: boolean;
+}
+
+type ManagedUsersBaseCache = {
+  currentUserId: string;
+  currentUserRole: ManagedUserRole;
+  fetchedAtMs: number;
+  usersAll: ManagedUserSummary[];
+};
+
+let managedUsersBaseCache: ManagedUsersBaseCache | null = null;
+
+export function getCachedManagedUsersBase(): {
+  currentUserRole: ManagedUserRole;
+  usersAll: ManagedUserSummary[];
+} | null {
+  if (!managedUsersBaseCache) return null;
+  return {
+    currentUserRole: managedUsersBaseCache.currentUserRole,
+    usersAll: managedUsersBaseCache.usersAll,
+  };
+}
+
+export function clearManagedUsersCache() {
+  managedUsersBaseCache = null;
+}
+
+function normalizeForSearch(s: string) {
+  return s.toLowerCase().replace(/[\s_]+/g, "");
+}
+
+export function filterManagedUsers(
+  users: ManagedUserSummary[],
+  params: { roleFilter?: ManagedUserRoleFilter; search?: string }
+): ManagedUserSummary[] {
+  const roleFilter = params.roleFilter ?? "all";
+  const search = params.search ?? "";
+
+  let mapped = users;
+
+  if (roleFilter !== "all") {
+    mapped = mapped.filter((u) => u.role === roleFilter);
+  }
+
+  if (search && search.trim().length > 0) {
+    const q = search.trim().toLowerCase();
+    const qNorm = normalizeForSearch(q);
+    const qDigits = q.replace(/[^0-9]/g, "");
+    mapped = mapped.filter(
+      (u) =>
+        normalizeForSearch(u.username).includes(qNorm) ||
+        normalizeForSearch(u.displayName).includes(qNorm) ||
+        (qDigits.length > 0 && u.shortId.includes(qDigits))
+    );
+  }
+
+  return mapped;
 }
 
 /**
@@ -69,12 +127,30 @@ async function getCurrentUserRole(): Promise<{
 export async function loadManagedUsers(
   params: LoadManagedUsersParams = {}
 ): Promise<ManagedUsersResult> {
-  const { roleFilter = "all", search } = params;
+  const { roleFilter = "all", search, maxAgeMs = 30_000, force = false } = params;
 
   const { userId: currentUserId, role: currentRole } = await getCurrentUserRole();
 
   if (!currentUserId) {
     return { currentUserRole: currentRole, users: [], totalCount: 0 };
+  }
+
+  const cacheEligible =
+    !force &&
+    managedUsersBaseCache?.currentUserId === currentUserId &&
+    managedUsersBaseCache?.currentUserRole === currentRole &&
+    Date.now() - managedUsersBaseCache.fetchedAtMs <= maxAgeMs;
+
+  if (cacheEligible && managedUsersBaseCache) {
+    const filtered = filterManagedUsers(managedUsersBaseCache.usersAll, {
+      roleFilter,
+      search,
+    });
+    return {
+      currentUserRole: currentRole,
+      users: filtered,
+      totalCount: filtered.length,
+    };
   }
 
   let targetUserIds: string[] = [];
@@ -324,7 +400,7 @@ export async function loadManagedUsers(
   }
 
   // مپ کردن به مدل ManagedUserSummary
-  let mapped: ManagedUserSummary[] = usersData
+  let mappedAll: ManagedUserSummary[] = usersData
     .filter((u: any) => u.id !== currentUserId) // حذف کاربر فعلی از لیست
     .map((u: any) => {
       const role = (u.role || "player") as ManagedUserRole;
@@ -348,39 +424,27 @@ export async function loadManagedUsers(
 
   // محاسبه تعداد کاربران زیرمجموعه برای هر کاربر (بر اساس parentUserId)
   const childrenCount = new Map<string, number>();
-  mapped.forEach((u) => {
+  mappedAll.forEach((u) => {
     if (u.parentUserId) {
       const prev = childrenCount.get(u.parentUserId) || 0;
       childrenCount.set(u.parentUserId, prev + 1);
     }
   });
 
-  mapped = mapped.map((u) => ({
+  mappedAll = mappedAll.map((u) => ({
     ...u,
     managedUserCount: childrenCount.get(u.id) || 0,
   }));
 
-  // فیلتر نقش (در سطح کلاینت)
-  if (roleFilter !== "all") {
-    mapped = mapped.filter((u) => u.role === roleFilter);
-  }
+  // Cache the full list (unfiltered) for fast tab switching.
+  managedUsersBaseCache = {
+    currentUserId,
+    currentUserRole: currentRole,
+    fetchedAtMs: Date.now(),
+    usersAll: mappedAll,
+  };
 
-  // جستجو روی username / displayName / shortId
-  if (search && search.trim().length > 0) {
-    const q = search.trim().toLowerCase();
-    const normalize = (s: string) => s.toLowerCase().replace(/[\s_]+/g, "");
-    const qNorm = normalize(q);
-    const qDigits = q.replace(/[^0-9]/g, "");
-    mapped = mapped.filter(
-      (u) =>
-        normalize(u.username).includes(qNorm) ||
-        normalize(u.displayName).includes(qNorm) ||
-        (qDigits.length > 0 && u.shortId.includes(qDigits))
-    );
-  }
-
-  // برای نمایش تعداد
-  const totalCount = mapped.length;
+  let mapped = filterManagedUsers(mappedAll, { roleFilter, search });
 
   // مرتب‌سازی: نقش سپس نام
   mapped.sort((a, b) => {
@@ -394,7 +458,7 @@ export async function loadManagedUsers(
   return {
     currentUserRole: currentRole,
     users: mapped,
-    totalCount,
+    totalCount: mapped.length,
   };
 }
 

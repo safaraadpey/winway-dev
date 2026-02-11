@@ -208,6 +208,23 @@ function makeShortIdFromUuid(id: string): string {
 export interface LoadTransactionHistoryParams {
   dateFilter?: DateFilter;
   search?: string;
+  maxAgeMs?: number;
+  force?: boolean;
+}
+
+type TransactionHistoryCacheKey = string;
+type TransactionHistoryCacheEntry = {
+  key: TransactionHistoryCacheKey;
+  fetchedAtMs: number;
+  result: TransactionHistoryResult;
+};
+
+let transactionHistoryCache: TransactionHistoryCacheEntry | null = null;
+
+function makeHistoryCacheKey(params: { dateFilter: DateFilter; search: string; userId: string }): string {
+  // normalize search to avoid missing cache hits for trivial whitespace differences
+  const q = (params.search || "").trim().toLowerCase();
+  return `${params.userId}|${params.dateFilter}|${q}`;
 }
 
 /**
@@ -216,7 +233,7 @@ export interface LoadTransactionHistoryParams {
 export async function loadTransactionHistory(
   params: LoadTransactionHistoryParams = {}
 ): Promise<TransactionHistoryResult> {
-  const { dateFilter = "month", search = "" } = params;
+  const { dateFilter = "month", search = "", maxAgeMs = 30_000, force = false } = params;
 
   try {
     // گرفتن کاربر فعلی
@@ -227,6 +244,14 @@ export async function loadTransactionHistory(
 
     if (authError || !authUser) {
       throw new Error("خطا در احراز هویت");
+    }
+
+    const cacheKey = makeHistoryCacheKey({ userId: authUser.id, dateFilter, search });
+    if (!force && transactionHistoryCache?.key === cacheKey) {
+      const ageMs = Date.now() - transactionHistoryCache.fetchedAtMs;
+      if (ageMs >= 0 && ageMs <= maxAgeMs) {
+        return transactionHistoryCache.result;
+      }
     }
 
     const { data: currentUser, error: userError } = await supabase
@@ -253,16 +278,11 @@ export async function loadTransactionHistory(
       dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
     }
 
-    // تعیین کاربران زیرمجموعه برای فیلتر
+    const scopeAll = currentUser.role === "admin";
+
+    // تعیین کاربران زیرمجموعه برای فیلتر (برای admin فیلتر لازم نیست)
     let targetUserIds: string[] = [];
-    if (currentUser.role === "admin") {
-      // admin: همه کاربران
-      const { data: allUsers } = await supabase
-        .from("users")
-        .select("id")
-        .in("role", ["player", "agent", "super"]);
-      targetUserIds = (allUsers || []).map((u: any) => u.id);
-    } else if (currentUser.role === "super") {
+    if (currentUser.role === "super") {
       // super: agents و players زیر این super
       // 1. گرفتن agents که parent_id آن‌ها این super است
       const { data: agentsData, error: agentsError } = await supabase
@@ -356,13 +376,19 @@ export async function loadTransactionHistory(
     }
 
     // همیشه خود کاربر فعلی را هم اضافه کن تا تراکنش‌های خودش دیده شود
-    if (!targetUserIds.includes(currentUser.id)) {
+    if (!scopeAll && !targetUserIds.includes(currentUser.id)) {
       targetUserIds.push(currentUser.id);
     }
 
     // اگر کاربر زیرمجموعه‌ای ندارد، فقط تراکنش‌های خودش را داریم
-    if (targetUserIds.length === 0) {
-      return { transactions: [], totalCount: 0 };
+    if (!scopeAll && targetUserIds.length === 0) {
+      const empty: TransactionHistoryResult = { transactions: [], totalCount: 0 };
+      transactionHistoryCache = {
+        key: cacheKey,
+        fetchedAtMs: Date.now(),
+        result: empty,
+      };
+      return empty;
     }
 
     // گرفتن همه تراکنش‌ها
@@ -370,31 +396,40 @@ export async function loadTransactionHistory(
     // اما Supabase query builder نمی‌تواند OR پیچیده را handle کند، پس باید از RPC استفاده کنیم
     // یا اینکه دو query جداگانه بگیریم و merge کنیم
     
-    // روش 1: گرفتن تراکنش‌هایی که گیرنده در targetUserIds است
-    const { data: transactionsAsReceiver, error: error1 } = await supabase
+    // روش 1: گرفتن تراکنش‌هایی که گیرنده در scope است
+    let receiverQuery = supabase
       .from("transactions")
       .select("id, user_id, amount, type, created_at, description, source_kind, source_ref, meta")
-      .in("user_id", targetUserIds)
       .gte("created_at", dateFrom.toISOString())
       .order("created_at", { ascending: false })
       .limit(100);
 
-    // روش 2: گرفتن تراکنش‌هایی که فرستنده (source_ref) در targetUserIds است
-    // source_ref یک text است که UUID را به صورت string نگه می‌دارد
-    // باید از filter استفاده کنیم چون .in() ممکن است با text درست کار نکند
+    if (!scopeAll) {
+      receiverQuery = receiverQuery.in("user_id", targetUserIds);
+    }
+
+    const { data: transactionsAsReceiver, error: error1 } = await receiverQuery;
+
+    // روش 2: گرفتن تراکنش‌هایی که فرستنده (source_ref) در scope است
     let senderQuery = supabase
       .from("transactions")
       .select("id, user_id, amount, type, created_at, description, source_kind, source_ref, meta")
-      .gte("created_at", dateFrom.toISOString());
-    
-    // فیلتر source_ref: باید یکی از targetUserIds باشد
-    // چون source_ref text است، باید به صورت دستی فیلتر کنیم
-    const { data: transactionsAsSenderRaw, error: error2 } = await senderQuery;
-    
-    // فیلتر کردن در client-side
-    const transactionsAsSender = (transactionsAsSenderRaw || []).filter((t: any) => 
-      t.source_ref && targetUserIds.includes(t.source_ref)
-    ).slice(0, 100);
+      .gte("created_at", dateFrom.toISOString())
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (!scopeAll) {
+      // source_ref column is text; PostgREST supports IN on text.
+      senderQuery = senderQuery.in("source_ref", targetUserIds);
+    }
+
+    let transactionsAsSender: any[] | null = [];
+    let error2: any = null;
+    if (!scopeAll) {
+      const senderRes = await senderQuery;
+      transactionsAsSender = senderRes.data;
+      error2 = senderRes.error;
+    }
 
     if (error1 || error2) {
       console.error("loadTransactionHistory query error:", error1 || error2);
@@ -593,10 +628,18 @@ export async function loadTransactionHistory(
       });
     }
 
-    return {
+    const result: TransactionHistoryResult = {
       transactions: historyItems,
       totalCount: historyItems.length,
     };
+
+    transactionHistoryCache = {
+      key: cacheKey,
+      fetchedAtMs: Date.now(),
+      result,
+    };
+
+    return result;
   } catch (err: any) {
     console.error("loadTransactionHistory error:", err);
     throw new Error(err?.message || "خطا در بارگذاری تاریخچه تراکنش‌ها");

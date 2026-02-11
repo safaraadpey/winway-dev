@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
-import { loadDashboardData } from "@/services/dashboard";
+import { getCachedDashboardData, loadDashboardData, clearDashboardCache } from "@/services/dashboard";
 import { supabase } from "@/lib/supabaseClient";
-import { getCurrentAdminPermissions } from "@/lib/admin-permissions";
+import { getCachedAdminPermissions, getCurrentAdminPermissions, clearAdminPermissionsCache } from "@/lib/admin-permissions";
 import type { DashboardPeriod, DashboardData } from "@/src/types/dashboard";
 import type { AdminPermissions } from "@/src/types/admins";
 
@@ -18,10 +18,11 @@ const PERIOD_LABELS: Record<DashboardPeriod, string> = {
 export default function AdminDashboardPage() {
   const router = useRouter();
   const { setShowHeader, setShowBackButton, setOnBackClick } = useHeaderVisibility();
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<DashboardData | null>(() => getCachedDashboardData());
+  const [loading, setLoading] = useState(() => getCachedDashboardData() === null);
   const [activePeriod, setActivePeriod] = useState<DashboardPeriod>("day");
-  const [permissions, setPermissions] = useState<AdminPermissions | null>(null);
+  const [permissions, setPermissions] = useState<AdminPermissions | null>(() => getCachedAdminPermissions());
+  const [adminZeroId, setAdminZeroId] = useState<string | null>(null);
 
   useEffect(() => {
     // برای داشبورد هدر را نمایش می‌دهیم و دکمه back لازم نیست
@@ -37,12 +38,21 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const result = await loadDashboardData();
+        const result = await loadDashboardData({ maxAgeMs: 30_000 });
         setData(result);
         
         // بارگذاری دسترسی‌ها اگر admin است
         if (result?.user?.role === "admin") {
-          const perms = await getCurrentAdminPermissions();
+          // Used to hide some menus for non-adminzero admins.
+          const { data: adminZero } = await supabase
+            .from("users")
+            .select("id")
+            .eq("username", "adminzero")
+            .eq("role", "admin")
+            .maybeSingle();
+          setAdminZeroId(adminZero?.id ?? null);
+
+          const perms = await getCurrentAdminPermissions({ maxAgeMs: 60_000 });
           setPermissions(perms);
         }
       } catch (error) {
@@ -61,6 +71,7 @@ export default function AdminDashboardPage() {
   const isAdmin = userRole === "admin";
   const adminSubRole = data?.user?.adminSubRole || null;
   const normalizedSubRole = adminSubRole ? adminSubRole.toLowerCase() : null;
+  const isAdminZero = isAdmin && !!adminZeroId && data?.user?.id === adminZeroId;
   // مدیر کل (null/manager)، مالی و پشتیبانی می‌توانند گزارش مالی را ببینند
   const canViewFinancialReport =
     isAdmin &&
@@ -75,11 +86,14 @@ export default function AdminDashboardPage() {
   const canAccessUsers = isAdmin && (permissions?.users ?? true);
   const canAccessTransactions = isAdmin && (permissions?.transactions ?? true);
   const canAccessEntryBanner = isAdmin && (permissions?.entry_banner ?? true);
-  const canAccessAdmins = isAdmin && (permissions?.admins ?? true);
+  // Only adminzero can see "Admins" and "Card pool" menus.
+  const canAccessAdmins = isAdminZero && (permissions?.admins ?? true);
 
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
+      clearDashboardCache();
+      clearAdminPermissionsCache();
       router.push("/login");
     } catch (error) {
       console.error("Error logging out:", error);
@@ -215,13 +229,6 @@ export default function AdminDashboardPage() {
               <span className="text-xl">›</span>
             </button>
           )}
-          <button
-            onClick={() => router.push("/admin/account")}
-            className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
-          >
-            <span>حساب کاربری</span>
-            <span className="text-xl">›</span>
-          </button>
           {/* منوی "تراکنش ها" */}
           {canAccessTransactions && (
             <button
@@ -252,8 +259,8 @@ export default function AdminDashboardPage() {
               <span className="text-xl">›</span>
             </button>
           )}
-          {/* منوی "استخر کارتها" - فقط برای ادمین (نه ایجنت، نه سوپر) */}
-          {isAdmin && (
+          {/* منوی "استخر کارتها" - فقط برای adminzero */}
+          {isAdminZero && (
             <button
               onClick={() => router.push("/admin/card-pool")}
               className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
@@ -262,6 +269,15 @@ export default function AdminDashboardPage() {
               <span className="text-xl">›</span>
             </button>
           )}
+
+          {/* منوی "حساب کاربری" - آخرین گزینه */}
+          <button
+            onClick={() => router.push("/admin/account")}
+            className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
+          >
+            <span>حساب کاربری</span>
+            <span className="text-xl">›</span>
+          </button>
         </div>
       </div>
     </div>

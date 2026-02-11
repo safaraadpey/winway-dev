@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { loadManagedUsers } from "@/services/users";
+import { filterManagedUsers, getCachedManagedUsersBase, loadManagedUsers } from "@/services/users";
 import type {
   ManagedUserRoleFilter,
   ManagedUserSummary,
@@ -21,11 +21,14 @@ const ALL_ROLE_TABS: { key: ManagedUserRoleFilter; label: string }[] = [
 
 export default function ManagedUsersList({ pageTitle }: ManagedUsersListProps) {
   const router = useRouter();
-  const [users, setUsers] = useState<ManagedUserSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = getCachedManagedUsersBase();
+  const [baseUsers, setBaseUsers] = useState<ManagedUserSummary[]>(
+    () => cached?.usersAll ?? []
+  );
+  const [loading, setLoading] = useState(() => !cached);
   const [roleFilter, setRoleFilter] = useState<ManagedUserRoleFilter>("all");
   const [search, setSearch] = useState("");
-  const [currentRole, setCurrentRole] = useState<string>("player");
+  const [currentRole, setCurrentRole] = useState<string>(() => cached?.currentUserRole ?? "player");
   const [viewMode, setViewMode] = useState<"flat" | "tree">("flat");
 
   // فیلتر کردن تب‌ها بر اساس نقش کاربر فعلی
@@ -54,24 +57,35 @@ export default function ManagedUsersList({ pageTitle }: ManagedUsersListProps) {
   useEffect(() => {
     let isMounted = true;
 
-    async function fetch() {
+    async function fetchBase() {
       try {
         setLoading(true);
-        const result = await loadManagedUsers({ roleFilter, search });
+        // Always fetch the base list once; filtering happens locally for fast tab switching.
+        const result = await loadManagedUsers({ roleFilter: "all", search: "", maxAgeMs: 30_000 });
         if (!isMounted) return;
         setCurrentRole(result.currentUserRole);
-        setUsers(result.users);
+        setBaseUsers(result.users);
       } finally {
         if (isMounted) setLoading(false);
       }
     }
 
-    fetch();
+    if (baseUsers.length === 0) {
+      fetchBase();
+    } else {
+      // We already have cached base list; avoid loader flicker.
+      setLoading(false);
+    }
 
     return () => {
       isMounted = false;
     };
-  }, [roleFilter, search]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const users = useMemo(() => {
+    return filterManagedUsers(baseUsers, { roleFilter, search });
+  }, [baseUsers, roleFilter, search]);
 
   const totalCount = useMemo(() => users.length, [users]);
 
@@ -151,8 +165,18 @@ export default function ManagedUsersList({ pageTitle }: ManagedUsersListProps) {
         ? "bg-[#1f2933]" // پیش‌فرض برای پلیر
         : "bg-[#1b1f2a]"; // ادمین
 
+    const navigateToUser = () => {
+      // تعیین مسیر بر اساس نقش کاربر فعلی
+      if (currentRole === "agent") {
+        router.push(`/agent/users/${u.id}`);
+      } else {
+        router.push(`/admin/users/${u.id}`);
+      }
+    };
+
     return (
       <button
+        type="button"
         key={u.id}
         onClick={() => {
           // اگر handler اختصاصی برای کلیک داده شده، همان را اجرا می‌کنیم
@@ -166,12 +190,7 @@ export default function ManagedUsersList({ pageTitle }: ManagedUsersListProps) {
             return;
           }
 
-          // تعیین مسیر بر اساس نقش کاربر فعلی
-          if (currentRole === "agent") {
-            router.push(`/agent/users/${u.id}`);
-          } else {
-            router.push(`/admin/users/${u.id}`);
-          }
+          navigateToUser();
         }}
         className={`w-full flex items-center justify-between ${bgClass} rounded-2xl px-3 py-3 hover:bg-[#2a3441] active:bg-[#1f2933] transition-colors`}
         style={{ paddingRight }}
@@ -185,7 +204,17 @@ export default function ManagedUsersList({ pageTitle }: ManagedUsersListProps) {
               }`}
             />
           )}
-          <div className="w-12 h-12 rounded-2xl bg-[#0b1120] flex items-center justify-center text-xl font-bold text-white">
+          <div
+            className="w-12 h-12 rounded-2xl bg-[#0b1120] flex items-center justify-center text-xl font-bold text-white cursor-pointer"
+            onClick={(e) => {
+              // In tree mode, parent rows with children are used for expand/collapse.
+              // Make the avatar area always navigate to the user.
+              e.preventDefault();
+              e.stopPropagation();
+              navigateToUser();
+            }}
+            title="مشاهده پروفایل"
+          >
             {u.displayName?.[0]?.toUpperCase() || "U"}
           </div>
           <div className="flex flex-col">

@@ -3,7 +3,16 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
-import { loadUserAccountData, saveUserCommission, toggleUserSuspension, savePersonalNote, deletePersonalNote, changeUserRole } from "@/services/user-account";
+import {
+  getCachedUserAccountData,
+  loadUserAccountData,
+  primeUserAccountDataCache,
+  saveUserCommission,
+  toggleUserSuspension,
+  savePersonalNote,
+  deletePersonalNote,
+  changeUserRole,
+} from "@/services/user-account";
 import { adjustWalletForUsersBulk } from "@/services/transactions";
 import { supabase } from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
@@ -55,8 +64,9 @@ function formatTransactionDate(dateString: string): string {
 export default function UserAccountPage({ userId }: UserAccountPageProps) {
   const router = useRouter();
   const { setShowHeader, setShowBackButton, setOnBackClick } = useHeaderVisibility();
-  const [data, setData] = useState<UserAccountData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cached = getCachedUserAccountData(userId, { maxAgeMs: 30_000 });
+  const [data, setData] = useState<UserAccountData | null>(() => cached);
+  const [loading, setLoading] = useState(() => cached === null);
   const [activePeriod, setActivePeriod] = useState<UserAccountPeriod>("month");
   const [commissionPercent, setCommissionPercent] = useState<string>("");
   const [savingCommission, setSavingCommission] = useState(false);
@@ -166,11 +176,20 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
     }
   }, [showRoleDropdown]);
 
+  // When navigating between userIds without a full remount, sync state to cache immediately.
   useEffect(() => {
+    const nextCached = getCachedUserAccountData(userId, { maxAgeMs: 30_000 });
+    setData(nextCached);
+    setLoading(nextCached === null);
+  }, [userId]);
+
+  useEffect(() => {
+    let isMounted = true;
     async function fetchData() {
       try {
-        setLoading(true);
-        const result = await loadUserAccountData(userId);
+        if (!cached) setLoading(true);
+        const result = await loadUserAccountData(userId, { maxAgeMs: 30_000 });
+        if (!isMounted) return;
         setData(result);
         // بارگذاری درصد کانیات
         if (result?.user.commissionPercent !== null && result?.user.commissionPercent !== undefined) {
@@ -187,12 +206,22 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
       } catch (error) {
         console.error("Error loading user account data:", error);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
 
     fetchData();
+    return () => {
+      isMounted = false;
+    };
   }, [userId]);
+
+  // Keep cache in sync with local edits while on the page.
+  useEffect(() => {
+    if (data) {
+      primeUserAccountDataCache(userId, data);
+    }
+  }, [userId, data]);
 
   // Handler برای ذخیره درصد کانیات
   const handleSaveCommission = async () => {
@@ -284,7 +313,7 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
       );
 
       // بارگذاری مجدد داده‌های کاربر
-      const result = await loadUserAccountData(userId);
+      const result = await loadUserAccountData(userId, { force: true });
       setData(result);
       setAmountInput("");
     } catch (err: any) {

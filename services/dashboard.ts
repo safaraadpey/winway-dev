@@ -26,6 +26,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
   day: {
     period: "day",
     ticketsVolume: 0,
+    ticketsVolumeTotal: 0,
     deposits: 0,
     withdrawals: 0,
     net: 0,
@@ -33,6 +34,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
   week: {
     period: "week",
     ticketsVolume: 0,
+    ticketsVolumeTotal: 0,
     deposits: 0,
     withdrawals: 0,
     net: 0,
@@ -40,11 +42,95 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
   month: {
     period: "month",
     ticketsVolume: 0,
+    ticketsVolumeTotal: 0,
     deposits: 0,
     withdrawals: 0,
     net: 0,
   },
 };
+
+type DashboardCache = {
+  key: string;
+  fetchedAtMs: number;
+  data: DashboardData;
+};
+
+let dashboardCache: DashboardCache | null = null;
+
+export function getCachedDashboardData(): DashboardData | null {
+  return dashboardCache?.data ?? null;
+}
+
+export function clearDashboardCache() {
+  dashboardCache = null;
+}
+
+type AdminZeroCache = { id: string | null; fetchedAtMs: number };
+let adminZeroCache: AdminZeroCache | null = null;
+
+async function getAdminZeroId(maxAgeMs = 5 * 60_000): Promise<string | null> {
+  if (adminZeroCache) {
+    const ageMs = Date.now() - adminZeroCache.fetchedAtMs;
+    if (ageMs >= 0 && ageMs <= maxAgeMs) return adminZeroCache.id;
+  }
+  const { data: adminZero, error } = await supabase
+    .from("users")
+    .select("id")
+    .eq("username", "adminzero")
+    .eq("role", "admin")
+    .maybeSingle();
+  if (error) {
+    console.warn("getAdminZeroId: users read error", error.message);
+  }
+  const id = (adminZero as any)?.id ?? null;
+  adminZeroCache = { id, fetchedAtMs: Date.now() };
+  return id;
+}
+
+async function fetchAdminCommissionSummary(): Promise<{
+  effectiveUserId: string;
+  day: number;
+  week: number;
+  month: number;
+}> {
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+  if (sessionError || !session) {
+    throw new Error("UNAUTHORIZED");
+  }
+
+  const res = await fetch("/api/admin/dashboard/commission-summary", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+    },
+  });
+
+  let payload: any = null;
+  try {
+    payload = await res.json();
+  } catch {
+    // ignore
+  }
+
+  if (!res.ok || payload?.ok === false) {
+    const msg =
+      payload?.message ||
+      payload?.error ||
+      `Failed to load commission summary (HTTP ${res.status})`;
+    throw new Error(msg);
+  }
+
+  const data = payload?.data || {};
+  return {
+    effectiveUserId: String(data.effectiveUserId || ""),
+    day: Number(data.day || 0),
+    week: Number(data.week || 0),
+    month: Number(data.month || 0),
+  };
+}
 
 /**
  * دریافت اطلاعات پایه کاربر (برای نمایش نام، نقش و کد معرف).
@@ -67,7 +153,7 @@ export async function loadDashboardUserInfo(): Promise<DashboardUserInfo | null>
   // تلاش برای خواندن از جدول users
   const { data: dbUser, error: dbError } = await supabase
     .from("users")
-    .select("id, username, role, referral_code, admin_sub_role")
+    .select("id, username, role, referral_code, admin_sub_role, parent_id")
     .eq("id", user.id)
     .single();
 
@@ -115,6 +201,7 @@ export async function loadDashboardUserInfo(): Promise<DashboardUserInfo | null>
     displayName,
     role,
     referralCode: dbUser?.referral_code ?? null,
+    parentId: (dbUser as any)?.parent_id ?? null,
     adminSubRole,
   };
 }
@@ -138,119 +225,16 @@ function getPeriodStart(period: DashboardPeriod): Date {
   }
 }
 
-/**
- * محاسبه کمیسیون (کانیات) برای یک کاربر در یک بازه زمانی
- */
-async function calculateCommission(
-  userId: string,
-  role: DashboardUserInfo["role"],
-  periodStart: Date
-): Promise<number> {
-  try {
-    if (role !== "admin" && role !== "super" && role !== "agent") {
-      return 0;
-    }
-
-    // کمیسیون‌های واقعی ثبت‌شده در کیف پول کاربر (fee_* در تراکنش‌ها)
-    const { data, error } = await supabase
-      .from("transactions")
-      .select("amount")
-      .eq("user_id", userId)
-      .in("type", ["fee_admin", "fee_super", "fee_agent"])
-      .gte("created_at", periodStart.toISOString());
-
-    if (error) {
-      console.error("calculateCommission error:", error);
-      return 0;
-    }
-
-    const total = (data || []).reduce(
-      (sum: number, row: any) => sum + Number(row.amount || 0),
-      0
-    );
-
-    return total;
-  } catch (err) {
-    console.error("calculateCommission unexpected error:", err);
-    return 0;
-  }
+function iso(d: Date) {
+  return d.toISOString();
 }
 
-/**
- * محاسبه واریز و برداشت پنلی (actor) برای یک کاربر در یک بازه زمانی
- */
-async function calculateDepositsWithdrawals(
-  userId: string,
-  role: DashboardUserInfo["role"],
-  periodStart: Date
-): Promise<{ deposits: number; withdrawals: number }> {
-  try {
-    if (role !== "admin" && role !== "super" && role !== "agent") {
-      return { deposits: 0, withdrawals: 0 };
-    }
-
-    // 1) مسیر قدیمی manual_panel: actor در source_ref است
-    const { data: manualDeposits, error: manualDepositsError } = await supabase
-      .from("transactions")
-      .select("amount")
-      .eq("source_kind", "manual_panel")
-      .eq("type", "deposit")
-      .eq("source_ref", userId)
-      .gte("created_at", periodStart.toISOString());
-
-    if (manualDepositsError) {
-      console.error("calculateDepositsWithdrawals manual deposits error:", manualDepositsError);
-    }
-
-    const { data: manualWithdrawals, error: manualWithdrawalsError } = await supabase
-      .from("transactions")
-      .select("amount")
-      .eq("source_kind", "manual_panel")
-      .eq("type", "withdraw")
-      .eq("source_ref", userId)
-      .gte("created_at", periodStart.toISOString());
-
-    if (manualWithdrawalsError) {
-      console.error("calculateDepositsWithdrawals manual withdrawals error:", manualWithdrawalsError);
-    }
-
-    // 2) مسیر جدید admin_panel_transfer: actor در meta.actor_id و اکشن در meta.action است
-    const { data: transferDeposits, error: transferDepositsError } = await supabase
-      .from("transactions")
-      .select("amount")
-      .eq("source_kind", "admin_panel_transfer")
-      .filter("meta->>actor_id", "eq", userId)
-      .filter("meta->>action", "eq", "deposit")
-      .gte("created_at", periodStart.toISOString());
-
-    if (transferDepositsError) {
-      console.error("calculateDepositsWithdrawals transfer deposits error:", transferDepositsError);
-    }
-
-    const { data: transferWithdrawals, error: transferWithdrawalsError } = await supabase
-      .from("transactions")
-      .select("amount")
-      .eq("source_kind", "admin_panel_transfer")
-      .filter("meta->>actor_id", "eq", userId)
-      .filter("meta->>action", "eq", "withdraw")
-      .gte("created_at", periodStart.toISOString());
-
-    if (transferWithdrawalsError) {
-      console.error("calculateDepositsWithdrawals transfer withdrawals error:", transferWithdrawalsError);
-    }
-
-    const deposits =
-      (manualDeposits || []).reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0) +
-      (transferDeposits || []).reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-    const withdrawals =
-      (manualWithdrawals || []).reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0) +
-      (transferWithdrawals || []).reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-
-    return { deposits, withdrawals };
-  } catch (err) {
-    console.error("calculateDepositsWithdrawals unexpected error:", err);
-    return { deposits: 0, withdrawals: 0 };
-  }
+function sumRowsSince(rows: any[], startIso: string, pick: (row: any) => number): number {
+  return (rows || []).reduce((sum: number, row: any) => {
+    const createdAt = String(row.created_at ?? "");
+    if (!createdAt || createdAt < startIso) return sum;
+    return sum + pick(row);
+  }, 0);
 }
 
 /**
@@ -262,7 +246,7 @@ async function calculateDepositsWithdrawals(
  * - برداشت: تراکنش‌های withdraw از manual_panel
  * - بیلان: واریز - برداشت
  */
-export async function loadDashboardData(): Promise<DashboardData> {
+export async function loadDashboardData(options?: { maxAgeMs?: number; force?: boolean }): Promise<DashboardData> {
   const user = await loadDashboardUserInfo();
 
   if (!user) {
@@ -276,6 +260,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
     day: {
       period: "day",
       ticketsVolume: 0,
+      ticketsVolumeTotal: 0,
       deposits: 0,
       withdrawals: 0,
       net: 0,
@@ -283,6 +268,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
     week: {
       period: "week",
       ticketsVolume: 0,
+      ticketsVolumeTotal: 0,
       deposits: 0,
       withdrawals: 0,
       net: 0,
@@ -290,42 +276,165 @@ export async function loadDashboardData(): Promise<DashboardData> {
     month: {
       period: "month",
       ticketsVolume: 0,
+      ticketsVolumeTotal: 0,
       deposits: 0,
       withdrawals: 0,
       net: 0,
     },
   };
 
-  // محاسبه برای هر دوره
-  for (const period of ["day", "week", "month"] as DashboardPeriod[]) {
-    const periodStart = getPeriodStart(period);
+  // Optimization: fetch once since month start, derive day/week/month locally.
+  const monthStart = getPeriodStart("month");
+  const weekStart = getPeriodStart("week");
+  const dayStart = getPeriodStart("day");
 
-    // محاسبه کمیسیون (کانیات)
-    const commission = await calculateCommission(user.id, user.role, periodStart);
+  if (user.role !== "admin" && user.role !== "super" && user.role !== "agent") {
+    const data: DashboardData = { user, summaries };
+    const cacheKey = `v3|${user.id}|${user.role}|${user.id}`;
+    dashboardCache = { key: cacheKey, fetchedAtMs: Date.now(), data };
+    return data;
+  }
 
-    // محاسبه واریز و برداشت
-    const { deposits, withdrawals } = await calculateDepositsWithdrawals(
-      user.id,
-      user.role,
-      periodStart
+  const monthIso = iso(monthStart);
+  const weekIso = iso(weekStart);
+  const dayIso = iso(dayStart);
+
+  const maxAgeMs = options?.maxAgeMs ?? 30_000;
+  // Bump this when cache semantics change.
+  const cacheKey = `v3|${user.id}|${user.role}|${user.parentId ?? ""}`;
+  if (!options?.force && dashboardCache?.key === cacheKey) {
+    const ageMs = Date.now() - dashboardCache.fetchedAtMs;
+    if (ageMs >= 0 && ageMs <= maxAgeMs) {
+      return dashboardCache.data;
+    }
+  }
+
+  // NOTE: client-side Supabase is subject to RLS. For admin commission totals,
+  // use a server route (service role) so admin sub-roles can see adminzero totals.
+  const adminCommissionMap: Record<DashboardPeriod, number> | null =
+    user.role === "admin"
+      ? await fetchAdminCommissionSummary().then((s) => ({
+          day: s.day,
+          week: s.week,
+          month: s.month,
+        }))
+      : null;
+
+  const manualPanelQuery = supabase
+    .from("transactions")
+    .select("amount, type, created_at")
+    .eq("source_kind", "manual_panel")
+    .eq("source_ref", user.id)
+    .in("type", ["deposit", "withdraw"])
+    .gte("created_at", monthIso);
+
+  const transferQuery = supabase
+    .from("transactions")
+    .select("amount, meta, created_at")
+    .eq("source_kind", "admin_panel_transfer")
+    .filter("meta->>actor_id", "eq", user.id)
+    .gte("created_at", monthIso);
+
+  const commissionQuery =
+    user.role === "agent"
+      ? supabase
+          .from("commissions_log")
+          .select("agent_amount, commission_base, created_at")
+          .eq("agent_id", user.id)
+          .gte("created_at", monthIso)
+      : supabase
+          .from("commissions_log")
+          .select("super_amount, commission_base, created_at")
+          .eq("super_id", user.id)
+          .gte("created_at", monthIso);
+
+  const [commissionTxsRes, manualPanelTxsRes, transferTxsRes] =
+    user.role === "admin"
+      ? ([
+          { data: [], error: null } as any,
+          ...(await Promise.all([manualPanelQuery, transferQuery])),
+        ] as any)
+      : await Promise.all([commissionQuery, manualPanelQuery, transferQuery]);
+
+  if (commissionTxsRes.error) {
+    console.error("loadDashboardData: commission source error:", commissionTxsRes.error);
+  }
+  if (manualPanelTxsRes.error) {
+    console.error("loadDashboardData: manual_panel tx error:", manualPanelTxsRes.error);
+  }
+  if (transferTxsRes.error) {
+    console.error("loadDashboardData: admin_panel_transfer tx error:", transferTxsRes.error);
+  }
+
+  const commissionRows = commissionTxsRes.data || [];
+  const manualTxs = manualPanelTxsRes.data || [];
+  const transferTxs = transferTxsRes.data || [];
+
+  const depositsFor = (startIso: string) => {
+    const manual = sumRowsSince(manualTxs, startIso, (t) =>
+      String(t.type) === "deposit" ? Number(t.amount || 0) : 0
     );
+    const transfer = sumRowsSince(transferTxs, startIso, (t) =>
+      String((t.meta as any)?.action ?? "") === "deposit" ? Number(t.amount || 0) : 0
+    );
+    return manual + transfer;
+  };
+  const withdrawalsFor = (startIso: string) => {
+    const manual = sumRowsSince(manualTxs, startIso, (t) =>
+      String(t.type) === "withdraw" ? Number(t.amount || 0) : 0
+    );
+    const transfer = sumRowsSince(transferTxs, startIso, (t) =>
+      String((t.meta as any)?.action ?? "") === "withdraw" ? Number(t.amount || 0) : 0
+    );
+    return manual + transfer;
+  };
+  const commissionFor = (startIso: string) => {
+    if (user.role === "admin") {
+      // values are precomputed by server route
+      if (startIso === dayIso) return adminCommissionMap?.day ?? 0;
+      if (startIso === weekIso) return adminCommissionMap?.week ?? 0;
+      return adminCommissionMap?.month ?? 0;
+    }
+    if (user.role === "agent") {
+      return sumRowsSince(commissionRows, startIso, (t) => Number((t as any).agent_amount || 0));
+    }
+    // super
+    return sumRowsSince(commissionRows, startIso, (t) => Number((t as any).super_amount || 0));
+  };
 
-    // محاسبه بیلان
+  // "کانیات کل" (commission_base): only available for agent/super from commissions_log.
+  const commissionBaseFor = (startIso: string) => {
+    if (user.role === "admin") return 0;
+    return sumRowsSince(commissionRows, startIso, (t) => Number((t as any).commission_base || 0));
+  };
+
+  for (const [period, startIso] of [
+    ["day", dayIso],
+    ["week", weekIso],
+    ["month", monthIso],
+  ] as Array<[DashboardPeriod, string]>) {
+    const commission = commissionFor(startIso);
+    const commissionBase = commissionBaseFor(startIso);
+    const deposits = depositsFor(startIso);
+    const withdrawals = withdrawalsFor(startIso);
     const net = deposits - withdrawals;
 
     summaries[period] = {
       period,
-      ticketsVolume: commission, // کانیات = کمیسیون
+      ticketsVolume: commission,
+      ticketsVolumeTotal: commissionBase,
       deposits,
       withdrawals,
       net,
     };
   }
 
-  return {
+  const data: DashboardData = {
     user,
     summaries,
   };
+  dashboardCache = { key: cacheKey, fetchedAtMs: Date.now(), data };
+  return data;
 }
 
 
