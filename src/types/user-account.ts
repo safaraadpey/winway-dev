@@ -31,6 +31,7 @@ export interface UserAccountActivity {
   lineWins: number; // تعداد برد خطی
   fullWins: number; // تعداد برد پر
   commission: number; // کانیات (کمیسیون)
+  commissionTotal: number | null; // کانیات کل (مبنای کمیسیون) - ممکن است برای برخی نقش‌ها قابل محاسبه نباشد
   deposits: number; // واریز
   withdrawals: number; // برداشت
   net: number; // بیلان

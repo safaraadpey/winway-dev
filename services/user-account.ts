@@ -295,10 +295,11 @@ async function calculateUserActivity(
     // - super: مجموع سهم super روی تیکت‌های زیرمجموعه
     // - admin: از transactions (fee_admin) چون commissions_log به admin خاصی اشاره نمی‌کند
     let commission = 0;
+    let commissionTotal: number | null = null;
     if (userRole === "player") {
       const { data: commissionData, error: commissionError } = await supabase
         .from("commissions_log")
-        .select("agent_amount, super_amount, admin_amount")
+        .select("agent_amount, super_amount, admin_amount, commission_base")
         .eq("player_id", userId)
         .gte("created_at", periodStart.toISOString());
 
@@ -314,10 +315,14 @@ async function calculateUserActivity(
           Number(row.admin_amount || 0)
         );
       }, 0);
+      commissionTotal = (commissionData || []).reduce(
+        (sum: number, row: any) => sum + Number(row.commission_base || 0),
+        0
+      );
     } else if (userRole === "agent") {
       const { data: commissionData, error: commissionError } = await supabase
         .from("commissions_log")
-        .select("agent_amount")
+        .select("agent_amount, commission_base")
         .eq("agent_id", userId)
         .gte("created_at", periodStart.toISOString());
 
@@ -329,10 +334,14 @@ async function calculateUserActivity(
         (sum: number, row: any) => sum + Number(row.agent_amount || 0),
         0
       );
+      commissionTotal = (commissionData || []).reduce(
+        (sum: number, row: any) => sum + Number(row.commission_base || 0),
+        0
+      );
     } else if (userRole === "super") {
       const { data: commissionData, error: commissionError } = await supabase
         .from("commissions_log")
-        .select("super_amount")
+        .select("super_amount, commission_base")
         .eq("super_id", userId)
         .gte("created_at", periodStart.toISOString());
 
@@ -342,6 +351,10 @@ async function calculateUserActivity(
 
       commission = (commissionData || []).reduce(
         (sum: number, row: any) => sum + Number(row.super_amount || 0),
+        0
+      );
+      commissionTotal = (commissionData || []).reduce(
+        (sum: number, row: any) => sum + Number(row.commission_base || 0),
         0
       );
     } else if (userRole === "admin") {
@@ -361,6 +374,7 @@ async function calculateUserActivity(
         (sum: number, t: any) => sum + Number(t.amount || 0),
         0
       );
+      commissionTotal = null; // commissions_log doesn't track admin_id; requires org tree aggregation
     }
 
     // محاسبه واریز و برداشت از transactions
@@ -397,6 +411,7 @@ async function calculateUserActivity(
       lineWins,
       fullWins,
       commission,
+      commissionTotal,
       deposits,
       withdrawals,
       net,
@@ -408,6 +423,7 @@ async function calculateUserActivity(
       lineWins: 0,
       fullWins: 0,
       commission: 0,
+      commissionTotal: null,
       deposits: 0,
       withdrawals: 0,
       net: 0,

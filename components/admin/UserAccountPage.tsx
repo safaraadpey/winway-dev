@@ -914,6 +914,12 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
               <span className="text-right font-mono">
                 {activity.commission.toLocaleString("en-US")}
               </span>
+              <span>کانیات کل</span>
+              <span className="text-right font-mono">
+                {activity.commissionTotal === null
+                  ? "—"
+                  : activity.commissionTotal.toLocaleString("en-US")}
+              </span>
               <span>واریز</span>
               <span className="text-right font-mono">
                 {activity.deposits.toLocaleString("en-US")}
