@@ -6,6 +6,9 @@ type CommissionSummary = {
   day: number;
   week: number;
   month: number;
+  dayTotal: number;
+  weekTotal: number;
+  monthTotal: number;
 };
 
 export async function GET(request: NextRequest) {
@@ -48,15 +51,11 @@ export async function GET(request: NextRequest) {
 
     const adminZeroId = (adminZero as any)?.id ?? null;
 
-    // Rule: any admin under adminzero (direct child) sees adminzero commission totals.
-    // Otherwise, show their own.
+    // Rule: all admin dashboards should monitor the main admin performance.
+    // If adminzero exists, use adminzero commission totals for every admin account.
     let effectiveUserId = actorId;
     if (adminZeroId) {
-      if (actorId === adminZeroId) {
-        effectiveUserId = adminZeroId;
-      } else if (String((actorUser as any).parent_id ?? "") === String(adminZeroId)) {
-        effectiveUserId = adminZeroId;
-      }
+      effectiveUserId = adminZeroId;
     }
 
     const { data: rows, error: txErr } = await supabase
@@ -75,6 +74,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const { data: baseRows, error: baseErr } = await supabase
+      .from("commissions_log")
+      .select("commission_base, created_at")
+      .gte("created_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString());
+
+    if (baseErr) {
+      console.error("[dashboard/commission-summary] commissions_log read error", baseErr);
+      return NextResponse.json(
+        { ok: false, error: "db_error", message: "خطا در دریافت کانیات کل." },
+        { status: 500 }
+      );
+    }
+
     const now = new Date();
     const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
     const dayOfWeek = now.getDay();
@@ -82,18 +94,32 @@ export async function GET(request: NextRequest) {
     const weekStart = new Date(now.getFullYear(), now.getMonth(), diff).toISOString();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-    const sumSince = (startIso: string) =>
+    const dayStartMs = new Date(dayStart).getTime();
+    const weekStartMs = new Date(weekStart).getTime();
+    const monthStartMs = new Date(monthStart).getTime();
+
+    const sumSinceMs = (startMs: number) =>
       (rows || []).reduce((sum, r: any) => {
-        const createdAt = String(r.created_at ?? "");
-        if (!createdAt || createdAt < startIso) return sum;
+        const createdAtMs = new Date(String(r.created_at ?? "")).getTime();
+        if (!Number.isFinite(createdAtMs) || createdAtMs < startMs) return sum;
         return sum + Number(r.amount || 0);
+      }, 0);
+
+    const sumBaseSinceMs = (startMs: number) =>
+      (baseRows || []).reduce((sum, r: any) => {
+        const createdAtMs = new Date(String(r.created_at ?? "")).getTime();
+        if (!Number.isFinite(createdAtMs) || createdAtMs < startMs) return sum;
+        return sum + Number(r.commission_base || 0);
       }, 0);
 
     const data: CommissionSummary = {
       effectiveUserId,
-      day: sumSince(dayStart),
-      week: sumSince(weekStart),
-      month: sumSince(monthStart),
+      day: sumSinceMs(dayStartMs),
+      week: sumSinceMs(weekStartMs),
+      month: sumSinceMs(monthStartMs),
+      dayTotal: sumBaseSinceMs(dayStartMs),
+      weekTotal: sumBaseSinceMs(weekStartMs),
+      monthTotal: sumBaseSinceMs(monthStartMs),
     };
 
     return NextResponse.json({ ok: true, data }, { status: 200 });

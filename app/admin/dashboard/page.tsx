@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
-import { getCachedDashboardData, loadDashboardData, clearDashboardCache } from "@/services/dashboard";
+import {
+  getCachedDashboardData,
+  loadDashboardData,
+  clearDashboardCache,
+  loadDashboardRangeSummary,
+} from "@/services/dashboard";
 import { supabase } from "@/lib/supabaseClient";
 import { getCachedAdminPermissions, getCurrentAdminPermissions, clearAdminPermissionsCache } from "@/lib/admin-permissions";
 import type { DashboardPeriod, DashboardData } from "@/src/types/dashboard";
@@ -16,11 +21,21 @@ const PERIOD_LABELS: Record<DashboardPeriod, string> = {
 };
 
 export default function AdminDashboardPage() {
+  type PeriodTab = DashboardPeriod | "range";
   const router = useRouter();
   const { setShowHeader, setShowBackButton, setOnBackClick } = useHeaderVisibility();
   const [data, setData] = useState<DashboardData | null>(() => getCachedDashboardData());
   const [loading, setLoading] = useState(() => getCachedDashboardData() === null);
-  const [activePeriod, setActivePeriod] = useState<DashboardPeriod>("day");
+  const [activePeriod, setActivePeriod] = useState<PeriodTab>("day");
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+  const [rangeLoading, setRangeLoading] = useState(false);
+  const [rangeSummary, setRangeSummary] = useState<{
+    ticketsVolume: number;
+    ticketsVolumeTotal: number;
+    deposits: number;
+    withdrawals: number;
+  } | null>(null);
   const [permissions, setPermissions] = useState<AdminPermissions | null>(() => getCachedAdminPermissions());
   const [adminZeroId, setAdminZeroId] = useState<string | null>(null);
 
@@ -38,7 +53,7 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const result = await loadDashboardData({ maxAgeMs: 30_000 });
+        const result = await loadDashboardData({ maxAgeMs: 30_000, force: true });
         setData(result);
         
         // بارگذاری دسترسی‌ها اگر admin است
@@ -65,7 +80,10 @@ export default function AdminDashboardPage() {
     fetchData();
   }, []);
 
-  const summary = data?.summaries[activePeriod];
+  const summary =
+    activePeriod === "range"
+      ? rangeSummary
+      : data?.summaries[activePeriod];
   const hasReferralCode = Boolean(data?.user?.referralCode);
   const userRole = data?.user?.role;
   const isAdmin = userRole === "admin";
@@ -97,6 +115,29 @@ export default function AdminDashboardPage() {
       router.push("/login");
     } catch (error) {
       console.error("Error logging out:", error);
+    }
+  };
+
+  const handleLoadRange = async () => {
+    if (!rangeFrom || !rangeTo) return;
+    if (rangeFrom > rangeTo) return;
+    try {
+      setRangeLoading(true);
+      const result = await loadDashboardRangeSummary({
+        from: rangeFrom,
+        to: rangeTo,
+      });
+      setRangeSummary({
+        ticketsVolume: result.ticketsVolume,
+        ticketsVolumeTotal: result.ticketsVolumeTotal,
+        deposits: result.deposits,
+        withdrawals: result.withdrawals,
+      });
+    } catch (error) {
+      console.error("Error loading range dashboard summary:", error);
+      setRangeSummary(null);
+    } finally {
+      setRangeLoading(false);
     }
   };
 
@@ -161,7 +202,7 @@ export default function AdminDashboardPage() {
         {/* تب‌های بازه زمانی و کارت آمار مالی - برای مدیر کل و مدیر مالی */}
         {canViewFinancialReport && (
           <div className="rounded-2xl bg-[#151515] border border-gray-800 mb-6">
-            <div className="grid grid-cols-3 text-center text-sm font-semibold rounded-2xl overflow-hidden">
+            <div className="grid grid-cols-4 text-center text-sm font-semibold rounded-2xl overflow-hidden">
               {(["day", "week", "month"] as DashboardPeriod[]).map((period) => (
                 <button
                   key={period}
@@ -173,15 +214,60 @@ export default function AdminDashboardPage() {
                   {PERIOD_LABELS[period]}
                 </button>
               ))}
+              <button
+                onClick={() => setActivePeriod("range")}
+                className={`py-3 ${
+                  activePeriod === "range" ? "bg-teal-500 text-black" : "text-gray-300"
+                }`}
+              >
+                بازه
+              </button>
             </div>
             <div className="px-4 py-3 text-sm text-gray-100">
-              {loading || !summary ? (
+              {activePeriod === "range" && (
+                <div className="mb-3 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      value={rangeFrom}
+                      onChange={(e) => setRangeFrom(e.target.value)}
+                      className="rounded-lg bg-[#1f1f1f] border border-gray-700 px-3 py-2 text-sm"
+                    />
+                    <input
+                      type="date"
+                      value={rangeTo}
+                      onChange={(e) => setRangeTo(e.target.value)}
+                      className="rounded-lg bg-[#1f1f1f] border border-gray-700 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <button
+                    onClick={handleLoadRange}
+                    disabled={!rangeFrom || !rangeTo || rangeFrom > rangeTo || rangeLoading}
+                    className="w-full rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                  >
+                    {rangeLoading ? "در حال محاسبه..." : "اعمال بازه"}
+                  </button>
+                </div>
+              )}
+              {activePeriod === "range" && (!rangeFrom || !rangeTo || rangeFrom > rangeTo) ? (
+                <div className="text-center py-4 text-gray-400">بازه تاریخ معتبر انتخاب کنید</div>
+              ) : !summary ||
+                loading ||
+                (activePeriod === "range" && !rangeSummary && !rangeLoading) ? (
                 <div className="text-center py-4 text-gray-400">در حال بارگذاری...</div>
               ) : (
                 <div className="grid grid-cols-2 gap-y-1">
                   <span>کانیات</span>
                   <span className="text-right font-mono">
                     {summary.ticketsVolume.toLocaleString("en-US")}
+                  </span>
+                  <span>کانیات کل</span>
+                  <span className="text-right font-mono">
+                    {summary.ticketsVolumeTotal.toLocaleString("en-US")}
+                  </span>
+                  <span>کانیات پنل‌ها</span>
+                  <span className="text-right font-mono">
+                    {Math.max(0, summary.ticketsVolumeTotal - summary.ticketsVolume).toLocaleString("en-US")}
                   </span>
                   <span>واریز</span>
                   <span className="text-right font-mono">
