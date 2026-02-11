@@ -152,24 +152,27 @@ async function loadMonthlyActivitySource(
   }
 
   // commissions_log (player/agent/super)
-  let commissionsQuery = supabase
-    .from("commissions_log")
-    .select("commission_base, created_at");
+  // IMPORTANT: build query in one go to keep TS types stable (Supabase query builder
+  // encodes selected columns in the type).
+  let selectCols = "commission_base, created_at";
+  let filterCol: "player_id" | "agent_id" | "super_id" = "player_id";
 
   if (userRole === "player") {
-    commissionsQuery = commissionsQuery
-      .select("agent_amount, super_amount, admin_amount, commission_base, created_at")
-      .eq("player_id", userId);
+    selectCols = "agent_amount, super_amount, admin_amount, commission_base, created_at";
+    filterCol = "player_id";
   } else if (userRole === "agent") {
-    commissionsQuery = commissionsQuery
-      .select("agent_amount, commission_base, created_at")
-      .eq("agent_id", userId);
+    selectCols = "agent_amount, commission_base, created_at";
+    filterCol = "agent_id";
   } else if (userRole === "super") {
-    commissionsQuery = commissionsQuery
-      .select("super_amount, commission_base, created_at")
-      .eq("super_id", userId);
+    selectCols = "super_amount, commission_base, created_at";
+    filterCol = "super_id";
   }
-  commissionsQuery = commissionsQuery.gte("created_at", monthStart);
+
+  const commissionsQuery = supabase
+    .from("commissions_log")
+    .select(selectCols)
+    .eq(filterCol, userId)
+    .gte("created_at", monthStart);
 
   const [resultsRes, manualRes, commRes] = await Promise.all([
     resultsPromise,
