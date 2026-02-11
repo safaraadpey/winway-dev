@@ -8,6 +8,11 @@
   padding-bottom: 2rem;
 }
 
+.adminContainer {
+  /* In admin/super/agent panels, use solid black background */
+  background-color: #0e0e0f;
+}
+
 .content {
   max-width: 600px;
   margin: 0 auto;

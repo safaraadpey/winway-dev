@@ -11,6 +11,7 @@ export interface UserAccountInfo {
   displayName: string;
   role: "admin" | "agent" | "super" | "player";
   adminSubRole: AdminSubRole | null; // فقط برای role="admin"
+  parentId: string | null;
   dingBalance: number;
   tomanBalance: number;
   lastLoginAt: string | null;
@@ -29,7 +30,7 @@ export interface UserAccountActivity {
   period: UserAccountPeriod;
   lineWins: number; // تعداد برد خطی
   fullWins: number; // تعداد برد پر
-  commission: number; // کانبات (کمیسیون)
+  commission: number; // کانیات (کمیسیون)
   deposits: number; // واریز
   withdrawals: number; // برداشت
   net: number; // بیلان

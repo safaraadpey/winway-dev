@@ -139,7 +139,7 @@ function getPeriodStart(period: DashboardPeriod): Date {
 }
 
 /**
- * محاسبه کمیسیون (کانبات) برای یک کاربر در یک بازه زمانی
+ * محاسبه کمیسیون (کانیات) برای یک کاربر در یک بازه زمانی
  */
 async function calculateCommission(
   userId: string,
@@ -257,7 +257,7 @@ async function calculateDepositsWithdrawals(
  * داده‌های مالی داشبورد.
  *
  * این تابع داده‌های واقعی را از دیتابیس می‌گیرد:
- * - کانبات: کمیسیون از بازی‌ها (از commissions_log)
+ * - کانیات: کمیسیون از بازی‌ها (از commissions_log)
  * - واریز: تراکنش‌های deposit از manual_panel
  * - برداشت: تراکنش‌های withdraw از manual_panel
  * - بیلان: واریز - برداشت
@@ -300,7 +300,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
   for (const period of ["day", "week", "month"] as DashboardPeriod[]) {
     const periodStart = getPeriodStart(period);
 
-    // محاسبه کمیسیون (کانبات)
+    // محاسبه کمیسیون (کانیات)
     const commission = await calculateCommission(user.id, user.role, periodStart);
 
     // محاسبه واریز و برداشت
@@ -315,7 +315,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
 
     summaries[period] = {
       period,
-      ticketsVolume: commission, // کانبات = کمیسیون
+      ticketsVolume: commission, // کانیات = کمیسیون
       deposits,
       withdrawals,
       net,

@@ -244,6 +244,7 @@ async function loadUserAccountInfo(userId: string): Promise<UserAccountInfo | nu
       displayName,
       role: user.role as UserAccountInfo["role"],
       adminSubRole: (user as any).admin_sub_role as AdminSubRole | null,
+      parentId: (user as any).parent_id as string | null,
       dingBalance,
       tomanBalance,
       lastLoginAt: user.last_login_at || null,
@@ -268,7 +269,8 @@ async function loadUserAccountInfo(userId: string): Promise<UserAccountInfo | nu
  */
 async function calculateUserActivity(
   userId: string,
-  period: UserAccountPeriod
+  period: UserAccountPeriod,
+  userRole: UserAccountInfo["role"]
 ): Promise<UserAccountActivity> {
   try {
     const periodStart = getPeriodStart(period);
@@ -287,28 +289,79 @@ async function calculateUserActivity(
     const lineWins = (resultsData || []).filter((r: any) => r.win_type === "line").length;
     const fullWins = (resultsData || []).filter((r: any) => r.win_type === "full").length;
 
-    // محاسبه کمیسیون از commissions_log
-    // برای player، کمیسیون‌هایی که player_id = userId است
-    // کانبات = مجموع همه کمیسیون‌هایی که از ticket های این player ایجاد شده
-    const { data: commissionData, error: commissionError } = await supabase
-      .from("commissions_log")
-      .select("agent_amount, super_amount, admin_amount")
-      .eq("player_id", userId)
-      .gte("created_at", periodStart.toISOString());
+    // محاسبه کانیات:
+    // - player: مجموع کمیسیون‌های ساخته‌شده از تیکت‌های خودش (agent+super+admin)
+    // - agent: مجموع سهم agent روی تیکت‌های زیرمجموعه
+    // - super: مجموع سهم super روی تیکت‌های زیرمجموعه
+    // - admin: از transactions (fee_admin) چون commissions_log به admin خاصی اشاره نمی‌کند
+    let commission = 0;
+    if (userRole === "player") {
+      const { data: commissionData, error: commissionError } = await supabase
+        .from("commissions_log")
+        .select("agent_amount, super_amount, admin_amount")
+        .eq("player_id", userId)
+        .gte("created_at", periodStart.toISOString());
 
-    if (commissionError) {
-      console.error("calculateUserActivity: commissions_log error", commissionError);
-    }
+      if (commissionError) {
+        console.error("calculateUserActivity: commissions_log(player) error", commissionError);
+      }
 
-    // جمع کردن همه کمیسیون‌ها (برای player، همه کمیسیون‌هایی که به او تعلق دارد)
-    const commission = (commissionData || []).reduce((sum: number, row: any) => {
-      return (
-        sum +
-        Number(row.agent_amount || 0) +
-        Number(row.super_amount || 0) +
-        Number(row.admin_amount || 0)
+      commission = (commissionData || []).reduce((sum: number, row: any) => {
+        return (
+          sum +
+          Number(row.agent_amount || 0) +
+          Number(row.super_amount || 0) +
+          Number(row.admin_amount || 0)
+        );
+      }, 0);
+    } else if (userRole === "agent") {
+      const { data: commissionData, error: commissionError } = await supabase
+        .from("commissions_log")
+        .select("agent_amount")
+        .eq("agent_id", userId)
+        .gte("created_at", periodStart.toISOString());
+
+      if (commissionError) {
+        console.error("calculateUserActivity: commissions_log(agent) error", commissionError);
+      }
+
+      commission = (commissionData || []).reduce(
+        (sum: number, row: any) => sum + Number(row.agent_amount || 0),
+        0
       );
-    }, 0);
+    } else if (userRole === "super") {
+      const { data: commissionData, error: commissionError } = await supabase
+        .from("commissions_log")
+        .select("super_amount")
+        .eq("super_id", userId)
+        .gte("created_at", periodStart.toISOString());
+
+      if (commissionError) {
+        console.error("calculateUserActivity: commissions_log(super) error", commissionError);
+      }
+
+      commission = (commissionData || []).reduce(
+        (sum: number, row: any) => sum + Number(row.super_amount || 0),
+        0
+      );
+    } else if (userRole === "admin") {
+      const { data: commissionTxs, error: commissionTxErr } = await supabase
+        .from("transactions")
+        .select("amount")
+        .eq("user_id", userId)
+        .eq("type", "fee_admin")
+        .eq("source_kind", "ticket_commission")
+        .gte("created_at", periodStart.toISOString());
+
+      if (commissionTxErr) {
+        console.error("calculateUserActivity: transactions(admin commission) error", commissionTxErr);
+      }
+
+      commission = (commissionTxs || []).reduce(
+        (sum: number, t: any) => sum + Number(t.amount || 0),
+        0
+      );
+    }
 
     // محاسبه واریز و برداشت از transactions
     const { data: depositsData, error: depositsError } = await supabase
@@ -638,57 +691,18 @@ export async function saveUserCommission(
     if (commissionPercent < 0 || commissionPercent > 100) {
       return { success: false, error: "درصد کانیات باید بین 0 تا 100 باشد" };
     }
-
-    // گرفتن نقش کاربر
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", userId)
-      .single();
-
-    if (userError || !userData) {
-      console.error("saveUserCommission: user error", userError);
-      return { success: false, error: "خطا در دریافت اطلاعات کاربر" };
-    }
-
-    const role = userData.role as "admin" | "super" | "agent" | "player";
-
-    // فقط برای agent و super مجاز است
-    if (role !== "agent" && role !== "super") {
-      return { success: false, error: "درصد کانیات فقط برای ایجنت و سوپر قابل تنظیم است" };
-    }
-
-    // تبدیل درصد به اعشار (0-1)
-    const commissionDecimal = commissionPercent / 100;
-
-    // ذخیره در user_commissions
-    const updateData: any = {};
-    if (role === "agent") {
-      updateData.agent_commission = commissionDecimal;
-    } else if (role === "super") {
-      updateData.super_commission = commissionDecimal;
-    }
-
-    const { error: upsertError } = await supabase
-      .from("user_commissions")
-      .upsert(
-        {
-          user_id: userId,
-          ...updateData,
-        },
-        {
-          onConflict: "user_id",
-        }
-      );
-
-    if (upsertError) {
-      console.error("saveUserCommission: upsert error", upsertError);
-      return { success: false, error: "خطا در ذخیره درصد کانیات" };
-    }
-
+    // [MIGRATED_TO_ADMIN_API] - do not write user_commissions from the browser (RLS).
+    const { setUserCommissionPercent } = await import("@/lib/adminApiClient");
+    await setUserCommissionPercent(userId, commissionPercent);
     return { success: true };
-  } catch (err) {
+  } catch (err: any) {
     console.error("saveUserCommission unexpected error:", err);
+
+    // Map AdminApiError
+    if (err?.code) {
+      return { success: false, error: err.message || "خطا در ذخیره درصد کانیات" };
+    }
+
     return { success: false, error: "خطای غیرمنتظره" };
   }
 }
@@ -705,9 +719,9 @@ export async function loadUserAccountData(userId: string): Promise<UserAccountDa
 
     // محاسبه آمار برای هر دوره
     const activities: Record<UserAccountPeriod, UserAccountActivity> = {
-      day: await calculateUserActivity(userId, "day"),
-      week: await calculateUserActivity(userId, "week"),
-      month: await calculateUserActivity(userId, "month"),
+      day: await calculateUserActivity(userId, "day", user.role),
+      week: await calculateUserActivity(userId, "week", user.role),
+      month: await calculateUserActivity(userId, "month", user.role),
     };
 
     // بارگذاری تراکنش‌ها

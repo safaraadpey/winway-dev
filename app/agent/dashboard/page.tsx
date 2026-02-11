@@ -130,7 +130,7 @@ export default function AgentDashboardPage() {
               <div className="text-center py-4 text-gray-400">در حال بارگذاری...</div>
             ) : (
               <div className="grid grid-cols-2 gap-y-1">
-                <span>کانبات</span>
+                <span>کانیات</span>
                 <span className="text-right font-mono">
                   {summary.ticketsVolume.toLocaleString("en-US")}
                 </span>
@@ -154,6 +154,13 @@ export default function AgentDashboardPage() {
             className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
           >
             <span>کاربران</span>
+            <span className="text-xl">›</span>
+          </button>
+          <button
+            onClick={() => router.push("/admin/account")}
+            className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
+          >
+            <span>حساب کاربری</span>
             <span className="text-xl">›</span>
           </button>
           <button

@@ -279,7 +279,7 @@ BEGIN
   -- محاسبه مبلغ‌ها (فعلاً گرد ساده: ceil به بالا برای پولِ بدون اعشار)
   v_total_comm   := CEIL(v_price * v_rate_room);
   v_agent_amount := CEIL(v_total_comm * v_agent_rate);
-  v_super_amount := CEIL(v_total_comm * v_super_rate);
+  v_super_amount := CEIL(v_total_comm * GREATEST(v_super_rate - v_agent_rate, 0));
   v_admin_amount := GREATEST(v_total_comm - v_agent_amount - v_super_amount, 0);
 
   INSERT INTO public.commissions_log(
@@ -368,7 +368,7 @@ BEGIN
   -- 6. محاسبه پایه کمیسیون و سهم‌ها
   v_base := v_commission_rate * v_gross;
   v_agent_amount := COALESCE(v_agent_rate,0) * v_base;
-  v_super_amount := COALESCE(v_super_rate,0) * v_base;
+  v_super_amount := COALESCE(GREATEST(v_super_rate - v_agent_rate, 0), 0) * v_base;
   v_admin_amount := v_base - (v_agent_amount + v_super_amount);
 
   -- 7. ساخت رکوردهای تراکنش برای هر نقش

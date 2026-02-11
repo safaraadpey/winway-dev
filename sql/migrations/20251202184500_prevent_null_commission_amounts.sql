@@ -81,7 +81,10 @@ BEGIN
 
   v_total_comm   := CEIL(v_price * v_rate_room);
   v_agent_amount := COALESCE(CEIL(v_total_comm * v_agent_rate), 0);
-  v_super_amount := COALESCE(CEIL(v_total_comm * v_super_rate), 0);
+  v_super_amount := COALESCE(
+    CEIL(v_total_comm * GREATEST(v_super_rate - v_agent_rate, 0)),
+    0
+  );
   v_admin_amount := GREATEST(v_total_comm - v_agent_amount - v_super_amount, 0);
 
   INSERT INTO public.commissions_log(

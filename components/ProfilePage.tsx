@@ -10,6 +10,7 @@ import {
   updateAvatarId,
   changePassword,
 } from "@/services/profile";
+import { getCurrentUserRoleInfo } from "@/lib/auth-helpers";
 import Image from "next/image";
 
 // Import آواتارهای موجود
@@ -87,6 +88,7 @@ export default function ProfilePage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
+  const [hideAvatarSection, setHideAvatarSection] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -120,6 +122,28 @@ export default function ProfilePage() {
     }
 
     fetchProfile();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function resolveRole() {
+      try {
+        const roleInfo = await getCurrentUserRoleInfo();
+        if (!active) return;
+        if (roleInfo && ["admin", "super", "agent"].includes(roleInfo.role)) {
+          setHideAvatarSection(true);
+        }
+      } catch (error) {
+        console.error("Error resolving role info:", error);
+      }
+    }
+
+    resolveRole();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleSaveDisplayName = async () => {
@@ -298,7 +322,11 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className={styles.container}>
+      <div
+        className={`${styles.container} ${
+          hideAvatarSection ? styles.adminContainer : ""
+        }`}
+      >
         <div className={styles.loadingContainer}>
           <div className={styles.loadingSpinner}></div>
           <p className={styles.loadingText}>در حال بارگذاری...</p>
@@ -309,7 +337,11 @@ export default function ProfilePage() {
 
   if (!profile) {
     return (
-      <div className={styles.container}>
+      <div
+        className={`${styles.container} ${
+          hideAvatarSection ? styles.adminContainer : ""
+        }`}
+      >
         <div className={styles.errorContainer}>
           <p className={styles.errorText}>خطا در بارگذاری اطلاعات پروفایل</p>
         </div>
@@ -318,147 +350,155 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className={styles.container}>
+    <div
+      className={`${styles.container} ${
+        hideAvatarSection ? styles.adminContainer : ""
+      }`}
+    >
       <div className={styles.content}>
         <h1 className={styles.title}>پروفایل من</h1>
 
         {/* بخش آواتار */}
-        <div className={styles.section}>
-          <label className={styles.sectionLabel}>آواتار</label>
-          <div className={styles.avatarSection}>
-            <div className={styles.avatarContainer}>
-              {profile.avatarUrl ? (
-                <img
-                  src={profile.avatarUrl}
-                  alt="Avatar"
-                  className={styles.avatar}
-                />
-              ) : selectedAvatarId && avatarMap[selectedAvatarId] ? (
-                <Image
-                  src={avatarMap[selectedAvatarId]}
-                  alt="Avatar"
-                  className={styles.avatar}
-                  width={120}
-                  height={120}
-                />
-              ) : (
-                <div className={styles.avatarPlaceholder}>
-                  {profile.displayName[0]?.toUpperCase() || "U"}
-                </div>
-              )}
-            </div>
-            <div className={styles.avatarActions}>
-              <button
-                type="button"
-                onClick={() => setShowAvatarSelector(!showAvatarSelector)}
-                disabled={savingAvatarId}
-                className={styles.avatarButton}
-              >
-                {savingAvatarId ? "در حال ذخیره..." : "انتخاب از آواتارهای موجود"}
-              </button>
-              <button
-                type="button"
-                onClick={handleAvatarClick}
-                disabled={uploadingAvatar}
-                className={styles.avatarButton}
-              >
-                {uploadingAvatar ? "در حال آپلود..." : "آپلود آواتار"}
-              </button>
-              {profile.avatarUrl && (
-                <button
-                  type="button"
-                  onClick={handleRemoveAvatar}
-                  disabled={removingAvatar}
-                  className={`${styles.avatarButton} ${styles.removeButton}`}
-                >
-                  {removingAvatar ? "در حال حذف..." : "حذف آواتار آپلود شده"}
-                </button>
-              )}
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleAvatarChange}
-              style={{ display: "none" }}
-            />
-            
-            {/* انتخابگر آواتار */}
-            {showAvatarSelector && (
-              <div className={styles.avatarSelector}>
-                <div className={styles.avatarGrid}>
-                  {AVAILABLE_AVATAR_IDS.map((id) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => handleSelectAvatar(id)}
-                      className={`${styles.avatarOption} ${
-                        selectedAvatarId === id ? styles.avatarOptionSelected : ""
-                      }`}
-                      disabled={savingAvatarId}
-                    >
-                      <Image
-                        src={avatarMap[id]}
-                        alt={`Avatar ${id}`}
-                        width={60}
-                        height={60}
-                      />
-                    </button>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowAvatarSelector(false)}
-                  className={styles.closeButton}
-                >
-                  بستن
-                </button>
+        {!hideAvatarSection && (
+          <div className={styles.section}>
+            <label className={styles.sectionLabel}>آواتار</label>
+            <div className={styles.avatarSection}>
+              <div className={styles.avatarContainer}>
+                {profile.avatarUrl ? (
+                  <img
+                    src={profile.avatarUrl}
+                    alt="Avatar"
+                    className={styles.avatar}
+                  />
+                ) : selectedAvatarId && avatarMap[selectedAvatarId] ? (
+                  <Image
+                    src={avatarMap[selectedAvatarId]}
+                    alt="Avatar"
+                    className={styles.avatar}
+                    width={120}
+                    height={120}
+                  />
+                ) : (
+                  <div className={styles.avatarPlaceholder}>
+                    {profile.displayName[0]?.toUpperCase() || "U"}
+                  </div>
+                )}
               </div>
-            )}
-            
-            <p className={styles.helperText}>
-              می‌توانید از آواتارهای موجود انتخاب کنید یا آواتار خود را آپلود کنید
-            </p>
+              <div className={styles.avatarActions}>
+                <button
+                  type="button"
+                  onClick={() => setShowAvatarSelector(!showAvatarSelector)}
+                  disabled={savingAvatarId}
+                  className={styles.avatarButton}
+                >
+                  {savingAvatarId ? "در حال ذخیره..." : "انتخاب از آواتارهای موجود"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAvatarClick}
+                  disabled={uploadingAvatar}
+                  className={styles.avatarButton}
+                >
+                  {uploadingAvatar ? "در حال آپلود..." : "آپلود آواتار"}
+                </button>
+                {profile.avatarUrl && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveAvatar}
+                    disabled={removingAvatar}
+                    className={`${styles.avatarButton} ${styles.removeButton}`}
+                  >
+                    {removingAvatar ? "در حال حذف..." : "حذف آواتار آپلود شده"}
+                  </button>
+                )}
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarChange}
+                style={{ display: "none" }}
+              />
+              
+              {/* انتخابگر آواتار */}
+              {showAvatarSelector && (
+                <div className={styles.avatarSelector}>
+                  <div className={styles.avatarGrid}>
+                    {AVAILABLE_AVATAR_IDS.map((id) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => handleSelectAvatar(id)}
+                        className={`${styles.avatarOption} ${
+                          selectedAvatarId === id ? styles.avatarOptionSelected : ""
+                        }`}
+                        disabled={savingAvatarId}
+                      >
+                        <Image
+                          src={avatarMap[id]}
+                          alt={`Avatar ${id}`}
+                          width={60}
+                          height={60}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAvatarSelector(false)}
+                    className={styles.closeButton}
+                  >
+                    بستن
+                  </button>
+                </div>
+              )}
+              
+              <p className={styles.helperText}>
+                می‌توانید از آواتارهای موجود انتخاب کنید یا آواتار خود را آپلود کنید
+              </p>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* بخش نام نمایشی */}
-        <div className={styles.section}>
-          <label htmlFor="displayName" className={styles.sectionLabel}>
-            انتخاب نام داخل بازی
-          </label>
-          <div className={styles.inputGroup}>
-            <input
-              id="displayName"
-              type="text"
-              value={displayName}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (value.length <= MAX_DISPLAY_NAME_LENGTH) {
-                  setDisplayName(value);
-                }
-              }}
-              maxLength={MAX_DISPLAY_NAME_LENGTH}
-              className={styles.input}
-              placeholder="نام نمایشی خود را وارد کنید"
-              disabled={savingDisplayName}
-            />
-            <button
-              type="button"
-              onClick={handleSaveDisplayName}
-              disabled={savingDisplayName || displayName.trim() === profile.displayName}
-              className={styles.saveButton}
-            >
-              {savingDisplayName ? "در حال ذخیره..." : "ذخیره"}
-            </button>
+        {!hideAvatarSection && (
+          <div className={styles.section}>
+            <label htmlFor="displayName" className={styles.sectionLabel}>
+              انتخاب نام داخل بازی
+            </label>
+            <div className={styles.inputGroup}>
+              <input
+                id="displayName"
+                type="text"
+                value={displayName}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value.length <= MAX_DISPLAY_NAME_LENGTH) {
+                    setDisplayName(value);
+                  }
+                }}
+                maxLength={MAX_DISPLAY_NAME_LENGTH}
+                className={styles.input}
+                placeholder="نام نمایشی خود را وارد کنید"
+                disabled={savingDisplayName}
+              />
+              <button
+                type="button"
+                onClick={handleSaveDisplayName}
+                disabled={savingDisplayName || displayName.trim() === profile.displayName}
+                className={styles.saveButton}
+              >
+                {savingDisplayName ? "در حال ذخیره..." : "ذخیره"}
+              </button>
+            </div>
+            <p className={styles.helperText}>
+              این نام در اپلیکیشن به سایر کاربران نمایش داده می‌شود
+              <span className={styles.characterCount}>
+                ({displayName.length}/{MAX_DISPLAY_NAME_LENGTH})
+              </span>
+            </p>
           </div>
-          <p className={styles.helperText}>
-            این نام در اپلیکیشن به سایر کاربران نمایش داده می‌شود
-            <span className={styles.characterCount}>
-              ({displayName.length}/{MAX_DISPLAY_NAME_LENGTH})
-            </span>
-          </p>
-        </div>
+        )}
 
         {/* بخش اطلاعات کاربری */}
         <div className={styles.section}>

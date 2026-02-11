@@ -159,6 +159,22 @@ export async function toggleUserSuspension(userId: string): Promise<void> {
 }
 
 /**
+ * Helper برای تنظیم درصد کانیات (commission) برای agent/super
+ */
+export async function setUserCommissionPercent(
+  userId: string,
+  commissionPercent: number
+): Promise<void> {
+  await callAdminApi('/api/admin/users/set-commission', {
+    method: 'POST',
+    body: {
+      user_id: userId,
+      commission_percent: commissionPercent,
+    },
+  })
+}
+
+/**
  * Helper برای تعلیق/فعال‌سازی مدیر
  */
 export async function toggleAdminStatus(adminId: string): Promise<void> {

@@ -68,6 +68,10 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [changingRole, setChangingRole] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState<"admin" | "super" | "agent" | "player" | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserParentId, setCurrentUserParentId] = useState<string | null>(null);
+  const [adminZeroId, setAdminZeroId] = useState<string | null>(null);
+  const [currentUserCommissionPercent, setCurrentUserCommissionPercent] = useState<number | null>(null);
   const roleDropdownRef = useRef<HTMLDivElement>(null);
   const [showAdminSubRoleModal, setShowAdminSubRoleModal] = useState(false);
   const [selectedAdminSubRole, setSelectedAdminSubRole] = useState<AdminSubRole | null>(null);
@@ -98,13 +102,45 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
       try {
         const { data: { user: currentUser } } = await supabase.auth.getUser();
         if (currentUser) {
+          setCurrentUserId(currentUser.id);
           const { data: userData } = await supabase
             .from("users")
-            .select("role")
+            .select("role, parent_id")
             .eq("id", currentUser.id)
             .single();
           if (userData) {
             setCurrentUserRole(userData.role as "admin" | "super" | "agent" | "player");
+            setCurrentUserParentId((userData as any).parent_id || null);
+
+            // Load current user's commission percent (used for super->agent cap).
+            const { data: commissionRow } = await supabase
+              .from("user_commissions")
+              .select("super_commission, agent_commission")
+              .eq("user_id", currentUser.id)
+              .maybeSingle();
+
+            if (userData.role === "super") {
+              const raw = (commissionRow as any)?.super_commission ?? null;
+              setCurrentUserCommissionPercent(
+                raw === null || raw === undefined ? null : Number(raw) * 100
+              );
+            } else if (userData.role === "agent") {
+              const raw = (commissionRow as any)?.agent_commission ?? null;
+              setCurrentUserCommissionPercent(
+                raw === null || raw === undefined ? null : Number(raw) * 100
+              );
+            } else {
+              setCurrentUserCommissionPercent(null);
+            }
+          }
+          const { data: adminZero } = await supabase
+            .from("users")
+            .select("id")
+            .eq("username", "adminzero")
+            .eq("role", "admin")
+            .single();
+          if (adminZero?.id) {
+            setAdminZeroId(adminZero.id);
           }
         }
       } catch (error) {
@@ -161,10 +197,18 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
   // Handler برای ذخیره درصد کانیات
   const handleSaveCommission = async () => {
     if (savingCommission || !data) return;
+    if (!canEditCommission) {
+      toast.error("فقط بالاسری مستقیم می‌تواند درصد کانیات را تغییر دهد");
+      return;
+    }
 
     const percentValue = parseFloat(commissionPercent);
-    if (isNaN(percentValue) || percentValue < 0 || percentValue > 100) {
-      toast.error("درصد کانیات باید عددی بین 0 تا 100 باشد");
+    if (isNaN(percentValue) || percentValue < 0 || percentValue > maxCommissionPercent) {
+      if (currentUserRole === "super" && user.role === "agent") {
+        toast.error(`درصد کانیات باید عددی بین 0 تا ${maxCommissionPercent} باشد`);
+      } else {
+        toast.error("درصد کانیات باید عددی بین 0 تا 100 باشد");
+      }
       return;
     }
 
@@ -584,6 +628,24 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
 
   const { user, activities, transactions } = data;
   const activity = activities[activePeriod];
+  const canEditCommission =
+    !!currentUserId &&
+    ((currentUserRole === "super" &&
+      user.role === "agent" &&
+      user.parentId === currentUserId) ||
+      (currentUserRole === "admin" &&
+        (user.role === "agent" || user.role === "super") &&
+        (user.parentId === currentUserId ||
+          (adminZeroId &&
+            (currentUserId === adminZeroId ||
+              currentUserParentId === adminZeroId) &&
+            user.parentId === adminZeroId))));
+
+  // Business rule: super cannot set agent commission above their own.
+  const maxCommissionPercent =
+    currentUserRole === "super" && user.role === "agent"
+      ? Math.max(0, Math.min(100, currentUserCommissionPercent ?? 0))
+      : 100;
 
   return (
     <div className="min-h-screen bg-[#0E0E0F] text-white p-4 pb-32">
@@ -777,7 +839,7 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
               <div className="flex items-center gap-3 mb-2">
                 <button
                   onClick={handleSaveCommission}
-                  disabled={savingCommission}
+                  disabled={savingCommission || !canEditCommission}
                   className="px-4 py-2 rounded-xl bg-teal-600 text-sm text-white font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {savingCommission ? "..." : "ثبت"}
@@ -786,7 +848,7 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
                   <input
                     type="number"
                     min="0"
-                    max="100"
+                    max={maxCommissionPercent}
                     step="0.01"
                     value={commissionPercent}
                     onChange={(e) => {
@@ -796,13 +858,23 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
                         setCommissionPercent(value);
                       }
                     }}
-                    disabled={savingCommission}
+                    disabled={savingCommission || !canEditCommission}
                     placeholder="0"
                     className="flex-1 py-2 px-3 rounded-xl bg-[#1f2933] text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-50"
                   />
                   <span className="text-sm text-gray-400">%</span>
                 </div>
                 <span className="text-sm text-gray-400">درصد کانیات</span>
+                {currentUserRole === "super" && user.role === "agent" && (
+                  <span className="text-xs text-gray-500">
+                    سقف مجاز: {maxCommissionPercent}%
+                  </span>
+                )}
+                {!canEditCommission && (
+                  <span className="text-xs text-gray-500">
+                    فقط بالاسری مستقیم می‌تواند تغییر دهد
+                  </span>
+                )}
               </div>
             )}
 
@@ -826,15 +898,19 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
           </div>
           <div className="px-4 py-3 text-sm text-gray-100">
             <div className="grid grid-cols-2 gap-y-1">
-              <span>تعداد برد خطی</span>
-              <span className="text-right font-mono">
-                {activity.lineWins.toLocaleString("en-US")}
-              </span>
-              <span>تعداد برد پر</span>
-              <span className="text-right font-mono">
-                {activity.fullWins.toLocaleString("en-US")}
-              </span>
-              <span>کانبات</span>
+              {data?.user?.role === "player" && (
+                <>
+                  <span>تعداد برد خطی</span>
+                  <span className="text-right font-mono">
+                    {activity.lineWins.toLocaleString("en-US")}
+                  </span>
+                  <span>تعداد برد پر</span>
+                  <span className="text-right font-mono">
+                    {activity.fullWins.toLocaleString("en-US")}
+                  </span>
+                </>
+              )}
+              <span>کانیات</span>
               <span className="text-right font-mono">
                 {activity.commission.toLocaleString("en-US")}
               </span>

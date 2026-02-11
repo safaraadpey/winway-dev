@@ -241,7 +241,7 @@ game_finance.fn_record_ticket_commission(p_ticket uuid) RETURNS uuid
    ```sql
    v_total_comm   := CEIL(v_price * v_rate_room);
    v_agent_amount := CEIL(v_total_comm * v_agent_rate);
-   v_super_amount := CEIL(v_total_comm * v_super_rate);
+   v_super_amount := CEIL(v_total_comm * GREATEST(v_super_rate - v_agent_rate, 0));
    v_admin_amount := GREATEST(v_total_comm - v_agent_amount - v_super_amount, 0);
    ```
 
