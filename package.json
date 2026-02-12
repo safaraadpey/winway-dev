@@ -12,11 +12,13 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.81.1",
     "framer-motion": "^12.23.24",
-    "next": "^14.2.5",
+    "next": "^14.2.35",
     "react": "^18.3.1",
     "react-confetti": "^6.4.0",
+    "react-date-object": "^2.1.9",
     "react-dom": "^18.3.1",
     "react-hot-toast": "^2.6.0",
+    "react-multi-date-picker": "^4.5.2",
     "use-sound": "^5.0.0"
   },
   "devDependencies": {
@@ -25,6 +27,8 @@
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.19",
     "dotenv": "^17.2.3",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.5",
     "postcss": "^8.4.39",
     "tailwindcss": "^3.4.4",
     "typescript": "^5.5.3"

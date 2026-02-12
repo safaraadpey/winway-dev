@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { loadAdminGamesReport } from "@/services/games-report";
 import type { AdminGameReportItem, GamesReportPeriod } from "@/src/types/games-report";
+import ShamsiDateInput from "@/components/common/ShamsiDateInput";
 
 type ReportPeriod = GamesReportPeriod;
 
@@ -125,12 +126,14 @@ export default function AdminGamesReportPage() {
   const formatPlayedAt = (iso: string) => {
     const d = new Date(iso);
     if (!Number.isFinite(d.getTime())) return "-";
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mi = String(d.getMinutes()).padStart(2, "0");
-    return `${yyyy}/${mm}/${dd} ${hh}:${mi}`;
+    return new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(d);
   };
 
   return (
@@ -155,18 +158,8 @@ export default function AdminGamesReportPage() {
         {activePeriod === "range" && (
           <div className="rounded-2xl bg-[#151515] border border-gray-800 mb-4 p-3 space-y-2">
             <div className="grid grid-cols-2 gap-2">
-              <input
-                type="date"
-                value={rangeFrom}
-                onChange={(e) => setRangeFrom(e.target.value)}
-                className="rounded-lg bg-[#1f1f1f] border border-gray-700 px-3 py-2 text-sm"
-              />
-              <input
-                type="date"
-                value={rangeTo}
-                onChange={(e) => setRangeTo(e.target.value)}
-                className="rounded-lg bg-[#1f1f1f] border border-gray-700 px-3 py-2 text-sm"
-              />
+              <ShamsiDateInput value={rangeFrom} onChange={setRangeFrom} />
+              <ShamsiDateInput value={rangeTo} onChange={setRangeTo} />
             </div>
             <button
               onClick={handleApplyRange}

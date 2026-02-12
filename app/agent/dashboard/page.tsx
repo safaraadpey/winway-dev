@@ -6,6 +6,7 @@ import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { loadDashboardData, loadDashboardRangeSummary } from "@/services/dashboard";
 import { supabase } from "@/lib/supabaseClient";
 import type { DashboardPeriod, DashboardData } from "@/src/types/dashboard";
+import ShamsiDateInput from "@/components/common/ShamsiDateInput";
 
 const PERIOD_LABELS: Record<DashboardPeriod, string> = {
   day: "روز",
@@ -172,18 +173,8 @@ export default function AgentDashboardPage() {
             {activePeriod === "range" && (
               <div className="mb-3 space-y-2">
                 <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="date"
-                    value={rangeFrom}
-                    onChange={(e) => setRangeFrom(e.target.value)}
-                    className="rounded-lg bg-[#1f1f1f] border border-gray-700 px-3 py-2 text-sm"
-                  />
-                  <input
-                    type="date"
-                    value={rangeTo}
-                    onChange={(e) => setRangeTo(e.target.value)}
-                    className="rounded-lg bg-[#1f1f1f] border border-gray-700 px-3 py-2 text-sm"
-                  />
+                  <ShamsiDateInput value={rangeFrom} onChange={setRangeFrom} />
+                  <ShamsiDateInput value={rangeTo} onChange={setRangeTo} />
                 </div>
                 <button
                   onClick={handleLoadRange}

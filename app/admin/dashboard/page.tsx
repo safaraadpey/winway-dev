@@ -9,6 +9,7 @@ import {
   clearDashboardCache,
   loadDashboardRangeSummary,
 } from "@/services/dashboard";
+import ShamsiDateInput from "@/components/common/ShamsiDateInput";
 import { supabase } from "@/lib/supabaseClient";
 import { getCachedAdminPermissions, getCurrentAdminPermissions, clearAdminPermissionsCache } from "@/lib/admin-permissions";
 import type { DashboardPeriod, DashboardData } from "@/src/types/dashboard";
@@ -227,18 +228,8 @@ export default function AdminDashboardPage() {
               {activePeriod === "range" && (
                 <div className="mb-3 space-y-2">
                   <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="date"
-                      value={rangeFrom}
-                      onChange={(e) => setRangeFrom(e.target.value)}
-                      className="rounded-lg bg-[#1f1f1f] border border-gray-700 px-3 py-2 text-sm"
-                    />
-                    <input
-                      type="date"
-                      value={rangeTo}
-                      onChange={(e) => setRangeTo(e.target.value)}
-                      className="rounded-lg bg-[#1f1f1f] border border-gray-700 px-3 py-2 text-sm"
-                    />
+                    <ShamsiDateInput value={rangeFrom} onChange={setRangeFrom} />
+                    <ShamsiDateInput value={rangeTo} onChange={setRangeTo} />
                   </div>
                   <button
                     onClick={handleLoadRange}

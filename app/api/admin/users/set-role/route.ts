@@ -65,28 +65,56 @@ export async function POST(request: NextRequest) {
 
     // 6.1 قوانین بر اساس نقش ادمین فعلی
 
-    // (الف) Admin فقط می‌تواند «پلیرهای مستقیم خودش» را تغییر نقش دهد
-    // - target.parent_id یا خالی است یا برابر خود admin است
-    // - target باید حتماً player باشد (نمی‌تواند ایجنت/سوپر/ادمین را تغییر نقش دهد)
+    // (الف) Admin (شامل sub-role مدیر کل) با همان قواعد پنل ادمین:
+    // - مستقیم: کاربرانی که parent_id آن‌ها خود admin است
+    // - در سلسله adminzero: اگر خود adminzero باشد یا زیرمجموعه مستقیم adminzero باشد،
+    //   می‌تواند کاربران مستقیم adminzero را هم مدیریت کند.
     if (currentRole === 'admin') {
       const parentId = targetUser.parent_id as string | null
-      if (parentId && parentId !== currentUserId) {
+
+      const { data: actorUser, error: actorUserErr } = await supabase
+        .from('users')
+        .select('id, parent_id')
+        .eq('id', currentUserId)
+        .single()
+
+      if (actorUserErr || !actorUser) {
+        return NextResponse.json(
+          { ok: false, error: 'user_not_found', message: 'actor user not found' },
+          { status: 404 }
+        )
+      }
+
+      const actorParentId = (actorUser as any).parent_id as string | null
+
+      const { data: adminZero, error: adminZeroErr } = await supabase
+        .from('users')
+        .select('id')
+        .eq('username', 'adminzero')
+        .eq('role', 'admin')
+        .single()
+
+      if (adminZeroErr || !adminZero) {
+        return NextResponse.json(
+          { ok: false, error: 'adminzero_not_found', message: 'adminzero user not found' },
+          { status: 500 }
+        )
+      }
+
+      const adminZeroId = (adminZero as any).id as string
+      const isAdminZero = currentUserId === adminZeroId
+      const isUnderAdminZero = actorParentId === adminZeroId
+
+      const adminCanEditUnderAdminZero =
+        (isAdminZero || isUnderAdminZero) && parentId === adminZeroId
+      const adminCanEditDirect = parentId === currentUserId
+
+      if (!adminCanEditUnderAdminZero && !adminCanEditDirect) {
         return NextResponse.json(
           {
             ok: false,
             error: 'forbidden_parent',
-            message: 'ادمین فقط می‌تواند پلیرهای مستقیم خود را تغییر نقش دهد',
-          },
-          { status: 403 }
-        )
-      }
-
-      if (targetRole !== 'player') {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: 'forbidden_role',
-            message: 'ادمین فقط مجاز به تغییر نقش پلیرهای مستقیم خود است و نمی‌تواند نقش ایجنت‌ها یا سوپرها را تغییر دهد',
+            message: 'ادمین فقط می‌تواند کاربران مستقیم مجاز خود را تغییر نقش دهد',
           },
           { status: 403 }
         )
