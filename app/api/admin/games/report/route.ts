@@ -24,9 +24,9 @@ export async function GET(request: NextRequest) {
   try {
     const { session, supabase } = await getAdminContextOrThrow(request);
 
-    if (session.role !== "admin") {
+    if (!["admin", "super", "agent"].includes(session.role)) {
       return NextResponse.json(
-        { ok: false, error: "forbidden", message: "فقط ادمین می‌تواند این گزارش را ببیند." },
+        { ok: false, error: "forbidden", message: "فقط ادمین/سوپر/ایجنت می‌توانند این گزارش را ببینند." },
         { status: 403 }
       );
     }

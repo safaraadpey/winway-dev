@@ -224,6 +224,13 @@ export default function AgentDashboardPage() {
         {/* منوهای ناوبری اصلی */}
         <div className="space-y-3">
           <button
+            onClick={() => router.push("/admin/games")}
+            className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
+          >
+            <span>بازی‌ها</span>
+            <span className="text-xl">›</span>
+          </button>
+          <button
             onClick={() => router.push("/agent/users")}
             className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
           >
