@@ -210,7 +210,7 @@ export default function AdminGamesReportPage() {
                   </span>
                   <span>زمان بازی</span>
                   <span className="text-right font-mono">{formatPlayedAt(item.playedAt)}</span>
-                  <span>برنده‌ها</span>
+                  <span>برنده های فول</span>
                   <span className="text-right">
                     {item.winnerNames.length > 0
                       ? item.winnerNames.join("، ")
