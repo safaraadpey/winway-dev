@@ -11,6 +11,7 @@ import {
   checkReferralCodeAvailable,
   ReferralCodeHistoryItem,
 } from "@/lib/auth-helpers";
+import { clearDashboardCache } from "@/services/dashboard";
 import toast from "react-hot-toast";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 
@@ -100,6 +101,7 @@ export default function AdminSettingsPage() {
     try {
       const success = await updateReferralCode(newCode);
       if (success) {
+        clearDashboardCache();
         toast.success("کد معرف با موفقیت تغییر کرد");
         setNewCode("");
         await loadData();
@@ -124,6 +126,7 @@ export default function AdminSettingsPage() {
     try {
       const success = await updateReferralCode(code);
       if (success) {
+        clearDashboardCache();
         toast.success("کد معرف با موفقیت تغییر کرد");
         await loadData();
       } else {

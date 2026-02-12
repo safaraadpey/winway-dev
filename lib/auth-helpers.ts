@@ -597,13 +597,22 @@ export async function updateReferralCode(newCode: string): Promise<boolean> {
     }
     
     // به‌روزرسانی کد
-    const { error } = await supabase
+    // مهم: اگر RLS اجازه ندهد، ممکن است update بدون error ولی با 0 row انجام شود.
+    // برای جلوگیری از false-positive، خروجی را select می‌کنیم و بررسی می‌کنیم واقعاً ردیف آپدیت شده باشد.
+    const { data: updatedRow, error } = await supabase
       .from('users')
       .update({ referral_code: trimmedCode })
-      .eq('id', user.id);
+      .eq('id', user.id)
+      .select('id, referral_code')
+      .single();
     
     if (error) {
       console.error('Error updating referral code:', error);
+      return false;
+    }
+
+    if (!updatedRow || updatedRow.referral_code !== trimmedCode) {
+      console.error('Referral code update did not persist for user:', user.id);
       return false;
     }
     

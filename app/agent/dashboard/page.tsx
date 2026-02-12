@@ -40,7 +40,7 @@ export default function AgentDashboardPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const result = await loadDashboardData();
+        const result = await loadDashboardData({ force: true });
         setData(result);
       } catch (error) {
         console.error("Error loading agent dashboard data:", error);
