@@ -305,6 +305,16 @@ export default function AdminDashboardPage() {
               <span className="text-xl">›</span>
             </button>
           )}
+          {/* منوی "بازی‌ها" */}
+          {isAdmin && (
+            <button
+              onClick={() => router.push("/admin/games")}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
+            >
+              <span>بازی‌ها</span>
+              <span className="text-xl">›</span>
+            </button>
+          )}
           {/* منوی "کاربران" */}
           {canAccessUsers && (
             <button
