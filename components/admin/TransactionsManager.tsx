@@ -33,231 +33,20 @@ interface TransactionsManagerProps {
   pageTitle?: string;
 }
 
-// Helper function برای محاسبه موجودی کل پلیرها، ایجنت‌ها و سوپرها
-async function fetchTotalBalances(): Promise<{
-  playersTotal: number;
-  agentsTotal: number;
-  supersTotal: number;
-}> {
-  try {
-    // گرفتن نقش کاربر فعلی
-    const {
-      data: { user: authUser },
-      error: authError,
-    } = await supabase.auth.getUser();
-    
-    if (authError || !authUser) {
-      console.error("fetchTotalBalances: auth error", authError);
-      return { playersTotal: 0, agentsTotal: 0, supersTotal: 0 };
-    }
+function getTotalsFromManagedUsers(users: ManagedUserSummary[]) {
+  let playersTotal = 0;
+  let agentsTotal = 0;
+  let supersTotal = 0;
 
-    const { data: currentUser, error: userError } = await supabase
-      .from("users")
-      .select("id, role")
-      .eq("id", authUser.id)
-      .single();
-
-    if (userError || !currentUser) {
-      console.error("fetchTotalBalances: user error", userError);
-      return { playersTotal: 0, agentsTotal: 0, supersTotal: 0 };
-    }
-
-    let targetUserIds: string[] = [];
-
-    // تعیین کاربران زیرمجموعه بر اساس نقش
-    if (currentUser.role === "admin") {
-      // admin: همه players، agents و super ها
-      const { data: allUsers, error: allUsersError } = await supabase
-        .from("users")
-        .select("id, role")
-        .in("role", ["player", "agent", "super"]);
-      
-      if (allUsersError) {
-        console.error("fetchTotalBalances: allUsers error", allUsersError);
-        return { playersTotal: 0, agentsTotal: 0, supersTotal: 0 };
-      }
-      
-      targetUserIds = (allUsers || []).map((u: any) => u.id);
-    } else if (currentUser.role === "super") {
-      // super: agents و players زیر این super
-      // 1. گرفتن agents که parent_id آن‌ها این super است
-      const { data: agentsData, error: agentsError } = await supabase
-        .from("users")
-        .select("id")
-        .eq("parent_id", currentUser.id)
-        .eq("role", "agent");
-
-      if (agentsError) {
-        console.error("fetchTotalBalances: agents for super error", agentsError);
-        return { playersTotal: 0, agentsTotal: 0, supersTotal: 0 };
-      }
-
-      const agentIds = (agentsData || []).map((a: any) => a.id);
-      targetUserIds.push(...agentIds);
-
-      // 2. گرفتن players مستقیم زیر این super (parent_id = super.id)
-      const { data: directPlayersData, error: directPlayersError } = await supabase
-        .from("users")
-        .select("id")
-        .eq("parent_id", currentUser.id)
-        .eq("role", "player");
-
-      if (directPlayersError) {
-        console.error("fetchTotalBalances: direct players for super error", directPlayersError);
-      } else {
-        const directPlayerIds = (directPlayersData || []).map((p: any) => p.id);
-        targetUserIds.push(...directPlayerIds);
-      }
-
-      // 3. گرفتن players که parent_id آن‌ها یکی از agents زیر این super است
-      if (agentIds.length > 0) {
-        const { data: playersData, error: playersError } = await supabase
-          .from("users")
-          .select("id")
-          .in("parent_id", agentIds)
-          .eq("role", "player");
-
-        if (playersError) {
-          console.error("fetchTotalBalances: players under agents for super error", playersError);
-        } else {
-          const playerIds = (playersData || []).map((p: any) => p.id);
-          targetUserIds.push(...playerIds);
-        }
-      }
-
-      // 4. همچنین از player_affiliation هم استفاده می‌کنیم (برای سازگاری)
-      const { data: paRows, error: paError } = await supabase
-        .from("player_affiliation")
-        .select("user_id, agent_id")
-        .eq("super_id", currentUser.id);
-
-      if (!paError && paRows && paRows.length > 0) {
-        const paPlayerIds = paRows.map((r: any) => r.user_id);
-        const paAgentIds = paRows
-          .map((r: any) => r.agent_id)
-          .filter((id: string | null) => !!id);
-        targetUserIds.push(...paPlayerIds, ...paAgentIds);
-      }
-
-      // حذف duplicates
-      targetUserIds = Array.from(new Set(targetUserIds));
-    } else if (currentUser.role === "agent") {
-      // agent: players زیر این agent
-      // 1. گرفتن players مستقیم زیر این agent (parent_id = agent.id)
-      const { data: directPlayersData, error: directPlayersError } = await supabase
-        .from("users")
-        .select("id")
-        .eq("parent_id", currentUser.id)
-        .eq("role", "player");
-
-      if (directPlayersError) {
-        console.error("fetchTotalBalances: direct players for agent error", directPlayersError);
-      } else {
-        const directPlayerIds = (directPlayersData || []).map((p: any) => p.id);
-        targetUserIds.push(...directPlayerIds);
-      }
-
-      // 2. همچنین از player_affiliation هم استفاده می‌کنیم (برای سازگاری)
-      const { data: paRows, error: paError } = await supabase
-        .from("player_affiliation")
-        .select("user_id")
-        .eq("agent_id", currentUser.id);
-
-      if (!paError && paRows && paRows.length > 0) {
-        const paPlayerIds = paRows.map((r: any) => r.user_id);
-        targetUserIds.push(...paPlayerIds);
-      }
-
-      // حذف duplicates
-      targetUserIds = Array.from(new Set(targetUserIds));
-    }
-
-    if (targetUserIds.length === 0) {
-      return { playersTotal: 0, agentsTotal: 0, supersTotal: 0 };
-    }
-
-    // گرفتن موجودی همه این کاربران
-    const { data: wallets, error: walletsError } = await supabase
-      .from("wallets")
-      .select("user_id, balance, currency")
-      .in("user_id", targetUserIds)
-      .eq("currency", "IRR");
-
-    // گرفتن نقش کاربران (شامل super ها برای admin)
-    const { data: usersData, error: usersError } = await supabase
-      .from("users")
-      .select("id, role")
-      .in("id", targetUserIds)
-      .in("role", currentUser.role === "admin" ? ["player", "agent", "super"] : ["player", "agent"]);
-
-    if (usersError) {
-      console.error("fetchTotalBalances: usersData error", usersError);
-      return { playersTotal: 0, agentsTotal: 0, supersTotal: 0 };
-    }
-
-      if (walletsError) {
-      console.error("fetchTotalBalances: wallets error", walletsError);
-      // اگر wallets خطا داد، باز هم users را بررسی کنیم
-      if (usersData) {
-        let playersTotal = 0;
-        let agentsTotal = 0;
-        let supersTotal = 0;
-        usersData.forEach((u: any) => {
-          if (u.role === "player") playersTotal += 0;
-          else if (u.role === "agent") agentsTotal += 0;
-          else if (u.role === "super") supersTotal += 0;
-        });
-        return { playersTotal, agentsTotal, supersTotal };
-      }
-      return { playersTotal: 0, agentsTotal: 0, supersTotal: 0 };
-    }
-
-    // ساخت map برای موجودی‌ها
-    const walletMap = new Map<string, number>();
-    (wallets || []).forEach((w: any) => {
-      const uid = w.user_id as string;
-      const bal =
-        typeof w.balance === "string"
-          ? parseFloat(w.balance) || 0
-          : Number(w.balance) || 0;
-      walletMap.set(uid, bal);
-    });
-
-    // ساخت map برای نقش‌ها
-    const roleMap = new Map<string, string>();
-    (usersData || []).forEach((u: any) => {
-      roleMap.set(u.id, u.role);
-    });
-
-    let playersTotal = 0;
-    let agentsTotal = 0;
-    let supersTotal = 0;
-
-    // محاسبه مجموع موجودی‌ها بر اساس نقش
-    walletMap.forEach((balance, userId) => {
-      const role = roleMap.get(userId);
-      if (role === "player") {
-        playersTotal += balance;
-      } else if (role === "agent") {
-        agentsTotal += balance;
-      } else if (role === "super") {
-        supersTotal += balance;
-      }
-    });
-
-    // اگر کاربری wallet نداشت، باز هم باید در نظر گرفته شود (موجودی 0)
-    roleMap.forEach((role, userId) => {
-      if (!walletMap.has(userId)) {
-        // این کاربر wallet ندارد، پس موجودی 0 است
-        // نیازی به اضافه کردن نیست چون 0 + 0 = 0
-      }
-    });
-
-    return { playersTotal, agentsTotal, supersTotal };
-  } catch (err) {
-    console.error("fetchTotalBalances: unexpected error", err);
-    return { playersTotal: 0, agentsTotal: 0, supersTotal: 0 };
+  for (const u of users) {
+    const bal = Number(u.tomanBalance || 0);
+    if (!Number.isFinite(bal)) continue;
+    if (u.role === "player") playersTotal += bal;
+    else if (u.role === "agent") agentsTotal += bal;
+    else if (u.role === "super") supersTotal += bal;
   }
+
+  return { playersTotal, agentsTotal, supersTotal };
 }
 
 export default function TransactionsManager({ pageTitle }: TransactionsManagerProps) {
@@ -294,51 +83,31 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
       // super: فقط همه، ایجنت، پلیر
       return ALL_ROLE_TABS.filter((tab) => tab.key !== "super");
     } else if (currentUserRole === "agent") {
-      // agent: فقط همه و پلیر (چون agent فقط players زیرمجموعه دارد)
-      return ALL_ROLE_TABS.filter((tab) => tab.key === "all" || tab.key === "player");
+      // agent: فقط همه، ایجنت و پلیر
+      return ALL_ROLE_TABS.filter((tab) => tab.key !== "super");
     }
     // admin: همه تب‌ها
     return ALL_ROLE_TABS;
   }, [currentUserRole]);
 
-  // اگر super است و roleFilter روی "super" است، آن را به "all" تغییر بده
-  // اگر agent است و roleFilter روی "agent" یا "super" است، آن را به "all" تغییر بده
+  // اگر super/agent است و roleFilter روی "super" است، آن را به "all" تغییر بده
   useEffect(() => {
     if (currentUserRole === "super" && roleFilter === "super") {
       setRoleFilter("all");
-    } else if (currentUserRole === "agent" && (roleFilter === "agent" || roleFilter === "super")) {
+    } else if (currentUserRole === "agent" && roleFilter === "super") {
       setRoleFilter("all");
     }
   }, [currentUserRole, roleFilter]);
 
 
-  // بارگذاری موجودی کل پلیرها و ایجنت‌ها (مستقل از فیلتر)
+  // موجودی‌های بالای صفحه را مستقیم از baseUsers محاسبه می‌کنیم
+  // تا دقیقاً با لیست کاربران همگام باشد و تحت تاثیر query جداگانه قرار نگیرد.
   useEffect(() => {
-    let isMounted = true;
-
-    async function fetchBalances() {
-      try {
-        const { playersTotal, agentsTotal, supersTotal } = await fetchTotalBalances();
-        if (isMounted) {
-          setTotalPlayersBalance(playersTotal);
-          setTotalAgentsBalance(agentsTotal);
-          setTotalSupersBalance(supersTotal);
-        }
-      } catch (err) {
-        console.error("Error loading balances:", err);
-        if (isMounted) {
-          setTotalPlayersBalance(0);
-          setTotalAgentsBalance(0);
-          setTotalSupersBalance(0);
-        }
-      }
-    }
-
-    fetchBalances();
-    return () => {
-      isMounted = false;
-    };
-  }, []); // فقط یک بار در mount
+    const { playersTotal, agentsTotal, supersTotal } = getTotalsFromManagedUsers(baseUsers);
+    setTotalPlayersBalance(playersTotal);
+    setTotalAgentsBalance(agentsTotal);
+    setTotalSupersBalance(supersTotal);
+  }, [baseUsers]);
 
   useEffect(() => {
     let isMounted = true;
@@ -358,11 +127,8 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
       }
     }
 
-    if (baseUsers.length === 0) {
-      fetchBase();
-    } else {
-      setLoading(false);
-    }
+    // همیشه یک fetch تازه بزنیم تا cache قدیمی باعث نمایش صفر نشود.
+    fetchBase();
 
     return () => {
       isMounted = false;
@@ -524,8 +290,8 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
       setSelectedIds(new Set());
       setAmountInput("");
 
-      // بارگذاری مجدد موجودی‌ها
-      const { playersTotal, agentsTotal, supersTotal } = await fetchTotalBalances();
+      // بارگذاری مجدد موجودی‌ها از همان دیتای refreshed users
+      const { playersTotal, agentsTotal, supersTotal } = getTotalsFromManagedUsers(result.users);
       setTotalPlayersBalance(playersTotal);
       setTotalAgentsBalance(agentsTotal);
       setTotalSupersBalance(supersTotal);
@@ -704,8 +470,8 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                 {/* خلاصه موجودی‌ها */}
                 <div className="mb-4">
                   <div className="flex gap-1">
-                    {/* موجودی ایجنت‌ها - فقط برای admin و super نمایش داده می‌شود */}
-                    {currentUserRole !== "agent" && (
+                    {/* موجودی ایجنت‌ها - برای admin/super/agent نمایش داده می‌شود */}
+                    {currentUserRole !== "player" && (
                       <div className="flex-1 bg-[#1f2933] rounded-xl px-1 py-1 flex flex-col items-center justify-center">
                         <span className="text-white text-xs mb-1.5">موجودی ایجنت‌ها</span>
                         <div className="bg-[#374151] rounded-lg px-1 py-1 w-full text-center">
@@ -741,7 +507,7 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                 </div>
 
                 {/* فیلتر نقش + تعداد کاربران */}
-                {currentUserRole !== "agent" && (
+                {currentUserRole !== "player" && (
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex flex-1 rounded-2xl bg-[#111827] overflow-hidden text-sm font-semibold">
                       {roleTabs.map((tabItem) => (
@@ -763,7 +529,7 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                     </div>
                   </div>
                 )}
-                {currentUserRole === "agent" && (
+                {currentUserRole === "player" && (
                   <div className="flex items-center justify-end mb-3">
                     <div className="text-sm text-gray-300">
                       <span>تعداد کاربر: {totalUsers}</span>
