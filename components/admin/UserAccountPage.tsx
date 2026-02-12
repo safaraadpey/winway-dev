@@ -13,7 +13,8 @@ import {
   deletePersonalNote,
   changeUserRole,
 } from "@/services/user-account";
-import { adjustWalletForUsersBulk } from "@/services/transactions";
+import { clearManagedUsersCache } from "@/services/users";
+import { transferWalletForUsersBulk } from "@/services/transactions";
 import { supabase } from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
 import type { TransactionAction } from "@/src/types/transactions";
@@ -113,6 +114,15 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
         const { data: { user: currentUser } } = await supabase.auth.getUser();
         if (currentUser) {
           setCurrentUserId(currentUser.id);
+          const roleFromMetadata = (currentUser.user_metadata as any)?.role;
+          if (
+            roleFromMetadata === "admin" ||
+            roleFromMetadata === "super" ||
+            roleFromMetadata === "agent" ||
+            roleFromMetadata === "player"
+          ) {
+            setCurrentUserRole(roleFromMetadata);
+          }
           const { data: userData } = await supabase
             .from("users")
             .select("role, parent_id")
@@ -188,7 +198,7 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
     async function fetchData() {
       try {
         if (!cached) setLoading(true);
-        const result = await loadUserAccountData(userId, { maxAgeMs: 30_000 });
+        const result = await loadUserAccountData(userId, { maxAgeMs: 30_000, force: true });
         if (!isMounted) return;
         setData(result);
         // بارگذاری درصد کانیات
@@ -233,7 +243,7 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
 
     const percentValue = parseFloat(commissionPercent);
     if (isNaN(percentValue) || percentValue < 0 || percentValue > maxCommissionPercent) {
-      if (currentUserRole === "super" && user.role === "agent") {
+      if ((currentUserRole === "super" || currentUserRole === "agent") && user.role === "agent") {
         toast.error(`درصد کانیات باید عددی بین 0 تا ${maxCommissionPercent} باشد`);
       } else {
         toast.error("درصد کانیات باید عددی بین 0 تا 100 باشد");
@@ -246,6 +256,7 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
       const result = await saveUserCommission(userId, percentValue);
       
       if (result.success) {
+        clearManagedUsersCache();
         // به‌روزرسانی state
         setData((prev) => {
           if (!prev) return null;
@@ -287,6 +298,9 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
     const raw = e.target.value.replace(/\D/g, ""); // فقط اعداد
     setAmountInput(raw);
   };
+  const formattedAmountValue = amountInput
+    ? Number(amountInput).toLocaleString("en-US")
+    : "";
 
   // Handler برای واریز/برداشت
   const handleTransaction = async (action: TransactionAction) => {
@@ -299,7 +313,7 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
 
     try {
       setSubmitting(true);
-      await adjustWalletForUsersBulk({
+      await transferWalletForUsersBulk({
         userIds: [userId],
         amount: parsedAmount,
         action,
@@ -659,9 +673,9 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
   const activity = activities[activePeriod];
   const canEditCommission =
     !!currentUserId &&
-    ((currentUserRole === "super" &&
+    (((currentUserRole === "super" || currentUserRole === "agent") &&
       user.role === "agent" &&
-      user.parentId === currentUserId) ||
+      (user.parentId === currentUserId || user.superId === currentUserId)) ||
       (currentUserRole === "admin" &&
         (user.role === "agent" || user.role === "super") &&
         (user.parentId === currentUserId ||
@@ -670,9 +684,9 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
               currentUserParentId === adminZeroId) &&
             user.parentId === adminZeroId))));
 
-  // Business rule: super cannot set agent commission above their own.
+  // Business rule: super/agent cannot set child-agent commission above their own commission.
   const maxCommissionPercent =
-    currentUserRole === "super" && user.role === "agent"
+    (currentUserRole === "super" || currentUserRole === "agent") && user.role === "agent"
       ? Math.max(0, Math.min(100, currentUserCommissionPercent ?? 0))
       : 100;
 
@@ -894,7 +908,7 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
                   <span className="text-sm text-gray-400">%</span>
                 </div>
                 <span className="text-sm text-gray-400">درصد کانیات</span>
-                {currentUserRole === "super" && user.role === "agent" && (
+                {(currentUserRole === "super" || currentUserRole === "agent") && user.role === "agent" && (
                   <span className="text-xs text-gray-500">
                     سقف مجاز: {maxCommissionPercent}%
                   </span>
@@ -1217,7 +1231,7 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
-                  value={amountInput}
+                  value={formattedAmountValue}
                   onChange={handleAmountChange}
                   className="bg-transparent outline-none text-right text-sm font-mono text-white w-28"
                   placeholder="0"

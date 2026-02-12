@@ -95,6 +95,74 @@ export async function GET(request: NextRequest) {
       )
     );
 
+    const ticketsCountByRoom = new Map<string, number>();
+    const commissionRateByRoom = new Map<string, number>();
+
+    if (roomIds.length > 0) {
+      const normalizeRateToPercent = (raw: unknown): number => {
+        const n = Number(raw ?? 0);
+        if (!Number.isFinite(n) || n <= 0) return 0;
+        // Support both storage styles:
+        // - decimal (0.1 => 10%)
+        // - percent (10 => 10%)
+        return n <= 1 ? n * 100 : n;
+      };
+
+      const [{ data: ticketsRows, error: ticketsError }, { data: roomRows, error: roomError }] =
+        await Promise.all([
+          supabase.from("tickets").select("room_id").in("room_id", roomIds),
+          supabase
+            .from("rooms")
+            .select("id, commission_rate, room_template_id")
+            .in("id", roomIds),
+        ]);
+
+      if (!ticketsError && ticketsRows) {
+        ticketsRows.forEach((t: any) => {
+          const rid = String(t.room_id || "");
+          if (!rid) return;
+          ticketsCountByRoom.set(rid, (ticketsCountByRoom.get(rid) || 0) + 1);
+        });
+      }
+
+      if (!roomError && roomRows) {
+        const templateIds = Array.from(
+          new Set(
+            roomRows
+              .map((r: any) => (r.room_template_id ? String(r.room_template_id) : ""))
+              .filter((id: string) => id.length > 0)
+          )
+        );
+
+        const templateRateById = new Map<string, number>();
+        if (templateIds.length > 0) {
+          const { data: templateRows, error: templateError } = await supabase
+            .from("room_templates")
+            .select("id, commission_rate")
+            .in("id", templateIds);
+
+          if (!templateError && templateRows) {
+            templateRows.forEach((rt: any) => {
+              templateRateById.set(String(rt.id), normalizeRateToPercent(rt.commission_rate));
+            });
+          }
+        }
+
+        roomRows.forEach((r: any) => {
+          const rid = String(r.id || "");
+          if (!rid) return;
+          const roomRate = r.commission_rate;
+          const templateRate =
+            r.room_template_id ? templateRateById.get(String(r.room_template_id)) : undefined;
+          const effectivePercent =
+            roomRate !== null && roomRate !== undefined
+              ? normalizeRateToPercent(roomRate)
+              : normalizeRateToPercent(templateRate);
+          commissionRateByRoom.set(rid, Number.isFinite(effectivePercent) ? effectivePercent : 0);
+        });
+      }
+    }
+
     const winnerNamesByRoom = new Map<string, string[]>();
     const lineWinnerNamesByRoom = new Map<string, string[]>();
     if (roomIds.length > 0) {
@@ -177,6 +245,10 @@ export async function GET(request: NextRequest) {
             roomTitle: String(r.room_title || "نامشخص"),
             roomCode: r.room_code ? String(r.room_code) : null,
             roomAmount: Number(r.room_amount || 0),
+            ticketsCount: Number(ticketsCountByRoom.get(String(r.room_id)) || 0),
+            commissionRatePercent: Number(
+              (commissionRateByRoom.get(String(r.room_id)) || 0).toFixed(2)
+            ),
             playedAt: String(r.played_at),
             lineWinsCount: Number(r.line_wins_count || 0),
             fullWinsCount: Number(r.full_wins_count || 0),

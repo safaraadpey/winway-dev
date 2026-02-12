@@ -6,6 +6,8 @@ export interface AdminGameReportItem {
   roomTitle: string;
   roomCode: string | null;
   roomAmount: number;
+  ticketsCount: number;
+  commissionRatePercent: number;
   playedAt: string;
   lineWinsCount: number;
   fullWinsCount: number;

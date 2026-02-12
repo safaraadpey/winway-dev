@@ -200,6 +200,14 @@ export default function AdminGamesReportPage() {
                   <span className="text-right font-mono">
                     {item.roomAmount.toLocaleString("en-US")}
                   </span>
+                  <span>تعداد تیکت‌ها</span>
+                  <span className="text-right font-mono">
+                    {item.ticketsCount.toLocaleString("en-US")}
+                  </span>
+                  <span>درصد کمیسیون میز</span>
+                  <span className="text-right font-mono">
+                    {item.commissionRatePercent.toLocaleString("en-US")}%
+                  </span>
                   <span>زمان بازی</span>
                   <span className="text-right font-mono">{formatPlayedAt(item.playedAt)}</span>
                   <span>برنده‌ها</span>

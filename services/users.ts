@@ -157,8 +157,22 @@ export async function loadManagedUsers(
 
   try {
     if (currentRole === "agent") {
-      // agent: players زیر این agent
-      // 1. گرفتن players مستقیم زیر این agent (parent_id = agent.id)
+      // agent: agents و players زیر این agent
+      // 1. گرفتن agents مستقیم زیر این agent (parent_id = agent.id)
+      const { data: directAgentsData, error: directAgentsError } = await supabase
+        .from("users")
+        .select("id")
+        .eq("parent_id", currentUserId)
+        .eq("role", "agent");
+
+      if (directAgentsError) {
+        console.error("loadManagedUsers: direct agents for agent error", directAgentsError);
+      } else {
+        const directAgentIds = (directAgentsData || []).map((a: any) => a.id);
+        targetUserIds.push(...directAgentIds);
+      }
+
+      // 2. گرفتن players مستقیم زیر این agent (parent_id = agent.id)
       const { data: directPlayersData, error: directPlayersError } = await supabase
         .from("users")
         .select("id")
@@ -172,15 +186,18 @@ export async function loadManagedUsers(
         targetUserIds.push(...directPlayerIds);
       }
 
-      // 2. همچنین از player_affiliation هم استفاده می‌کنیم (برای سازگاری)
+      // 3. همچنین از player_affiliation هم استفاده می‌کنیم (برای سازگاری)
       const { data: paRows, error: paError } = await supabase
         .from("player_affiliation")
-        .select("user_id")
+        .select("user_id, agent_id")
         .eq("agent_id", currentUserId);
 
       if (!paError && paRows && paRows.length > 0) {
         const paPlayerIds = paRows.map((r: any) => r.user_id);
-        targetUserIds.push(...paPlayerIds);
+        const paAgentIds = paRows
+          .map((r: any) => r.agent_id)
+          .filter((id: string | null) => !!id);
+        targetUserIds.push(...paPlayerIds, ...paAgentIds);
       }
 
       // حذف duplicates
@@ -390,7 +407,7 @@ export async function loadManagedUsers(
 
     // Agent: فعلاً درخت مسطح (همه پلیرها در یک سطح)
     if (currentRole === "agent") {
-      if (userRole === "player") {
+      if (userRole === "player" || userRole === "agent") {
         return currentUserId;
       }
       return null;

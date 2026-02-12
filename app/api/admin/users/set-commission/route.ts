@@ -7,6 +7,7 @@
  * - از service_role استفاده می‌کند (RLS bypass)
  * - اما دسترسی را بر اساس نقش caller محدود می‌کند
  *   - super: فقط برای agent های مستقیم خودش
+ *   - agent: فقط برای agent های مستقیم خودش
  *   - admin (هر subrole): فقط برای super/agent های مستقیم خودش
  */
 
@@ -72,6 +73,7 @@ export async function POST(request: NextRequest) {
 
     // Authorization rules (as requested):
     // - super → agents directly under that super
+    // - agent → agents directly under that agent
     // - admin (any subrole) → if under adminzero, can edit any agent/super under adminzero
     //   otherwise only direct agents and supers under that admin
     const actorRole = session.role;
@@ -145,6 +147,44 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+    } else if (actorRole === "agent") {
+      if (targetRole !== "agent" || targetParentId !== actorId) {
+        return NextResponse.json(
+          { ok: false, error: "forbidden", message: "agent can only set commission for direct agents" },
+          { status: 403 }
+        );
+      }
+
+      // Business rule: an agent cannot set a child agent commission above its own agent commission.
+      const { data: actorCommission, error: actorCommissionErr } = await supabase
+        .from("user_commissions")
+        .select("agent_commission")
+        .eq("user_id", actorId)
+        .maybeSingle();
+
+      if (actorCommissionErr) {
+        console.error("set-commission: actor commission load error:", actorCommissionErr);
+        return NextResponse.json(
+          { ok: false, error: "database_error", message: actorCommissionErr.message },
+          { status: 500 }
+        );
+      }
+
+      let actorAgentRate = Number((actorCommission as any)?.agent_commission ?? 0);
+      if (!Number.isFinite(actorAgentRate) || actorAgentRate < 0) actorAgentRate = 0;
+      if (actorAgentRate > 1) actorAgentRate = actorAgentRate / 100; // tolerate legacy percent storage
+
+      if (decimal > actorAgentRate) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "validation_error",
+            message: "agent commission_percent cannot exceed actor agent commission_percent",
+            max_percent: actorAgentRate * 100,
+          },
+          { status: 400 }
+        );
+      }
     } else if (actorRole === "admin") {
       const adminCanEditUnderAdminZero =
         (isAdminZero || isUnderAdminZero) && targetParentId === adminZeroId;
@@ -158,7 +198,7 @@ export async function POST(request: NextRequest) {
       }
     } else {
       return NextResponse.json(
-        { ok: false, error: "forbidden", message: "only admin or super can set commission" },
+        { ok: false, error: "forbidden", message: "only admin, super or agent can set commission" },
         { status: 403 }
       );
     }
