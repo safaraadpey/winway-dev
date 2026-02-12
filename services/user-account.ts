@@ -716,12 +716,14 @@ async function calculateUserActivity(
  */
 async function loadUserTransactions(userId: string): Promise<UserAccountTransaction[]> {
   try {
-    // گرفتن تراکنش‌های manual_panel که این کاربر گیرنده یا فرستنده است
+    // گرفتن تراکنش‌های پنلی:
+    // - مسیر قدیمی: manual_panel (deposit/withdraw)
+    // - مسیر جدید: admin_panel_transfer (transfer_in/transfer_out)
     const { data: transactionsData, error: transactionsError } = await supabase
       .from("transactions")
-      .select("id, amount, type, source_ref, created_at")
-      .eq("source_kind", "manual_panel")
-      .in("type", ["deposit", "withdraw"])
+      .select("id, user_id, amount, type, source_kind, source_ref, meta, created_at")
+      .in("source_kind", ["manual_panel", "admin_panel_transfer"])
+      .in("type", ["deposit", "withdraw", "transfer_in", "transfer_out"])
       .or(`user_id.eq.${userId},source_ref.eq.${userId}`)
       .order("created_at", { ascending: false })
       .limit(50);
@@ -731,11 +733,17 @@ async function loadUserTransactions(userId: string): Promise<UserAccountTransact
       return [];
     }
 
-    // گرفتن اطلاعات actor (source_ref)
+    // گرفتن اطلاعات actor:
+    // - manual_panel: source_ref
+    // - admin_panel_transfer: meta.actor_id
     const actorIds = Array.from(
       new Set(
         (transactionsData || [])
-          .map((t: any) => t.source_ref)
+          .map((t: any) =>
+            t.source_kind === "admin_panel_transfer"
+              ? (t.meta?.actor_id as string | null)
+              : (t.source_ref as string | null)
+          )
           .filter((id: string | null) => !!id)
       )
     ) as string[];
@@ -764,16 +772,28 @@ async function loadUserTransactions(userId: string): Promise<UserAccountTransact
 
     // تبدیل به UserAccountTransaction
     const transactions: UserAccountTransaction[] = (transactionsData || [])
-      .filter((t: any) => t.source_ref && actorMap.has(t.source_ref))
+      .filter((t: any) => {
+        const actorId =
+          t.source_kind === "admin_panel_transfer"
+            ? (t.meta?.actor_id as string | null)
+            : (t.source_ref as string | null);
+        return !!actorId && actorMap.has(actorId);
+      })
       .map((t: any) => {
-        const actor = actorMap.get(t.source_ref)!;
+        const actorId =
+          t.source_kind === "admin_panel_transfer"
+            ? (t.meta?.actor_id as string | null)
+            : (t.source_ref as string | null);
+        const actor = actorMap.get(actorId as string)!;
+        const mappedType: "deposit" | "withdraw" =
+          t.type === "deposit" || t.type === "transfer_in" ? "deposit" : "withdraw";
         return {
           id: t.id,
           amount: Number(t.amount || 0),
-          type: t.type as "deposit" | "withdraw",
+          type: mappedType,
           actorRole: actor.role as "admin" | "agent" | "super",
-          actorId: t.source_ref,
-          actorShortId: makeShortIdFromUuid(t.source_ref),
+          actorId: actorId as string,
+          actorShortId: makeShortIdFromUuid(actorId as string),
           actorUsername: actor.username,
           createdAt: t.created_at,
         };
