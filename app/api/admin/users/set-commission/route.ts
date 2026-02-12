@@ -302,3 +302,152 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function GET(request: NextRequest) {
+  try {
+    const { session, supabase } = await getAdminContextOrThrow(request);
+    const userId = request.nextUrl.searchParams.get("user_id");
+
+    if (!userId) {
+      return NextResponse.json(
+        { ok: false, error: "invalid_payload", message: "user_id is required" },
+        { status: 400 }
+      );
+    }
+
+    const { data: targetUser, error: targetErr } = await supabase
+      .from("users")
+      .select("id, role, parent_id")
+      .eq("id", userId)
+      .single();
+
+    if (targetErr || !targetUser) {
+      return NextResponse.json(
+        { ok: false, error: "user_not_found", message: "target user not found" },
+        { status: 404 }
+      );
+    }
+
+    const targetRole = String((targetUser as any).role ?? "");
+    const targetParentId = (targetUser as any).parent_id as string | null;
+
+    if (targetRole !== "agent" && targetRole !== "super") {
+      return NextResponse.json(
+        { ok: false, error: "validation_error", message: "commission is only available for agent or super" },
+        { status: 400 }
+      );
+    }
+
+    const actorRole = session.role;
+    const actorId = session.user.id;
+
+    const { data: actorUser, error: actorUserErr } = await supabase
+      .from("users")
+      .select("id, parent_id")
+      .eq("id", actorId)
+      .single();
+
+    if (actorUserErr || !actorUser) {
+      return NextResponse.json(
+        { ok: false, error: "user_not_found", message: "actor user not found" },
+        { status: 404 }
+      );
+    }
+    const actorParentId = (actorUser as any).parent_id as string | null;
+
+    const { data: adminZero, error: adminZeroErr } = await supabase
+      .from("users")
+      .select("id")
+      .eq("username", "adminzero")
+      .eq("role", "admin")
+      .single();
+
+    if (adminZeroErr || !adminZero) {
+      return NextResponse.json(
+        { ok: false, error: "adminzero_not_found", message: "adminzero user not found" },
+        { status: 500 }
+      );
+    }
+    const adminZeroId = (adminZero as any).id as string;
+    const isAdminZero = actorId === adminZeroId;
+    const isUnderAdminZero = actorParentId === adminZeroId;
+
+    if (actorRole === "super") {
+      if (targetRole !== "agent" || targetParentId !== actorId) {
+        return NextResponse.json(
+          { ok: false, error: "forbidden", message: "super can only view commission for direct agents" },
+          { status: 403 }
+        );
+      }
+    } else if (actorRole === "agent") {
+      if (targetRole !== "agent" || targetParentId !== actorId) {
+        return NextResponse.json(
+          { ok: false, error: "forbidden", message: "agent can only view commission for direct agents" },
+          { status: 403 }
+        );
+      }
+    } else if (actorRole === "admin") {
+      const adminCanViewUnderAdminZero =
+        (isAdminZero || isUnderAdminZero) && targetParentId === adminZeroId;
+      const adminCanViewDirect = targetParentId === actorId;
+
+      if (!adminCanViewUnderAdminZero && !adminCanViewDirect) {
+        return NextResponse.json(
+          { ok: false, error: "forbidden_parent", message: "admin can only view commission for direct users" },
+          { status: 403 }
+        );
+      }
+    } else {
+      return NextResponse.json(
+        { ok: false, error: "forbidden", message: "only admin, super or agent can view commission" },
+        { status: 403 }
+      );
+    }
+
+    const { data: row, error: rowErr } = await supabase
+      .from("user_commissions")
+      .select("agent_commission, super_commission")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (rowErr) {
+      return NextResponse.json(
+        { ok: false, error: "database_error", message: rowErr.message },
+        { status: 500 }
+      );
+    }
+
+    const raw = targetRole === "agent" ? (row as any)?.agent_commission : (row as any)?.super_commission;
+    let commissionPercent: number | null = null;
+    if (raw !== null && raw !== undefined) {
+      const n = Number(raw);
+      if (Number.isFinite(n)) {
+        commissionPercent = n > 1 ? n : n * 100;
+      }
+    }
+
+    return NextResponse.json(
+      { ok: true, data: { commission_percent: commissionPercent } },
+      { status: 200 }
+    );
+  } catch (err: any) {
+    if (err.message === "UNAUTHORIZED") {
+      return NextResponse.json(
+        { ok: false, error: "unauthorized", message: "missing or invalid session" },
+        { status: 401 }
+      );
+    }
+    if (err.message === "FORBIDDEN") {
+      return NextResponse.json(
+        { ok: false, error: "forbidden", message: "insufficient permissions" },
+        { status: 403 }
+      );
+    }
+
+    console.error("GET /api/admin/users/set-commission error:", err);
+    return NextResponse.json(
+      { ok: false, error: "unexpected_error", message: err?.message || "unexpected error" },
+      { status: 500 }
+    );
+  }
+}
+

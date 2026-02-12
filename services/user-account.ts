@@ -451,20 +451,37 @@ async function loadUserAccountInfo(userId: string): Promise<UserAccountInfo | nu
     const dingBalance = Number(dingBalanceData?.balance || 0);
     const tomanBalance = Number(walletData?.balance || 0);
 
-    // گرفتن درصد کانیات از user_commissions (فقط برای agent و super)
+    // گرفتن درصد کانیات از Admin API (RLS-safe) برای agent/super
     let commissionPercent: number | null = null;
     if (user.role === "agent" || user.role === "super") {
-      const { data: commissionData, error: commissionError } = await supabase
-        .from("user_commissions")
-        .select("agent_commission, super_commission")
-        .eq("user_id", userId)
-        .single();
+      try {
+        const { callAdminApi } = await import("@/lib/adminApiClient");
+        const data = await callAdminApi<{ commission_percent: number | null }>(
+          `/api/admin/users/set-commission?user_id=${encodeURIComponent(userId)}`,
+          { method: "GET" }
+        );
+        commissionPercent =
+          typeof data?.commission_percent === "number"
+            ? data.commission_percent
+            : null;
+      } catch (apiErr) {
+        console.warn("loadUserAccountInfo: commission via API failed, fallback to direct read", apiErr);
+        const { data: commissionData, error: commissionError } = await supabase
+          .from("user_commissions")
+          .select("agent_commission, super_commission")
+          .eq("user_id", userId)
+          .maybeSingle();
 
-      if (!commissionError && commissionData) {
-        if (user.role === "agent") {
-          commissionPercent = commissionData.agent_commission ? Number(commissionData.agent_commission) * 100 : null; // تبدیل به درصد
-        } else if (user.role === "super") {
-          commissionPercent = commissionData.super_commission ? Number(commissionData.super_commission) * 100 : null; // تبدیل به درصد
+        if (!commissionError && commissionData) {
+          if (user.role === "agent") {
+            commissionPercent = commissionData.agent_commission
+              ? Number(commissionData.agent_commission) * 100
+              : null;
+          } else if (user.role === "super") {
+            commissionPercent = commissionData.super_commission
+              ? Number(commissionData.super_commission) * 100
+              : null;
+          }
         }
       }
     }
