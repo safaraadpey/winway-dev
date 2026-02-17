@@ -161,8 +161,9 @@ export async function loadDashboardRangeSummary(params: {
     };
   }
 
-  const from = new Date(`${params.from}T00:00:00.000`);
-  const to = new Date(`${params.to}T23:59:59.999`);
+  // تفسیر تاریخ‌ها به عنوان UTC (نه زمان محلی)
+  const from = new Date(`${params.from}T00:00:00.000Z`);
+  const to = new Date(`${params.to}T23:59:59.999Z`);
   if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from > to) {
     throw new Error("بازه تاریخ نامعتبر است");
   }
@@ -346,21 +347,20 @@ export async function loadDashboardUserInfo(): Promise<DashboardUserInfo | null>
 }
 
 /**
- * محاسبه تاریخ شروع برای یک دوره
+ * محاسبه تاریخ شروع برای یک دوره (بر پایه UTC)
  */
 function getPeriodStart(period: DashboardPeriod): Date {
   const now = new Date();
-  now.setHours(0, 0, 0, 0);
 
   if (period === "day") {
-    return now;
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   } else if (period === "week") {
-    const dayOfWeek = now.getDay();
-    const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Monday
-    return new Date(now.getFullYear(), now.getMonth(), diff);
+    const dayOfWeek = now.getUTCDay();
+    const diff = now.getUTCDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Monday
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), diff));
   } else {
     // month
-    return new Date(now.getFullYear(), now.getMonth(), 1);
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   }
 }
 
