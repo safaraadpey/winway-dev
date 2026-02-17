@@ -352,6 +352,13 @@ export default function BingoCardDemo({
   const cellSizeClass = size === 'large' ? styles.cellLarge : styles.cellSmall;
   const labelSizeClass = size === 'large' ? styles.headerLabelLarge : styles.headerLabelSmall;
 
+  // آیا این کارت برنده خط است؟ (برای بوردر طلایی)
+  const isLineWinner = Boolean(
+    ticketId &&
+    lineWinners?.length > 0 &&
+    lineWinners.some((w) => String(w.ticketId) === String(ticketId))
+  );
+
   return (
     <div 
       ref={containerRef}
@@ -369,7 +376,9 @@ export default function BingoCardDemo({
         />
       )}
 
-      <div className={styles.outer}>
+      <div
+        className={`${styles.outer} ${isLineWinner ? styles.outerLineWinner : ""}`}
+      >
         {/* Wrapper با بکگراند اصلی کارت */}
         <div className={styles.wrapper}>
           <div
@@ -446,7 +455,7 @@ export default function BingoCardDemo({
                       }`}
                       initial={false}
                       animate={{
-                        opacity: marked ? 0.3 : 1,
+                        opacity: marked ? 0.85 : 1,
                       }}
                       transition={{
                         duration: 0.6,

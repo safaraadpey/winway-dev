@@ -55,6 +55,13 @@
   max-width: 100%;
   box-shadow: 0 calc(8px * var(--card-scale)) calc(20px * var(--card-scale)) rgba(0, 0, 0, 0.25);
   box-sizing: border-box;
+  border: 2px solid transparent;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.outerLineWinner {
+  border-color: #fbbf24;
+  box-shadow: 0 0 16px rgba(251, 191, 36, 0.5);
 }
 
 .header {
@@ -191,10 +198,12 @@
 
 .cellNumberNormal {
   color: #000000; /* text-black */
+  font-size: 18px;
 }
 
 .cellNumberMarked {
-  color: #d1d5db; /* text-gray-300 */
+  color: #6b7280; /* gray-500 - واضح‌تر از gray-300 */
+  font-size: 14px;
 }
 
 .coinAnimation {
