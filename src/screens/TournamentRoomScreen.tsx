@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
@@ -97,25 +97,19 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     };
   }, [router, setOnBackClick, setShowBackButton]);
 
-  useEffect(() => {
-    let active = true;
-    const fetchUser = async () => {
-      const { data, error } = await supabase.auth.getUser();
-      if (!active) return;
-      if (!error && data?.user) {
-        setCurrentUserId(data.user.id);
-      }
-    };
-    void fetchUser();
-
-    const load = async () => {
+  const loadTournamentAndEntries = useCallback(
+    async (showLoader: boolean) => {
       if (!tournamentId) {
         setError("شناسه تورنومنت نامعتبر است");
         setLoading(false);
         return;
       }
-      setLoading(true);
+
+      if (showLoader) {
+        setLoading(true);
+      }
       setError(null);
+
       const [{ data, error }, { data: entriesData, error: entriesErr }] = await Promise.all([
         supabase
           .from("tournaments")
@@ -130,7 +124,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
           .eq("tournament_id", tournamentId)
           .eq("status", "created"),
       ]);
-      if (!active) return;
+
       if (error || entriesErr) {
         setError(error?.message || entriesErr?.message || "خطا در دریافت اطلاعات تورنومنت");
         setTournament(null);
@@ -139,13 +133,37 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
         setTournament((data as TournamentRow) ?? null);
         setEntries(((entriesData as any) ?? []) as typeof entries);
       }
-      setLoading(false);
+
+      if (showLoader) {
+        setLoading(false);
+      }
+    },
+    [tournamentId]
+  );
+
+  useEffect(() => {
+    let active = true;
+    const fetchUser = async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (!active) return;
+      if (!error && data?.user) {
+        setCurrentUserId(data.user.id);
+      }
     };
-    void load();
+    void fetchUser();
+
+    void loadTournamentAndEntries(true);
+
+    // Keep tournament status fresh so UI sections react immediately after state changes.
+    const refreshInterval = setInterval(() => {
+      void loadTournamentAndEntries(false);
+    }, 10000);
+
     return () => {
       active = false;
+      clearInterval(refreshInterval);
     };
-  }, [tournamentId]);
+  }, [loadTournamentAndEntries]);
 
   useEffect(() => {
     const shouldShowWinner =
@@ -266,6 +284,12 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
 
   useEffect(() => {
     if (!tournamentId) return;
+    if (tournament?.status === "finished" || tournament?.status === "settling") {
+      setTournamentTables([]);
+      setCurrentRoundNo(null);
+      setTablesLoading(false);
+      return;
+    }
 
     let active = true;
     const ticketPrice = tournament?.ticket_price ?? 0;
@@ -378,7 +402,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
       active = false;
       clearInterval(interval);
     };
-  }, [tournamentId, tournament?.ticket_price]);
+  }, [tournamentId, tournament?.ticket_price, tournament?.status]);
 
   const minQty = useMemo(
     () => tournament?.min_tickets_per_player ?? 1,
@@ -639,6 +663,14 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   };
 
   const isRegistrationOpen = tournament?.status === "registration_open";
+  const tablesEmptyMessage =
+    tournament?.status === "finished"
+      ? "این تورنومنت پایان یافته است"
+      : tournament?.status === "settling"
+        ? "تورنومنت در حال تسویه است"
+        : tablesLoading
+          ? "در حال بارگذاری..."
+          : "هیچ بازی فعالی وجود ندارد";
 
   if (loading) {
     return (
@@ -788,7 +820,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
         <ActiveTablesSection
           title="میزهای تورنومنت"
           tables={tournamentTables}
-          emptyMessage={tablesLoading ? "در حال بارگذاری..." : "هیچ بازی فعالی وجود ندارد"}
+          emptyMessage={tablesEmptyMessage}
           onTableClick={handleTableClick}
         />
 

@@ -495,7 +495,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
             isTournament={!!data.tournament?.id}
             tournamentName={data.tournament?.title ?? null}
             roundNumber={data.tournament?.round_no ?? null}
-            hasLineWinner={lineWinners.length > 0}
+            hasLineWinner={!data.tournament?.id && lineWinners.length > 0}
           />
 
           <DrawStrip
@@ -529,7 +529,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
                 size="large"
                 isMyCard={card.is_my_card}
                 linePrize={true}
-                lineWinners={lineWinners}
+                lineWinners={data.tournament?.id ? [] : lineWinners}
                 cardData={card.card}
               />
             </div>

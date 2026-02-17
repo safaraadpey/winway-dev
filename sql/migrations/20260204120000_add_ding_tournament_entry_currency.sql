@@ -312,6 +312,7 @@ DECLARE
 
   v_wallet      uuid;
   v_free        numeric;
+  v_locked      numeric;
   v_tx          uuid;
 
   v_ding_balance bigint;
@@ -400,7 +401,7 @@ BEGIN
       v_amount,
       v_now
     )
-    ON CONFLICT ON CONSTRAINT tournament_entries_unique_per_user
+    ON CONFLICT (tournament_id, user_id)
     DO UPDATE
       SET status = 'created'::public.tournament_entry_status,
           tickets_count =
@@ -466,8 +467,8 @@ BEGIN
     v_tx := NULL;
   ELSE
     -- lock wallet row
-    SELECT w.id, w.balance
-      INTO v_wallet, v_free
+    SELECT w.id, w.balance, w.locked_amount
+      INTO v_wallet, v_free, v_locked
     FROM public.wallets w
     WHERE w.user_id = v_user
       AND w.currency = p_currency
@@ -477,8 +478,11 @@ BEGIN
       RAISE EXCEPTION 'wallet not found for user %', v_user;
     END IF;
 
+    -- Calculate available balance: balance - locked_amount
+    v_free := COALESCE(v_free, 0) - COALESCE(v_locked, 0);
+
     IF v_free < v_amount THEN
-      RAISE EXCEPTION 'insufficient free balance';
+      RAISE EXCEPTION 'insufficient balance (have %, need %)', v_free, v_amount;
     END IF;
 
     SELECT game_finance.fn_wallet_apply_delta(
