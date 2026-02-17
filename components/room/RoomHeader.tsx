@@ -12,6 +12,8 @@ interface RoomHeaderProps {
   isTournament?: boolean;
   tournamentName?: string | null;
   roundNumber?: number | null;
+  /** وقتی برنده خط مشخص شده، بوردر چیپ خط طلایی می‌شود */
+  hasLineWinner?: boolean;
 }
 
 const formatNumber = (value: number) =>
@@ -23,6 +25,7 @@ export default function RoomHeader({
   isTournament = false,
   tournamentName = null,
   roundNumber = null,
+  hasLineWinner = false,
 }: RoomHeaderProps) {
   const [open, setOpen] = useState(false);
   const anchorRef = useRef<HTMLButtonElement | null>(null);
@@ -107,7 +110,9 @@ export default function RoomHeader({
           </>
         ) : (
           <>
-            <div className={styles.prizeChip}>
+            <div
+              className={`${styles.prizeChip} ${hasLineWinner ? styles.prizeChipLineWinner : ""}`}
+            >
               <span className={`${styles.prizeValue} latin-number`}>
                 {formatNumber(linePrize)}
               </span>

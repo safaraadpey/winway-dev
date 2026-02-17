@@ -56,6 +56,11 @@
   flex: 0 0 auto;
 }
 
+.prizeChipLineWinner {
+  border: 2px solid #fbbf24;
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.5);
+}
+
 .tournamentChip {
   justify-content: flex-end;
   text-align: right;

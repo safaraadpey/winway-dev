@@ -495,6 +495,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
             isTournament={!!data.tournament?.id}
             tournamentName={data.tournament?.title ?? null}
             roundNumber={data.tournament?.round_no ?? null}
+            hasLineWinner={lineWinners.length > 0}
           />
 
           <DrawStrip
