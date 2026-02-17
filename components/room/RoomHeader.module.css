@@ -44,7 +44,7 @@
   gap: 10px;
   min-width: 145px;
   padding: 8px 12px;
-  border-radius: 12px;
+  border-radius: 999px;
   background-image: url("../../src/assets/logo/lobbyInfo.png");
   background-repeat: no-repeat;
   background-position: center center;
@@ -59,6 +59,7 @@
 .prizeChipLineWinner {
   border: 2px solid #fbbf24;
   box-shadow: 0 0 12px rgba(251, 191, 36, 0.5);
+  border-radius: 999px;
 }
 
 .tournamentChip {
