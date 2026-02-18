@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
+import useScreenWakeLock from "@/lib/hooks/useScreenWakeLock";
 import BuyCardsPanel from "@/components/room/BuyCardsPanel";
 import ActiveCardsStatus, {
   ActiveCardStatus,
@@ -113,6 +114,7 @@ export default function GameRoomScreen({ roomId, templateId }: GameRoomScreenPro
   const router = useRouter();
   const { setShowBackButton } = useHeaderVisibility();
   const { refreshWalletBalances } = useBalancesContext();
+  useScreenWakeLock(Boolean(roomId));
 
   // State برای اطلاعات روم
   const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
