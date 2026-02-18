@@ -8,6 +8,7 @@ import dingCoinIcon from '@/src/assets/icons/ding-coin.png';
 import logoWatermark from "@/src/assets/logo/logo.webp";
 import styles from './BingoCardDemo.module.css';
 import { analyzeCardState } from "@/lib/live-room-helper";
+import { isAudioPlaybackAllowedNow } from "@/lib/audio/foreground";
 
 const BASE_WIDTH_PX = 381; // base width including margins/padding for outer wrapper at scale 1
 
@@ -317,6 +318,7 @@ export default function BingoCardDemo({
   // و هنگام افزایش موجودی در DingHeader پخش می‌شود
 
   const playBingo = () => {
+    if (!isAudioPlaybackAllowedNow()) return;
     if (typeof window !== 'undefined' && window.AudioContext) {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const notes = [523.25, 659.25, 783.99, 1046.50]; // C, E, G, C (C major chord)
@@ -455,7 +457,7 @@ export default function BingoCardDemo({
                       }`}
                       initial={false}
                       animate={{
-                        opacity: marked ? 0.85 : 1,
+                        opacity: marked ? 0.75 : 1,
                       }}
                       transition={{
                         duration: 0.6,

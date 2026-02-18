@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { getMyDingBalance } from '../features/ding/ding';
 import { isDingEnabled } from "@/lib/audio-settings";
+import { isAudioPlaybackAllowedNow } from "@/lib/audio/foreground";
 
 /**
  * تابع پخش صدای دینگ (منتقل شده از BingoCard)
@@ -13,6 +14,10 @@ import { isDingEnabled } from "@/lib/audio-settings";
  */
 function playDingSound(audioContextRef: React.MutableRefObject<AudioContext | null>) {
   console.log('[playDingSound] Attempting to play ding sound...');
+  if (!isAudioPlaybackAllowedNow()) {
+    console.log('[playDingSound] Skipped: app is not foreground/visible');
+    return;
+  }
   
   if (!audioContextRef.current) {
     console.warn('[playDingSound] AudioContext not available');

@@ -21,6 +21,8 @@ let audio: HTMLAudioElement | null = null;
 let unlockHandlerInstalled = false;
 let isPlaying = false;
 let storageListenerInstalled = false;
+let foregroundListenersInstalled = false;
+let shouldBePlaying = false;
 
 function isBrowser() {
   return typeof window !== "undefined";
@@ -31,6 +33,12 @@ function syncVolumeFromStorage() {
   const savedVolume = getMusicVolume();
   const volumeToUse = savedVolume !== 1 ? savedVolume : DEFAULT_VOLUME;
   audio.volume = volumeToUse;
+}
+
+function canPlayInForeground() {
+  if (!isBrowser()) return false;
+  if (typeof document === "undefined") return true;
+  return document.visibilityState === "visible" && document.hasFocus();
 }
 
 function installStorageListener() {
@@ -45,6 +53,69 @@ function installStorageListener() {
     }
   };
   window.addEventListener("storage", onStorageChange);
+}
+
+function pauseForBackground() {
+  if (!audio) return;
+  if (audio.paused) return;
+  audio.pause();
+  isPlaying = false;
+}
+
+function tryPlayIfAllowed() {
+  const a = getOrCreateAudio();
+  if (!a) return;
+  if (!shouldBePlaying) return;
+  if (!canPlayInForeground()) {
+    pauseForBackground();
+    return;
+  }
+  if (isPlaying && !a.paused) return;
+
+  void a.play()
+    .then(() => {
+      isPlaying = true;
+    })
+    .catch((err) => {
+      // May fail until first gesture unlocks media playback
+      console.debug("[music] Play failed (will retry after gesture):", err);
+    });
+}
+
+function installForegroundListeners() {
+  if (!isBrowser()) return;
+  if (foregroundListenersInstalled) return;
+  foregroundListenersInstalled = true;
+
+  const onVisibilityChange = () => {
+    if (document.visibilityState !== "visible") {
+      pauseForBackground();
+      return;
+    }
+    tryPlayIfAllowed();
+  };
+
+  const onBlur = () => {
+    pauseForBackground();
+  };
+
+  const onFocus = () => {
+    tryPlayIfAllowed();
+  };
+
+  const onPageHide = () => {
+    pauseForBackground();
+  };
+
+  const onPageShow = () => {
+    tryPlayIfAllowed();
+  };
+
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  window.addEventListener("blur", onBlur);
+  window.addEventListener("focus", onFocus);
+  window.addEventListener("pagehide", onPageHide);
+  window.addEventListener("pageshow", onPageShow);
 }
 
 function getOrCreateAudio(): HTMLAudioElement | null {
@@ -119,19 +190,11 @@ export function playLiveRoomMusic() {
 
   // Install unlock handler if not already done
   installUnlockHandler();
+  installForegroundListeners();
+  shouldBePlaying = true;
 
-  // If already playing, don't restart
-  if (isPlaying && !a.paused) return;
-
-  // Attempt to play (will work after first gesture)
-  void a.play()
-    .then(() => {
-      isPlaying = true;
-    })
-    .catch((err) => {
-      // Expected before first gesture - handler will unlock on next gesture
-      console.debug("[music] Play failed (will retry after gesture):", err);
-    });
+  // Try to play only when app/tab is currently visible and focused.
+  tryPlayIfAllowed();
 }
 
 /**
@@ -144,8 +207,7 @@ export function stopLiveRoomMusic() {
   const a = getOrCreateAudio();
   if (!a) return;
 
-  if (!isPlaying) return;
-
+  shouldBePlaying = false;
   a.pause();
   a.currentTime = 0; // Reset to start for next play
   isPlaying = false;

@@ -9,6 +9,7 @@ import dingCoinIcon from '@/src/assets/icons/ding-coin.png';
 import logoWatermark from "@/src/assets/logo/logo.webp";
 import styles from './BingoCard.module.css';
 import { getAlmostCompleteRowNumber, getAlmostCompleteCardNumber, getCompleteRows } from '@/lib/bingo-logic';
+import { isAudioPlaybackAllowedNow } from "@/lib/audio/foreground";
 
 // Import sound files (you need to add these files to public/sounds/)
 // const dingSound = '/sounds/ding.mp3';
@@ -90,6 +91,7 @@ export default function BingoCard({
   // و هنگام افزایش موجودی در DingHeader پخش می‌شود
 
   const playBingo = () => {
+    if (!isAudioPlaybackAllowedNow()) return;
     // Create a fanfare-like sound
     if (typeof window !== 'undefined' && window.AudioContext) {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();

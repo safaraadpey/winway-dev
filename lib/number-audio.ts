@@ -7,6 +7,8 @@
  * - Persists mute/volume in localStorage.
  */
 
+import { isAudioPlaybackAllowedNow } from "@/lib/audio/foreground";
+
 const BASE_URL = "/sounds/numbers";
 const MIN_N = 1;
 const MAX_N = 90;
@@ -236,6 +238,7 @@ export function unlockAndPreloadOnUserGesture(target: Document | Window = window
  */
 export async function playNumber(n: number) {
   if (!isBrowser()) return;
+  if (!isAudioPlaybackAllowedNow()) return;
   assertValidNumber(n);
 
   const { ctx, gain } = getOrCreateAudioGraph();
