@@ -36,8 +36,8 @@
   padding-right: 16px;
   min-height: 40px;
   min-width: fit-content;
-  border-radius: 8px;
-  background-image: url("../src/assets/logo/MyActiveGame.png");
+  border-radius: 999px;
+  background-image: url("../src/assets/logo/gamebadge.png");
   background-repeat: no-repeat;
   background-position: center;
   background-size: 100% 100%;

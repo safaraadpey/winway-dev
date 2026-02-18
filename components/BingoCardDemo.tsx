@@ -295,16 +295,27 @@ export default function BingoCardDemo({
     // فقط اگر این کارت اولین برنده خط است، خط طلایی را نمایش بده
     if (String(firstLineWinner.ticketId) !== String(ticketId)) return [];
 
-    // پیدا کردن تمام سطرهای کامل شده این کارت
-    const rows = card.reduce((rows: number[], row, idx) => {
+    // فقط اعداد تا لحظه برنده شدن خط را در نظر بگیر
+    // drawNumber در results همان عدد اعلام‌شده‌ای است که win روی آن ثبت شده
+    const winDrawNumber = firstLineWinner.drawNumber ?? null;
+    const winDrawIndex =
+      winDrawNumber === null ? -1 : calledNumbers.indexOf(winDrawNumber);
+    const numbersAtLineWin =
+      winDrawIndex >= 0 ? calledNumbers.slice(0, winDrawIndex + 1) : calledNumbers;
+
+    // پیدا کردن سطرهای کامل شده این کارت در لحظه‌ی win
+    const rowsAtWin = card.reduce((rows: number[], row, idx) => {
       const values = row.filter((n): n is number => n !== null);
-      if (values.length > 0 && values.every((n) => calledNumbers.includes(n))) {
+      if (values.length > 0 && values.every((n) => numbersAtLineWin.includes(n))) {
         rows.push(idx);
       }
       return rows;
     }, []);
 
-    // اگر سطرهای برنده پیدا شد، آن‌ها را ذخیره کن و flag را true کن
+    // فقط یک سطر (اولین سطر کامل‌شده در لحظه‌ی win) را نگه دار
+    const rows = rowsAtWin.length > 0 ? [rowsAtWin[0]] : [];
+
+    // اگر سطر برنده پیدا شد، آن را ذخیره کن و flag را true کن
     if (rows.length > 0) {
       winnerRowsRef.current = rows;
       hasShownLineWinnerRef.current = true;
