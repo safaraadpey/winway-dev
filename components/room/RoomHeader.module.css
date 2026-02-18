@@ -56,6 +56,10 @@
   flex: 0 0 auto;
 }
 
+.prizeChipGameBadge {
+  background-image: url("../../src/assets/logo/gamebadge.png");
+}
+
 .prizeChipLineWinner {
   border: 2px solid #fbbf24;
   box-shadow: 0 0 12px rgba(251, 191, 36, 0.5);
