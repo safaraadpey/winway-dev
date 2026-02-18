@@ -87,6 +87,8 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     }[]
   >([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [globalRegistrationLocked, setGlobalRegistrationLocked] = useState(false);
+  const [globalRegistrationLockReason, setGlobalRegistrationLockReason] = useState<string | null>(null);
 
   useEffect(() => {
     setShowBackButton(true);
@@ -152,11 +154,39 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     };
     void fetchUser();
 
-    void loadTournamentAndEntries(true);
+    const loadGlobalLockState = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const token = session?.access_token || null;
+        const res = await fetch("/api/player/runtime/global-registration-lock", {
+          method: "GET",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          cache: "no-store",
+        });
+        if (!active || !res.ok) return;
+        const payload = (await res.json()) as {
+          global_registration_locked?: boolean;
+          global_registration_lock_reason?: string | null;
+        };
+        if (!active) return;
+        setGlobalRegistrationLocked(Boolean(payload.global_registration_locked));
+        setGlobalRegistrationLockReason(
+          payload.global_registration_lock_reason?.trim() || null
+        );
+      } catch {
+        if (!active) return;
+        setGlobalRegistrationLocked(false);
+        setGlobalRegistrationLockReason(null);
+      }
+    };
+
+    void Promise.all([loadTournamentAndEntries(true), loadGlobalLockState()]);
 
     // Keep tournament status fresh so UI sections react immediately after state changes.
     const refreshInterval = setInterval(() => {
-      void loadTournamentAndEntries(false);
+      void Promise.all([loadTournamentAndEntries(false), loadGlobalLockState()]);
     }, 10000);
 
     return () => {
@@ -499,6 +529,14 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
       toast.error("اطلاعات تورنومنت موجود نیست");
       return;
     }
+    if (globalRegistrationLocked) {
+      toast.error(
+        globalRegistrationLockReason ||
+          "ثبت نام در همه بازی‌ها موقتاً توسط ادمین قفل شده است."
+      );
+      return;
+    }
+
     const currentCount = currentEntry?.tickets_count ?? 0;
     if (remainingQty <= 0) {
       toast.error("سقف خرید تکمیل شده است");
@@ -530,7 +568,14 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
         p_entry_id: entryId,
       });
       if (holdErr) {
-        toast.error(holdErr.message || "خطا در هولد مبلغ");
+        if ((holdErr.message || "").includes("global registration locked")) {
+          toast.error(
+            globalRegistrationLockReason ||
+              "ثبت نام در همه بازی‌ها موقتاً توسط ادمین قفل شده است."
+          );
+        } else {
+          toast.error(holdErr.message || "خطا در هولد مبلغ");
+        }
         return;
       }
 
@@ -715,6 +760,13 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   return (
     <div className="min-h-screen bg-[#0E0E0F] bg-cover bg-center bg-no-repeat px-4 py-4">
       <div className="max-w-md mx-auto space-y-4 text-white">
+        {globalRegistrationLocked && (
+          <div className="rounded-xl border border-red-500/50 bg-amber-500/10 px-3 py-2 text-sm text-white text-right">
+            {globalRegistrationLockReason
+              ? globalRegistrationLockReason
+              : "ثبت نام در همه بازی‌ها موقتاً توسط ادمین قفل شده است."}
+          </div>
+        )}
         <div
           className="rounded-2xl border border-transparent px-4 py-3 space-y-2 text-sm"
           style={{
@@ -799,9 +851,15 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
             displayMin={minQty}
             displayMax={maxQty}
             initialQuantity={panelMinQty}
-            disabled={submitting || !tournament || remainingQty <= 0}
+            disabled={submitting || !tournament || remainingQty <= 0 || globalRegistrationLocked}
             onConfirm={handleRegister}
-            actionLabel={submitting ? "در حال ثبت..." : undefined}
+            actionLabel={
+              submitting
+                ? "در حال ثبت..."
+                : globalRegistrationLocked
+                  ? "ثبت نام قفل است"
+                  : undefined
+            }
             currencyLabel={entryCurrencyLabel}
             secondaryActionLabel={currentEntry ? (submitting ? "در حال لغو..." : "لغو خرید") : undefined}
             secondaryDisabled={submitting}
