@@ -18,7 +18,14 @@ export default function PlayerLayoutClient({
 }) {
   const pathname = usePathname();
   const { showHeader, showBackButton, onBackClick } = useHeaderVisibility();
-  const { dingBalance, tomanBalance, lockedTomanBalance, loading, isAnimating } = useBalancesContext();
+  const {
+    dingBalance,
+    tomanBalance,
+    lockedTomanBalance,
+    loading,
+    isAnimating,
+    refreshAllBalances,
+  } = useBalancesContext();
 
   // نکته: در بک‌اند، هنگام hold برای join، هم balance کم می‌شود و هم locked_amount زیاد.
   // بنابراین `wallets.balance` خودش موجودی قابل استفاده است و نباید دوباره locked_amount از آن کم شود.
@@ -65,6 +72,8 @@ export default function PlayerLayoutClient({
             isAnimating={isAnimating}
             showBackButton={showBackButton}
             onBackClick={onBackClick || undefined}
+            onRefreshBalances={refreshAllBalances}
+            refreshDisabled={loading}
           />
         )}
         <MyActiveGames />

@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
 import styles from "./MergedPlayerHeader.module.css";
 
 import dingCoinIcon from "@/src/assets/icons/ding-coin.png";
+import refreshIcon from "@/src/assets/icons/refresh.webp";
 import backIconPng from "@/src/assets/logo/back.png";
 
 // Import آواتارهای موجود (کپی از PlayerStatusBar برای عدم دستکاری کامپوننت قبلی)
@@ -70,6 +71,8 @@ interface MergedPlayerHeaderProps {
   isAnimating?: boolean;
   showBackButton?: boolean;
   onBackClick?: () => void;
+  onRefreshBalances?: () => Promise<void> | void;
+  refreshDisabled?: boolean;
 }
 
 export default function MergedPlayerHeader({
@@ -79,6 +82,8 @@ export default function MergedPlayerHeader({
   isAnimating = false,
   showBackButton = false,
   onBackClick,
+  onRefreshBalances,
+  refreshDisabled = false,
 }: MergedPlayerHeaderProps) {
   const router = useRouter();
 
@@ -86,6 +91,7 @@ export default function MergedPlayerHeader({
   const [avatarId, setAvatarId] = useState<string>("001");
   const [playerLoading, setPlayerLoading] = useState<boolean>(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [isRefreshingBalances, setIsRefreshingBalances] = useState(false);
 
   // helper: تولید یک ID کوتاه ۱۰ رقمی پایدار از روی UUID (کپی از PlayerStatusBar)
   const makeShortIdFromUuid = (id: string): string => {
@@ -184,6 +190,23 @@ export default function MergedPlayerHeader({
     else router.back();
   };
 
+  const handleRefreshBalances = async () => {
+    if (!onRefreshBalances || refreshDisabled || isRefreshingBalances) return;
+    try {
+      setIsRefreshingBalances(true);
+      await onRefreshBalances();
+    } finally {
+      setIsRefreshingBalances(false);
+    }
+  };
+
+  const handleRefreshKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      void handleRefreshBalances();
+    }
+  };
+
   const capsuleAnimate = isAnimating
     ? {
         boxShadow: [
@@ -238,28 +261,45 @@ export default function MergedPlayerHeader({
       <div className={`${styles.row2} ${showBackButton ? "" : styles.row2NoBackButton}`}>
         {/* Toman Capsule */}
         <motion.div
-          className={`${styles.balanceCapsule} ${styles.tomanBg}`}
+          className={`${styles.balanceCapsule} ${styles.tomanBg} ${styles.refreshableCapsule}`}
           animate={tomanCapsuleAnimate}
           transition={{ duration: 0.8, ease: "easeInOut" }}
+          onClick={() => void handleRefreshBalances()}
+          role="button"
+          tabIndex={0}
+          onKeyDown={handleRefreshKeyDown}
         >
           {loading ? (
             <span className={styles.loadingText}>...</span>
           ) : (
-            <motion.span
-              className={styles.balanceAmount}
-              animate={tomanAmountAnimate}
-              transition={{ duration: 0.8, ease: "easeInOut" }}
-            >
-              {formatBalance(tomanBalance)}
-            </motion.span>
+            <>
+              <motion.span
+                className={styles.balanceAmount}
+                animate={tomanAmountAnimate}
+                transition={{ duration: 0.8, ease: "easeInOut" }}
+              >
+                {formatBalance(tomanBalance)}
+              </motion.span>
+              <Image
+                src={refreshIcon}
+                alt="Refresh"
+                className={`${styles.refreshIcon} ${isRefreshingBalances ? styles.refreshSpinning : ""}`}
+                width={32}
+                height={32}
+              />
+            </>
           )}
         </motion.div>
 
         {/* Ding Capsule */}
         <motion.div
-          className={`${styles.balanceCapsule} ${styles.dingBg}`}
+          className={`${styles.balanceCapsule} ${styles.dingBg} ${styles.refreshableCapsule}`}
           animate={dingCapsuleAnimate}
           transition={{ duration: 0.8, ease: "easeInOut" }}
+          onClick={() => void handleRefreshBalances()}
+          role="button"
+          tabIndex={0}
+          onKeyDown={handleRefreshKeyDown}
         >
           {loading ? (
             <span className={styles.loadingText}>...</span>
@@ -276,7 +316,13 @@ export default function MergedPlayerHeader({
                 animate={isAnimating ? { scale: [1, 1.15, 1] } : {}}
                 transition={{ duration: 0.6, ease: "easeOut" }}
               >
-                <Image src={dingCoinIcon} alt="Ding Coin" className={styles.coinIcon} width={32} height={32} />
+                <Image
+                  src={dingCoinIcon}
+                  alt="Ding Coin"
+                  className={`${styles.coinIcon} ${isRefreshingBalances ? styles.refreshSpinning : ""}`}
+                  width={32}
+                  height={32}
+                />
               </motion.div>
             </>
           )}

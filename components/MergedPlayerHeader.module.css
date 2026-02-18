@@ -146,7 +146,7 @@
 
 .tomanBg {
   background-image: url("../src/assets/logo/toman_BG.png");
-  justify-content: flex-start;
+  justify-content: space-between;
 }
 
 .balanceAmount {
@@ -163,6 +163,34 @@
   height: 32px;
   object-fit: contain;
   flex-shrink: 0;
+}
+
+.refreshIcon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.refreshableCapsule {
+  cursor: pointer;
+}
+
+.refreshableCapsule:active {
+  opacity: 0.9;
+}
+
+.refreshSpinning {
+  animation: refreshSpin 0.9s linear infinite;
+}
+
+@keyframes refreshSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .loadingText {

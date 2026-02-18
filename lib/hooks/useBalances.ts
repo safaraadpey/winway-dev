@@ -80,6 +80,10 @@ export interface Balances {
    */
   refreshWalletBalances?: () => Promise<void>;
   /**
+   * Refresh both toman + ding balances immediately from server.
+   */
+  refreshAllBalances?: () => Promise<void>;
+  /**
    * Sync dingBalance from server via API, once per draw (guarded + bounded retries).
    * markDetected=true یعنی این draw قطعاً روی یکی از کارت‌های کاربر mark داشته است.
    */
@@ -135,6 +139,18 @@ export function useBalances(): Balances {
       setLockedTomanBalance(Number((walletData as any)?.locked_amount ?? 0) || 0);
     } catch (err) {
       console.warn("[useBalances] refreshWalletBalances failed", err);
+    }
+  };
+
+  const refreshAllBalances = async (): Promise<void> => {
+    try {
+      await refreshWalletBalances();
+      const { balance: serverBalance } = await fetchDingBalanceFromApi();
+      if (!isMountedRef.current) return;
+      setDingBalance(serverBalance);
+      currentBalanceRef.current = serverBalance;
+    } catch (err) {
+      console.warn("[useBalances] refreshAllBalances failed", err);
     }
   };
 
@@ -517,6 +533,7 @@ export function useBalances(): Balances {
     error,
     isAnimating,
     refreshWalletBalances,
+    refreshAllBalances,
     scheduleDingBalanceSync,
   };
 }
