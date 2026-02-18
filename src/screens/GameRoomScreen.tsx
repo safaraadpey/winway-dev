@@ -755,7 +755,11 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
 
       toast.success(`${selectedQuantity} کارت با موفقیت خریداری شد`);
       await refreshWalletBalances?.();
-      invalidateActiveGames?.();
+      
+      // تاخیر برای اطمینان از اینکه بازی جدید در سرور ساخته شده است
+      setTimeout(() => {
+        invalidateActiveGames?.();
+      }, 800); // 800ms delay برای اینکه سرور فرصت ایجاد بازی را داشته باشد
     } catch (error: any) {
       console.error("[JOIN_RPC][ERROR]", error);
       toast.error(error.message || "خطا در خرید کارت");
