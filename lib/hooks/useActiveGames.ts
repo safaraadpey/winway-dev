@@ -41,7 +41,9 @@ export function useActiveGames(): ActiveGames {
    * dev default: orchestrator, prod default: legacy
    * Override via NEXT_PUBLIC_ACTIVE_GAMES_SOURCE.
    */
-  const source = process.env.NEXT_PUBLIC_ACTIVE_GAMES_SOURCE ?? "orchestrator";
+  const source =
+    process.env.NEXT_PUBLIC_ACTIVE_GAMES_SOURCE ??
+    (process.env.NODE_ENV === "production" ? "legacy" : "orchestrator");
 
   // When orchestrator is enabled, this hook becomes a thin reader and must not
   // create its own fetch/poll/realtime side-effects.

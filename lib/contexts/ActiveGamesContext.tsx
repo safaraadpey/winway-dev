@@ -15,7 +15,8 @@ export function ActiveGamesProvider({ children }: { children: ReactNode }) {
    * - "orchestrator" | "legacy"
    */
   const source =
-    process.env.NEXT_PUBLIC_ACTIVE_GAMES_SOURCE ?? "orchestrator";
+    process.env.NEXT_PUBLIC_ACTIVE_GAMES_SOURCE ??
+    (process.env.NODE_ENV === "production" ? "legacy" : "orchestrator");
 
   // Single source of truth for user active games + realtime subscription
   const activeGames =

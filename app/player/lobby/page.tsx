@@ -111,6 +111,7 @@ export default function LobbyPage() {
       }
 
       // If no token, do NOT fetch. Keep rescheduling to check again.
+      // Important: avoid infinite loading UI while waiting for auth/token.
       if (!sessionSnap.authReady || !sessionSnap.accessToken) {
         traceFetch("LobbyPage:lobby-snapshot", {
           reason: "no-token",
@@ -118,6 +119,8 @@ export default function LobbyPage() {
           visibilityState: typeof document !== "undefined" ? document.visibilityState : "unknown",
           hasToken: false,
         });
+        setErrorMessage(null);
+        setLoading(false);
         schedule(5000, "no-token");
         return;
       }

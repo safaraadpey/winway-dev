@@ -5,6 +5,7 @@ import { HeaderVisibilityProvider, useHeaderVisibility } from "@/lib/contexts/He
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import DingHeader from "@/components/DingHeader";
 import EntryBannerModal from "@/components/EntryBannerModal";
+import ClientAuthGuard from "@/components/auth/ClientAuthGuard";
 
 function AgentLayoutContent({
   children,
@@ -42,7 +43,9 @@ export default function AgentLayout({
 }) {
   return (
     <HeaderVisibilityProvider>
-      <AgentLayoutContent>{children}</AgentLayoutContent>
+      <ClientAuthGuard>
+        <AgentLayoutContent>{children}</AgentLayoutContent>
+      </ClientAuthGuard>
     </HeaderVisibilityProvider>
   );
 }

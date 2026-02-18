@@ -4,6 +4,7 @@ import React from 'react';
 import { HeaderVisibilityProvider, useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import DingHeader from "@/components/DingHeader";
+import ClientAuthGuard from "@/components/auth/ClientAuthGuard";
 
 function SettingsLayoutContent({
   children,
@@ -40,7 +41,9 @@ export default function SettingsLayout({
 }) {
   return (
     <HeaderVisibilityProvider>
-      <SettingsLayoutContent>{children}</SettingsLayoutContent>
+      <ClientAuthGuard>
+        <SettingsLayoutContent>{children}</SettingsLayoutContent>
+      </ClientAuthGuard>
     </HeaderVisibilityProvider>
   );
 }
