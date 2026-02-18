@@ -327,91 +327,33 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     const loadTables = async () => {
       setTablesLoading(true);
       try {
-        const { data: roundRooms, error: roundErr } = await supabase
-          .from("tournament_round_rooms")
-          .select("room_id, round_no, table_no")
-          .eq("tournament_id", tournamentId)
-          .not("room_id", "is", null)
-          .order("round_no", { ascending: false })
-          .order("table_no", { ascending: true });
-
-        if (roundErr || !roundRooms || roundRooms.length === 0) {
-          if (active) {
-            setTournamentTables([]);
-            setCurrentRoundNo(null);
-          }
-          return;
-        }
-
-        const roomIds = roundRooms
-          .map((row: any) => row.room_id)
-          .filter(Boolean) as string[];
-
-        if (roomIds.length === 0) {
-          if (active) {
-            setTournamentTables([]);
-            setCurrentRoundNo(null);
-          }
-          return;
-        }
-
-        const { data: assignments, error: assignmentsErr } = await supabase
-          .from("tournament_round_assignments")
-          .select("room_id, user_id, cards_count")
-          .eq("tournament_id", tournamentId)
-          .in("room_id", roomIds);
-
-        if (assignmentsErr) {
-          console.error("load tournament tables assignments error:", assignmentsErr);
-          if (active) {
-            setTournamentTables([]);
-            setCurrentRoundNo(null);
-          }
-          return;
-        }
-
-        const roomStats = new Map<
-          string,
-          {
-            players: Set<string>;
-            cards: number;
-          }
-        >();
-
-        assignments?.forEach((row: any) => {
-          const roomId = row.room_id as string | null;
-          if (!roomId) return;
-          if (!roomStats.has(roomId)) {
-            roomStats.set(roomId, { players: new Set(), cards: 0 });
-          }
-          const stats = roomStats.get(roomId)!;
-          if (row.user_id) {
-            stats.players.add(row.user_id as string);
-          }
-          stats.cards += Number(row.cards_count || 0);
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const token = session?.access_token || null;
+        const search = new URLSearchParams({ tournamentId });
+        const res = await fetch(`/api/player/tournament-active-tables?${search.toString()}`, {
+          method: "GET",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          cache: "no-store",
         });
 
-        const mappedTables: ActiveTable[] = roundRooms.map((row: any) => {
-          const roomId = row.room_id as string;
-          const stats = roomStats.get(roomId) || { players: new Set(), cards: 0 };
-          const cardCount = stats.cards;
-          return {
-            id: roomId,
-            prize: Number(ticketPrice) * cardCount,
-            players: stats.players.size,
-            cardCount,
-            roundNo: row.round_no ?? null,
-          };
-        });
+        if (!res.ok) {
+          if (active) {
+            setTournamentTables([]);
+            setCurrentRoundNo(null);
+          }
+          return;
+        }
+
+        const payload = (await res.json()) as {
+          tables?: ActiveTable[];
+          currentRoundNo?: number | null;
+        };
 
         if (active) {
-          setTournamentTables(mappedTables);
-          const latestRound =
-            roundRooms
-              .map((row: any) => row.round_no)
-              .filter((value: any) => value != null)
-              .sort((a: number, b: number) => b - a)[0] ?? null;
-          setCurrentRoundNo(latestRound);
+          setTournamentTables(Array.isArray(payload.tables) ? payload.tables : []);
+          setCurrentRoundNo(payload.currentRoundNo ?? null);
         }
       } catch (err) {
         console.error("load tournament tables error:", err);

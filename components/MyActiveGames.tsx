@@ -14,7 +14,7 @@ import hourglassPng from "../src/assets/logo/hourglass.png";
  */
 export default function MyActiveGames() {
   const router = useRouter();
-  const { rooms, loading, error } = useActiveGamesContext();
+  const { rooms, loading, error, invalidate } = useActiveGamesContext();
 
   // اگر هیچ میز فعالی وجود ندارد، کامپوننت را اصلاً رندر نکن
   // (مطابق UX: در نبود بازی فعال، چیپ‌ها نمایش داده نشوند)
@@ -85,7 +85,16 @@ export default function MyActiveGames() {
         {loading ? (
           <div className={styles.emptyState}>در حال بارگذاری...</div>
         ) : error ? (
-          <div className={styles.emptyState}>خطا در دریافت میزهای فعال</div>
+          <div className={styles.errorState}>
+            <span className={styles.errorText}>خطا در دریافت میزها</span>
+            <button
+              type="button"
+              className={styles.retryButton}
+              onClick={() => invalidate?.()}
+            >
+              بروزرسانی دستی
+            </button>
+          </div>
         ) : (
           rooms.map((room) => (
             <button
