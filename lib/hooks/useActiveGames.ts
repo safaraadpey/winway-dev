@@ -222,11 +222,13 @@ export function useActiveGames(): ActiveGames {
     }
   };
 
-  fetchActiveRoomsRef.current = fetchActiveRooms;
-
   const invalidate = useCallback(() => {
     void fetchActiveRoomsRef.current?.(true, "manual");
   }, []);
+
+  useEffect(() => {
+    fetchActiveRoomsRef.current = fetchActiveRooms;
+  });
 
   // Setup subscription
   useEffect(() => {
