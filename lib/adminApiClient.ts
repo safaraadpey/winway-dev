@@ -186,3 +186,36 @@ export async function toggleAdminStatus(adminId: string): Promise<void> {
   })
 }
 
+export type GlobalRegistrationLockState = {
+  global_registration_locked: boolean;
+  global_registration_locked_at: string | null;
+  global_registration_locked_by: string | null;
+  global_registration_lock_reason: string | null;
+  updated_at: string | null;
+}
+
+export async function getGlobalRegistrationLockState(): Promise<GlobalRegistrationLockState> {
+  const data = await callAdminApi<GlobalRegistrationLockState>(
+    '/api/admin/runtime/global-registration-lock',
+    { method: 'GET' }
+  )
+  return data
+}
+
+export async function setGlobalRegistrationLockState(
+  locked: boolean,
+  reason?: string
+): Promise<GlobalRegistrationLockState> {
+  const data = await callAdminApi<GlobalRegistrationLockState>(
+    '/api/admin/runtime/global-registration-lock',
+    {
+      method: 'POST',
+      body: {
+        locked,
+        reason: reason ?? null,
+      },
+    }
+  )
+  return data
+}
+

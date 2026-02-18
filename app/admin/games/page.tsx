@@ -6,6 +6,10 @@ import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { loadAdminGamesReport } from "@/services/games-report";
 import type { AdminGameReportItem, GamesReportPeriod } from "@/src/types/games-report";
 import ShamsiDateInput from "@/components/common/ShamsiDateInput";
+import {
+  getGlobalRegistrationLockState,
+  setGlobalRegistrationLockState,
+} from "@/lib/adminApiClient";
 
 type ReportPeriod = GamesReportPeriod;
 
@@ -29,6 +33,10 @@ export default function AdminGamesReportPage() {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [globalRegistrationLocked, setGlobalRegistrationLocked] = useState(false);
+  const [globalLockReason, setGlobalLockReason] = useState("");
+  const [globalLockLoading, setGlobalLockLoading] = useState(true);
+  const [globalLockSaving, setGlobalLockSaving] = useState(false);
   const pageSize = 20;
 
   const canApplyRange = rangeFrom.length > 0 && rangeTo.length > 0 && rangeFrom <= rangeTo;
@@ -44,6 +52,31 @@ export default function AdminGamesReportPage() {
       setOnBackClick(null);
     };
   }, [setShowHeader, setShowBackButton, setOnBackClick, router]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadGlobalLockState() {
+      try {
+        setGlobalLockLoading(true);
+        const state = await getGlobalRegistrationLockState();
+        if (!isMounted) return;
+        setGlobalRegistrationLocked(Boolean(state.global_registration_locked));
+        setGlobalLockReason(state.global_registration_lock_reason || "");
+      } catch (err) {
+        if (!isMounted) return;
+        setGlobalRegistrationLocked(false);
+        setGlobalLockReason("");
+      } finally {
+        if (isMounted) setGlobalLockLoading(false);
+      }
+    }
+
+    loadGlobalLockState();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (activePeriod === "range") return;
@@ -123,6 +156,23 @@ export default function AdminGamesReportPage() {
     setPage(1);
   };
 
+  const handleToggleGlobalLock = async () => {
+    try {
+      setGlobalLockSaving(true);
+      const nextLocked = !globalRegistrationLocked;
+      const state = await setGlobalRegistrationLockState(
+        nextLocked,
+        nextLocked ? globalLockReason : ""
+      );
+      setGlobalRegistrationLocked(Boolean(state.global_registration_locked));
+      setGlobalLockReason(state.global_registration_lock_reason || "");
+    } catch (err: any) {
+      setError(err?.message || "خطا در تغییر وضعیت قفل ثبت نام");
+    } finally {
+      setGlobalLockSaving(false);
+    }
+  };
+
   const formatPlayedAt = (iso: string) => {
     const d = new Date(iso);
     if (!Number.isFinite(d.getTime())) return "-";
@@ -152,6 +202,51 @@ export default function AdminGamesReportPage() {
                 {PERIOD_LABELS[period]}
               </button>
             ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-[#151515] border border-gray-800 mb-4 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold">قفل سراسری ثبت نام بازی</div>
+              <div
+                className={`text-xs mt-1 ${
+                  globalRegistrationLocked ? "text-amber-300" : "text-emerald-300"
+                }`}
+              >
+                {globalLockLoading
+                  ? "در حال بارگذاری وضعیت..."
+                  : globalRegistrationLocked
+                    ? "ثبت نام همه بازی‌ها قفل است"
+                    : "ثبت نام همه بازی‌ها باز است"}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleToggleGlobalLock}
+              disabled={globalLockLoading || globalLockSaving}
+              className={`rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50 ${
+                globalRegistrationLocked
+                  ? "bg-emerald-600 text-white"
+                  : "bg-amber-600 text-white"
+              }`}
+            >
+              {globalLockSaving
+                ? "در حال ذخیره..."
+                : globalRegistrationLocked
+                  ? "باز کردن ثبت نام"
+                  : "قفل کردن ثبت نام"}
+            </button>
+          </div>
+          <div className="mt-2">
+            <input
+              type="text"
+              value={globalLockReason}
+              onChange={(e) => setGlobalLockReason(e.target.value)}
+              placeholder="علت قفل (اختیاری)"
+              maxLength={500}
+              className="w-full rounded-lg border border-gray-700 bg-[#101214] px-3 py-2 text-sm text-white outline-none focus:border-teal-500"
+            />
           </div>
         </div>
 

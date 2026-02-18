@@ -36,6 +36,8 @@ type GameRoomView = {
     prize: number;
   }>;
   can_cancel: boolean;
+  global_registration_locked: boolean;
+  global_registration_lock_reason: string | null;
 };
 
 function mapRoomStatusToMode(status: string | null): GameMode {
@@ -99,9 +101,16 @@ export async function GET(request: Request) {
 
     const supabase = createServiceClient();
     const serverNow = new Date().toISOString();
+    const globalRegistrationLockState = await loadGlobalRegistrationLockState(supabase);
 
     if (roomId) {
-      const view = await buildViewFromRoomId(supabase, roomId, serverNow, user.id);
+      const view = await buildViewFromRoomId(
+        supabase,
+        roomId,
+        serverNow,
+        user.id,
+        globalRegistrationLockState
+      );
       if (!view) {
         const templateId = await getTemplateIdForRoom(supabase, roomId);
         if (templateId) {
@@ -109,7 +118,8 @@ export async function GET(request: Request) {
             supabase,
             templateId,
             serverNow,
-            user.id
+            user.id,
+            globalRegistrationLockState
           );
           if (fallbackView) {
             return NextResponse.json(fallbackView);
@@ -135,7 +145,13 @@ export async function GET(request: Request) {
       );
     }
 
-    const view = await buildViewFromTemplateId(supabase, templateId, serverNow, user.id);
+    const view = await buildViewFromTemplateId(
+      supabase,
+      templateId,
+      serverNow,
+      user.id,
+      globalRegistrationLockState
+    );
     if (!view) {
       return NextResponse.json(
         {
@@ -163,7 +179,8 @@ async function buildViewFromRoomId(
   supabase: ReturnType<typeof createServiceClient>,
   roomId: string,
   serverNow: string,
-  currentUserId: string
+  currentUserId: string,
+  globalRegistrationLockState: GlobalRegistrationLockState
 ): Promise<GameRoomView | null> {
   // اطلاعات روم
   const { data: room, error: roomError } = await supabase
@@ -236,6 +253,8 @@ async function buildViewFromRoomId(
     active_cards: activeCards,
     active_tables: activeTables,
     can_cancel: canCancel,
+    global_registration_locked: globalRegistrationLockState.locked,
+    global_registration_lock_reason: globalRegistrationLockState.reason,
   };
 
   return view;
@@ -245,7 +264,8 @@ async function buildViewFromTemplateId(
   supabase: ReturnType<typeof createServiceClient>,
   templateId: string,
   serverNow: string,
-  currentUserId: string
+  currentUserId: string,
+  globalRegistrationLockState: GlobalRegistrationLockState
 ): Promise<GameRoomView | null> {
   // ۱) چک کن آیا روم waiting برای این template هست یا نه
   const { data: waitingRoom, error: waitingError } = await supabase
@@ -278,7 +298,13 @@ async function buildViewFromTemplateId(
 
   if (waitingRoom) {
     // اگر روم waiting موجود است، مثل حالت roomId رفتار کن
-    return buildViewFromRoomId(supabase, waitingRoom.id as string, serverNow, currentUserId);
+    return buildViewFromRoomId(
+      supabase,
+      waitingRoom.id as string,
+      serverNow,
+      currentUserId,
+      globalRegistrationLockState
+    );
   }
 
   // ۲) حالت preview – فقط از room_templates می‌خوانیم
@@ -338,6 +364,8 @@ async function buildViewFromTemplateId(
     active_cards: [],
     active_tables: activeTables,
     can_cancel: false,
+    global_registration_locked: globalRegistrationLockState.locked,
+    global_registration_lock_reason: globalRegistrationLockState.reason,
   };
 
   return view;
@@ -467,6 +495,35 @@ async function loadActiveCardsForRoom(
   }
 
   return result;
+}
+
+type GlobalRegistrationLockState = {
+  locked: boolean;
+  reason: string | null;
+};
+
+async function loadGlobalRegistrationLockState(
+  supabase: ReturnType<typeof createServiceClient>
+): Promise<GlobalRegistrationLockState> {
+  const { data, error } = await supabase
+    .from("app_runtime_flags")
+    .select("global_registration_locked, global_registration_lock_reason")
+    .eq("id", true)
+    .maybeSingle();
+
+  if (error) {
+    // Graceful fallback for environments where migration is not applied yet.
+    if ((error as any).code === "42P01") {
+      return { locked: false, reason: null };
+    }
+    console.error("loadGlobalRegistrationLockState error:", error);
+    return { locked: false, reason: null };
+  }
+
+  return {
+    locked: Boolean((data as any)?.global_registration_locked),
+    reason: (data as any)?.global_registration_lock_reason ?? null,
+  };
 }
 
 async function loadActiveTablesForRoom(

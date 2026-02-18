@@ -141,7 +141,6 @@ export default function DrawStrip({
               </span>{" "}
               <span className="text-white/70">کد</span>
             </span>
-            <span className="text-white/70 whitespace-nowrap">CMT</span>
             <span dir="ltr" className="latin-number">
               {commitShort}
             </span>

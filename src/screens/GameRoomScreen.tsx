@@ -121,6 +121,8 @@ export default function GameRoomScreen({ roomId, templateId }: GameRoomScreenPro
   // State برای اطلاعات روم
   const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [globalRegistrationLocked, setGlobalRegistrationLocked] = useState(false);
+  const [globalRegistrationLockReason, setGlobalRegistrationLockReason] = useState<string | null>(null);
 
   // State برای شمارش معکوس
   const [countdownSeconds, setCountdownSeconds] = useState<number>(0);
@@ -221,6 +223,10 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
 
         // نگاشت GameRoomView به RoomInfo (برای سازگاری UI فعلی)
         let mappedRoom: RoomInfo | null = null;
+        setGlobalRegistrationLocked(Boolean(view.global_registration_locked));
+        setGlobalRegistrationLockReason(
+          view.global_registration_lock_reason?.trim() || null
+        );
 
         if (view.mode === "preview") {
           mappedRoom = {
@@ -725,6 +731,11 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     }
   
     const isCancelMode = canCancel;
+
+    if (!isCancelMode && globalRegistrationLocked) {
+      toast.error("ثبت نام بازی توسط ادمین موقتاً قفل شده است");
+      return;
+    }
   
     try {
       // --- حالت لغو رزرو ---
@@ -879,6 +890,8 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     return <LiveRoomScreen roomId={roomId!} />;
   }
 
+  const purchaseLockedByAdmin = globalRegistrationLocked && !canCancel;
+
   // استفاده از cardsToRenderForCancel که قبلاً تعریف شده
   const cardsToRender = cardsToRenderForCancel;
 
@@ -906,6 +919,13 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
   return (
     <div className="overflow-hidden bg-black/40 min-h-screen">
       <div className="px-4 space-y-1 pt-1">
+        {purchaseLockedByAdmin && (
+          <div className="rounded-xl border border-red-500/50 bg-amber-500/10 px-3 py-2 text-sm text-white text-right">
+            {globalRegistrationLockReason
+              ? globalRegistrationLockReason
+              : "ثبت نام در همه بازی‌ها موقتاً توسط ادمین قفل شده است."}
+          </div>
+        )}
         {/* پنل انتخاب کارت */}
         <BuyCardsPanel
           price={roomInfo.cardPrice}
@@ -917,12 +937,19 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           showMusicToggle
           onConfirm={handleAddToList}
           disabled={
-            roomId && !canCancel
+            purchaseLockedByAdmin ||
+            (roomId && !canCancel
               ? countdownSeconds === 0 || roomInfo.status !== "waiting"
-              : false
+              : false)
           }
           mode={canCancel ? "cancel" : "purchase"}
-          actionLabel={canCancel ? "لغو رزرو" : undefined}
+          actionLabel={
+            canCancel
+              ? "لغو رزرو"
+              : purchaseLockedByAdmin
+                ? "ثبت نام قفل است"
+                : undefined
+          }
         />
 
         <ActiveCardsStatus cards={cardsToRender} secondsRemaining={countdownSeconds} />

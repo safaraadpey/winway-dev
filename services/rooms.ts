@@ -241,6 +241,11 @@ export async function joinOrCreateRoom(options: {
         "به دلیل تعلیق ایجنت یا سوپر شما، فعلاً امکان ورود به اتاق وجود ندارد"
       );
     }
+    if (error.message.includes("global registration locked")) {
+      throw new Error(
+        "ثبت نام بازی توسط ادمین موقتاً قفل شده است. لطفاً بعداً دوباره تلاش کنید."
+      );
+    }
 
     console.error("joinOrCreateRoom error:", error);
     throw error;
@@ -585,6 +590,8 @@ export type GameRoomView = {
     prize: number;
   }>;
   can_cancel: boolean;
+  global_registration_locked: boolean;
+  global_registration_lock_reason: string | null;
 };
 
 export async function fetchGameRoomView(params: {

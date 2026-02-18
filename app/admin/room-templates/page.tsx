@@ -12,6 +12,10 @@ import { loadRooms, saveRoomTemplate, deleteRoomTemplate } from "@/services/room
 import toast from "react-hot-toast";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useRouter } from "next/navigation";
+import {
+  getGlobalRegistrationLockState,
+  setGlobalRegistrationLockState,
+} from "@/lib/adminApiClient";
 
 export default function RoomTemplatesPage() {
   const { setShowHeader, setShowBackButton, setOnBackClick } = useHeaderVisibility();
@@ -41,10 +45,40 @@ export default function RoomTemplatesPage() {
     createEmptyRoomTemplate()
   );
   const [createKey, setCreateKey] = useState(0);
+  const [globalRegistrationLocked, setGlobalRegistrationLocked] = useState(false);
+  const [globalLockReason, setGlobalLockReason] = useState("");
+  const [globalLockLoading, setGlobalLockLoading] = useState(true);
+  const [globalLockSaving, setGlobalLockSaving] = useState(false);
 
   // بارگذاری روم‌ها از دیتابیس
   useEffect(() => {
     loadTemplates();
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadGlobalLockState() {
+      try {
+        setGlobalLockLoading(true);
+        const state = await getGlobalRegistrationLockState();
+        if (!isMounted) return;
+        setGlobalRegistrationLocked(Boolean(state.global_registration_locked));
+        setGlobalLockReason(state.global_registration_lock_reason || "");
+      } catch (error: any) {
+        if (!isMounted) return;
+        setGlobalRegistrationLocked(false);
+        setGlobalLockReason("");
+        toast.error(error?.message || "خطا در بارگذاری وضعیت قفل ثبت نام");
+      } finally {
+        if (isMounted) setGlobalLockLoading(false);
+      }
+    }
+
+    loadGlobalLockState();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const loadTemplates = async () => {
@@ -161,6 +195,28 @@ export default function RoomTemplatesPage() {
     }
   };
 
+  const handleToggleGlobalLock = async () => {
+    try {
+      setGlobalLockSaving(true);
+      const nextLocked = !globalRegistrationLocked;
+      const state = await setGlobalRegistrationLockState(
+        nextLocked,
+        nextLocked ? globalLockReason : ""
+      );
+      setGlobalRegistrationLocked(Boolean(state.global_registration_locked));
+      setGlobalLockReason(state.global_registration_lock_reason || "");
+      toast.success(
+        nextLocked
+          ? "قفل سراسری ثبت نام فعال شد"
+          : "قفل سراسری ثبت نام غیرفعال شد"
+      );
+    } catch (error: any) {
+      toast.error(error?.message || "خطا در تغییر وضعیت قفل ثبت نام");
+    } finally {
+      setGlobalLockSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div
@@ -192,6 +248,50 @@ export default function RoomTemplatesPage() {
       <h1 className="text-lg font-bold mb-4 text-neutral-100">
         تنظیمات اتاق‌ها
       </h1>
+      <div className="rounded-xl border border-neutral-700 bg-neutral-900 text-neutral-100 p-4 mb-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold">قفل سراسری ثبت نام بازی</div>
+            <div
+              className={`text-xs mt-1 ${
+                globalRegistrationLocked ? "text-amber-300" : "text-emerald-300"
+              }`}
+            >
+              {globalLockLoading
+                ? "در حال بارگذاری وضعیت..."
+                : globalRegistrationLocked
+                  ? "ثبت نام همه بازی‌ها قفل است"
+                  : "ثبت نام همه بازی‌ها باز است"}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleToggleGlobalLock}
+            disabled={globalLockLoading || globalLockSaving}
+            className={`rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50 ${
+              globalRegistrationLocked
+                ? "bg-emerald-600 text-white"
+                : "bg-amber-600 text-white"
+            }`}
+          >
+            {globalLockSaving
+              ? "در حال ذخیره..."
+              : globalRegistrationLocked
+                ? "باز کردن ثبت نام"
+                : "قفل کردن ثبت نام"}
+          </button>
+        </div>
+        <div className="mt-2">
+          <input
+            type="text"
+            value={globalLockReason}
+            onChange={(e) => setGlobalLockReason(e.target.value)}
+            placeholder="علت قفل (اختیاری)"
+            maxLength={500}
+            className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white outline-none focus:border-teal-500"
+          />
+        </div>
+      </div>
       <div className="flex flex-col gap-3">
         {/* نمایش روم‌های موجود */}
         {templates.map((templateId) => {
