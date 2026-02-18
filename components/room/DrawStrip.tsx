@@ -150,7 +150,7 @@ export default function DrawStrip({
               onClick={copyCommit}
               className="rounded-full border border-[rgba(42,146,178,1)] bg-[rgba(42,146,178,1)] px-2 py-[2px] text-[11px] text-white font-semibold active:opacity-80"
             >
-              کپی
+              کپی هش
             </button>
           </span>
         )}

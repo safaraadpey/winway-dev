@@ -3,7 +3,7 @@ import bg002 from "@/src/assets/logo/BG002.png";
 import buyCardButtonBg from "@/src/assets/logo/BuyCardBotton.png";
 import ingameLogo from "@/src/assets/logo/ingamelogo.png";
 import Image from "next/image";
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 export type Winner = {
   id: string;
@@ -132,6 +132,9 @@ export default function GameResultsDialog({
 }: GameResultsDialogProps) {
   if (!isOpen) return null;
 
+  const [copyToast, setCopyToast] = useState<null | "success" | "error">(null);
+  const copyToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const isWinner =
     (!!currentUserId &&
       (lineWinners.some((w) => w.id === currentUserId) ||
@@ -165,8 +168,10 @@ export default function GameResultsDialog({
 
   const copyProof = async () => {
     if (!proofFull) return;
+    let copied = false;
     try {
       await navigator.clipboard.writeText(proofFull);
+      copied = true;
     } catch {
       // fallback
       try {
@@ -179,11 +184,30 @@ export default function GameResultsDialog({
         ta.select();
         document.execCommand("copy");
         document.body.removeChild(ta);
+        copied = true;
       } catch {
         // ignore
       }
     }
+    setCopyToast(copied ? "success" : "error");
+    if (copyToastTimerRef.current) {
+      clearTimeout(copyToastTimerRef.current);
+      copyToastTimerRef.current = null;
+    }
+    copyToastTimerRef.current = setTimeout(() => {
+      setCopyToast(null);
+      copyToastTimerRef.current = null;
+    }, 1500);
   };
+
+  useEffect(() => {
+    return () => {
+      if (copyToastTimerRef.current) {
+        clearTimeout(copyToastTimerRef.current);
+        copyToastTimerRef.current = null;
+      }
+    };
+  }, []);
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 px-4">
@@ -218,7 +242,20 @@ export default function GameResultsDialog({
           </div>
 
           {proofDisplay && (
-            <div className="w-full flex items-center justify-center gap-2 text-[12px]">
+            <div className="relative w-full flex items-center justify-center gap-2 text-[12px]">
+              {copyToast && (
+                <span
+                  role="status"
+                  aria-live="polite"
+                  className={`pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg border px-2 py-1 text-[12px] shadow-lg ${
+                    copyToast === "success"
+                      ? "border-emerald-300 bg-emerald-600 text-white"
+                      : "border-red-300 bg-red-600 text-white"
+                  }`}
+                >
+                  {copyToast === "success" ? "کپی شد" : "خطا در کپی"}
+                </span>
+              )}
               <span className="text-white/70">seed|commit</span>
               <span dir="ltr" className="latin-number text-white/90">
                 {proofDisplay}
@@ -228,7 +265,7 @@ export default function GameResultsDialog({
                 onClick={copyProof}
                 className="rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-white/90 active:opacity-80"
               >
-                کپی
+                کپی هش
               </button>
             </div>
           )}
