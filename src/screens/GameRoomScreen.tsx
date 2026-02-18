@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
+import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 import useScreenWakeLock from "@/lib/hooks/useScreenWakeLock";
 import BuyCardsPanel from "@/components/room/BuyCardsPanel";
 import ActiveCardsStatus, {
@@ -114,6 +115,7 @@ export default function GameRoomScreen({ roomId, templateId }: GameRoomScreenPro
   const router = useRouter();
   const { setShowBackButton } = useHeaderVisibility();
   const { refreshWalletBalances } = useBalancesContext();
+  const { invalidate: invalidateActiveGames } = useActiveGamesContext();
   useScreenWakeLock(Boolean(roomId));
 
   // State برای اطلاعات روم
@@ -753,6 +755,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
 
       toast.success(`${selectedQuantity} کارت با موفقیت خریداری شد`);
       await refreshWalletBalances?.();
+      invalidateActiveGames?.();
     } catch (error: any) {
       console.error("[JOIN_RPC][ERROR]", error);
       toast.error(error.message || "خطا در خرید کارت");

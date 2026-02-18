@@ -18,15 +18,19 @@ export function ActiveGamesProvider({ children }: { children: ReactNode }) {
     process.env.NEXT_PUBLIC_ACTIVE_GAMES_SOURCE ??
     (process.env.NODE_ENV === "production" ? "legacy" : "orchestrator");
 
+  const orchestrator = getActiveGamesOrchestrator();
+  const snapshot = useSyncExternalStore(
+    orchestrator.subscribe,
+    orchestrator.getSnapshot,
+    orchestrator.getSnapshot
+  );
+  const legacyActiveGames = useActiveGames();
+
   // Single source of truth for user active games + realtime subscription
   const activeGames =
     source === "orchestrator"
-      ? useSyncExternalStore(
-          getActiveGamesOrchestrator().subscribe,
-          getActiveGamesOrchestrator().getSnapshot,
-          getActiveGamesOrchestrator().getSnapshot
-        )
-      : useActiveGames();
+      ? { ...snapshot, invalidate: () => orchestrator.invalidate("manual") }
+      : legacyActiveGames;
 
   if (process.env.NODE_ENV !== "production") {
     // Useful to verify swap without touching UI
