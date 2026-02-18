@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore, type MutableRefObject } from "react";
 import { supabase } from "../supabaseClient";
 import { useSession } from "@/lib/contexts/SessionContext";
 import { traceFetch } from "@/lib/debug/netTrace";
@@ -76,7 +76,7 @@ export function useActiveGames(): ActiveGames {
   const subscriptionRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const etagRef = useRef<string | null>(null);
   const trackedRoomIdsRef = useRef<Set<string>>(new Set());
-  const fetchActiveRoomsRef = useRef<(skipEtag?: boolean, source?: ActiveGamesFetchSource) => Promise<number | null>>(null);
+  const fetchActiveRoomsRef = useRef<(skipEtag?: boolean, source?: ActiveGamesFetchSource) => Promise<number | null> | null>(null) as MutableRefObject<(skipEtag?: boolean, source?: ActiveGamesFetchSource) => Promise<number | null> | null>;
 
   const clearPollTimer = () => {
     if (pollTimerRef.current) {
