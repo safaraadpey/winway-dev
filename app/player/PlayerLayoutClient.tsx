@@ -55,8 +55,8 @@ export default function PlayerLayoutClient({
   }, [dingBalance, tomanBalance, lockedTomanBalance, availableTomanBalance, isAnimating]);
 
   return (
-    <>
-      <div className="sticky top-0 z-50 bg-[#0E0E0F]">
+    <div className="flex flex-col h-dvh overflow-hidden">
+      <div className="flex-shrink-0 sticky top-0 z-50 bg-[#0E0E0F]">
         {showHeader && (
           <MergedPlayerHeader
             dingBalance={dingBalance || 0}
@@ -69,8 +69,10 @@ export default function PlayerLayoutClient({
         )}
         <MyActiveGames />
       </div>
-      {children}
-    </>
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {children}
+      </div>
+    </div>
   );
 }
 

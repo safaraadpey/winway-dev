@@ -457,7 +457,7 @@ export default function BingoCardDemo({
                       }`}
                       initial={false}
                       animate={{
-                        opacity: marked ? 0.75 : 1,
+                        opacity: marked ? 0.85 : 1,
                       }}
                       transition={{
                         duration: 0.6,

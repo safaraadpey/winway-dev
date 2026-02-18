@@ -6,7 +6,6 @@ import { ActiveGamesProvider } from "@/lib/contexts/ActiveGamesContext";
 import { ActiveGamesOrchestratorProvider } from "@/lib/activeGames/ActiveGamesOrchestratorProvider";
 import PlayerLayoutClient from "./PlayerLayoutClient";
 import EntryBannerModal from "@/components/EntryBannerModal";
-import ClientAuthGuard from "@/components/auth/ClientAuthGuard";
 
 /**
  * Layout برای بخش پلیر
@@ -22,18 +21,16 @@ export default function PlayerLayout({
 }) {
   return (
     <div
-      className="min-h-screen bg-[#0E0E0F] bg-cover bg-center bg-no-repeat"
+      className="h-dvh min-h-screen overflow-hidden bg-[#0E0E0F] bg-cover bg-center bg-no-repeat"
       style={{ backgroundImage: "url(/backgrounds/layout_BG.webp)" }}
     >
       <HeaderVisibilityProvider>
-        <ClientAuthGuard>
-          <ActiveGamesOrchestratorProvider>
-            <ActiveGamesProvider>
-              <PlayerLayoutClient>{children}</PlayerLayoutClient>
-              <EntryBannerModal />
-            </ActiveGamesProvider>
-          </ActiveGamesOrchestratorProvider>
-        </ClientAuthGuard>
+        <ActiveGamesOrchestratorProvider>
+          <ActiveGamesProvider>
+            <PlayerLayoutClient>{children}</PlayerLayoutClient>
+            <EntryBannerModal />
+          </ActiveGamesProvider>
+        </ActiveGamesOrchestratorProvider>
       </HeaderVisibilityProvider>
     </div>
   );

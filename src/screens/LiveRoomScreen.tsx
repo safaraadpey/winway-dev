@@ -472,51 +472,49 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   );
 
   return (
-    <div
-      className="min-h-screen bg-black/40 text-white overflow-hidden"
-      style={{ height: "100dvh" }}
-    >
-      <div
-        className="max-w-3xl mx-auto px-4 pb-[9px] flex flex-col h-full gap-1 min-h-0"
-        style={{ paddingTop: "8px" }}
-      >
-        <div
-          className="rounded-2xl overflow-hidden bg-cover bg-center bg-no-repeat p-2 flex flex-col gap-1"
-          style={{
-            backgroundImage: `linear-gradient(rgba(0,0,0,0.28), rgba(0,0,0,0.28)), url(${gameHeaderBg.src})`,
-            backgroundRepeat: "no-repeat",
-            backgroundPosition: "center center",
-            backgroundSize: "100% 100%",
-          }}
-        >
-          <RoomHeader
-            linePrize={linePrize}
-            fullPrize={fullPrize}
-            isTournament={!!data.tournament?.id}
-            tournamentName={data.tournament?.title ?? null}
-            roundNumber={data.tournament?.round_no ?? null}
-            hasLineWinner={!data.tournament?.id && lineWinners.length > 0}
-          />
+    <div className="h-full bg-black/40 text-white overflow-hidden">
+      <div className="max-w-3xl mx-auto h-full flex flex-col">
+        {/* RoomHeader Section - Fixed, doesn't scroll */}
+        <div className="flex-shrink-0 px-4 pt-2 pb-1">
+          <div
+            className="rounded-2xl overflow-hidden bg-cover bg-center bg-no-repeat p-2 flex flex-col gap-1"
+            style={{
+              backgroundImage: `linear-gradient(rgba(0,0,0,0.28), rgba(0,0,0,0.28)), url(${gameHeaderBg.src})`,
+              backgroundRepeat: "no-repeat",
+              backgroundPosition: "center center",
+              backgroundSize: "100% 100%",
+            }}
+          >
+            <RoomHeader
+              linePrize={linePrize}
+              fullPrize={fullPrize}
+              isTournament={!!data.tournament?.id}
+              tournamentName={data.tournament?.title ?? null}
+              roundNumber={data.tournament?.round_no ?? null}
+              hasLineWinner={!data.tournament?.id && lineWinners.length > 0}
+            />
 
-          <DrawStrip
-            roomName={roomName}
-            showRoomBadge={false}
-            commitHash={roomCommitHash}
-            currentNumber={latestNumber ?? null}
-            history={previousNumbers}
-            totalDraws={calledNumbers.length}
-            countdownSeconds={latestNumber == null ? firstDrawCountdownSec : null}
-          />
+            <DrawStrip
+              roomName={roomName}
+              showRoomBadge={false}
+              commitHash={roomCommitHash}
+              currentNumber={latestNumber ?? null}
+              history={previousNumbers}
+              totalDraws={calledNumbers.length}
+              countdownSeconds={latestNumber == null ? firstDrawCountdownSec : null}
+            />
+          </div>
+
+          {error && (
+            <div className="mt-1 bg-red-500/20 border border-red-500 text-red-200 rounded-2xl p-3 text-sm">
+              {error}
+            </div>
+          )}
         </div>
 
-        {error && (
-          <div className="bg-red-500/20 border border-red-500 text-red-200 rounded-2xl p-3 text-sm">
-            {error}
-          </div>
-        )}
-
+        {/* Cards List Section - Scrollable */}
         <div
-          className="space-y-2 pr-1 flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+          className="flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-[9px] space-y-2 pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
           style={{ paddingBottom: "300px" }}
         >
           {orderedCards.map((card) => (
