@@ -136,24 +136,39 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
           snapshot.draws.map((d) => d.number)
         );
 
-        // لود line winners موجود از results table
+        // لود line winners موجود از API endpoint (استفاده از service client - بدون RLS)
         try {
-          const { data: existingResults, error: resultsError } = await supabase
-            .from("results")
-            .select("ticket_id, user_id, draw_number, draw")
-            .eq("room_id", roomId)
-            .eq("win_type", "line");
+          const roomResults = await fetchRoomResults(roomId);
+          
+          if (roomResults.lineWinners && roomResults.lineWinners.length > 0) {
+            const existingLineWinners: LineWinner[] = roomResults.lineWinners
+              .map((winner) => {
+                // استفاده از ticketId و drawNumber از API response
+                // اگر ticketId در API نبود، از cards پیدا کن
+                let ticketId = winner.ticketId;
+                if (!ticketId) {
+                  const card = snapshot.cards.find(
+                    (c) => c.player_id === winner.id
+                  );
+                  if (!card) {
+                    console.warn(
+                      "[LiveRoom] could not find ticket_id for lineWinner:",
+                      winner.id
+                    );
+                    return null;
+                  }
+                  ticketId = card.ticket_id;
+                }
 
-          if (resultsError) {
-            console.warn("[LiveRoom] failed to load existing line winners:", resultsError);
-          } else if (existingResults && existingResults.length > 0) {
-            const existingLineWinners: LineWinner[] = existingResults.map((r) => ({
-              ticketId: r.ticket_id,
-              userId: r.user_id,
-              drawNumber: r.draw_number ?? r.draw ?? 0,
-            }));
+                return {
+                  ticketId,
+                  userId: winner.id,
+                  drawNumber: winner.drawNumber ?? 0,
+                };
+              })
+              .filter((w): w is LineWinner => w !== null);
 
-            if (isMounted) {
+            if (isMounted && existingLineWinners.length > 0) {
               setLineWinners(existingLineWinners);
               console.log(
                 "[LiveRoom] loaded existing line winners:",

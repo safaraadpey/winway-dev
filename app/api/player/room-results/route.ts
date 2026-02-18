@@ -6,6 +6,8 @@ type Winner = {
   avatarUrl: string;
   nickname: string;
   prizeAmount: number;
+  ticketId?: string;
+  drawNumber?: number;
 };
 
 type RoomResultsResponse = {
@@ -39,9 +41,10 @@ export async function GET(request: NextRequest) {
     const supabase = createServiceClient();
 
     // گرفتن نتایج بر اساس جدول results
+    // فقط فیلدهایی که مطمئن هستیم وجود دارند را select می‌کنیم
     const { data: resultRows, error: resultsError } = await supabase
       .from("results")
-      .select("user_id, win_type, reward_amount")
+      .select("user_id, win_type, reward_amount, ticket_id, draw_number")
       .eq("room_id", roomId);
 
     if (resultsError) {
@@ -90,6 +93,8 @@ export async function GET(request: NextRequest) {
         avatarUrl: info.avatarUrl || "",
         nickname: displayName,
         prizeAmount: Number(r.reward_amount || 0),
+        ticketId: r.ticket_id || undefined,
+        drawNumber: r.draw_number ?? undefined,
       };
     };
 

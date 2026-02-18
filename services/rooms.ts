@@ -676,6 +676,8 @@ export type Winner = {
   avatarUrl: string;
   nickname: string;
   prizeAmount: number;
+  ticketId?: string;
+  drawNumber?: number;
 };
 
 export type RoomResultsResponse = {
