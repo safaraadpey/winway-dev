@@ -202,6 +202,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           mappedRoom = {
             id: view.room.template_id,
             roomCode: "",
+            roomType: view.room.room_type,
             title: view.room.title || undefined,
             status: "waiting", // برای فعال بودن UI مطابق رفتار قبلی
             cardPrice: view.room.ticket_price,
@@ -220,6 +221,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           mappedRoom = {
             id: (view.room.id as string) || "",
             roomCode: view.room.room_code || "",
+            roomType: view.room.room_type,
             title: view.room.title || undefined,
             status: view.room.status || "waiting",
             cardPrice: view.room.ticket_price,
@@ -854,6 +856,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
   }
 
   const purchaseLockedByAdmin = globalRegistrationLocked && !canCancel;
+  const isTournamentRoom = (roomInfo.roomType || "").toLowerCase() === "tournament";
 
   // استفاده از cardsToRenderForCancel که قبلاً تعریف شده
   const cardsToRender = cardsToRenderForCancel;
@@ -889,35 +892,38 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
               : "ثبت نام در همه بازی‌ها موقتاً توسط ادمین قفل شده است."}
           </div>
         )}
-        {/* پنل انتخاب کارت */}
-        <BuyCardsPanel
-          price={roomInfo.cardPrice}
-          minQuantity={1}
-          maxQuantity={roomInfo.maxPlayers || 10}
-          maxBuy={roomInfo.maxPlayers || 10}
-          musicEnabled={isMusicEnabled}
-          onToggleMusic={roomId ? handleToggleMusic : undefined}
-          showMusicToggle
-          onConfirm={handleAddToList}
-          disabled={
-            purchaseLockedByAdmin ||
-            (roomId && !canCancel
-              ? countdownSeconds === 0 || roomInfo.status !== "waiting"
-              : false)
-          }
-          mode={canCancel ? "cancel" : "purchase"}
-          actionLabel={
-            canCancel
-              ? "لغو رزرو"
-              : purchaseLockedByAdmin
-                ? "ثبت نام قفل است"
-                : undefined
-          }
-        />
+        {!isTournamentRoom && (
+          <BuyCardsPanel
+            price={roomInfo.cardPrice}
+            minQuantity={1}
+            maxQuantity={roomInfo.maxPlayers || 10}
+            maxBuy={roomInfo.maxPlayers || 10}
+            musicEnabled={isMusicEnabled}
+            onToggleMusic={roomId ? handleToggleMusic : undefined}
+            showMusicToggle
+            onConfirm={handleAddToList}
+            disabled={
+              purchaseLockedByAdmin ||
+              (roomId && !canCancel
+                ? countdownSeconds === 0 || roomInfo.status !== "waiting"
+                : false)
+            }
+            mode={canCancel ? "cancel" : "purchase"}
+            actionLabel={
+              canCancel
+                ? "لغو رزرو"
+                : purchaseLockedByAdmin
+                  ? "ثبت نام قفل است"
+                  : undefined
+            }
+          />
+        )}
 
         <ActiveCardsStatus cards={cardsToRender} secondsRemaining={countdownSeconds} />
 
-        <ActiveTablesSection tables={activeTables} onTableClick={handleTableClick} />
+        {!isTournamentRoom && (
+          <ActiveTablesSection tables={activeTables} onTableClick={handleTableClick} />
+        )}
       </div>
     </div>
   );

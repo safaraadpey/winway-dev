@@ -317,6 +317,7 @@ export async function cancelWaitingRoom(roomId: string): Promise<void> {
 export interface RoomInfo {
   id: string;
   roomCode: string;
+  roomType?: string | null;
   title?: string;
   status: string;
   cardPrice: number;
@@ -564,6 +565,7 @@ export type GameRoomView = {
   room: {
     id: string | null;
     template_id: string;
+    room_type: string | null;
     room_code: string | null;
     title: string | null;
     status: string | null;

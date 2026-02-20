@@ -10,6 +10,7 @@ type GameRoomView = {
   room: {
     id: string | null;
     template_id: string;
+    room_type: string | null;
     room_code: string | null;
     title: string | null;
     status: string | null;
@@ -210,6 +211,10 @@ async function buildViewFromRoomId(
   }
 
   const mode = mapRoomStatusToMode(room.status || null);
+  const roomType = await getRoomTemplateType(
+    supabase,
+    (room.room_template_id as string | null) ?? null
+  );
 
   // کارت‌های فعال (بر اساس tickets)
   const activeCards = await loadActiveCardsForRoom(supabase, room.id as string);
@@ -237,6 +242,7 @@ async function buildViewFromRoomId(
     room: {
       id: room.id,
       template_id: room.room_template_id,
+      room_type: roomType,
       room_code: room.room_code,
       title: room.title,
       status: room.status,
@@ -314,6 +320,7 @@ async function buildViewFromTemplateId(
       `
         id,
         name,
+        room_type,
         price,
         currency,
         min_players,
@@ -346,6 +353,7 @@ async function buildViewFromTemplateId(
     room: {
       id: null,
       template_id: template.id,
+      room_type: template.room_type || null,
       room_code: null,
       title: template.name,
       status: null,
@@ -386,6 +394,22 @@ async function getTemplateIdForRoom(
   }
 
   return data.room_template_id || null;
+}
+
+async function getRoomTemplateType(
+  supabase: ReturnType<typeof createServiceClient>,
+  templateId: string | null
+): Promise<string | null> {
+  if (!templateId) return null;
+
+  const { data, error } = await supabase
+    .from("room_templates")
+    .select("room_type")
+    .eq("id", templateId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return ((data as any).room_type as string | null) ?? null;
 }
 
 function computeCanCancel({

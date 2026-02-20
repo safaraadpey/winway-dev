@@ -27,6 +27,7 @@ export default function AgentDashboardPage() {
   const [rangeSummary, setRangeSummary] = useState<{
     ticketsVolume: number;
     ticketsVolumeTotal: number;
+    tournamentCommission: number;
     deposits: number;
     withdrawals: number;
   } | null>(null);
@@ -87,6 +88,7 @@ export default function AgentDashboardPage() {
       setRangeSummary({
         ticketsVolume: result.ticketsVolume,
         ticketsVolumeTotal: result.ticketsVolumeTotal,
+        tournamentCommission: result.tournamentCommission,
         deposits: result.deposits,
         withdrawals: result.withdrawals,
       });
@@ -198,6 +200,10 @@ export default function AgentDashboardPage() {
                 <span>کانیات کل</span>
                 <span className="text-right font-mono">
                   {summary.ticketsVolumeTotal.toLocaleString("en-US")}
+                </span>
+                <span>کانیات تورنومنت</span>
+                <span className="text-right font-mono">
+                  {(summary.tournamentCommission ?? 0).toLocaleString("en-US")}
                 </span>
                 <span>واریز</span>
                 <span className="text-right font-mono">
