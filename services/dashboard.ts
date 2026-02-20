@@ -14,6 +14,7 @@ import type {
 export interface DashboardRangeSummary {
   ticketsVolume: number;
   ticketsVolumeTotal: number;
+  tournamentCommission: number;
   deposits: number;
   withdrawals: number;
   net: number;
@@ -35,6 +36,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     period: "day",
     ticketsVolume: 0,
     ticketsVolumeTotal: 0,
+    tournamentCommission: 0,
     deposits: 0,
     withdrawals: 0,
     net: 0,
@@ -43,6 +45,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     period: "week",
     ticketsVolume: 0,
     ticketsVolumeTotal: 0,
+    tournamentCommission: 0,
     deposits: 0,
     withdrawals: 0,
     net: 0,
@@ -51,6 +54,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     period: "month",
     ticketsVolume: 0,
     ticketsVolumeTotal: 0,
+    tournamentCommission: 0,
     deposits: 0,
     withdrawals: 0,
     net: 0,
@@ -73,28 +77,6 @@ export function clearDashboardCache() {
   dashboardCache = null;
 }
 
-type AdminZeroCache = { id: string | null; fetchedAtMs: number };
-let adminZeroCache: AdminZeroCache | null = null;
-
-async function getAdminZeroId(maxAgeMs = 5 * 60_000): Promise<string | null> {
-  if (adminZeroCache) {
-    const ageMs = Date.now() - adminZeroCache.fetchedAtMs;
-    if (ageMs >= 0 && ageMs <= maxAgeMs) return adminZeroCache.id;
-  }
-  const { data: adminZero, error } = await supabase
-    .from("users")
-    .select("id")
-    .eq("username", "adminzero")
-    .eq("role", "admin")
-    .maybeSingle();
-  if (error) {
-    console.warn("getAdminZeroId: users read error", error.message);
-  }
-  const id = (adminZero as any)?.id ?? null;
-  adminZeroCache = { id, fetchedAtMs: Date.now() };
-  return id;
-}
-
 async function fetchAdminCommissionSummary(): Promise<{
   effectiveUserId: string;
   day: number;
@@ -103,6 +85,9 @@ async function fetchAdminCommissionSummary(): Promise<{
   dayTotal: number;
   weekTotal: number;
   monthTotal: number;
+  dayTournament: number;
+  weekTournament: number;
+  monthTournament: number;
 }> {
   const { data, error } = await supabase.rpc("fn_dashboard_admin_commission_summary");
   if (error) {
@@ -121,13 +106,16 @@ async function fetchAdminCommissionSummary(): Promise<{
     dayTotal: Number((row as any).day_total || 0),
     weekTotal: Number((row as any).week_total || 0),
     monthTotal: Number((row as any).month_total || 0),
+    dayTournament: Number((row as any).day_tournament_amount || 0),
+    weekTournament: Number((row as any).week_tournament_amount || 0),
+    monthTournament: Number((row as any).month_tournament_amount || 0),
   };
 }
 
 async function fetchAdminCommissionSummaryRange(
   fromIso: string,
   toIso: string
-): Promise<{ effectiveUserId: string; amount: number; total: number }> {
+): Promise<{ effectiveUserId: string; amount: number; total: number; tournamentAmount: number }> {
   const { data, error } = await supabase.rpc("fn_dashboard_admin_commission_summary_range", {
     p_from: fromIso,
     p_to: toIso,
@@ -143,6 +131,7 @@ async function fetchAdminCommissionSummaryRange(
     effectiveUserId: String((row as any).effective_user_id || ""),
     amount: Number((row as any).amount || 0),
     total: Number((row as any).total || 0),
+    tournamentAmount: Number((row as any).tournament_amount || 0),
   };
 }
 
@@ -155,6 +144,7 @@ export async function loadDashboardRangeSummary(params: {
     return {
       ticketsVolume: 0,
       ticketsVolumeTotal: 0,
+      tournamentCommission: 0,
       deposits: 0,
       withdrawals: 0,
       net: 0,
@@ -247,6 +237,7 @@ export async function loadDashboardRangeSummary(params: {
     return {
       ticketsVolume: admin.amount,
       ticketsVolumeTotal: admin.total,
+      tournamentCommission: admin.tournamentAmount,
       deposits,
       withdrawals,
       net: deposits - withdrawals,
@@ -266,6 +257,7 @@ export async function loadDashboardRangeSummary(params: {
   return {
     ticketsVolume: commission,
     ticketsVolumeTotal: commissionBase,
+    tournamentCommission: 0,
     deposits,
     withdrawals,
     net: deposits - withdrawals,
@@ -400,6 +392,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
       period: "day",
       ticketsVolume: 0,
       ticketsVolumeTotal: 0,
+      tournamentCommission: 0,
       deposits: 0,
       withdrawals: 0,
       net: 0,
@@ -408,6 +401,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
       period: "week",
       ticketsVolume: 0,
       ticketsVolumeTotal: 0,
+      tournamentCommission: 0,
       deposits: 0,
       withdrawals: 0,
       net: 0,
@@ -416,6 +410,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
       period: "month",
       ticketsVolume: 0,
       ticketsVolumeTotal: 0,
+      tournamentCommission: 0,
       deposits: 0,
       withdrawals: 0,
       net: 0,
@@ -454,6 +449,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
     | {
         admin: Record<DashboardPeriod, number>;
         total: Record<DashboardPeriod, number>;
+        tournament: Record<DashboardPeriod, number>;
       }
     | null =
     user.role === "admin"
@@ -467,6 +463,11 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
             day: s.dayTotal,
             week: s.weekTotal,
             month: s.monthTotal,
+          },
+          tournament: {
+            day: s.dayTournament,
+            week: s.weekTournament,
+            month: s.monthTournament,
           },
         }))
       : null;
@@ -519,7 +520,6 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
   if (transferTxsRes.error) {
     console.error("loadDashboardData: admin_panel_transfer tx error:", transferTxsRes.error);
   }
-
   const commissionRows = commissionTxsRes.data || [];
   const manualTxs = manualPanelTxsRes.data || [];
   const transferTxs = transferTxsRes.data || [];
@@ -566,6 +566,13 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
     return sumRowsSince(commissionRows, startIso, (t) => Number((t as any).commission_base || 0));
   };
 
+  const tournamentCommissionFor = (startIso: string) => {
+    if (user.role !== "admin") return 0;
+    if (startIso === dayIso) return adminCommissionMap?.tournament.day ?? 0;
+    if (startIso === weekIso) return adminCommissionMap?.tournament.week ?? 0;
+    return adminCommissionMap?.tournament.month ?? 0;
+  };
+
   for (const [period, startIso] of [
     ["day", dayIso],
     ["week", weekIso],
@@ -581,6 +588,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
       period,
       ticketsVolume: commission,
       ticketsVolumeTotal: commissionBase,
+      tournamentCommission: tournamentCommissionFor(startIso),
       deposits,
       withdrawals,
       net,

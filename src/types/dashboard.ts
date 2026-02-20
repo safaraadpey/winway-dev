@@ -20,6 +20,8 @@ export interface FinancialSummary {
   ticketsVolume: number; // مجموع مبلغ بلیت‌ها / فروش
   /** مجموع مبلغی که کمیسیون از آن ساخته شده (commission_base) */
   ticketsVolumeTotal: number;
+  /** کمیسیون تورنومنت (نمایش جداگانه در داشبورد) */
+  tournamentCommission: number;
   deposits: number; // واریزها
   withdrawals: number; // برداشت‌ها
   net: number; // بیلان (deposits - withdrawals یا عدد ترکیبی)
