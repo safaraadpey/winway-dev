@@ -26,9 +26,8 @@ import LiveRoomScreen from "@/src/screens/LiveRoomScreen";
 import {
   playLiveRoomMusic,
   stopLiveRoomMusic,
-  getMusicVolumeValue,
-  setMusicVolumeValue,
 } from "@/lib/audio/music";
+import { isMusicEnabled as readMusicEnabled, setMusicEnabled } from "@/lib/audio-settings";
 
 interface GameRoomScreenProps {
   roomId?: string;
@@ -139,32 +138,10 @@ export default function GameRoomScreen({ roomId, templateId }: GameRoomScreenPro
   // State برای شناسه کاربر فعلی
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-const MUSIC_PREF_KEY = "gameroom_music_enabled";
-
-function readStoredMusicEnabled() {
-  if (typeof window === "undefined") return true;
-  try {
-    const raw = window.localStorage.getItem(MUSIC_PREF_KEY);
-    if (raw === null) return true; // پیش‌فرض: روشن
-    return raw === "true";
-  } catch {
-    return true;
-  }
-}
-
-function writeStoredMusicEnabled(enabled: boolean) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(MUSIC_PREF_KEY, String(Boolean(enabled)));
-  } catch {
-    // ignore
-  }
-}
-
 // Music toggle for real rooms (roomId mode only)
 const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
   if (roomId && !templateId) {
-    return readStoredMusicEnabled();
+    return readMusicEnabled();
   }
   return false;
 });
@@ -173,14 +150,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     setIsMusicEnabled((prev) => {
       if (!roomId || templateId) return false;
       const next = !prev;
-      if (next) {
-        // If volume was muted globally (e.g., from LiveRoom slider), restore a sensible default
-        const currentVol = getMusicVolumeValue();
-        if (currentVol <= 0.001) {
-          setMusicVolumeValue(0.15);
-        }
-      }
-      writeStoredMusicEnabled(next);
+      setMusicEnabled(next);
       return next;
     });
   };
@@ -439,19 +409,12 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     };
   }, [setShowBackButton]);
 
-  // در حالت roomId، وضعیت ترجیح کاربر را از localStorage می‌خوانیم؛ پیش‌فرض: روشن
+  // در حالت roomId، وضعیت ترجیح کاربر را از تنظیم یکپارچه می‌خوانیم
   useEffect(() => {
     if (!roomId || templateId) return;
 
-    const stored = readStoredMusicEnabled();
+    const stored = readMusicEnabled();
     setIsMusicEnabled(stored);
-
-    if (stored) {
-      const currentVol = getMusicVolumeValue();
-      if (currentVol <= 0.001) {
-        setMusicVolumeValue(0.15);
-      }
-    }
   }, [roomId, templateId]);
 
   // موسیقی بک‌گراند: فقط وقتی roomId داریم (خرید انجام شده) و در حالت template نیستیم

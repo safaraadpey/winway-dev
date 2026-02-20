@@ -7,12 +7,16 @@
 
 const LS_KEYS = {
   musicVolume: "music_volume",
+  musicEnabled: "music_enabled",
+  legacyGameRoomMusicEnabled: "gameroom_music_enabled",
   dingEnabled: "ding_sound_enabled",
   masterMuted: "master_muted",
   previousMusicVolume: "previous_music_volume",
   previousNumbersMuted: "previous_numbers_muted",
   previousDingEnabled: "previous_ding_enabled",
 } as const;
+
+const DEFAULT_MUSIC_VOLUME = 0.15;
 
 function isBrowser() {
   return typeof window !== "undefined";
@@ -24,13 +28,13 @@ function clamp01(x: number) {
 }
 
 export function getMusicVolume(): number {
-  if (!isBrowser()) return 1;
+  if (!isBrowser()) return DEFAULT_MUSIC_VOLUME;
   try {
     const raw = window.localStorage.getItem(LS_KEYS.musicVolume);
-    if (raw == null) return 1;
+    if (raw == null) return DEFAULT_MUSIC_VOLUME;
     return clamp01(Number(raw));
   } catch {
-    return 1;
+    return DEFAULT_MUSIC_VOLUME;
   }
 }
 
@@ -38,6 +42,33 @@ export function setMusicVolume(v: number) {
   if (!isBrowser()) return;
   try {
     window.localStorage.setItem(LS_KEYS.musicVolume, String(clamp01(v)));
+  } catch {
+    // ignore
+  }
+}
+
+export function isMusicEnabled(): boolean {
+  if (!isBrowser()) return true;
+  try {
+    const raw = window.localStorage.getItem(LS_KEYS.musicEnabled);
+    if (raw != null) return raw === "true";
+
+    // Backward compatibility with older key.
+    const legacy = window.localStorage.getItem(LS_KEYS.legacyGameRoomMusicEnabled);
+    if (legacy != null) return legacy === "true";
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+export function setMusicEnabled(enabled: boolean) {
+  if (!isBrowser()) return;
+  const value = String(Boolean(enabled));
+  try {
+    window.localStorage.setItem(LS_KEYS.musicEnabled, value);
+    // Keep legacy key in sync to avoid split behavior during rollout.
+    window.localStorage.setItem(LS_KEYS.legacyGameRoomMusicEnabled, value);
   } catch {
     // ignore
   }

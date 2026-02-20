@@ -12,7 +12,11 @@
 
 "use client";
 
-import { getMusicVolume, setMusicVolume } from "@/lib/audio-settings";
+import {
+  getMusicVolume,
+  isMusicEnabled,
+  setMusicVolume,
+} from "@/lib/audio-settings";
 
 const MUSIC_URL = "/sounds/music/live.mp3";
 const DEFAULT_VOLUME = 0.15;
@@ -50,6 +54,16 @@ function installStorageListener() {
   const onStorageChange = (e: StorageEvent) => {
     if (e.key === "music_volume") {
       syncVolumeFromStorage();
+      return;
+    }
+    if (e.key === "music_enabled") {
+      if (!isMusicEnabled()) {
+        shouldBePlaying = false;
+        pauseForBackground();
+        return;
+      }
+      shouldBePlaying = true;
+      tryPlayIfAllowed();
     }
   };
   window.addEventListener("storage", onStorageChange);
@@ -65,6 +79,11 @@ function pauseForBackground() {
 function tryPlayIfAllowed() {
   const a = getOrCreateAudio();
   if (!a) return;
+  if (!isMusicEnabled()) {
+    shouldBePlaying = false;
+    pauseForBackground();
+    return;
+  }
   if (!shouldBePlaying) return;
   if (!canPlayInForeground()) {
     pauseForBackground();
@@ -126,15 +145,8 @@ function getOrCreateAudio(): HTMLAudioElement | null {
     audio.loop = true;
     audio.preload = "auto";
     
-    // Set initial volume from localStorage or default
-    const savedVolume = getMusicVolume();
-    const initialVolume = savedVolume !== 1 ? savedVolume : DEFAULT_VOLUME;
-    audio.volume = initialVolume;
-    
-    // If localStorage had default (1), persist the new default (0.22)
-    if (savedVolume === 1) {
-      setMusicVolume(DEFAULT_VOLUME);
-    }
+    // Set initial volume from localStorage or default.
+    audio.volume = getMusicVolume();
 
     // Install storage listener once
     installStorageListener();
@@ -164,11 +176,8 @@ function installUnlockHandler() {
     const a = getOrCreateAudio();
     if (!a) return;
 
-    // Attempt to play to unlock audio (will fail silently if not allowed)
-    // After first gesture, browser will allow subsequent plays
-    void a.play().catch(() => {
-      // Expected before first gesture - will work after gesture
-    });
+    // Run normal play guard path so we don't auto-play unexpectedly.
+    tryPlayIfAllowed();
   };
 
   // Use capture phase with once:true to catch first gesture and auto-remove
@@ -184,6 +193,11 @@ function installUnlockHandler() {
  */
 export function playLiveRoomMusic() {
   if (!isBrowser()) return;
+  if (!isMusicEnabled()) {
+    shouldBePlaying = false;
+    pauseForBackground();
+    return;
+  }
 
   const a = getOrCreateAudio();
   if (!a) return;
@@ -244,6 +258,6 @@ export function getMusicVolumeValue(): number {
     return a.volume;
   }
   
-  return getMusicVolume() !== 1 ? getMusicVolume() : DEFAULT_VOLUME;
+  return getMusicVolume();
 }
 

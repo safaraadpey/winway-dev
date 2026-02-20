@@ -23,6 +23,7 @@ import {
   setPreviousNumbersMuted,
   getPreviousDingEnabled,
   setPreviousDingEnabled,
+  setMusicEnabled,
 } from "@/lib/audio-settings";
 import { setMusicVolumeValue } from "@/lib/audio/music";
 
@@ -190,6 +191,7 @@ export default function SoundControlsPopup({ open, onClose, anchorRef, onSetting
                 setMusicVolState(0);
                 setMusicVolume(0);
                 setMusicVolumeValue(0);
+                setMusicEnabled(false);
                 setMusicMutedState(true);
                 setNumbersMutedState(true);
                 setNumberMuted(true);
@@ -215,6 +217,7 @@ export default function SoundControlsPopup({ open, onClose, anchorRef, onSetting
                 setMusicVolState(restoredMv);
                 setMusicVolume(restoredMv);
                 setMusicVolumeValue(restoredMv);
+                setMusicEnabled(restoredMv > 0.001);
                 setMusicMutedState(restoredMv <= 0.001);
                 setPreviousMusicVol(restoredMv > 0.001 ? restoredMv : 0.15);
                 setNumbersMutedState(restoredNm);
@@ -259,12 +262,14 @@ export default function SoundControlsPopup({ open, onClose, anchorRef, onSetting
                 setMusicVolState(0);
                 setMusicVolume(0);
                 setMusicVolumeValue(0);
+                setMusicEnabled(false);
               } else {
                 // Unmute: restore previous volume or use default
                 const restoredVol = previousMusicVol > 0.001 ? previousMusicVol : 0.15;
                 setMusicVolState(restoredVol);
                 setMusicVolume(restoredVol);
                 setMusicVolumeValue(restoredVol);
+                setMusicEnabled(true);
               }
               
               // If master muted and user unmutes music, disable master mute
@@ -302,6 +307,7 @@ export default function SoundControlsPopup({ open, onClose, anchorRef, onSetting
             setMusicVolState(v);
             setMusicVolume(v);
             setMusicVolumeValue(v); // Update the actual music audio element
+            setMusicEnabled(v > 0.001);
             
             // Update mute state based on volume
             if (v <= 0.001) {

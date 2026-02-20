@@ -23,6 +23,7 @@ import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import { playNumber, unlockAndPreloadOnUserGesture } from "@/lib/number-audio";
 import { playLiveRoomMusic, stopLiveRoomMusic } from "@/lib/audio/music";
+import { isMusicEnabled } from "@/lib/audio-settings";
 
 type LineWinner = {
   ticketId: string;
@@ -109,6 +110,10 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
 
   // Start background music when entering LiveRoom, stop when leaving
   useEffect(() => {
+    if (!isMusicEnabled()) {
+      stopLiveRoomMusic();
+      return;
+    }
     playLiveRoomMusic();
     return () => {
       stopLiveRoomMusic();
