@@ -90,7 +90,11 @@ export default function InstallAppButton({ label = "نصب اپلیکیشن" }: 
         {label}
       </button>
       {ios && showIosHelp && (
-        <p className={styles.helpText}>برای نصب در آیفون: Safari &gt; Share &gt; Add to Home Screen</p>
+        <p className={styles.helpText}>
+          راهنمای نصب در آیفون:
+          <br />
+          Safari &gt; Share &gt; Add to Home Screen
+        </p>
       )}
     </div>
   );

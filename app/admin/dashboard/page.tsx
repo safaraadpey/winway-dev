@@ -36,6 +36,7 @@ export default function AdminDashboardPage() {
     ticketsVolume: number;
     ticketsVolumeTotal: number;
     tournamentCommission: number;
+    tournamentGuaranteePayout: number;
     deposits: number;
     withdrawals: number;
   } | null>(null);
@@ -134,6 +135,7 @@ export default function AdminDashboardPage() {
         ticketsVolume: result.ticketsVolume,
         ticketsVolumeTotal: result.ticketsVolumeTotal,
         tournamentCommission: result.tournamentCommission,
+        tournamentGuaranteePayout: result.tournamentGuaranteePayout,
         deposits: result.deposits,
         withdrawals: result.withdrawals,
       });
@@ -254,10 +256,6 @@ export default function AdminDashboardPage() {
                 <div className="text-center py-4 text-gray-400">در حال بارگذاری...</div>
               ) : (
                 <div className="grid grid-cols-2 gap-y-1">
-                  <span>کانیات</span>
-                  <span className="text-right font-mono">
-                    {summary.ticketsVolume.toLocaleString("en-US")}
-                  </span>
                   <span>کانیات کل</span>
                   <span className="text-right font-mono">
                     {summary.ticketsVolumeTotal.toLocaleString("en-US")}
@@ -266,9 +264,24 @@ export default function AdminDashboardPage() {
                   <span className="text-right font-mono">
                     {Math.max(0, summary.ticketsVolumeTotal - summary.ticketsVolume).toLocaleString("en-US")}
                   </span>
-                  <span>کانیات تورنومنت</span>
+                  <span>کانیات من</span>
+                  <span className="text-right font-mono">
+                    {summary.ticketsVolume.toLocaleString("en-US")}
+                  </span>
+                  <span>کانیات از تورنومنت</span>
                   <span className="text-right font-mono">
                     {(summary.tournamentCommission ?? 0).toLocaleString("en-US")}
+                  </span>
+                  <span>کانیات از بازی‌ها</span>
+                  <span className="text-right font-mono">
+                    {Math.max(
+                      0,
+                      summary.ticketsVolume - (summary.tournamentCommission ?? 0)
+                    ).toLocaleString("en-US")}
+                  </span>
+                  <span>تاپ آپ گارانتی</span>
+                  <span className="text-right font-mono">
+                    {(summary.tournamentGuaranteePayout ?? 0).toLocaleString("en-US")}
                   </span>
                   <span>واریز</span>
                   <span className="text-right font-mono">

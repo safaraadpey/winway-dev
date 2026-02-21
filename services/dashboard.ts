@@ -15,6 +15,7 @@ export interface DashboardRangeSummary {
   ticketsVolume: number;
   ticketsVolumeTotal: number;
   tournamentCommission: number;
+  tournamentGuaranteePayout: number;
   deposits: number;
   withdrawals: number;
   net: number;
@@ -37,6 +38,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     ticketsVolume: 0,
     ticketsVolumeTotal: 0,
     tournamentCommission: 0,
+    tournamentGuaranteePayout: 0,
     deposits: 0,
     withdrawals: 0,
     net: 0,
@@ -46,6 +48,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     ticketsVolume: 0,
     ticketsVolumeTotal: 0,
     tournamentCommission: 0,
+    tournamentGuaranteePayout: 0,
     deposits: 0,
     withdrawals: 0,
     net: 0,
@@ -55,6 +58,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     ticketsVolume: 0,
     ticketsVolumeTotal: 0,
     tournamentCommission: 0,
+    tournamentGuaranteePayout: 0,
     deposits: 0,
     withdrawals: 0,
     net: 0,
@@ -135,6 +139,52 @@ async function fetchAdminCommissionSummaryRange(
   };
 }
 
+async function fetchAdminGuaranteeSummary(): Promise<{
+  effectiveUserId: string;
+  day: number;
+  week: number;
+  month: number;
+}> {
+  const { data, error } = await supabase.rpc("fn_dashboard_admin_tournament_guarantee_summary");
+  if (error) {
+    throw new Error(error.message || "Failed to load admin tournament guarantee summary");
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) {
+    throw new Error("Empty admin tournament guarantee summary");
+  }
+  return {
+    effectiveUserId: String((row as any).effective_user_id || ""),
+    day: Number((row as any).day_amount || 0),
+    week: Number((row as any).week_amount || 0),
+    month: Number((row as any).month_amount || 0),
+  };
+}
+
+async function fetchAdminGuaranteeSummaryRange(
+  fromIso: string,
+  toIso: string
+): Promise<{ effectiveUserId: string; amount: number }> {
+  const { data, error } = await supabase.rpc(
+    "fn_dashboard_admin_tournament_guarantee_summary_range",
+    {
+      p_from: fromIso,
+      p_to: toIso,
+    }
+  );
+  if (error) {
+    throw new Error(error.message || "Failed to load admin tournament guarantee range");
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) {
+    throw new Error("Empty admin tournament guarantee range");
+  }
+  return {
+    effectiveUserId: String((row as any).effective_user_id || ""),
+    amount: Number((row as any).amount || 0),
+  };
+}
+
 export async function loadDashboardRangeSummary(params: {
   from: string; // YYYY-MM-DD
   to: string; // YYYY-MM-DD
@@ -145,6 +195,7 @@ export async function loadDashboardRangeSummary(params: {
       ticketsVolume: 0,
       ticketsVolumeTotal: 0,
       tournamentCommission: 0,
+      tournamentGuaranteePayout: 0,
       deposits: 0,
       withdrawals: 0,
       net: 0,
@@ -256,10 +307,12 @@ export async function loadDashboardRangeSummary(params: {
 
   if (user.role === "admin") {
     const admin = await fetchAdminCommissionSummaryRange(fromIso, toIso);
+    const guarantee = await fetchAdminGuaranteeSummaryRange(fromIso, toIso);
     return {
       ticketsVolume: admin.amount,
       ticketsVolumeTotal: admin.total,
       tournamentCommission: admin.tournamentAmount,
+      tournamentGuaranteePayout: guarantee.amount,
       deposits,
       withdrawals,
       net: deposits - withdrawals,
@@ -293,6 +346,7 @@ export async function loadDashboardRangeSummary(params: {
     ticketsVolume: ticketCommission + tournamentCommission,
     ticketsVolumeTotal: commissionBase,
     tournamentCommission,
+    tournamentGuaranteePayout: 0,
     deposits,
     withdrawals,
     net: deposits - withdrawals,
@@ -428,6 +482,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
       ticketsVolume: 0,
       ticketsVolumeTotal: 0,
       tournamentCommission: 0,
+      tournamentGuaranteePayout: 0,
       deposits: 0,
       withdrawals: 0,
       net: 0,
@@ -437,6 +492,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
       ticketsVolume: 0,
       ticketsVolumeTotal: 0,
       tournamentCommission: 0,
+      tournamentGuaranteePayout: 0,
       deposits: 0,
       withdrawals: 0,
       net: 0,
@@ -446,6 +502,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
       ticketsVolume: 0,
       ticketsVolumeTotal: 0,
       tournamentCommission: 0,
+      tournamentGuaranteePayout: 0,
       deposits: 0,
       withdrawals: 0,
       net: 0,
@@ -504,6 +561,20 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
             week: s.weekTournament,
             month: s.monthTournament,
           },
+        }))
+      : null;
+  const adminGuaranteeMap:
+    | {
+        day: number;
+        week: number;
+        month: number;
+      }
+    | null =
+    user.role === "admin"
+      ? await fetchAdminGuaranteeSummary().then((s) => ({
+          day: s.day,
+          week: s.week,
+          month: s.month,
         }))
       : null;
 
@@ -682,6 +753,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
       ticketsVolume: commission,
       ticketsVolumeTotal: commissionBase,
       tournamentCommission: tournamentCommissionFor(startIso),
+      tournamentGuaranteePayout: user.role === "admin" ? adminGuaranteeMap?.[period] ?? 0 : 0,
       deposits,
       withdrawals,
       net,
