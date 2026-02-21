@@ -332,15 +332,6 @@ export default function AdminDashboardPage() {
               <span className="text-xl">›</span>
             </button>
           )}
-          {canAccessTournaments && (
-            <button
-              onClick={() => router.push("/admin/tournaments/report")}
-              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
-            >
-              <span>گزارش تورنومنت‌ها</span>
-              <span className="text-xl">›</span>
-            </button>
-          )}
           {/* منوی "بازی‌ها" */}
           {isAdmin && (
             <button
