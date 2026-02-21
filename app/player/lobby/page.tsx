@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import LobbyInfo from '@/components/LobbyInfo';
 import LobbyRoomCard from '@/components/LobbyRoomCard';
+import InstallAppButton from "@/components/InstallAppButton";
 import toast from 'react-hot-toast';
 import styles from './lobby.module.css';
 import { supabase } from "@/lib/supabaseClient";
@@ -278,6 +279,7 @@ export default function LobbyPage() {
           onlinePlayersCount={onlinePlayersCount}
         />
       </div>
+      <InstallAppButton />
       {errorMessage && (
         <div className={styles.errorMessage}>
           {errorMessage}
