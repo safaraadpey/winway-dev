@@ -5,6 +5,21 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { getCurrentUserRoleInfo } from "@/lib/auth-helpers";
 
+const DEFAULT_ADMIN_ORIGIN = "https://admin.dingmoney.org";
+
+function getAdminOrigin(): string {
+  const configuredOrigin = process.env.NEXT_PUBLIC_ADMIN_ORIGIN;
+  if (configuredOrigin) {
+    return configuredOrigin.replace(/\/+$/, "");
+  }
+  return DEFAULT_ADMIN_ORIGIN;
+}
+
+function redirectToAdmin(path: string) {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  window.location.assign(`${getAdminOrigin()}${normalizedPath}`);
+}
+
 /**
  * صفحه میانی برای تصمیم‌گیری بر اساس نقش کاربر
  * بعد از لاگین موفق، کاربر به این صفحه هدایت می‌شود
@@ -52,23 +67,23 @@ export default function PostLoginPage() {
             if (adminSubRole) {
               switch (adminSubRole) {
                 case "finance":
-                  router.push("/admin/dashboard"); // فعلاً داشبورد واحد
+                  redirectToAdmin("/admin/dashboard"); // فعلاً داشبورد واحد
                   break;
                 case "support":
-                  router.push("/admin/dashboard");
+                  redirectToAdmin("/admin/dashboard");
                   break;
                 case "room":
-                  router.push("/admin/room-templates");
+                  redirectToAdmin("/admin/room-templates");
                   break;
                 case "manager":
                 default:
                   // مدیر کل یا بدون sub_role
-                  router.push("/admin/dashboard");
+                  redirectToAdmin("/admin/dashboard");
                   break;
               }
             } else {
               // ادمین بدون sub_role (مدیر کل)
-              router.push("/admin/dashboard");
+              redirectToAdmin("/admin/dashboard");
             }
             break;
           case "super":
