@@ -14,6 +14,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { getCachedAdminPermissions, getCurrentAdminPermissions, clearAdminPermissionsCache } from "@/lib/admin-permissions";
 import type { DashboardPeriod, DashboardData } from "@/src/types/dashboard";
 import type { AdminPermissions } from "@/src/types/admins";
+import InstallAppButton from "@/components/InstallAppButton";
 
 const PERIOD_LABELS: Record<DashboardPeriod, string> = {
   day: "روز",
@@ -147,6 +148,9 @@ export default function AdminDashboardPage() {
   return (
     <div className="min-h-screen bg-[#0E0E0F] p-4">
       <div className="max-w-2xl mx-auto">
+        <div className="mb-4">
+          <InstallAppButton label="نصب اپ ادمین" />
+        </div>
         {/* کارت اطلاعات کاربر و ردیف کد معرف */}
         <div className="mb-4">
           <div className="flex items-center justify-between gap-3 mb-3">

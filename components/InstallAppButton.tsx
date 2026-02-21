@@ -22,7 +22,11 @@ function isRunningStandalone() {
   return iosStandalone || displayModeStandalone;
 }
 
-export default function InstallAppButton() {
+interface InstallAppButtonProps {
+  label?: string;
+}
+
+export default function InstallAppButton({ label = "نصب اپلیکیشن" }: InstallAppButtonProps) {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
   const [showIosHelp, setShowIosHelp] = useState(false);
@@ -71,7 +75,7 @@ export default function InstallAppButton() {
   return (
     <div className={styles.wrap}>
       <button type="button" className={styles.button} onClick={handleInstallClick}>
-        نصب اپلیکیشن
+        {label}
       </button>
       {ios && showIosHelp && (
         <p className={styles.helpText}>برای نصب در آیفون: Safari &gt; Share &gt; Add to Home Screen</p>
