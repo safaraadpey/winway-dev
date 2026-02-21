@@ -42,7 +42,9 @@ export default function RootLayout({
       </head>
       <body className="bg-[#0E0E0F]">
         <PWARegistration />
-        <GlobalUserStateClient>{children}</GlobalUserStateClient>
+        <div className="relative mx-auto min-h-dvh w-full max-w-[390px] overflow-x-hidden bg-[#0E0E0F]">
+          <GlobalUserStateClient>{children}</GlobalUserStateClient>
+        </div>
         <Toaster
           position="top-center"
           toastOptions={{
