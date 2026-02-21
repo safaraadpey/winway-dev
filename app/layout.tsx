@@ -40,7 +40,7 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap"
         />
       </head>
-      <body className="bg-white" style={{ maxWidth: '390px', margin: '0 auto', width: '100%', overflowX: 'hidden', position: 'relative' }}>
+      <body className="bg-[#0E0E0F]">
         <PWARegistration />
         <GlobalUserStateClient>{children}</GlobalUserStateClient>
         <Toaster

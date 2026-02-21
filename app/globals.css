@@ -4,6 +4,12 @@
 
 :root, html, body {
   font-family: 'Vazirmatn', 'Inter', 'Segoe UI', sans-serif;
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  background-color: #0e0e0f;
 }
 
 body, button, input, textarea, select, * {
