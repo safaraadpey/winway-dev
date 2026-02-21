@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import GlobalUserStateClient from "./GlobalUserStateClient";
@@ -7,7 +8,6 @@ import PWARegistration from "@/components/PWARegistration";
 export const metadata: Metadata = {
   title: "Dingmoney Bingo",
   description: "Bingo game application",
-  manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -32,9 +32,25 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const host = (headers().get("host") || "").split(":")[0].toLowerCase();
+  const adminHost = (
+    process.env.ADMIN_APP_HOST ||
+    process.env.NEXT_PUBLIC_ADMIN_HOST ||
+    "admin.dingmoney.org"
+  ).toLowerCase();
+  const isAdminHost = host === adminHost;
+  const manifestHref = isAdminHost
+    ? "/manifest-admin.webmanifest"
+    : "/manifest-player.webmanifest";
+  const appleTouchIconHref = isAdminHost
+    ? "/icons/admin-icon-192.svg"
+    : "/icons/icon-192.svg";
+
   return (
     <html lang="en">
       <head>
+        <link rel="manifest" href={manifestHref} />
+        <link rel="apple-touch-icon" href={appleTouchIconHref} />
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap"
