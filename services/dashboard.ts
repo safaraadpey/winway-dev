@@ -282,12 +282,27 @@ export async function loadDashboardRangeSummary(params: {
           .gte("created_at", fromIso)
           .lte("created_at", toIso);
 
-  const [manualRes, transferRes, commissionRes, tournamentCommissionRes] = await Promise.all([
+  const tournamentCommissionAmountQuery =
+    user.role === "admin"
+      ? null
+      : supabase
+          .from("transactions")
+          .select("amount")
+          .eq("user_id", user.id)
+          .eq("source_kind", "tournament_commission")
+          .eq("type", "win")
+          .gte("created_at", fromIso)
+          .lte("created_at", toIso);
+
+  const [manualRes, transferRes, commissionRes, tournamentCommissionRes, tournamentCommissionAmountRes] = await Promise.all([
     manualPanelQuery,
     transferQuery,
     commissionQuery ? commissionQuery : Promise.resolve({ data: [], error: null } as any),
     tournamentCommissionQuery
       ? tournamentCommissionQuery
+      : Promise.resolve({ data: [], error: null } as any),
+    tournamentCommissionAmountQuery
+      ? tournamentCommissionAmountQuery
       : Promise.resolve({ data: [], error: null } as any),
   ]);
 
@@ -295,11 +310,13 @@ export async function loadDashboardRangeSummary(params: {
   if (transferRes.error) throw new Error("خطا در دریافت تراکنش‌های پنلی");
   if (commissionRes.error) throw new Error("خطا در دریافت کمیسیون");
   if (tournamentCommissionRes.error) throw new Error("خطا در دریافت کمیسیون تورنومنت");
+  if (tournamentCommissionAmountRes.error) throw new Error("خطا در دریافت مبلغ کمیسیون تورنومنت");
 
   const manualRows = manualRes.data || [];
   const transferRows = transferRes.data || [];
   const commissionRows = commissionRes.data || [];
   const tournamentCommissionRows = tournamentCommissionRes.data || [];
+  const tournamentCommissionAmountRows = tournamentCommissionAmountRes.data || [];
 
   const deposits =
     manualRows.reduce(
@@ -344,15 +361,10 @@ export async function loadDashboardRangeSummary(params: {
       : commissionRows.reduce((sum: number, r: any) => sum + Number(r.super_amount || 0), 0);
 
   const tournamentCommission =
-    user.role === "agent"
-      ? tournamentCommissionRows.reduce(
-          (sum: number, r: any) => sum + Number(r.agent_amount || 0),
-          0
-        )
-      : tournamentCommissionRows.reduce(
-          (sum: number, r: any) => sum + Number(r.super_amount || 0),
-          0
-        );
+    tournamentCommissionAmountRows.reduce(
+      (sum: number, r: any) => sum + Number(r.amount || 0),
+      0
+    );
 
   const commissionBase =
     commissionRows.reduce((sum: number, r: any) => sum + Number(r.commission_base || 0), 0) +
@@ -657,11 +669,23 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
           .eq("super_id", user.id)
           .gte("created_at", monthIso);
 
-  const [commissionTxsRes, manualPanelTxsRes, transferTxsRes, tournamentCommissionTxsRes] =
+  const tournamentCommissionAmountQuery =
+    user.role === "admin"
+      ? null
+      : supabase
+          .from("transactions")
+          .select("amount, created_at")
+          .eq("user_id", user.id)
+          .eq("source_kind", "tournament_commission")
+          .eq("type", "win")
+          .gte("created_at", monthIso);
+
+  const [commissionTxsRes, manualPanelTxsRes, transferTxsRes, tournamentCommissionTxsRes, tournamentCommissionAmountTxsRes] =
     user.role === "admin"
       ? ([
           { data: [], error: null } as any,
           ...(await Promise.all([manualPanelQuery, transferQuery])),
+          { data: [], error: null } as any,
           { data: [], error: null } as any,
         ] as any)
       : await Promise.all([
@@ -669,6 +693,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
           manualPanelQuery,
           transferQuery,
           tournamentCommissionQuery as any,
+          tournamentCommissionAmountQuery as any,
         ]);
 
   if (commissionTxsRes.error) {
@@ -686,10 +711,17 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
       tournamentCommissionTxsRes.error
     );
   }
+  if (tournamentCommissionAmountTxsRes.error) {
+    console.error(
+      "loadDashboardData: tournament commission amount tx error:",
+      tournamentCommissionAmountTxsRes.error
+    );
+  }
   const commissionRows = commissionTxsRes.data || [];
   const manualTxs = manualPanelTxsRes.data || [];
   const transferTxs = transferTxsRes.data || [];
   const tournamentCommissionRows = tournamentCommissionTxsRes.data || [];
+  const tournamentCommissionAmountRows = tournamentCommissionAmountTxsRes.data || [];
 
   const depositsFor = (startIso: string) => {
     const manual = sumRowsSince(manualTxs, startIso, (t) =>
@@ -718,13 +750,9 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
     }
 
     const tournamentPart =
-      user.role === "agent"
-        ? sumRowsSince(tournamentCommissionRows, startIso, (t) =>
-            Number((t as any).agent_amount || 0)
-          )
-        : sumRowsSince(tournamentCommissionRows, startIso, (t) =>
-            Number((t as any).super_amount || 0)
-          );
+      sumRowsSince(tournamentCommissionAmountRows, startIso, (t) =>
+        Number((t as any).amount || 0)
+      );
 
     if (user.role === "agent") {
       return (
@@ -766,14 +794,9 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
   };
 
   const tournamentCommissionFor = (startIso: string) => {
-    if (user.role === "agent") {
-      return sumRowsSince(tournamentCommissionRows, startIso, (t) =>
-        Number((t as any).agent_amount || 0)
-      );
-    }
-    if (user.role === "super") {
-      return sumRowsSince(tournamentCommissionRows, startIso, (t) =>
-        Number((t as any).super_amount || 0)
+    if (user.role === "agent" || user.role === "super") {
+      return sumRowsSince(tournamentCommissionAmountRows, startIso, (t) =>
+        Number((t as any).amount || 0)
       );
     }
     if (startIso === dayIso) return adminCommissionMap?.tournament.day ?? 0;
