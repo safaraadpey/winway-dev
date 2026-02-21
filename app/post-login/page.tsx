@@ -6,6 +6,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { getCurrentUserRoleInfo } from "@/lib/auth-helpers";
 
 const DEFAULT_MAIN_HOST = "dingmoney.org";
+const DEFAULT_MAIN_ORIGIN = "https://dingmoney.org";
+const DEFAULT_ADMIN_HOST = "admin.dingmoney.org";
 const DEFAULT_ADMIN_ORIGIN = "https://admin.dingmoney.org";
 
 function getMainHost(): string {
@@ -20,10 +22,27 @@ function getAdminOrigin(): string {
   return DEFAULT_ADMIN_ORIGIN;
 }
 
+function getMainOrigin(): string {
+  const configuredOrigin = process.env.NEXT_PUBLIC_MAIN_ORIGIN;
+  if (configuredOrigin) {
+    return configuredOrigin.replace(/\/+$/, "");
+  }
+  return DEFAULT_MAIN_ORIGIN;
+}
+
+function getAdminHost(): string {
+  return (process.env.NEXT_PUBLIC_ADMIN_HOST || DEFAULT_ADMIN_HOST).toLowerCase();
+}
+
 function isMainHost(hostname: string): boolean {
   const mainHost = getMainHost();
   const normalized = hostname.toLowerCase();
   return normalized === mainHost || normalized === `www.${mainHost}`;
+}
+
+function isAdminHost(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return normalized === getAdminHost();
 }
 
 function redirectToAdmin(path: string) {
@@ -39,7 +58,9 @@ function redirectToAdmin(path: string) {
 export default function PostLoginPage() {
   const router = useRouter();
   const [adminPortalRequired, setAdminPortalRequired] = useState(false);
+  const [playerPortalRequired, setPlayerPortalRequired] = useState(false);
   const adminOrigin = getAdminOrigin();
+  const mainOrigin = getMainOrigin();
 
   useEffect(() => {
     async function redirectBasedOnRole() {
@@ -114,6 +135,11 @@ export default function PostLoginPage() {
             break;
           case "player":
           default:
+            if (isAdminHost(window.location.hostname)) {
+              await supabase.auth.signOut();
+              setPlayerPortalRequired(true);
+              return;
+            }
             // پیش‌فرض: همه به player/home می‌روند
             router.push("/player/home");
             break;
@@ -148,6 +174,32 @@ export default function PostLoginPage() {
             className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700"
           >
             بازگشت به ورود پلیر
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (playerPortalRequired) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-100 px-5">
+        <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-lg">
+          <h1 className="mb-3 text-xl font-bold text-gray-900">ورود پلیر از این آدرس مجاز نیست</h1>
+          <p className="mb-5 text-sm leading-6 text-gray-600">
+            برای ورود به پنل پلیر، لطفا از آدرس اصلی dingmoney.org یا اپلیکیشن پلیر استفاده کنید.
+          </p>
+          <a
+            href={`${mainOrigin}/login`}
+            className="inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white"
+          >
+            ورود به اپ پلیر
+          </a>
+          <button
+            type="button"
+            onClick={() => router.replace("/login")}
+            className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700"
+          >
+            بازگشت به ورود
           </button>
         </div>
       </div>
