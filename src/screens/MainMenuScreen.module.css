@@ -24,6 +24,12 @@
   gap: 0.75rem;
 }
 
+.installSection {
+  width: 100%;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
 /* Status Bar */
 .statusBar {
   display: flex;

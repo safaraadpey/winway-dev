@@ -45,7 +45,9 @@ const MainMenuScreen: React.FC = () => {
   return (
     <div className={styles.mainMenu}>
       <div className={styles.mainMenuInner}>
-        <InstallAppButton />
+        <div className={styles.installSection}>
+          <InstallAppButton />
+        </div>
         {/* Menu List */}
         <div className={styles.menuList}>
           <Link href="/player/lobby">
