@@ -89,6 +89,66 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [globalRegistrationLocked, setGlobalRegistrationLocked] = useState(false);
   const [globalRegistrationLockReason, setGlobalRegistrationLockReason] = useState<string | null>(null);
+  const [profileNamesByUserId, setProfileNamesByUserId] = useState<Record<string, string>>({});
+
+  const isUuidLike = useCallback((value: string | null | undefined) => {
+    if (!value) return false;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value.trim()
+    );
+  }, []);
+
+  const pickHumanName = useCallback(
+    (...candidates: Array<string | null | undefined>) => {
+      for (const candidate of candidates) {
+        const value = candidate?.trim();
+        if (!value) continue;
+        if (isUuidLike(value)) continue;
+        return value;
+      }
+      return "بازیکن";
+    },
+    [isUuidLike]
+  );
+
+  const loadProfileNames = useCallback(async () => {
+    if (!tournamentId) {
+      setProfileNamesByUserId({});
+      return;
+    }
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const token = session?.access_token || null;
+    const search = new URLSearchParams({ tournamentId });
+    const res = await fetch(`/api/player/tournament-entry-names?${search.toString()}`, {
+      method: "GET",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      setProfileNamesByUserId({});
+      return;
+    }
+
+    const payload = (await res.json()) as { namesByUserId?: Record<string, string> };
+    setProfileNamesByUserId(payload.namesByUserId ?? {});
+  }, [tournamentId]);
+
+  const entryNamesByUserId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const entry of entries) {
+      const name = pickHumanName(
+        profileNamesByUserId[entry.user_id],
+        entry.users?.username,
+        entry.users?.email
+      );
+      if (entry.user_id) map.set(entry.user_id, name);
+    }
+    return map;
+  }, [entries, pickHumanName, profileNamesByUserId]);
 
   useEffect(() => {
     setShowBackButton(true);
@@ -131,16 +191,19 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
         setError(error?.message || entriesErr?.message || "خطا در دریافت اطلاعات تورنومنت");
         setTournament(null);
         setEntries([]);
+        setProfileNamesByUserId({});
       } else {
         setTournament((data as TournamentRow) ?? null);
-        setEntries(((entriesData as any) ?? []) as typeof entries);
+        const nextEntries = (((entriesData as any) ?? []) as typeof entries);
+        setEntries(nextEntries);
+        void loadProfileNames();
       }
 
       if (showLoader) {
         setLoading(false);
       }
     },
-    [tournamentId]
+    [loadProfileNames, tournamentId]
   );
 
   useEffect(() => {
@@ -207,7 +270,13 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     let active = true;
 
     const resolveWinnerName = (row: any) =>
-      row?.users?.username || row?.users?.email || row?.user_id || "بازیکن";
+      pickHumanName(
+        row?.user_id ? profileNamesByUserId[row.user_id] : null,
+        row?.users?.username,
+        row?.users?.email,
+        row?.user_id ? entryNamesByUserId.get(row.user_id) : null,
+        row?.user_id
+      );
 
     const loadWinner = async () => {
       setWinnersLoading(true);
@@ -310,7 +379,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     return () => {
       active = false;
     };
-  }, [tournament?.id, tournament?.status]);
+  }, [entryNamesByUserId, pickHumanName, profileNamesByUserId, tournament?.id, tournament?.status]);
 
   useEffect(() => {
     if (!tournamentId) return;
@@ -566,7 +635,9 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
       toast.error("خطا در به‌روزرسانی لیست ثبت‌نام");
       return;
     }
-    setEntries(((data as any) ?? []) as typeof entries);
+    const nextEntries = (((data as any) ?? []) as typeof entries);
+    setEntries(nextEntries);
+    void loadProfileNames();
   };
 
   const handleCancelRegister = async () => {
@@ -615,13 +686,18 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     if (entries.length > 0) {
       return entries.map((e) => ({
         id: e.user_id,
-        title: e.users?.username || e.users?.email || "بازیکن",
+        title: pickHumanName(
+          profileNamesByUserId[e.user_id],
+          e.users?.username,
+          e.users?.email,
+          e.user_id
+        ),
         count: Math.max(1, e.tickets_count ?? 1),
       }));
     }
     // بدون ثبت‌نام، لیست را خالی نگه دار تا حالت خالی نمایش داده شود
     return [];
-  }, [entries, tournament]);
+  }, [entries, pickHumanName, profileNamesByUserId, tournament]);
 
   const currentEntry = useMemo(
     () => entries.find((e) => currentUserId && e.user_id === currentUserId),
