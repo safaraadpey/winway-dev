@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import InstallAppButton from "@/components/InstallAppButton";
 import styles from './MainMenuScreen.module.css';
 
 // Import menu banner images
@@ -44,6 +45,7 @@ const MainMenuScreen: React.FC = () => {
   return (
     <div className={styles.mainMenu}>
       <div className={styles.mainMenuInner}>
+        <InstallAppButton />
         {/* Menu List */}
         <div className={styles.menuList}>
           <Link href="/player/lobby">
