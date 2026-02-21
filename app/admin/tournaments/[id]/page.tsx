@@ -37,6 +37,14 @@ type RoundRoomRow = {
   created_at: string | null;
 };
 
+type PrizeTxRow = {
+  user_id: string | null;
+  users?: {
+    username?: string | null;
+    email?: string | null;
+  } | null;
+};
+
 export default function AdminTournamentDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -47,6 +55,7 @@ export default function AdminTournamentDetailPage() {
   const [tournament, setTournament] = useState<TournamentRow | null>(null);
   const [entries, setEntries] = useState<EntryRow[]>([]);
   const [rooms, setRooms] = useState<RoundRoomRow[]>([]);
+  const [winnerNames, setWinnerNames] = useState<string[]>([]);
 
   const tournamentId =
     typeof params?.id === "string"
@@ -72,7 +81,12 @@ export default function AdminTournamentDetailPage() {
       setLoading(true);
       setError(null);
 
-      const [{ data: tData, error: tErr }, { data: eData, error: eErr }, { data: rData, error: rErr }] =
+      const [
+        { data: tData, error: tErr },
+        { data: eData, error: eErr },
+        { data: rData, error: rErr },
+        { data: pData, error: pErr },
+      ] =
         await Promise.all([
           supabase
             .from("tournaments")
@@ -90,16 +104,34 @@ export default function AdminTournamentDetailPage() {
             .eq("tournament_id", tournamentId)
             .order("round_no", { ascending: true })
             .order("table_no", { ascending: true }),
+          supabase
+            .from("transactions")
+            .select("user_id,users:users(username,email)")
+            .eq("source_kind", "tournament_prize")
+            .eq("type", "win")
+            .eq("source_ref", tournamentId),
         ]);
 
       if (!active) return;
 
-      if (tErr || eErr || rErr) {
-        setError(tErr?.message || eErr?.message || rErr?.message || "خطا در بارگذاری داده");
+      if (tErr || eErr || rErr || pErr) {
+        setError(
+          tErr?.message ||
+            eErr?.message ||
+            rErr?.message ||
+            pErr?.message ||
+            "خطا در بارگذاری داده"
+        );
       } else {
         setTournament((tData as TournamentRow) ?? null);
         setEntries((eData as EntryRow[]) ?? []);
         setRooms((rData as RoundRoomRow[]) ?? []);
+        const names = new Set<string>();
+        for (const row of (pData as PrizeTxRow[]) || []) {
+          const name = row.users?.username || row.users?.email || row.user_id || null;
+          if (name) names.add(String(name));
+        }
+        setWinnerNames(Array.from(names));
       }
       setLoading(false);
     };
@@ -175,6 +207,12 @@ export default function AdminTournamentDetailPage() {
                 <div className="text-gray-400">زمان شروع</div>
                 <div className="font-semibold">
                   {tournament.start_at ? new Date(tournament.start_at).toLocaleString("fa-IR") : "نامشخص"}
+                </div>
+              </div>
+              <div className="col-span-2">
+                <div className="text-gray-400">برنده‌ها</div>
+                <div className="font-semibold break-words">
+                  {winnerNames.length > 0 ? winnerNames.join("، ") : "نامشخص"}
                 </div>
               </div>
             </div>

@@ -193,7 +193,7 @@ export default function AgentDashboardPage() {
               <div className="text-center py-4 text-gray-400">در حال بارگذاری...</div>
             ) : (
               <div className="grid grid-cols-2 gap-y-1">
-                <span>کانیات</span>
+                <span>کانیات من</span>
                 <span className="text-right font-mono">
                   {summary.ticketsVolume.toLocaleString("en-US")}
                 </span>
@@ -201,9 +201,16 @@ export default function AgentDashboardPage() {
                 <span className="text-right font-mono">
                   {summary.ticketsVolumeTotal.toLocaleString("en-US")}
                 </span>
-                <span>کانیات تورنومنت</span>
+                <span>کانیات از تورنومنت</span>
                 <span className="text-right font-mono">
                   {(summary.tournamentCommission ?? 0).toLocaleString("en-US")}
+                </span>
+                <span>کانیات از بازی</span>
+                <span className="text-right font-mono">
+                  {Math.max(
+                    0,
+                    summary.ticketsVolume - (summary.tournamentCommission ?? 0)
+                  ).toLocaleString("en-US")}
                 </span>
                 <span>واریز</span>
                 <span className="text-right font-mono">
@@ -220,6 +227,13 @@ export default function AgentDashboardPage() {
 
         {/* منوهای ناوبری اصلی */}
         <div className="space-y-3">
+          <button
+            onClick={() => router.push("/agent/tournaments/report")}
+            className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
+          >
+            <span>گزارش تورنومنت‌ها</span>
+            <span className="text-xl">›</span>
+          </button>
           <button
             onClick={() => router.push("/admin/games")}
             className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"

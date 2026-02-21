@@ -35,6 +35,7 @@ export default function AdminDashboardPage() {
   const [rangeSummary, setRangeSummary] = useState<{
     ticketsVolume: number;
     ticketsVolumeTotal: number;
+    tournamentTicketsVolumeTotal: number;
     tournamentCommission: number;
     tournamentGuaranteePayout: number;
     deposits: number;
@@ -134,6 +135,7 @@ export default function AdminDashboardPage() {
       setRangeSummary({
         ticketsVolume: result.ticketsVolume,
         ticketsVolumeTotal: result.ticketsVolumeTotal,
+        tournamentTicketsVolumeTotal: result.tournamentTicketsVolumeTotal,
         tournamentCommission: result.tournamentCommission,
         tournamentGuaranteePayout: result.tournamentGuaranteePayout,
         deposits: result.deposits,
@@ -260,6 +262,17 @@ export default function AdminDashboardPage() {
                   <span className="text-right font-mono">
                     {summary.ticketsVolumeTotal.toLocaleString("en-US")}
                   </span>
+                  <span>کانیات کل تورنومنت‌ها</span>
+                  <span className="text-right font-mono">
+                    {(summary.tournamentTicketsVolumeTotal ?? 0).toLocaleString("en-US")}
+                  </span>
+                  <span>کانیات کل بازی‌ها</span>
+                  <span className="text-right font-mono">
+                    {Math.max(
+                      0,
+                      summary.ticketsVolumeTotal - (summary.tournamentTicketsVolumeTotal ?? 0)
+                    ).toLocaleString("en-US")}
+                  </span>
                   <span>کانیات پنل‌ها</span>
                   <span className="text-right font-mono">
                     {Math.max(0, summary.ticketsVolumeTotal - summary.ticketsVolume).toLocaleString("en-US")}
@@ -316,6 +329,15 @@ export default function AdminDashboardPage() {
               className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
             >
               <span>تورنومنت‌ها</span>
+              <span className="text-xl">›</span>
+            </button>
+          )}
+          {canAccessTournaments && (
+            <button
+              onClick={() => router.push("/admin/tournaments/report")}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
+            >
+              <span>گزارش تورنومنت‌ها</span>
               <span className="text-xl">›</span>
             </button>
           )}

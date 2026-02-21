@@ -20,6 +20,8 @@ export interface FinancialSummary {
   ticketsVolume: number; // مجموع مبلغ بلیت‌ها / فروش
   /** مجموع مبلغی که کمیسیون از آن ساخته شده (commission_base) */
   ticketsVolumeTotal: number;
+  /** مجموع commission_base تورنومنت‌ها */
+  tournamentTicketsVolumeTotal: number;
   /** کمیسیون تورنومنت (نمایش جداگانه در داشبورد) */
   tournamentCommission: number;
   /** مبلغ پرداختی گارانتی تورنومنت‌ها (تاپ‌آپ ضمانت) */

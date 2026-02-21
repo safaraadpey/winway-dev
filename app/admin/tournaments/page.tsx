@@ -203,12 +203,20 @@ export default function AdminTournamentsPage() {
           <div>
             <h1 className="text-2xl font-bold">تورنومنت‌ها</h1>
           </div>
-          <button
-            onClick={() => router.push("/admin/tournaments/create")}
-            className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white text-sm font-semibold"
-          >
-            + تورنومنت جدید
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push("/admin/tournaments/report")}
+              className="px-4 py-2 rounded-xl bg-[#1f2933] hover:bg-[#27323f] active:bg-[#324052] text-white text-sm font-semibold"
+            >
+              گزارش انجام‌شده‌ها
+            </button>
+            <button
+              onClick={() => router.push("/admin/tournaments/create")}
+              className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white text-sm font-semibold"
+            >
+              + تورنومنت جدید
+            </button>
+          </div>
         </div>
 
         {loading && <div className="text-gray-300">در حال بارگذاری...</div>}
