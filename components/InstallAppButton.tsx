@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import toast from "react-hot-toast";
 import styles from "./InstallAppButton.module.css";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -35,7 +36,6 @@ export default function InstallAppButton({ label = "نصب اپلیکیشن" }: 
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
   const [showIosHelp, setShowIosHelp] = useState(false);
-  const [showAndroidHelp, setShowAndroidHelp] = useState(false);
 
   const ios = useMemo(() => isIosDevice(), []);
   const android = useMemo(() => isAndroidDevice(), []);
@@ -52,7 +52,6 @@ export default function InstallAppButton({ label = "نصب اپلیکیشن" }: 
       setInstalled(true);
       setDeferredPrompt(null);
       setShowIosHelp(false);
-      setShowAndroidHelp(false);
     };
 
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
@@ -73,14 +72,13 @@ export default function InstallAppButton({ label = "نصب اپلیکیشن" }: 
     }
 
     if (ios) {
-      setShowAndroidHelp(false);
       setShowIosHelp((prev) => !prev);
       return;
     }
 
     if (android) {
-      setShowIosHelp(false);
-      setShowAndroidHelp((prev) => !prev);
+      // Chrome emits beforeinstallprompt asynchronously; avoid showing install steps.
+      toast("چند لحظه دیگر دوباره روی نصب بزنید");
     }
   };
 
@@ -93,11 +91,6 @@ export default function InstallAppButton({ label = "نصب اپلیکیشن" }: 
       </button>
       {ios && showIosHelp && (
         <p className={styles.helpText}>برای نصب در آیفون: Safari &gt; Share &gt; Add to Home Screen</p>
-      )}
-      {android && showAndroidHelp && (
-        <p className={styles.helpText}>
-          اگر پنجره نصب باز نشد: در Chrome روی منوی سه‌نقطه بزنید و گزینه Install app یا Add to Home screen را انتخاب کنید.
-        </p>
       )}
     </div>
   );
