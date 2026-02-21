@@ -1,11 +1,30 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import GlobalUserStateClient from "./GlobalUserStateClient";
+import PWARegistration from "@/components/PWARegistration";
 
 export const metadata: Metadata = {
   title: "Dingmoney Bingo",
   description: "Bingo game application",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Dingmoney Bingo",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+  themeColor: "#111827",
 };
 
 export default function RootLayout({
@@ -16,13 +35,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap"
         />
       </head>
       <body className="bg-white" style={{ maxWidth: '390px', margin: '0 auto', width: '100%', overflowX: 'hidden', position: 'relative' }}>
+        <PWARegistration />
         <GlobalUserStateClient>{children}</GlobalUserStateClient>
         <Toaster
           position="top-center"
