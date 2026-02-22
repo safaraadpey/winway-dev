@@ -4,6 +4,10 @@ import React from 'react';
 import ProfilePage from '@/components/ProfilePage';
 
 export default function MyProfilePage() {
-  return <ProfilePage />;
+  return (
+    <div className="h-full overflow-y-auto">
+      <ProfilePage />
+    </div>
+  );
 }
 
