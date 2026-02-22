@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { loadFinancialReports } from "@/services/financial-reports";
 import type {
@@ -21,6 +21,7 @@ export default function FinancialReportsPage() {
   const [data, setData] = useState<FinancialReportsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activePeriod, setActivePeriod] = useState<ReportPeriod>("month");
+  const periodCacheRef = useRef<Partial<Record<ReportPeriod, FinancialReportsData>>>({});
 
   useEffect(() => {
     setShowBackButton(true);
@@ -34,20 +35,39 @@ export default function FinancialReportsPage() {
   }, [setShowBackButton, setOnBackClick]);
 
   useEffect(() => {
+    const cached = periodCacheRef.current[activePeriod];
+    if (cached) {
+      setData(cached);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
     async function fetchData() {
       try {
         setLoading(true);
         const result = await loadFinancialReports(activePeriod);
-        setData(result);
+        periodCacheRef.current[activePeriod] = result;
+        if (!cancelled) {
+          setData(result);
+        }
       } catch (error: any) {
-        console.error("Error loading financial reports:", error);
-        toast.error(error.message || "خطا در بارگذاری گزارشات مالی");
+        if (!cancelled) {
+          console.error("Error loading financial reports:", error);
+          toast.error(error.message || "خطا در بارگذاری گزارشات مالی");
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
     fetchData();
+
+    return () => {
+      cancelled = true;
+    };
   }, [activePeriod]);
 
   const formatAmount = (amount: number): string => {
@@ -123,7 +143,7 @@ export default function FinancialReportsPage() {
     return description;
   };
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className={styles.container}>
         <div className={styles.loadingContainer}>
