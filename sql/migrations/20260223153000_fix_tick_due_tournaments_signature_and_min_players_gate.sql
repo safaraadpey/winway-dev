@@ -1,3 +1,8 @@
+-- Fix tournament tick ambiguity and keep only canonical 3-arg function.
+-- Also enforce "delay 1 hour if registration_open tournament has < 3 players".
+
+DROP FUNCTION IF EXISTS tournament.fn_tick_due_tournaments();
+
 CREATE OR REPLACE FUNCTION tournament.fn_tick_due_tournaments(
   p_limit integer DEFAULT 50,
   p_seed bigint DEFAULT NULL::bigint,
@@ -12,18 +17,14 @@ DECLARE
   r record;
   v_count int := 0;
   v_entries_players int;
-  v_min_players int;
+  v_min_players int := 3;
 
-  -- error log details
   v_ctx    text;
   v_detail text;
   v_hint   text;
 BEGIN
   FOR r IN
-    SELECT
-      t.id,
-      t.status,
-      GREATEST(COALESCE(NULLIF(t.meta->>'min_players_to_start','')::int, 3), 3) AS min_players_to_start
+    SELECT t.id, t.status
     FROM public.tournaments t
     WHERE
       (t.status = 'registration_open'::public.tournament_status
@@ -36,7 +37,6 @@ BEGIN
   LOOP
     BEGIN
       IF r.status = 'registration_open'::public.tournament_status THEN
-        v_min_players := COALESCE(r.min_players_to_start, 3);
         SELECT count(DISTINCT te.user_id)
           INTO v_entries_players
         FROM public.tournament_entries te
@@ -93,3 +93,18 @@ BEGIN
 END;
 $function$;
 
+-- Make pg_cron call explicit to avoid overload ambiguity.
+DO $$
+BEGIN
+  UPDATE cron.job
+     SET command = 'SELECT tournament.fn_tick_due_tournaments(50, NULL, NULL)'
+   WHERE jobname = 'tournament.fn_tick_due_tournaments';
+EXCEPTION
+  WHEN undefined_table THEN
+    -- In environments without pg_cron metadata table.
+    NULL;
+  WHEN insufficient_privilege THEN
+    -- In hosted environments where current role cannot update cron metadata.
+    NULL;
+END
+$$;

@@ -19,6 +19,7 @@ export type TournamentFormValues = {
   commission_rate: number | null;
   guaranteed_prize: number | null;
   min_players_for_guarantee: number | null;
+  min_players_to_start: number | null;
   final_winners_count: number | null;
 };
 
@@ -103,6 +104,7 @@ export function TournamentForm({
       commission_rate: null,
       guaranteed_prize: 0,
       min_players_for_guarantee: null,
+      min_players_to_start: 3,
       final_winners_count: 1,
     }),
     []
@@ -222,6 +224,13 @@ export function TournamentForm({
       values.min_players_for_guarantee < 1
     ) {
       setError("حداقل تعداد بازیکن گارانتی باید حداقل 1 باشد.");
+      return;
+    }
+    if (
+      values.min_players_to_start != null &&
+      values.min_players_to_start < 3
+    ) {
+      setError("حداقل نفرات شروع تورنومنت باید حداقل 3 باشد.");
       return;
     }
     if (startAtValue) {
@@ -425,6 +434,18 @@ export function TournamentForm({
             onChange={(e) => handleNumber("min_players_for_guarantee", e.target.value)}
             className={inputClass}
             disabled={readOnly || isFreeTournament}
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm">
+          <span>حداقل نفرات شروع تورنومنت (حداقل 3)</span>
+          <input
+            type="number"
+            min="3"
+            value={values.min_players_to_start ?? ""}
+            onChange={(e) => handleNumber("min_players_to_start", e.target.value)}
+            className={inputClass}
+            disabled={readOnly}
           />
         </label>
 

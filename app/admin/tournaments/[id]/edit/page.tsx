@@ -37,6 +37,7 @@ export default function AdminTournamentEditPage() {
       commission_rate: data.commission_rate ?? null,
       guaranteed_prize: data.guaranteed_prize ?? 0,
       min_players_for_guarantee: data?.meta?.min_players_for_guarantee ?? null,
+      min_players_to_start: data?.meta?.min_players_to_start ?? 3,
       final_winners_count: data?.meta?.final_winners_count ?? 1,
     };
   }, []);
@@ -104,6 +105,7 @@ export default function AdminTournamentEditPage() {
       meta: {
         final_winners_count: values.final_winners_count,
         min_players_for_guarantee: values.min_players_for_guarantee,
+        min_players_to_start: values.min_players_to_start,
         entry_currency: values.entry_currency,
       },
     };
