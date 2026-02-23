@@ -47,6 +47,8 @@ function mapToFormValues(row: TournamentRow): TournamentFormValues {
     guaranteed_prize: row.guaranteed_prize ?? 0,
     min_players_for_guarantee:
       (row.meta as any)?.min_players_for_guarantee ?? null,
+    min_players_to_start:
+      (row.meta as any)?.min_players_to_start ?? 3,
     final_winners_count: (row.meta as any)?.final_winners_count ?? 1,
   };
 }
