@@ -10,13 +10,13 @@ const siteOrigin =
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteOrigin),
-  title: "Dingmoney Bingo",
+  title: "Dingmoney - بازی آنلاین و تورنومنت دبرنا",
   description:
     "بینگوی آنلاین دینگ مانی — بازی کنید، برنده شوید. اپلیکیشن بینگو و تورنمنت از Ding Money Gaming Hub.",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Dingmoney Bingo",
+    title: "Dingmoney - بازی آنلاین و تورنومنت دبرنا",
   },
   formatDetection: {
     telephone: false,
@@ -25,8 +25,8 @@ export const metadata: Metadata = {
     type: "website",
     locale: "fa_IR",
     url: siteOrigin,
-    siteName: "Dingmoney Bingo",
-    title: "Dingmoney Bingo — بینگو آنلاین",
+    siteName: "Dingmoney - بازی آنلاین و تورنومنت دبرنا",
+    title: "Dingmoney - بازی آنلاین و تورنومنت دبرنا",
     description:
       "بینگوی آنلاین دینگ مانی — بازی کنید، برنده شوید. اپلیکیشن بینگو و تورنمنت از Ding Money Gaming Hub.",
     images: [
@@ -34,13 +34,13 @@ export const metadata: Metadata = {
         url: "/ding_money_preview.jpg",
         width: 1200,
         height: 630,
-        alt: "Ding Money Gaming Hub — بینگو آنلاین",
+        alt: "Dingmoney - بازی آنلاین و تورنومنت دبرنا",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Dingmoney Bingo — بینگو آنلاین",
+    title: "Dingmoney - بازی آنلاین و تورنومنت دبرنا",
     description:
       "بینگوی آنلاین دینگ مانی — بازی کنید، برنده شوید. اپلیکیشن بینگو و تورنمنت از Ding Money Gaming Hub.",
     images: ["/ding_money_preview.jpg"],
