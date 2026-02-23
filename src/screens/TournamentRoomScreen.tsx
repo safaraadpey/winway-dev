@@ -652,14 +652,17 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     }
     setSubmitting(true);
     try {
-      const { error: relErr } = await supabase.rpc("fn_tournament_wallet_release", {
-        p_tournament_id: tournament.id,
-        p_entry_id: userEntry.id,
-        p_currency: entryCurrency,
-      });
-      if (relErr) {
-        toast.error(relErr.message || "خطا در آزادسازی مبلغ");
-        return;
+      const isFreeTournament = (tournament.ticket_price ?? 0) === 0;
+      if (!isFreeTournament) {
+        const { error: relErr } = await supabase.rpc("fn_tournament_wallet_release", {
+          p_tournament_id: tournament.id,
+          p_entry_id: userEntry.id,
+          p_currency: entryCurrency,
+        });
+        if (relErr) {
+          toast.error(relErr.message || "خطا در آزادسازی مبلغ");
+          return;
+        }
       }
 
       const { error } = await supabase

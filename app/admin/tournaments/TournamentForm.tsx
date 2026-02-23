@@ -170,8 +170,8 @@ export function TournamentForm({
       setError("عنوان الزامی است.");
       return;
     }
-    if (!values.ticket_price || values.ticket_price <= 0) {
-      setError("قیمت بلیت باید بیشتر از صفر باشد.");
+    if (values.ticket_price != null && values.ticket_price < 0) {
+      setError("قیمت بلیت نمی‌تواند منفی باشد. برای تورنومنت رایگان عدد ۰ وارد کنید.");
       return;
     }
     if (values.entry_currency === "DING" && (!values.guaranteed_prize || values.guaranteed_prize <= 0)) {
@@ -380,7 +380,7 @@ export function TournamentForm({
         </label>
 
         <label className="flex flex-col gap-1 text-sm">
-          <span>قیمت بلیت</span>
+          <span>قیمت بلیت (۰ = رایگان)</span>
           <input
             type="number"
             min="0"
@@ -388,7 +388,6 @@ export function TournamentForm({
             value={values.ticket_price ?? ""}
             onChange={(e) => handleNumber("ticket_price", e.target.value)}
             className={inputClass}
-            required
             disabled={readOnly}
           />
         </label>
