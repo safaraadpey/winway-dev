@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteOrigin),
   title: "Dingmoney - بازی آنلاین و تورنومنت دبرنا",
   description:
-    "اپلیکیشن دبرنای آنلاین و تورنومنت دبرنای دینگ مانی- بازی کنید، برنده شوید.",
+    "اولین اپلیکیشن دبرنا دارای تورنومنت و تکنیک هش جهت جلوگیری از تقلب",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     siteName: "Dingmoney - بازی آنلاین و تورنومنت دبرنا",
     title: "Dingmoney - بازی آنلاین و تورنومنت دبرنا",
     description:
-      "اپلیکیشن دبرنای آنلاین و تورنومنت دبرنای دینگ مانی- بازی کنید، برنده شوید.",
+      "اولین اپلیکیشن دبرنا دارای تورنومنت و تکنیک هش جهت جلوگیری از تقلب",
     images: [
       {
         url: "/ding_money_preview.jpg",
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Dingmoney - بازی آنلاین و تورنومنت دبرنا",
     description:
-      "اپلیکیشن دبرنای آنلاین و تورنومنت دبرنای دینگ مانی- بازی کنید، برنده شوید.",
+      "اولین اپلیکیشن دبرنا دارای تورنومنت و تکنیک هش جهت جلوگیری از تقلب",
     images: ["/ding_money_preview.jpg"],
   },
 };
