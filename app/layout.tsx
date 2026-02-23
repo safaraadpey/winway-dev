@@ -5,9 +5,14 @@ import { Toaster } from "react-hot-toast";
 import GlobalUserStateClient from "./GlobalUserStateClient";
 import PWARegistration from "@/components/PWARegistration";
 
+const siteOrigin =
+  process.env.NEXT_PUBLIC_MAIN_ORIGIN || "https://dingmoney.org";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteOrigin),
   title: "Dingmoney Bingo",
-  description: "Bingo game application",
+  description:
+    "بینگوی آنلاین دینگ مانی — بازی کنید، برنده شوید. اپلیکیشن بینگو و تورنمنت از Ding Money Gaming Hub.",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -15,6 +20,30 @@ export const metadata: Metadata = {
   },
   formatDetection: {
     telephone: false,
+  },
+  openGraph: {
+    type: "website",
+    locale: "fa_IR",
+    url: siteOrigin,
+    siteName: "Dingmoney Bingo",
+    title: "Dingmoney Bingo — بینگو آنلاین",
+    description:
+      "بینگوی آنلاین دینگ مانی — بازی کنید، برنده شوید. اپلیکیشن بینگو و تورنمنت از Ding Money Gaming Hub.",
+    images: [
+      {
+        url: "/ding_money_preview.jpg",
+        width: 1200,
+        height: 630,
+        alt: "Ding Money Gaming Hub — بینگو آنلاین",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Dingmoney Bingo — بینگو آنلاین",
+    description:
+      "بینگوی آنلاین دینگ مانی — بازی کنید، برنده شوید. اپلیکیشن بینگو و تورنمنت از Ding Money Gaming Hub.",
+    images: ["/ding_money_preview.jpg"],
   },
 };
 
