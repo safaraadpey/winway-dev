@@ -156,6 +156,13 @@ export function TournamentForm({
     const num = val === "" ? null : Number(val);
     handleChange(key, Number.isNaN(num) ? null : num);
   };
+  const isFreeTournament = (values.ticket_price ?? 0) <= 0;
+
+  useEffect(() => {
+    if (isFreeTournament && values.min_players_for_guarantee != null) {
+      setValues((prev) => ({ ...prev, min_players_for_guarantee: null }));
+    }
+  }, [isFreeTournament, values.min_players_for_guarantee]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -227,6 +234,7 @@ export function TournamentForm({
     }
     await onSubmit({
       ...values,
+      min_players_for_guarantee: isFreeTournament ? null : values.min_players_for_guarantee,
       start_at: startAtValue,
     });
   };
@@ -406,14 +414,17 @@ export function TournamentForm({
         </label>
 
         <label className="flex flex-col gap-1 text-sm">
-          <span>حداقل بازیکن برای گارانتی</span>
+          <span>
+            حداقل بازیکن برای گارانتی
+            {isFreeTournament ? " (در تورنومنت رایگان غیرفعال است)" : ""}
+          </span>
           <input
             type="number"
             min="1"
             value={values.min_players_for_guarantee ?? ""}
             onChange={(e) => handleNumber("min_players_for_guarantee", e.target.value)}
             className={inputClass}
-            disabled={readOnly}
+            disabled={readOnly || isFreeTournament}
           />
         </label>
 

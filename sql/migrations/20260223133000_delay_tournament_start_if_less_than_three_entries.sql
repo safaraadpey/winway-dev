@@ -1,3 +1,7 @@
+-- Delay tournament start by one hour when registrations are below threshold.
+-- Rule: if registration_open tournament reaches start_at with fewer than 3 created entries,
+-- push start_at forward by 1 hour instead of moving to running.
+
 CREATE OR REPLACE FUNCTION tournament.fn_tick_due_tournaments()
 RETURNS void
 LANGUAGE plpgsql
@@ -35,4 +39,3 @@ BEGIN
   END LOOP;
 END;
 $$;
-
