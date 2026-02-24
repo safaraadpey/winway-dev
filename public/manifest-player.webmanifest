@@ -1,7 +1,7 @@
 {
   "id": "/player-pwa",
-  "name": "Dingmoney Player",
-  "short_name": "Ding Player",
+  "name": "Ding Money",
+  "short_name": "Ding Money",
   "description": "Dingmoney player application",
   "start_url": "/player/home",
   "scope": "/",
