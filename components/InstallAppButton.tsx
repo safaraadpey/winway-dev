@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import toast from "react-hot-toast";
 import styles from "./InstallAppButton.module.css";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -35,7 +34,7 @@ function isRunningStandalone() {
 export default function InstallAppButton({ label = "نصب اپلیکیشن" }: InstallAppButtonProps) {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
-  const [showIosHelp, setShowIosHelp] = useState(false);
+  const [showInstallGuideModal, setShowInstallGuideModal] = useState(false);
 
   const ios = useMemo(() => isIosDevice(), []);
   const android = useMemo(() => isAndroidDevice(), []);
@@ -51,7 +50,7 @@ export default function InstallAppButton({ label = "نصب اپلیکیشن" }: 
     const onInstalled = () => {
       setInstalled(true);
       setDeferredPrompt(null);
-      setShowIosHelp(false);
+      setShowInstallGuideModal(false);
     };
 
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
@@ -71,15 +70,7 @@ export default function InstallAppButton({ label = "نصب اپلیکیشن" }: 
       return;
     }
 
-    if (ios) {
-      setShowIosHelp((prev) => !prev);
-      return;
-    }
-
-    if (android) {
-      // Chrome emits beforeinstallprompt asynchronously; avoid showing install steps.
-      toast("چند لحظه دیگر دوباره روی نصب بزنید");
-    }
+    setShowInstallGuideModal(true);
   };
 
   if (installed) return null;
@@ -89,12 +80,35 @@ export default function InstallAppButton({ label = "نصب اپلیکیشن" }: 
       <button type="button" className={styles.button} onClick={handleInstallClick}>
         {label}
       </button>
-      {ios && showIosHelp && (
-        <p className={styles.helpText}>
-          راهنمای نصب در آیفون:
-          <br />
-          Safari &gt; Share &gt; Add to Home Screen
-        </p>
+      {showInstallGuideModal && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modalCard}>
+            {ios ? (
+              <p className={styles.helpText}>
+                راهنمای نصب در آیفون:
+                <br />
+                Safari &gt; Share &gt; Add to Home Screen
+              </p>
+            ) : android ? (
+              <p className={styles.helpText}>
+                راهنمای نصب در اندروید:
+                <br />
+                Chrome &gt; سه‌نقطه &gt; Install app
+              </p>
+            ) : (
+              <p className={styles.helpText}>
+                برای نصب اپ، از گزینه نصب مرورگر استفاده کنید.
+              </p>
+            )}
+            <button
+              type="button"
+              className={styles.confirmButton}
+              onClick={() => setShowInstallGuideModal(false)}
+            >
+              متوجه شدم
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
