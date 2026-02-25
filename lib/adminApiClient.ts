@@ -159,6 +159,19 @@ export async function toggleUserSuspension(userId: string): Promise<void> {
 }
 
 /**
+ * Helper برای صدور رمز عبور جدید توسط ادمین (فقط نقش admin)
+ */
+export async function setUserPassword(userId: string, newPassword: string): Promise<void> {
+  await callAdminApi('/api/admin/users/set-password', {
+    method: 'POST',
+    body: {
+      user_id: userId,
+      new_password: newPassword,
+    },
+  })
+}
+
+/**
  * Helper برای تنظیم درصد کانیات (commission) برای agent/super
  */
 export async function setUserCommissionPercent(

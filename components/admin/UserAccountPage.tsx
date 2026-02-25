@@ -15,6 +15,7 @@ import {
 } from "@/services/user-account";
 import { clearManagedUsersCache } from "@/services/users";
 import { transferWalletForUsersBulk } from "@/services/transactions";
+import { setUserPassword } from "@/lib/adminApiClient";
 import { supabase } from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
 import type { TransactionAction } from "@/src/types/transactions";
@@ -95,6 +96,9 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
   } | null>(null);
   const [amountInput, setAmountInput] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
+  const [newPasswordInput, setNewPasswordInput] = useState<string>("");
+  const [settingPassword, setSettingPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   useEffect(() => {
     setShowHeader(true);
@@ -649,6 +653,31 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
     }
   };
 
+  // Handler برای صدور رمز عبور جدید توسط ادمین
+  const handleSetPassword = async () => {
+    const trimmed = newPasswordInput.trim();
+    if (!trimmed) {
+      toast.error("رمز عبور جدید را وارد کنید");
+      return;
+    }
+    if (trimmed.length < 6) {
+      toast.error("رمز عبور باید حداقل ۶ کاراکتر باشد");
+      return;
+    }
+    if (settingPassword) return;
+    try {
+      setSettingPassword(true);
+      await setUserPassword(userId, trimmed);
+      setNewPasswordInput("");
+      toast.success("رمز عبور با موفقیت تنظیم شد");
+    } catch (err: any) {
+      const msg = err?.message || "خطا در تنظیم رمز عبور";
+      toast.error(msg);
+    } finally {
+      setSettingPassword(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0E0E0F] p-4">
@@ -689,6 +718,11 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
     (currentUserRole === "super" || currentUserRole === "agent") && user.role === "agent"
       ? Math.max(0, Math.min(100, currentUserCommissionPercent ?? 0))
       : 100;
+  const canSetPassword =
+    currentUserRole === "admin" &&
+    !!currentUserId &&
+    !!adminZeroId &&
+    currentUserId === adminZeroId;
 
   return (
     <div className="min-h-screen bg-[#0E0E0F] text-white p-4 pb-32">
@@ -757,6 +791,42 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
                   : "تعلیق اکانت"}
               </button>
             </div>
+            {/* صدور رمز عبور جدید — فقط برای ادمین */}
+            {canSetPassword && (
+              <div className="flex gap-2 items-center mt-2">
+                <div className="flex-1 relative flex items-center">
+                  <input
+                    type={showNewPassword ? "text" : "password"}
+                    value={newPasswordInput}
+                    onChange={(e) => setNewPasswordInput(e.target.value)}
+                    placeholder="رمز عبور جدید"
+                    className="w-full py-2 pl-3 pr-10 rounded-xl bg-[#1f2933] text-sm text-white placeholder-gray-500 border border-[#2a3441] focus:border-yellow-500 focus:outline-none"
+                    dir="ltr"
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword((v) => !v)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-gray-400 hover:text-gray-200 focus:outline-none"
+                    title={showNewPassword ? "مخفی کردن رمز" : "نمایش رمز"}
+                    aria-label={showNewPassword ? "مخفی کردن رمز" : "نمایش رمز"}
+                  >
+                    {showNewPassword ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                    )}
+                  </button>
+                </div>
+                <button
+                  onClick={handleSetPassword}
+                  disabled={settingPassword || !newPasswordInput.trim()}
+                  className="px-4 py-2 rounded-xl bg-amber-600 text-sm text-white font-semibold hover:bg-amber-700 transition-colors disabled:opacity-50 whitespace-nowrap"
+                >
+                  {settingPassword ? "..." : "صدور رمز"}
+                </button>
+              </div>
+            )}
           </div>
 
         {/* نقش و ایجنت/سوپر */}
