@@ -2,11 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import styles from "./InstallAppButton.module.css";
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
-}
+import { useInstallPrompt } from "@/lib/contexts/InstallPromptContext";
 
 interface InstallAppButtonProps {
   label?: string;
@@ -22,58 +18,28 @@ function isAndroidDevice() {
   return /Android/i.test(navigator.userAgent);
 }
 
-function isRunningStandalone() {
-  if (typeof window === "undefined") return false;
-  const iosStandalone =
-    typeof (navigator as Navigator & { standalone?: boolean }).standalone === "boolean" &&
-    Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
-  const displayModeStandalone = window.matchMedia("(display-mode: standalone)").matches;
-  return iosStandalone || displayModeStandalone;
-}
-
 export default function InstallAppButton({ label = "نصب اپلیکیشن" }: InstallAppButtonProps) {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [installed, setInstalled] = useState(false);
   const [showInstallGuideModal, setShowInstallGuideModal] = useState(false);
+  const { isInstalled, canInstallDirectly, requestInstall } = useInstallPrompt();
 
   const ios = useMemo(() => isIosDevice(), []);
   const android = useMemo(() => isAndroidDevice(), []);
-
   useEffect(() => {
-    setInstalled(isRunningStandalone());
-
-    const onBeforeInstallPrompt = (event: Event) => {
-      event.preventDefault();
-      setDeferredPrompt(event as BeforeInstallPromptEvent);
-    };
-
-    const onInstalled = () => {
-      setInstalled(true);
-      setDeferredPrompt(null);
+    if (isInstalled) {
       setShowInstallGuideModal(false);
-    };
-
-    window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
-    window.addEventListener("appinstalled", onInstalled);
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
-      window.removeEventListener("appinstalled", onInstalled);
-    };
-  }, []);
+    }
+  }, [isInstalled]);
 
   const handleInstallClick = async () => {
-    if (deferredPrompt) {
-      await deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
-      setDeferredPrompt(null);
+    if (canInstallDirectly) {
+      await requestInstall();
       return;
     }
 
     setShowInstallGuideModal(true);
   };
 
-  if (installed) return null;
+  if (isInstalled) return null;
 
   return (
     <div className={styles.wrap}>
