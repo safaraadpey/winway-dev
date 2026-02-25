@@ -803,7 +803,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
               {tournament?.title ?? ""}
             </span>
             <div className="flex items-center gap-2 text-right">
-              <span className="text-gray-300">بازیکن‌ها</span>
+              <span className="text-gray-300">بازیکن</span>
               <span className="text-emerald-300 font-semibold">
                 {playersLabel != null ? playersLabel : "-"}
               </span>
