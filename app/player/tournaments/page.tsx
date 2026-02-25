@@ -20,7 +20,6 @@ type TournamentRow = {
     final_winners_count?: number | null;
     entry_currency?: string | null;
   } | null;
-  tournament_entries?: { count: number }[] | null;
 };
 
 export default function TournamentsPage() {
@@ -30,6 +29,7 @@ export default function TournamentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<TournamentRow[]>([]);
+  const [entryCounts, setEntryCounts] = useState<Record<string, number>>({});
   const [viewMode, setViewMode] = useState<"active" | "finished">("active");
 
   useEffect(() => {
@@ -64,7 +64,7 @@ export default function TournamentsPage() {
     const { data, error } = await supabase
       .from("tournaments")
       .select(
-        "id,title,status,start_at,currency,ticket_price,guaranteed_prize,meta,tournament_entries(count)"
+        "id,title,status,start_at,currency,ticket_price,guaranteed_prize,meta"
       )
       .in("status", ["registration_open", "running", "settling", "finished"])
       .order("start_at", { ascending: false })
@@ -73,6 +73,7 @@ export default function TournamentsPage() {
     if (error) {
       setError(error.message || "خطا در دریافت لیست تورنومنت‌ها");
       setRows([]);
+      setEntryCounts({});
     } else {
       const items = ((data as TournamentRow[]) ?? []).slice();
       const statusPriority: Record<string, number> = {
@@ -92,6 +93,34 @@ export default function TournamentsPage() {
         return 0;
       });
       setRows(items);
+
+      const tournamentIds = items.map((i) => i.id);
+      if (tournamentIds.length === 0) {
+        setEntryCounts({});
+      } else {
+        const { data: entriesData, error: entriesError } = await supabase
+          .from("tournament_entries")
+          .select("tournament_id,user_id")
+          .in("tournament_id", tournamentIds)
+          .eq("status", "created");
+
+        if (entriesError) {
+          setEntryCounts({});
+        } else {
+          const usersByTournament: Record<string, Set<string>> = {};
+          for (const row of (entriesData as { tournament_id: string; user_id: string }[]) ?? []) {
+            if (!usersByTournament[row.tournament_id]) {
+              usersByTournament[row.tournament_id] = new Set<string>();
+            }
+            usersByTournament[row.tournament_id].add(row.user_id);
+          }
+          const nextCounts: Record<string, number> = {};
+          for (const id of tournamentIds) {
+            nextCounts[id] = usersByTournament[id]?.size ?? 0;
+          }
+          setEntryCounts(nextCounts);
+        }
+      }
     }
     setLoading(false);
   };
@@ -199,7 +228,7 @@ export default function TournamentsPage() {
               {!error && filteredRows.length > 0 && (
                 <div className="space-y-3">
                   {filteredRows.map((t) => {
-                    const entriesCount = t.tournament_entries?.[0]?.count ?? 0;
+                    const entriesCount = entryCounts[t.id] ?? 0;
                     const minPlayersForGuarantee =
                       t.meta?.min_players_for_guarantee ?? null;
                     const finalWinnersCount = t.meta?.final_winners_count ?? null;
@@ -234,7 +263,12 @@ export default function TournamentsPage() {
                           <div className="flex items-center gap-2">
                             <span className="text-xs px-2 py-1 rounded-full border border-gray-500/60 bg-black/40 font-medium text-gray-100">
                               {t.start_at
-                                ? new Date(t.start_at).toLocaleString("fa-IR")
+                                ? `${new Date(t.start_at).toLocaleDateString("fa-IR")}، ${new Date(
+                                    t.start_at
+                                  ).toLocaleTimeString("fa-IR", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}`
                                 : "نامشخص"}
                             </span>
                             <span className="text-xs px-2 py-1 rounded-full bg-[rgba(0,255,170,0.6)] text-[rgba(49,63,56,1)] border border-[rgba(0,0,0,0.3)] font-semibold">
@@ -251,7 +285,9 @@ export default function TournamentsPage() {
                             <span className="text-[#212121] text-xs font-bold">قیمت بلیت</span>
                             <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-gray-500/60 bg-black/40 font-medium text-gray-100">
                               {t.ticket_price != null
-                                ? `${t.ticket_price.toLocaleString("fa-IR")} ${entryCurrency}`
+                                ? t.ticket_price <= 0
+                                  ? "رایگان"
+                                  : `${t.ticket_price.toLocaleString("fa-IR")} ${entryCurrency}`
                                 : "-"}
                             </span>
                           </div>

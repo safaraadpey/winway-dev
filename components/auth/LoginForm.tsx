@@ -26,6 +26,7 @@ export default function LoginForm() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
 
   /**
    * هندل کردن submit فرم
@@ -206,7 +207,7 @@ export default function LoginForm() {
           <div className={styles.forgotPasswordLink}>
             <button
               type="button"
-              onClick={() => router.push("/recovery")}
+              onClick={() => setShowForgotPasswordModal(true)}
               className={styles.forgotPasswordButton}
               disabled={loading}
             >
@@ -269,6 +270,27 @@ export default function LoginForm() {
           </div>
         </form>
       </div>
+
+      {showForgotPasswordModal && (
+        <div
+          className={styles.modalBackdrop}
+          onClick={() => setShowForgotPasswordModal(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="راهنمای بازیابی رمز عبور"
+        >
+          <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+            <p className={styles.modalText}>برای بازیابی رمز عبور با ایجنت خود تماس بگیرید</p>
+            <button
+              type="button"
+              className={styles.modalCloseButton}
+              onClick={() => setShowForgotPasswordModal(false)}
+            >
+              متوجه شدم
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
