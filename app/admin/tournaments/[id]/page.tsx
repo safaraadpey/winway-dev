@@ -97,6 +97,7 @@ export default function AdminTournamentDetailPage() {
             .from("tournament_entries")
             .select("id,user_id,tickets_count,amount,status,created_at,users:users(username,email)")
             .eq("tournament_id", tournamentId)
+            .eq("status", "created")
             .order("created_at", { ascending: false }),
           supabase
             .from("tournament_round_rooms")
