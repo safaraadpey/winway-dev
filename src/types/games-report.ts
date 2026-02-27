@@ -14,6 +14,7 @@ export interface AdminGameReportItem {
   totalReward: number;
   lineReward: number;
   fullReward: number;
+  fullWinnerNames: string[];
   winnerNames: string[];
   lineWinnerNames: string[];
 }

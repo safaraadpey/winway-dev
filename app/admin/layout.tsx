@@ -27,7 +27,7 @@ function AdminLayoutContent({
         />
       )}
       {children}
-      <EntryBannerModal />
+      <EntryBannerModal visibleOnPaths={["/admin/dashboard"]} />
     </>
   );
 }

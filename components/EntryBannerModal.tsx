@@ -1,17 +1,33 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { loadActiveBannersForUser } from "@/services/entry-banner";
 import type { EntryBanner } from "@/src/types/entry-banner";
 
-export default function EntryBannerModal() {
+type EntryBannerModalProps = {
+  visibleOnPaths?: string[];
+};
+
+export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalProps) {
+  const pathname = usePathname();
   const [banners, setBanners] = useState<EntryBanner[]>([]);
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [confirmed, setConfirmed] = useState(false);
   const [dismissedBanners, setDismissedBanners] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const shouldShowOnThisPath =
+    !visibleOnPaths ||
+    visibleOnPaths.some(
+      (basePath) => pathname === basePath || pathname.startsWith(`${basePath}/`)
+    );
 
   useEffect(() => {
+    if (!shouldShowOnThisPath) {
+      setLoading(false);
+      return;
+    }
+
     let isMounted = true;
 
     async function fetchBanners() {
@@ -47,12 +63,12 @@ export default function EntryBannerModal() {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, []);
+  }, [shouldShowOnThisPath]);
 
   const currentBanner = banners[currentBannerIndex];
 
   // اگر در حال بارگذاری است یا بنری وجود ندارد، چیزی نمایش نده
-  if (loading || !currentBanner || banners.length === 0) {
+  if (!shouldShowOnThisPath || loading || !currentBanner || banners.length === 0) {
     return null;
   }
 

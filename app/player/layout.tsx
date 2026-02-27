@@ -28,7 +28,7 @@ export default function PlayerLayout({
         <ActiveGamesOrchestratorProvider>
           <ActiveGamesProvider>
             <PlayerLayoutClient>{children}</PlayerLayoutClient>
-            <EntryBannerModal />
+            <EntryBannerModal visibleOnPaths={["/player/home"]} />
           </ActiveGamesProvider>
         </ActiveGamesOrchestratorProvider>
       </HeaderVisibilityProvider>

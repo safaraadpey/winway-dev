@@ -163,7 +163,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const winnerNamesByRoom = new Map<string, string[]>();
+    const fullWinnerNamesByRoom = new Map<string, string[]>();
     const lineWinnerNamesByRoom = new Map<string, string[]>();
     if (roomIds.length > 0) {
       const { data: winnersRows, error: winnersError } = await supabase
@@ -194,7 +194,7 @@ export async function GET(request: NextRequest) {
           });
         }
 
-        const roomToNamesSet = new Map<string, Set<string>>();
+        const roomToFullNamesSet = new Map<string, Set<string>>();
         const roomToLineNamesSet = new Map<string, Set<string>>();
         const roomToLineReward = new Map<string, number>();
         const roomToFullReward = new Map<string, number>();
@@ -205,11 +205,6 @@ export async function GET(request: NextRequest) {
           const username = userNameMap.get(userId) || "نامشخص";
           const reward = Number(w.reward_amount || 0);
           const winType = String(w.win_type || "").toLowerCase();
-          if (!roomToNamesSet.has(roomId)) {
-            roomToNamesSet.set(roomId, new Set<string>());
-          }
-          roomToNamesSet.get(roomId)!.add(username);
-
           if (winType === "line") {
             if (!roomToLineNamesSet.has(roomId)) {
               roomToLineNamesSet.set(roomId, new Set<string>());
@@ -217,12 +212,16 @@ export async function GET(request: NextRequest) {
             roomToLineNamesSet.get(roomId)!.add(username);
             roomToLineReward.set(roomId, (roomToLineReward.get(roomId) || 0) + reward);
           } else if (winType === "full") {
+            if (!roomToFullNamesSet.has(roomId)) {
+              roomToFullNamesSet.set(roomId, new Set<string>());
+            }
+            roomToFullNamesSet.get(roomId)!.add(username);
             roomToFullReward.set(roomId, (roomToFullReward.get(roomId) || 0) + reward);
           }
         });
 
-        roomToNamesSet.forEach((set, roomId) => {
-          winnerNamesByRoom.set(roomId, Array.from(set));
+        roomToFullNamesSet.forEach((set, roomId) => {
+          fullWinnerNamesByRoom.set(roomId, Array.from(set));
         });
         roomToLineNamesSet.forEach((set, roomId) => {
           lineWinnerNamesByRoom.set(roomId, Array.from(set));
@@ -255,7 +254,8 @@ export async function GET(request: NextRequest) {
             totalReward: Number(r.total_reward || 0),
             lineReward: Number((r as any).__line_reward || 0),
             fullReward: Number((r as any).__full_reward || 0),
-            winnerNames: winnerNamesByRoom.get(String(r.room_id)) || [],
+            winnerNames: fullWinnerNamesByRoom.get(String(r.room_id)) || [],
+            fullWinnerNames: fullWinnerNamesByRoom.get(String(r.room_id)) || [],
             lineWinnerNames: lineWinnerNamesByRoom.get(String(r.room_id)) || [],
           })),
           totalCount,

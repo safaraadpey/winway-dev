@@ -27,7 +27,7 @@ function AgentLayoutContent({
         />
       )}
       {children}
-      <EntryBannerModal />
+      <EntryBannerModal visibleOnPaths={["/agent/dashboard"]} />
     </>
   );
 }

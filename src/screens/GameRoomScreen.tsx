@@ -708,6 +708,9 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
         await cancelWaitingRoom(roomId);
         toast.success("رزرو شما لغو شد");
         await refreshWalletBalances?.();
+        setTimeout(() => {
+          invalidateActiveGames?.();
+        }, 800);
         router.push("/player/lobby");
         return;
       }

@@ -307,8 +307,8 @@ export default function AdminGamesReportPage() {
                   <span className="text-right font-mono">{formatPlayedAt(item.playedAt)}</span>
                   <span>برنده های فول</span>
                   <span className="text-right">
-                    {item.winnerNames.length > 0
-                      ? item.winnerNames.join("، ")
+                    {item.fullWinnerNames.length > 0
+                      ? item.fullWinnerNames.join("، ")
                       : "نامشخص"}
                   </span>
                   <span>برنده‌های لاین</span>
