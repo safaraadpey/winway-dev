@@ -231,6 +231,9 @@ export default function BuyCardsPanel({
             <div className="mb-4 text-center text-base text-gray-200 leading-7">
               آیا از خرید {quantity.toLocaleString("en-US")} کارت به مبلغ{" "}
               {totalPrice.toLocaleString("en-US")} تومن مطمئن هستید؟
+              <div className="mt-1 text-center text-[11px] text-red-300">
+                بعد از خرید امکان لغو وجود ندارد.
+              </div>
               <div className="mt-2 text-center text-sm text-gray-300">
                 بعد از خرید، اگر نام شما در لیست بازیکن‌ها نمایش داده نشد کمی صبر کنید یا صفحه را رفرش کنید.
               </div>
