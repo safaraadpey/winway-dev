@@ -188,10 +188,32 @@ export async function GET(request: NextRequest) {
           .in("id", winnerUserIds);
 
         const userNameMap = new Map<string, string>();
+        const userIdToUsernameMap = new Map<string, string>();
         if (!usersError && usersRows) {
           usersRows.forEach((u: any) => {
-            userNameMap.set(String(u.id), String(u.username || "نامشخص"));
+            const uid = String(u.id);
+            const username = String(u.username || "نامشخص");
+            userIdToUsernameMap.set(uid, username);
+            userNameMap.set(uid, username);
           });
+        }
+
+        // Enrich names with nickname when available (username (nickname))
+        if (winnerUserIds.length > 0) {
+          const { data: profilesRows, error: profilesError } = await supabase
+            .from("user_profiles")
+            .select("user_id, nickname")
+            .in("user_id", winnerUserIds);
+
+          if (!profilesError && profilesRows) {
+            for (const p of profilesRows as any[]) {
+              const uid = String(p.user_id || "");
+              const nickname = String(p.nickname || "").trim();
+              const username = userIdToUsernameMap.get(uid);
+              if (!uid || !username || !nickname) continue;
+              userNameMap.set(uid, `${username} (${nickname})`);
+            }
+          }
         }
 
         const roomToFullNamesSet = new Map<string, Set<string>>();

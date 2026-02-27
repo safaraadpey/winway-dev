@@ -699,6 +699,8 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
   }
 
   const { user, activities, transactions } = data;
+  const headerNickname =
+    user.displayName && user.displayName !== user.username ? user.displayName : "";
   const activity = activities[activePeriod];
   const canEditCommission =
     !!currentUserId &&
@@ -737,7 +739,12 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
 
             {/* اطلاعات کاربر */}
             <div className="flex-1">
-              <div className="text-lg font-semibold mb-1">{user.displayName}</div>
+              <div className="text-[16px] font-semibold mb-1">
+                <span className="inline-flex items-center gap-1" dir="ltr">
+                  <span>{user.username}</span>
+                  {headerNickname ? <span className="text-gray-300">({headerNickname})</span> : null}
+                </span>
+              </div>
               {user.lastLoginAt && (
                 <div className="text-xs text-gray-400">
                   آخرین ورود: {formatDate(user.lastLoginAt)}

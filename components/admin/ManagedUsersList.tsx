@@ -153,6 +153,18 @@ export default function ManagedUsersList({ pageTitle }: ManagedUsersListProps) {
     indentLevel: number = 0,
     options?: { onClickOverride?: () => void; disableNavigate?: boolean }
   ) => {
+    const renderUserTitle = () => {
+      const username = String(u.username || "").trim();
+      const nickname = String((u as ManagedUserSummary).nickname || "").trim();
+      if (!username) return <span>کاربر</span>;
+      return (
+        <span className="inline-flex items-center gap-1" dir="ltr">
+          <span>{username}</span>
+          {nickname ? <span className="text-gray-300">({nickname})</span> : null}
+        </span>
+      );
+    };
+
     const paddingRight = 12 + indentLevel * 12;
 
     // رنگ پس‌زمینه کارت بر اساس نقش کاربر برای تشخیص سریع‌تر
@@ -196,7 +208,7 @@ export default function ManagedUsersList({ pageTitle }: ManagedUsersListProps) {
         style={{ paddingRight }}
       >
         {/* سمت چپ: علامت زیرمجموعه + آواتار + نام + ID */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1">
           {indentLevel > 0 && (
             <div
               className={`w-2 h-2 rounded-full ${
@@ -205,7 +217,7 @@ export default function ManagedUsersList({ pageTitle }: ManagedUsersListProps) {
             />
           )}
           <div
-            className="w-12 h-12 rounded-2xl bg-[#0b1120] flex items-center justify-center text-xl font-bold text-white cursor-pointer"
+            className="w-[26px] h-[26px] rounded-2xl bg-[#0b1120] flex items-center justify-center text-sm font-bold text-white cursor-pointer"
             onClick={(e) => {
               // In tree mode, parent rows with children are used for expand/collapse.
               // Make the avatar area always navigate to the user.
@@ -219,7 +231,7 @@ export default function ManagedUsersList({ pageTitle }: ManagedUsersListProps) {
           </div>
           <div className="flex flex-col">
             <span className="text-sm font-semibold">
-              {u.displayName || u.username}
+              {renderUserTitle()}
             </span>
           </div>
         </div>

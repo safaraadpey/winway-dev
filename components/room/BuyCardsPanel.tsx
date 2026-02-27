@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import ticktBuyBg from "@/src/assets/logo/TicktBuy_BG.png";
 import buyCardButtonBg from "@/src/assets/logo/BuyCardBotton.png";
+import cancelCardButtonBg from "@/src/assets/logo/cancelCardBotton.png";
 import minusButtonImg from "@/src/assets/logo/minusBotton.png";
 import plusButtonImg from "@/src/assets/logo/plusBotton.png";
 
@@ -45,6 +46,7 @@ export default function BuyCardsPanel({
   onSecondaryAction,
 }: BuyCardsPanelProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [quantity, setQuantity] = useState(() => {
     const safeInitial = initialQuantity ?? minQuantity;
     return Math.min(Math.max(safeInitial, minQuantity), maxQuantity);
@@ -68,14 +70,24 @@ export default function BuyCardsPanel({
     }
   };
 
-  const handleConfirm = async () => {
+  const executeConfirm = async () => {
     if (disabled || isSubmitting) return;
     try {
       setIsSubmitting(true);
       await onConfirm(quantity);
+      setShowConfirmModal(false);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleConfirmClick = () => {
+    if (disabled || isSubmitting) return;
+    if (isCancelMode) {
+      void executeConfirm();
+      return;
+    }
+    setShowConfirmModal(true);
   };
 
   const totalPrice = quantity * price;
@@ -158,7 +170,7 @@ export default function BuyCardsPanel({
 
       <div className={hasSecondary ? "flex gap-2" : ""}>
         <button
-          onClick={handleConfirm}
+          onClick={handleConfirmClick}
           disabled={buttonDisabled}
           className={`${buttonClass} ${hasSecondary ? "flex-1" : ""}`}
           style={purchaseButtonStyle}
@@ -202,6 +214,60 @@ export default function BuyCardsPanel({
           </button>
         )}
       </div>
+
+      {showConfirmModal && !isCancelMode && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 px-4">
+          <div
+            className="w-full max-w-sm rounded-2xl border border-gray-700 p-4 text-white"
+            style={{
+              backgroundImage: `url(${ticktBuyBg.src})`,
+              backgroundRepeat: "no-repeat",
+              backgroundPosition: "center",
+              backgroundSize: "100% 100%",
+              backgroundColor: "#151A26",
+            }}
+          >
+            <div className="mb-2 text-center text-xl font-bold">تایید خرید کارت</div>
+            <div className="mb-4 text-center text-base text-gray-200 leading-7">
+              آیا از خرید {quantity.toLocaleString("en-US")} کارت به مبلغ{" "}
+              {totalPrice.toLocaleString("en-US")} تومن مطمئن هستید؟
+              <div className="mt-2 text-center text-sm text-gray-300">
+                بعد از خرید، اگر نام شما در لیست بازیکن‌ها نمایش داده نشد کمی صبر کنید یا صفحه را رفرش کنید.
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                disabled={isSubmitting}
+                className="flex-1 rounded-xl bg-transparent px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                style={{
+                  backgroundImage: `url(${cancelCardButtonBg.src})`,
+                  backgroundRepeat: "no-repeat",
+                  backgroundPosition: "center",
+                  backgroundSize: "100% 100%",
+                }}
+              >
+                لغو
+              </button>
+              <button
+                type="button"
+                onClick={() => void executeConfirm()}
+                disabled={isSubmitting}
+                className="flex-1 rounded-xl bg-transparent px-3 py-2 text-sm font-semibold text-[#006400] disabled:opacity-50"
+                style={{
+                  backgroundImage: `url(${buyCardButtonBg.src})`,
+                  backgroundRepeat: "no-repeat",
+                  backgroundPosition: "center",
+                  backgroundSize: "100% 100%",
+                }}
+              >
+                {isSubmitting ? "در حال ثبت..." : "تایید نهایی"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

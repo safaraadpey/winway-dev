@@ -65,6 +65,32 @@ export function clearUserAccountDataCache(userId?: string) {
   }
 }
 
+async function loadNicknameViaApi(userId: string): Promise<string | null> {
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+  if (sessionError || !session?.access_token) return null;
+
+  try {
+    const response = await fetch("/api/admin/users/nicknames", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ user_ids: [userId] }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok || !Array.isArray(payload?.data)) return null;
+    const row = (payload.data as any[]).find((r) => String(r?.user_id || "") === userId);
+    const nickname = String(row?.nickname || "").trim();
+    return nickname || null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * محاسبه تاریخ شروع برای یک دوره
  */
@@ -506,16 +532,18 @@ async function loadUserAccountInfo(userId: string): Promise<UserAccountInfo | nu
       console.error("loadUserAccountInfo: error loading personal note", err);
     }
 
-    // گرفتن nickname از user_profiles
-    const { data: profile } = await supabase
-      .from("user_profiles")
-      .select("nickname")
-      .eq("user_id", userId)
-      .single();
-
     const username = user.username || "نامشخص";
-    // اولویت: nickname از user_profiles > username
-    const displayName = profile?.nickname || username;
+    // اولویت: nickname (از API سروری برای عبور از RLS) > username
+    let nickname = await loadNicknameViaApi(userId);
+    if (!nickname) {
+      const { data: profile } = await supabase
+        .from("user_profiles")
+        .select("nickname")
+        .eq("user_id", userId)
+        .single();
+      nickname = profile?.nickname || null;
+    }
+    const displayName = nickname || username;
 
     return {
       id: user.id,

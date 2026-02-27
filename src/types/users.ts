@@ -9,6 +9,7 @@ export interface ManagedUserSummary {
   id: string; // UUID اصلی کاربر
   shortId: string; // ID ده رقمی برای نمایش سریع در UI
   username: string;
+  nickname: string | null;
   displayName: string;
   role: ManagedUserRole;
   tomanBalance: number;

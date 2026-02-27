@@ -56,6 +56,7 @@ export default function AdminTournamentDetailPage() {
   const [entries, setEntries] = useState<EntryRow[]>([]);
   const [rooms, setRooms] = useState<RoundRoomRow[]>([]);
   const [winnerNames, setWinnerNames] = useState<string[]>([]);
+  const [nicknameByUserId, setNicknameByUserId] = useState<Record<string, string>>({});
 
   const tournamentId =
     typeof params?.id === "string"
@@ -123,9 +124,11 @@ export default function AdminTournamentDetailPage() {
             pErr?.message ||
             "خطا در بارگذاری داده"
         );
+        setNicknameByUserId({});
       } else {
         setTournament((tData as TournamentRow) ?? null);
-        setEntries((eData as EntryRow[]) ?? []);
+        const nextEntries = (eData as EntryRow[]) ?? [];
+        setEntries(nextEntries);
         setRooms((rData as RoundRoomRow[]) ?? []);
         const names = new Set<string>();
         for (const row of (pData as PrizeTxRow[]) || []) {
@@ -133,6 +136,37 @@ export default function AdminTournamentDetailPage() {
           if (name) names.add(String(name));
         }
         setWinnerNames(Array.from(names));
+
+        const uniqueUserIds = Array.from(
+          new Set(nextEntries.map((e) => String(e.user_id || "").trim()).filter((id) => id.length > 0))
+        );
+        const nicknameMap: Record<string, string> = {};
+        if (uniqueUserIds.length > 0) {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            const response = await fetch("/api/admin/users/nicknames", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({ user_ids: uniqueUserIds }),
+            });
+            const payload = await response.json().catch(() => null);
+            if (response.ok && payload?.ok && Array.isArray(payload?.data)) {
+              for (const row of payload.data as any[]) {
+                const userId = String(row?.user_id || "").trim();
+                const nickname = String(row?.nickname || "").trim();
+                if (userId && nickname) {
+                  nicknameMap[userId] = nickname;
+                }
+              }
+            }
+          }
+        }
+        setNicknameByUserId(nicknameMap);
       }
       setLoading(false);
     };
@@ -243,13 +277,18 @@ export default function AdminTournamentDetailPage() {
                   {entries.map((e) => (
                     <tr key={e.id} className="border-t border-gray-800">
                       <td className="py-2 pr-3">
-                        {e.users?.username || e.users?.email || e.user_id}
+                        <span className="inline-flex items-center gap-1 text-xs" dir="ltr">
+                          <span>{e.users?.username || e.users?.email || e.user_id}</span>
+                          {nicknameByUserId[e.user_id] ? (
+                            <span className="text-gray-300">({nicknameByUserId[e.user_id]})</span>
+                          ) : null}
+                        </span>
                       </td>
                       <td className="py-2 pr-3">{e.tickets_count ?? "-"}</td>
                       <td className="py-2 pr-3">
                         {e.amount != null ? e.amount.toLocaleString("en-US") : "-"}
                       </td>
-                      <td className="py-2 pr-3">
+                      <td className="py-2 pr-3 text-xs">
                         {e.created_at ? new Date(e.created_at).toLocaleString("fa-IR") : "-"}
                       </td>
                     </tr>

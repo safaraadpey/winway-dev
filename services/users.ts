@@ -51,6 +51,47 @@ export function clearManagedUsersCache() {
   managedUsersBaseCache = null;
 }
 
+async function loadNicknamesViaApi(userIds: string[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (userIds.length === 0) return map;
+
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+
+  if (sessionError || !session?.access_token) {
+    return map;
+  }
+
+  try {
+    const response = await fetch("/api/admin/users/nicknames", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ user_ids: userIds }),
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok || !Array.isArray(payload?.data)) {
+      return map;
+    }
+
+    for (const row of payload.data as any[]) {
+      const uid = String(row?.user_id || "").trim();
+      const nickname = String(row?.nickname || "").trim();
+      if (!uid || !nickname) continue;
+      map.set(uid, nickname);
+    }
+  } catch {
+    // fallback handled by caller
+  }
+
+  return map;
+}
+
 function normalizeForSearch(s: string) {
   return s.toLowerCase().replace(/[\s_]+/g, "");
 }
@@ -317,19 +358,21 @@ export async function loadManagedUsers(
     walletMap.set(uid, bal);
   });
 
-  // گرفتن nickname از user_profiles برای همه کاربران
+  // گرفتن nickname از user_profiles برای همه کاربران (از API سروری برای عبور از RLS)
   const userIds = usersData.map((u: any) => u.id).filter((id: string) => id !== currentUserId);
-  const { data: profiles } = await supabase
-    .from("user_profiles")
-    .select("user_id, nickname")
-    .in("user_id", userIds);
-
-  const profileMap = new Map<string, string>();
-  (profiles || []).forEach((p: any) => {
-    if (p.nickname) {
-      profileMap.set(p.user_id, p.nickname);
-    }
-  });
+  const profileMap = await loadNicknamesViaApi(userIds);
+  if (profileMap.size === 0 && userIds.length > 0) {
+    // fallback: query مستقیم (ممکن است به دلیل RLS ناقص باشد)
+    const { data: profiles } = await supabase
+      .from("user_profiles")
+      .select("user_id, nickname")
+      .in("user_id", userIds);
+    (profiles || []).forEach((p: any) => {
+      if (p.nickname) {
+        profileMap.set(p.user_id, p.nickname);
+      }
+    });
+  }
 
   // گرفتن اطلاعات affiliation برای ساخت رابطه بالاسری (agent/super)
   const { data: affiliations, error: affError } = await supabase
@@ -423,8 +466,9 @@ export async function loadManagedUsers(
       const role = (u.role || "player") as ManagedUserRole;
       const shortId = makeShortIdFromUuid(u.id as string);
       const username: string = u.username || u.referral_code || shortId;
-      // اولویت: nickname از user_profiles > username
-      const displayName = profileMap.get(u.id) || username;
+      const nickname = profileMap.get(u.id) || null;
+      // برای سازگاری با بخش‌های دیگر UI
+      const displayName = nickname || username;
       const tomanBalance = walletMap.get(u.id) || 0;
       const parentUserId = resolveParentId(u);
 
@@ -432,6 +476,7 @@ export async function loadManagedUsers(
         id: u.id,
         shortId,
         username,
+        nickname,
         displayName,
         role,
         tomanBalance,

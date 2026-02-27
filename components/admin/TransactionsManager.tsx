@@ -240,6 +240,18 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
 
   const allSelected = totalUsers > 0 && selectedCount === totalUsers;
 
+  const renderUserLabel = (u: ManagedUserSummary) => {
+    const username = String(u.username || "").trim();
+    const nickname = String(u.nickname || "").trim();
+    if (!username) return <span>کاربر</span>;
+    return (
+      <span className="inline-flex items-center gap-1" dir="ltr">
+        <span>{username}</span>
+        {nickname ? <span className="text-gray-300">({nickname})</span> : null}
+      </span>
+    );
+  };
+
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Keep internal state as digits only; render with thousands separators.
     const rawDigits = e.target.value.replace(/[^0-9]/g, "");
@@ -544,7 +556,7 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                     <button
                       type="button"
                       onClick={toggleSelectAll}
-                      className={`w-7 h-7 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
+                      className={`w-5 h-[21px] rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
                         allSelected
                           ? "border-teal-400 bg-[#0f766e]"
                           : "border-gray-500 bg-transparent"
@@ -593,7 +605,7 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                           <button
                             type="button"
                             onClick={() => toggleSelect(u.id)}
-                            className={`w-7 h-7 rounded-md border-2 flex items-center justify-center ${
+                            className={`w-5 h-[21px] rounded-md border-2 flex items-center justify-center ${
                               checked
                                 ? "border-teal-400 bg-[#0f766e]"
                                 : "border-gray-500 bg-transparent"
@@ -605,7 +617,7 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                         {/* فقط نام کاربری/نمایشی */}
                         <div className="flex flex-col">
                           <span className="text-sm font-semibold">
-                            {u.displayName || u.username}
+                            {renderUserLabel(u)}
                           </span>
                         </div>
                         </div>
@@ -615,7 +627,6 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                           <span className="text-sm font-mono text-white">
                             {u.tomanBalance.toLocaleString("en-US")}
                           </span>
-                          <span className="text-xs text-yellow-300">T</span>
                         </div>
                       </div>
                     );
