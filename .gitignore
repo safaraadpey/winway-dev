@@ -27,6 +27,10 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
+game-engine/.env
+game-engine/.env.*
+!game-engine/.env.example
+!game-engine/.env.develop.local.example
 
 # vercel
 .vercel
