@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import ws from "ws";
 import type { EngineConfig } from "../config/env.js";
 
 export type SupabaseAdmin = SupabaseClient;
@@ -8,6 +9,10 @@ export function createSupabaseAdmin(config: EngineConfig): SupabaseAdmin {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
+    },
+    // Node 20 has no global WebSocket; Supabase Realtime still initializes on createClient.
+    realtime: {
+      transport: ws as unknown as typeof WebSocket,
     },
   });
 }

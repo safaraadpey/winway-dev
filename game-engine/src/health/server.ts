@@ -28,6 +28,17 @@ export function startHealthServer(
     res.end();
   });
 
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      log.warn("health server port already in use; draw-processor continues", {
+        port,
+        hint: "Stop the other game-engine instance or change GAME_ENGINE_HTTP_PORT",
+      });
+      return;
+    }
+    log.error("health server error", { port, error: err.message });
+  });
+
   server.listen(port, () => {
     log.info("health server listening", { port });
   });

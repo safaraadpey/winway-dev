@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchLiveRoomSnapshot,
   type LiveRoomSnapshot,
@@ -50,6 +50,49 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   const [results, setResults] = useState<RoomResultsResponse | null>(null);
   const [resultsRequested, setResultsRequested] = useState(false);
   const [showResultsDialog, setShowResultsDialog] = useState(false);
+  const resultsRequestedRef = useRef(false);
+  const openingResultsRef = useRef(false);
+
+  useEffect(() => {
+    resultsRequestedRef.current = resultsRequested;
+  }, [resultsRequested]);
+
+  // state پاپ‌آپ فقط با عوض شدن room ریست شود (نه وقتی status هنوز playing است)
+  useEffect(() => {
+    setResultsRequested(false);
+    setShowResultsDialog(false);
+    setResults(null);
+    resultsRequestedRef.current = false;
+    openingResultsRef.current = false;
+  }, [roomId]);
+
+  const tryOpenResultsDialog = useCallback(async () => {
+    if (resultsRequestedRef.current || openingResultsRef.current) return;
+
+    const key = buildGameResultsKey({
+      roomName: roomId,
+      status: "finished",
+      finishedAtHint: null,
+    });
+    if (hasSeenGameResults(key)) return;
+
+    openingResultsRef.current = true;
+    resultsRequestedRef.current = true;
+    setResultsRequested(true);
+
+    try {
+      const res = await fetchRoomResults(roomId);
+      setResults(res);
+      setShowResultsDialog(true);
+      markSeenGameResults(key);
+    } catch (err) {
+      console.error("[LiveRoom] winners fetch error:", err);
+      setShowResultsDialog(true);
+      markSeenGameResults(key);
+    } finally {
+      openingResultsRef.current = false;
+    }
+  }, [roomId]);
 
   // Countdown تا اولین draw (نمایش در جای عدد current در DrawStrip وقتی هنوز عددی نداریم)
   const [firstDrawCountdownSec, setFirstDrawCountdownSec] = useState<number | null>(null);
@@ -200,6 +243,83 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       isMounted = false;
     };
   }, [roomId]);
+
+  // Polling سبک: فقط sync UI از API (بدون دست‌کاری status / draw_jobs در DB)
+  const roomStatusRef = useRef<string>("");
+  useEffect(() => {
+    roomStatusRef.current = (data?.room?.status || "").trim().toLowerCase();
+  }, [data?.room?.status]);
+
+  useEffect(() => {
+    if (!roomId) return;
+
+    let cancelled = false;
+    const ACTIVE = new Set(["waiting", "running", "playing", "live", "settling"]);
+
+    const poll = async () => {
+      if (cancelled) return;
+
+      const status = roomStatusRef.current;
+      if (status && !ACTIVE.has(status)) return;
+
+      try {
+        const snapshot = await fetchLiveRoomSnapshot(roomId);
+        if (cancelled) return;
+
+        const status = (snapshot.room.status || "").trim().toLowerCase();
+        roomStatusRef.current = status;
+        setData(snapshot);
+        setCalledNumbers((prev) => {
+          const next = snapshot.draws.map((d) => d.number);
+          for (const n of next) {
+            if (!prev.includes(n)) void playNumber(n);
+          }
+          return next;
+        });
+
+        const isTerminal = ["settling", "finished", "cancelled"].includes(status);
+        if (isTerminal) void tryOpenResultsDialog();
+      } catch (err) {
+        console.warn("[LiveRoom] poll error:", err);
+      }
+    };
+
+    const interval = setInterval(poll, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [roomId, tryOpenResultsDialog]);
+
+  // برنده full ثبت شده ولی status هنوز playing (تسویه عقب افتاده)
+  useEffect(() => {
+    if (!roomId || !data) return;
+
+    const status = (data.room.status || "").trim().toLowerCase();
+    const stillPlaying = ["running", "playing", "live", "waiting"].includes(status);
+    if (!stillPlaying) return;
+
+    let cancelled = false;
+
+    const checkResults = async () => {
+      if (cancelled || resultsRequestedRef.current) return;
+      try {
+        const res = await fetchRoomResults(roomId);
+        if (cancelled || !res.fullWinners?.length) return;
+        await tryOpenResultsDialog();
+      } catch (err) {
+        console.warn("[LiveRoom] endgame results check failed:", err);
+      }
+    };
+
+    const interval = setInterval(checkResults, 4000);
+    void checkResults();
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [roomId, data, data?.room?.status, tryOpenResultsDialog]);
 
   // ریل‌تایم: draws + rooms + results
   useEffect(() => {
@@ -363,7 +483,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
           }
 
           if (newRow.win_type === "full") {
-            console.log("[LiveRoom] full win detected → mark room finished");
+            console.log("[LiveRoom] full win detected → open results");
             setData((prev) =>
               prev
                 ? {
@@ -372,6 +492,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
                   }
                 : prev
             );
+            void tryOpenResultsDialog();
           }
         }
       );
@@ -389,7 +510,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       }
       supabase.removeChannel(channel);
     };
-  }, [roomId]);
+  }, [roomId, tryOpenResultsDialog]);
 
   // userId فعلی
   const currentUserId = useMemo(() => {
@@ -398,50 +519,18 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     return mine?.player_id ?? null;
   }, [data]);
 
-  // مدیریت پایان بازی و popup نتایج
+  // status از realtime/poll به settling|finished رسید
   useEffect(() => {
     const status = (data?.room.status || "").trim().toLowerCase();
     const isFinished =
       status !== "" &&
       !["running", "playing", "live", "waiting"].includes(status);
 
-    if (!isFinished) {
-      if (resultsRequested || showResultsDialog || results) {
-        console.log("[LiveRoom] reset results state, status:", status);
-        setResultsRequested(false);
-        setShowResultsDialog(false);
-        setResults(null);
-      }
-      return;
-    }
-
-    if (resultsRequested) return;
+    if (!isFinished) return;
 
     console.log("[LiveRoom] room finished with status:", status);
-    // Dedup across the app: if a global listener already handled this room's result popup,
-    // avoid double overlay here.
-    const roomName = data?.room?.room_code || `اتاق ${data?.room?.card_price ?? ""}`;
-    // Treat settling/finished as a single end-state (prevents duplicate popups).
-    // Rely on short-term uniqueness of roomName to keep the key stable.
-    const key = buildGameResultsKey({ roomName, status: "finished", finishedAtHint: null });
-    if (hasSeenGameResults(key)) {
-      setResultsRequested(true);
-      return;
-    }
-    markSeenGameResults(key);
-    setResultsRequested(true);
-
-    fetchRoomResults(roomId)
-      .then((res) => {
-        console.log("[LiveRoom] room results fetched", res);
-        setResults(res);
-        setShowResultsDialog(true);
-      })
-      .catch((err) => {
-        console.error("[LiveRoom] winners fetch error:", err);
-        setShowResultsDialog(true);
-      });
-  }, [data?.room.status, resultsRequested, roomId, showResultsDialog, results]);
+    void tryOpenResultsDialog();
+  }, [data?.room.status, tryOpenResultsDialog]);
 
   // ---- رندر ----
 

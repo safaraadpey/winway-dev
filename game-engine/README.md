@@ -32,12 +32,16 @@ REDIS_URL=rediss://default:...@....upstash.io:6379
 `GET /health` → `{ ok, redis: "up" | "down" | "disabled" }`
 
 
-```bash
+```powershell
+# From repo root (uses winway/.env.local for clone Supabase)
+..\scripts\sync-game-engine-env.ps1   # optional: $env:GAME_RUNTIME='hybrid' first
 cd game-engine
-cp .env.example .env
 npm install
 npm run dev
+curl http://localhost:8080/health
 ```
+
+See [docs/migration/local-game-engine-rollout.md](../docs/migration/local-game-engine-rollout.md).
 
 ## نقش‌ها (GAME_ENGINE_ROLES)
 
