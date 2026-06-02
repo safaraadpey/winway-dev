@@ -30,6 +30,15 @@ $env:GAME_RUNTIME='hybrid'
 $env:GAME_ENGINE_ROLES='draw-processor'
 ..\scripts\sync-game-engine-env.ps1
 npm run dev
+
+# Phase 2 — engine owns heartbeat (disable bingo_heartbeat cron first!)
+# In Supabase SQL: run scripts/game-engine-cron-heartbeat.sql (DISABLE section)
+# Or migration: sql/migrations/20260602120000_game_engine_phase2_disable_heartbeat_cron.sql
+$env:GAME_RUNTIME='hybrid'
+$env:GAME_ENGINE_ROLES='scheduler,draw-processor'
+..\scripts\sync-game-engine-env.ps1
+npm run dev
+# Logs should show room-scheduler ticks (fn_heartbeat_tick) + draw-processor batches
 ```
 
 ## Phases
