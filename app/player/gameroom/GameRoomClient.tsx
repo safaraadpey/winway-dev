@@ -2,6 +2,7 @@
 
 import React, { useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import PageLoading from "@/components/PageLoading";
 import GameRoomScreen from "@/src/screens/GameRoomScreen";
 
 export default function GameRoomClient() {
@@ -35,26 +36,7 @@ export default function GameRoomClient() {
   }, [roomId, templateId, router]);
 
   if (!roomId && !templateId) {
-    // در حال redirect است — برای جلوگیری از black flash، یک UI shell سبک رندر می‌کنیم.
-    return (
-      <div className="min-h-screen bg-black/40 text-white">
-        <div className="px-4 pt-4 space-y-4">
-          <div className="animate-pulse rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
-            <div className="h-5 w-44 rounded-md bg-white/10" />
-            <div className="h-4 w-64 rounded-md bg-white/10" />
-          </div>
-
-          <div className="animate-pulse rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
-            <div className="h-4 w-40 rounded-md bg-white/10" />
-            <div className="space-y-2">
-              <div className="h-10 rounded-xl bg-white/10" />
-              <div className="h-10 rounded-xl bg-white/10" />
-              <div className="h-10 rounded-xl bg-white/10" />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <PageLoading />;
   }
 
   return <GameRoomScreen roomId={roomId} templateId={templateId} />;

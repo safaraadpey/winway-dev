@@ -35,6 +35,36 @@ interface LiveRoomScreenProps {
   roomId: string;
 }
 
+function mapLineWinnersFromApi(
+  winners: RoomResultsResponse["lineWinners"],
+  cards: LiveRoomSnapshot["cards"]
+): LineWinner[] {
+  if (!winners?.length) return [];
+
+  return winners
+    .map((winner) => {
+      let ticketId = winner.ticketId;
+      if (!ticketId) {
+        const card = cards.find((c) => c.player_id === winner.id);
+        if (!card) return null;
+        ticketId = card.ticket_id;
+      }
+      return {
+        ticketId,
+        userId: winner.id,
+        drawNumber: winner.drawNumber ?? 0,
+      };
+    })
+    .filter((w): w is LineWinner => w !== null);
+}
+
+function lineWinnersEqual(a: LineWinner[], b: LineWinner[]): boolean {
+  if (a.length !== b.length) return false;
+  const key = (w: LineWinner) => `${w.ticketId}:${w.drawNumber}`;
+  const setA = new Set(a.map(key));
+  return b.every((w) => setA.has(key(w)));
+}
+
 export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   const router = useRouter();
   const { setShowStatusBar } = useHeaderVisibility();
@@ -93,6 +123,28 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       openingResultsRef.current = false;
     }
   }, [roomId]);
+
+  const syncLineWinnersFromApi = useCallback(
+    async (snapshot: LiveRoomSnapshot) => {
+      if (snapshot.tournament?.id) {
+        setLineWinners([]);
+        return;
+      }
+      try {
+        const roomResults = await fetchRoomResults(roomId);
+        const next = mapLineWinnersFromApi(
+          roomResults.lineWinners,
+          snapshot.cards
+        );
+        setLineWinners((prev) =>
+          lineWinnersEqual(prev, next) ? prev : next
+        );
+      } catch (err) {
+        console.warn("[LiveRoom] line winners sync failed:", err);
+      }
+    },
+    [roomId]
+  );
 
   // Countdown تا اولین draw (نمایش در جای عدد current در DrawStrip وقتی هنوز عددی نداریم)
   const [firstDrawCountdownSec, setFirstDrawCountdownSec] = useState<number | null>(null);
@@ -184,49 +236,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
           snapshot.draws.map((d) => d.number)
         );
 
-        // لود line winners موجود از API endpoint (استفاده از service client - بدون RLS)
-        try {
-          const roomResults = await fetchRoomResults(roomId);
-          
-          if (roomResults.lineWinners && roomResults.lineWinners.length > 0) {
-            const existingLineWinners: LineWinner[] = roomResults.lineWinners
-              .map((winner) => {
-                // استفاده از ticketId و drawNumber از API response
-                // اگر ticketId در API نبود، از cards پیدا کن
-                let ticketId = winner.ticketId;
-                if (!ticketId) {
-                  const card = snapshot.cards.find(
-                    (c) => c.player_id === winner.id
-                  );
-                  if (!card) {
-                    console.warn(
-                      "[LiveRoom] could not find ticket_id for lineWinner:",
-                      winner.id
-                    );
-                    return null;
-                  }
-                  ticketId = card.ticket_id;
-                }
-
-                return {
-                  ticketId,
-                  userId: winner.id,
-                  drawNumber: winner.drawNumber ?? 0,
-                };
-              })
-              .filter((w): w is LineWinner => w !== null);
-
-            if (isMounted && existingLineWinners.length > 0) {
-              setLineWinners(existingLineWinners);
-              console.log(
-                "[LiveRoom] loaded existing line winners:",
-                existingLineWinners
-              );
-            }
-          }
-        } catch (err) {
-          console.warn("[LiveRoom] error loading existing line winners:", err);
-        }
+        if (isMounted) await syncLineWinnersFromApi(snapshot);
       } catch (err: any) {
         console.error("[LiveRoom] snapshot load error:", err);
         if (isMounted) {
@@ -242,7 +252,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     return () => {
       isMounted = false;
     };
-  }, [roomId]);
+  }, [roomId, syncLineWinnersFromApi]);
 
   // Polling سبک: فقط sync UI از API (بدون دست‌کاری status / draw_jobs در DB)
   const roomStatusRef = useRef<string>("");
@@ -278,6 +288,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
         });
 
         const isTerminal = ["settling", "finished", "cancelled"].includes(status);
+        await syncLineWinnersFromApi(snapshot);
         if (isTerminal) void tryOpenResultsDialog();
       } catch (err) {
         console.warn("[LiveRoom] poll error:", err);
@@ -289,7 +300,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [roomId, tryOpenResultsDialog]);
+  }, [roomId, tryOpenResultsDialog, syncLineWinnersFromApi]);
 
   // برنده full ثبت شده ولی status هنوز playing (تسویه عقب افتاده)
   useEffect(() => {

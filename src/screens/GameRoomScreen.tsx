@@ -6,6 +6,7 @@ import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 import useScreenWakeLock from "@/lib/hooks/useScreenWakeLock";
+import PageLoading from "@/components/PageLoading";
 import BuyCardsPanel from "@/components/room/BuyCardsPanel";
 import ActiveCardsStatus, {
   ActiveCardStatus,
@@ -732,9 +733,39 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
         at: new Date().toISOString(),
       });
 
+      // تعیین roomId مقصد. اگر RPC مستقیماً room_id برنگرداند (مثلاً شکل خروجی فرق کند)،
+      // از روی templateId همان روم واقعی را واکشی می‌کنیم — دقیقاً مثل مسیری که هنگام رفرش دستی کار می‌کند.
+      let targetRoomId = (result?.room_id || "").trim();
+      if (!targetRoomId && !roomId && roomInfo.templateId) {
+        try {
+          const view = await fetchGameRoomView({ templateId: roomInfo.templateId });
+          if (view.mode !== "preview" && view.room.id) {
+            targetRoomId = String(view.room.id);
+          }
+        } catch (resolveErr) {
+          console.warn("[JOIN_RPC][RESOLVE_ROOM_FALLBACK_FAILED]", resolveErr);
+        }
+      }
+
       toast.success(`${selectedQuantity} کارت با موفقیت خریداری شد`);
-      await refreshWalletBalances?.();
-      
+
+      // ناوبری قطعی به روم واقعی — قبل از هر await دیگری تا با خطای احتمالی (مثل refreshWalletBalances) بلاک نشود.
+      // در حالت template هنوز roomId نداریم؛ این صفحه را از templateId به roomId می‌برد.
+      console.log("[JOIN_RPC][NAVIGATE]", {
+        targetRoomId,
+        currentRoomId: roomId ?? null,
+        willNavigate: Boolean(targetRoomId && targetRoomId !== roomId),
+        at: new Date().toISOString(),
+      });
+      if (targetRoomId && targetRoomId !== roomId) {
+        router.replace(`/player/gameroom?roomId=${targetRoomId}`);
+      }
+
+      // رفرش کیف پول به‌صورت غیرمسدودکننده — نباید جلوی ناوبری بالا را بگیرد.
+      void Promise.resolve(refreshWalletBalances?.()).catch((walletErr) => {
+        console.warn("[JOIN_RPC][WALLET_REFRESH_FAILED]", walletErr);
+      });
+
       // تاخیر برای اطمینان از اینکه بازی جدید در سرور ساخته شده است
       setTimeout(() => {
         invalidateActiveGames?.();
@@ -751,100 +782,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
   };
 
   if (loading || !roomInfo) {
-    return (
-      <div className="overflow-hidden bg-black/40 min-h-screen">
-        <div className="px-4 space-y-1 pt-1">
-          {/* Panel 1: BuyCardsPanel skeleton (no images, UI-only) */}
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 space-y-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="inline-flex flex-col items-center rounded-full border border-white/10 px-3 py-1 text-white">
-                <div className="h-3 w-16 rounded-full bg-white/10 animate-pulse" />
-                <div className="mt-2 h-6 w-10 rounded-full bg-white/10 animate-pulse" />
-              </div>
-
-              <div className="rounded-full px-2 py-2 flex items-center justify-center gap-4 border border-white/10 bg-black/20">
-                <button
-                  disabled
-                  aria-label="کاهش"
-                  className="w-12 h-12 rounded-full bg-white/5 opacity-60 cursor-not-allowed flex items-center justify-center"
-                >
-                  <div className="h-5 w-5 rounded-full bg-white/20 animate-pulse" />
-                </button>
-
-                <div className="h-8 w-14 rounded-lg bg-white/10 animate-pulse" />
-
-                <button
-                  disabled
-                  aria-label="افزایش"
-                  className="w-12 h-12 rounded-full bg-white/5 opacity-60 cursor-not-allowed flex items-center justify-center"
-                >
-                  <div className="h-5 w-5 rounded-full bg-white/20 animate-pulse" />
-                </button>
-              </div>
-            </div>
-
-            <button
-              disabled
-              className="w-full py-4 rounded-xl bg-white/5 text-white/70 font-bold text-lg opacity-60 cursor-not-allowed"
-            >
-              <span className="flex items-center justify-center gap-2">
-                <span className="h-5 w-5 rounded-full bg-white/20 animate-pulse" />
-                <span className="h-5 w-40 rounded-md bg-white/10 animate-pulse" />
-              </span>
-            </button>
-          </div>
-
-          {/* Panel 2: ActiveCardsStatus skeleton */}
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 pt-5 pb-5 mt-3 h-[200px] min-h-[200px] flex flex-col space-y-3">
-            <div className="flex items-center justify-between h-[39px] max-h-[40px]">
-              <div className="flex items-center gap-2">
-                <div className="h-10 w-28 rounded-lg bg-white/10 animate-pulse" />
-                <div className="h-6 w-6 rounded-full bg-white/10 animate-pulse" />
-              </div>
-              <div className="h-4 w-28 rounded-md bg-white/10 animate-pulse" />
-            </div>
-
-            <div className="flex-1 space-y-2 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="rounded-lg px-3 py-1.5 flex items-center justify-between bg-white/5 border border-white/10"
-                >
-                  <div className="h-4 w-36 rounded-md bg-white/10 animate-pulse" />
-                  <div className="h-4 w-16 rounded-md bg-white/10 animate-pulse" />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Panel 3: ActiveTablesSection skeleton */}
-          <div className="rounded-lg border border-white/10 bg-white/[0.04] px-3 pt-[4px] pb-[6px] mt-[9px] min-h-[200px] space-y-3">
-            {/* title skeleton (no real text during loading) */}
-            <div className="pt-2">
-              <div className="h-4 w-28 mx-auto rounded-md bg-white/10 animate-pulse" />
-            </div>
-
-            <div
-              className="space-y-2 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-              style={{ maxHeight: "146px" }}
-            >
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="rounded-lg px-3 py-1.5 flex items-center justify-between bg-white/5 border border-white/10"
-                >
-                  <div className="h-4 w-20 rounded-md bg-white/10 animate-pulse" />
-                  <div className="flex items-center gap-4">
-                    <div className="h-4 w-14 rounded-md bg-white/10 animate-pulse" />
-                    <div className="h-4 w-14 rounded-md bg-white/10 animate-pulse" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <PageLoading />;
   }
 
   const normalizedStatus = (roomInfo.status || "").toLowerCase();

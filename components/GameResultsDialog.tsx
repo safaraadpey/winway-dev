@@ -19,22 +19,11 @@ interface WinnerRowProps {
 
 function WinnerRow({ winner, showPrize }: WinnerRowProps) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl bg-black/60 border border-[rgba(101,79,150,1)] px-4 py-1 h-[39px] max-h-[40px]">
-      <div className="flex h-12 w-12 flex-none items-center justify-center overflow-hidden rounded-full bg-[#1f2735] border border-[#3a4356]">
-        {winner.avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={winner.avatarUrl}
-            alt={winner.nickname}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <span className="text-lg font-semibold text-white">{winner.nickname?.[0] ?? "?"}</span>
-        )}
-      </div>
-      <div className="flex flex-1 flex-col text-white">
-        <span className="text-base font-semibold">{winner.nickname}</span>
-      </div>
+    <div
+      dir="ltr"
+      className="flex items-center justify-between gap-3 rounded-2xl bg-black/60 border border-[rgba(101,79,150,1)] px-4 py-1 h-[39px] max-h-[40px]"
+    >
+      <span className="text-base font-semibold text-white">{winner.nickname}</span>
       {showPrize && (
         <div className="flex flex-col items-end">
           <div className="flex items-baseline gap-1">
