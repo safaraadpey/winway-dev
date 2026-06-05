@@ -9,6 +9,8 @@ export interface ActiveTable {
   players: number;
   cardCount: number;
   roundNo?: number | null;
+  tableNo?: number | null;
+  winnerNames?: string[];
 }
 
 interface ActiveTablesPanelProps {
@@ -49,6 +51,8 @@ export default function ActiveTablesPanel({
               players={table.players}
               cardCount={table.cardCount}
               roundNo={table.roundNo}
+              tableNo={table.tableNo}
+              winnerNames={table.winnerNames}
               onClick={onTableClick ? () => onTableClick(table.id) : undefined}
             />
           ))

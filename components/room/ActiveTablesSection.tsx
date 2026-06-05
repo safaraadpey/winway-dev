@@ -48,6 +48,8 @@ export default function ActiveTablesSection({
               players={table.players}
               cardCount={table.cardCount}
               roundNo={table.roundNo}
+              tableNo={table.tableNo}
+              winnerNames={table.winnerNames}
               onClick={onTableClick ? () => onTableClick(table.id) : undefined}
             />
           ))

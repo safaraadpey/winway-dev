@@ -383,15 +383,11 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
 
   useEffect(() => {
     if (!tournamentId) return;
-    if (tournament?.status === "finished" || tournament?.status === "settling") {
-      setTournamentTables([]);
-      setCurrentRoundNo(null);
-      setTablesLoading(false);
-      return;
-    }
+
+    const isFinished =
+      tournament?.status === "finished" || tournament?.status === "settling";
 
     let active = true;
-    const ticketPrice = tournament?.ticket_price ?? 0;
 
     const loadTables = async () => {
       setTablesLoading(true);
@@ -401,7 +397,10 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
         } = await supabase.auth.getSession();
         const token = session?.access_token || null;
         const search = new URLSearchParams({ tournamentId });
-        const res = await fetch(`/api/player/tournament-active-tables?${search.toString()}`, {
+        const endpoint = isFinished
+          ? `/api/player/tournament-finished-tables?${search.toString()}`
+          : `/api/player/tournament-active-tables?${search.toString()}`;
+        const res = await fetch(endpoint, {
           method: "GET",
           headers: token ? { Authorization: `Bearer ${token}` } : {},
           cache: "no-store",
@@ -422,7 +421,16 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
 
         if (active) {
           setTournamentTables(Array.isArray(payload.tables) ? payload.tables : []);
-          setCurrentRoundNo(payload.currentRoundNo ?? null);
+          if (isFinished) {
+            const roundNumbers = (payload.tables || [])
+              .map((t) => t.roundNo)
+              .filter((n): n is number => n != null);
+            setCurrentRoundNo(
+              roundNumbers.length > 0 ? Math.max(...roundNumbers) : null
+            );
+          } else {
+            setCurrentRoundNo(payload.currentRoundNo ?? null);
+          }
         }
       } catch (err) {
         console.error("load tournament tables error:", err);
@@ -438,12 +446,18 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     };
 
     void loadTables();
+    if (isFinished) {
+      return () => {
+        active = false;
+      };
+    }
+
     const interval = setInterval(loadTables, 20000);
     return () => {
       active = false;
       clearInterval(interval);
     };
-  }, [tournamentId, tournament?.ticket_price, tournament?.status]);
+  }, [tournamentId, tournament?.status]);
 
   const minQty = useMemo(
     () => tournament?.min_tickets_per_player ?? 1,
@@ -729,14 +743,13 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   };
 
   const isRegistrationOpen = tournament?.status === "registration_open";
-  const tablesEmptyMessage =
-    tournament?.status === "finished"
-      ? "این تورنومنت پایان یافته است"
-      : tournament?.status === "settling"
-        ? "تورنومنت در حال تسویه است"
-        : tablesLoading
-          ? "در حال بارگذاری..."
-          : "هیچ بازی فعالی وجود ندارد";
+  const isTournamentEnded =
+    tournament?.status === "finished" || tournament?.status === "settling";
+  const tablesEmptyMessage = tablesLoading
+    ? "در حال بارگذاری..."
+    : isTournamentEnded
+      ? "میزی برای نمایش وجود ندارد"
+      : "هیچ بازی فعالی وجود ندارد";
 
   if (loading) {
     return (
