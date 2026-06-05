@@ -219,6 +219,129 @@ function createOrchestrator(): ActiveGamesOrchestrator {
   let visibilityHandler: (() => void) | null = null;
   let etag: string | null = null;
   const roomStatusById = new Map<string, string>();
+  const ACTIVE_ROOM_STATUSES = new Set(["waiting", "playing", "live", "settling"]);
+  const ACTIVE_ROOM_STATUS_ORDER: Record<ActiveRoom["status"], number> = {
+    live: 0,
+    playing: 1,
+    waiting: 2,
+    settling: 3,
+  };
+
+  const sortActiveRooms = (rooms: ActiveRoom[]): ActiveRoom[] =>
+    [...rooms].sort(
+      (a, b) =>
+        (ACTIVE_ROOM_STATUS_ORDER[a.status] ?? 9) - (ACTIVE_ROOM_STATUS_ORDER[b.status] ?? 9)
+    );
+
+  const publishActiveRooms = (rooms: ActiveRoom[], reason: string) => {
+    const sorted = sortActiveRooms(rooms);
+    for (const r of sorted) {
+      if (r?.roomId && r?.status) roomStatusById.set(r.roomId, r.status);
+    }
+    if (sorted.length === 0) roomStatusById.clear();
+    store.lastRoomsSig = stableRoomsSignature(sorted);
+    store.lastUnchanged = false;
+    setData({ rooms: sorted, loading: false, error: store.data.error }, { reason });
+  };
+
+  const patchRoomFromRealtime = (
+    payload: { new?: Record<string, unknown> },
+    localRunId: number
+  ) => {
+    const row = payload.new;
+    if (!row) return;
+
+    const roomId = row.id as string | undefined;
+    const newStatus = row.status as string | undefined;
+    if (!roomId) return;
+
+    const idx = store.data.rooms.findIndex((r) => r.roomId === roomId);
+    const inList = idx >= 0;
+    if (!roomStatusById.has(roomId) && !inList) {
+      logMetrics("realtime:rooms:ignored", { roomId, reason: "not-tracked" });
+      return;
+    }
+
+    const prevStatus = roomStatusById.get(roomId) ?? store.data.rooms[idx]?.status;
+
+    // Heartbeat-only updates (e.g. next_draw_at) — no refetch; patch chip fields only if present.
+    if (newStatus && prevStatus === newStatus && inList) {
+      const room = store.data.rooms[idx]!;
+      const next: ActiveRoom = { ...room };
+      let changed = false;
+
+      if ("room_code" in row && row.room_code !== room.roomCode) {
+        next.roomCode = (row.room_code as string | null) ?? null;
+        changed = true;
+      }
+      if ("card_price" in row && Number(row.card_price ?? 0) !== room.cardPrice) {
+        next.cardPrice = Number(row.card_price ?? 0);
+        next.prize = next.cardPrice * room.cardCount;
+        changed = true;
+      }
+
+      if (!changed) {
+        logMetrics("realtime:rooms:ignored", { roomId, reason: "heartbeat-only" });
+        return;
+      }
+
+      const rooms = [...store.data.rooms];
+      rooms[idx] = next;
+      publishActiveRooms(rooms, "realtime:rooms:patch-fields");
+      logMetrics("realtime:rooms:patch", { roomId, action: "fields" });
+      return;
+    }
+
+    if (!newStatus) return;
+
+    const isActive = ACTIVE_ROOM_STATUSES.has(newStatus);
+    const wasActive = prevStatus ? ACTIVE_ROOM_STATUSES.has(prevStatus) : false;
+
+    if (wasActive && !isActive) {
+      roomStatusById.delete(roomId);
+      publishActiveRooms(
+        store.data.rooms.filter((r) => r.roomId !== roomId),
+        "realtime:rooms:removed"
+      );
+      logMetrics("realtime:rooms:patch", {
+        roomId,
+        oldStatus: prevStatus ?? null,
+        newStatus,
+        action: "remove",
+      });
+      return;
+    }
+
+    if (isActive && inList) {
+      const room = store.data.rooms[idx]!;
+      const next: ActiveRoom = {
+        ...room,
+        status: newStatus as ActiveRoom["status"],
+        roomCode:
+          "room_code" in row ? ((row.room_code as string | null) ?? room.roomCode) : room.roomCode,
+        cardPrice:
+          "card_price" in row ? Number(row.card_price ?? room.cardPrice) : room.cardPrice,
+      };
+      next.prize = next.cardPrice * next.cardCount;
+
+      const rooms = [...store.data.rooms];
+      rooms[idx] = next;
+      roomStatusById.set(roomId, newStatus);
+      publishActiveRooms(rooms, "realtime:rooms:patch-status");
+      logMetrics("realtime:rooms:patch", {
+        roomId,
+        oldStatus: prevStatus ?? null,
+        newStatus,
+        action: "status",
+      });
+      return;
+    }
+
+    if (isActive && !inList) {
+      logMetrics("realtime:rooms:resync", { roomId, newStatus, reason: "room-not-in-list" });
+      invalidateRealtime(localRunId);
+    }
+  };
 
   // single-flight / coalescing
   let pending = false;
@@ -735,30 +858,7 @@ function createOrchestrator(): ActiveGamesOrchestrator {
         (payload) => {
           if (!active) return;
           if (localRunId !== runId) return;
-          const roomId = (payload.new as any)?.id;
-          const newStatus = (payload.new as any)?.status;
-          if (!roomId || !newStatus) return;
-
-          // Only react to room updates for rooms we currently track.
-          // When the active rooms list is empty, this prevents `rooms` realtime from waking us.
-          if (!roomStatusById.has(roomId)) return;
-
-          const prevStatus = roomStatusById.get(roomId);
-          if (prevStatus === newStatus) {
-            logMetrics("realtime:rooms:duplicate", { roomId, prevStatus, newStatus });
-            return;
-          }
-
-          // Update our stable map so oldStatus is real after the first event
-          roomStatusById.set(roomId, newStatus);
-          logMetrics("realtime:rooms", { roomId, oldStatus: prevStatus ?? null, newStatus });
-
-          const isActiveStatus = ["waiting", "playing", "live", "settling"].includes(newStatus);
-          const wasActiveStatus = prevStatus ? ["waiting", "playing", "live", "settling"].includes(prevStatus) : false;
-          if (isActiveStatus || wasActiveStatus) {
-            // Realtime should only invalidate; debounce/coalesce happens in invalidate()
-            invalidateRealtime(localRunId);
-          }
+          patchRoomFromRealtime(payload as { new?: Record<string, unknown> }, localRunId);
         }
       )
       .subscribe((status) => {

@@ -1,38 +1,19 @@
 import { NextResponse } from "next/server";
 import { createServiceClient, getUserFromRequest } from "@/lib/supabaseServer";
-import { createHash } from "crypto";
+import {
+  computeActiveRoomsEtag,
+  ifNoneMatchHits,
+  mapRpcToActiveRooms,
+  parseIfNoneMatch,
+  type ActiveRoomRow,
+} from "@/lib/activeGames/myActiveRoomsApi";
+import {
+  getCachedActiveRooms,
+  setCachedActiveRooms,
+} from "@/lib/activeGames/myActiveRoomsCache";
 
 // This route uses Node.js APIs (e.g. Buffer for ETag). Force Node runtime to avoid Edge limitations.
 export const runtime = "nodejs";
-
-type ActiveRoom = {
-  roomId: string;
-  roomCode: string | null;
-  status: "waiting" | "playing" | "live" | "settling";
-  cardPrice: number;
-  currency: string;
-  cardCount: number;
-  prize: number; // تخمین جایزه: cardPrice * cardCount
-  roomType: string; // نوع روم: 'normal' | 'tournament' | ...
-};
-
-function parseIfNoneMatch(header: string | null): string[] {
-  if (!header) return [];
-
-  // Can be a comma-separated list, may include weak validators: W/"..."
-  return header
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((tag) => {
-      let t = tag;
-      if (t.startsWith("W/")) t = t.slice(2).trim();
-      if (t.startsWith('"') && t.endsWith('"') && t.length >= 2) {
-        t = t.slice(1, -1);
-      }
-      return t;
-    });
-}
 
 export async function GET(request: Request) {
   try {
@@ -44,8 +25,17 @@ export async function GET(request: Request) {
       );
     }
 
-    // Check ETag from request
     const ifNoneMatch = request.headers.get("If-None-Match");
+    const candidates = parseIfNoneMatch(ifNoneMatch);
+
+    // Fast path: client ETag matches fresh in-memory cache → 304 without DB.
+    const cached = getCachedActiveRooms(user.id);
+    if (cached && candidates.length > 0 && ifNoneMatchHits(candidates, cached.etag)) {
+      const notModified = new NextResponse(null, { status: 304 });
+      notModified.headers.set("ETag", `"${cached.etag}"`);
+      notModified.headers.set("X-Active-Rooms-Cache", "hit");
+      return notModified;
+    }
 
     const supabase = createServiceClient();
 
@@ -61,32 +51,16 @@ export async function GET(request: Request) {
       );
     }
 
-    const activeRooms: ActiveRoom[] = (rooms ?? []).map((room: any) => ({
-      roomId: room.room_id,
-      roomCode: room.room_code,
-      status: room.status as "waiting" | "playing" | "live" | "settling",
-      cardPrice: Number(room.card_price || 0),
-      currency: room.currency || "IRR",
-      cardCount: Number(room.card_count || 0),
-      prize: Number(room.prize || 0),
-      roomType: room.room_type || "normal",
-    }));
-
-    // Sort: live/playing اول، سپس waiting، سپس settling
-    const statusOrder = { live: 0, playing: 1, waiting: 2, settling: 3 };
-    activeRooms.sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
-
-    // ETag برای polling optimization
-    // Use a stable, low-collision strong validator (sha256 over response payload).
-    const payload = JSON.stringify(activeRooms);
-    const etagValue = createHash("sha256").update(payload).digest("hex").slice(0, 32);
+    const activeRooms = mapRpcToActiveRooms((rooms ?? []) as ActiveRoomRow[]);
+    const etagValue = computeActiveRoomsEtag(activeRooms);
     const etagHeader = `"${etagValue}"`;
 
-    // اگر ETag match کند، 304 Not Modified برگردان
-    const candidates = parseIfNoneMatch(ifNoneMatch);
-    if (candidates.includes(etagValue) || candidates.includes(etagHeader)) {
+    setCachedActiveRooms(user.id, etagValue, activeRooms);
+
+    if (candidates.length > 0 && ifNoneMatchHits(candidates, etagValue)) {
       const notModified = new NextResponse(null, { status: 304 });
       notModified.headers.set("ETag", etagHeader);
+      notModified.headers.set("X-Active-Rooms-Cache", "revalidated");
       return notModified;
     }
 
@@ -101,4 +75,3 @@ export async function GET(request: Request) {
     );
   }
 }
-

@@ -39,6 +39,15 @@ $env:GAME_ENGINE_ROLES='scheduler,draw-processor'
 ..\scripts\sync-game-engine-env.ps1
 npm run dev
 # Logs should show room-scheduler ticks (fn_heartbeat_tick) + draw-processor batches
+
+# Phase 5 — engine owns tournament tick (disable tournament cron first!)
+# Requires: sql/migrations/20260605120000_public_tournament_tick_rpc_wrappers.sql
+# In Supabase SQL: run scripts/game-engine-cron-tournament.sql (DISABLE section)
+$env:GAME_RUNTIME='hybrid'
+$env:GAME_ENGINE_ROLES='scheduler,draw-processor,tournament-orchestrator'
+..\scripts\sync-game-engine-env.ps1
+npm run dev
+# Logs: tournament-orchestrator + tournament tick when due tournaments exist
 ```
 
 ## Phases
