@@ -10,5 +10,7 @@ export type { ProcessDrawBatchOptions } from "./processDrawBatch.js";
 export { processDrawBatchEngine } from "./processDrawBatchEngine.js";
 export type { ProcessDrawBatchEngineOptions } from "./processDrawBatchEngine.js";
 export { applyMarksAndEvaluate } from "./evaluateDraw.js";
+export { groupJobsByRoom, processJobsByRoom } from "./processJobsByRoom.js";
+export { pickDrawJobs } from "./pickDrawJobs.js";
 export { EMPTY_BATCH } from "./types.js";
 export type { DrawBatchResult, DrawJob } from "./types.js";

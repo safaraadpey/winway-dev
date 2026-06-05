@@ -15,10 +15,14 @@ import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import type { Logger } from "../../metrics/logger.js";
 import { GameRepo } from "../../repositories/index.js";
 import { applyMarksAndEvaluate } from "./evaluateDraw.js";
+import { pickDrawJobs } from "./pickDrawJobs.js";
+import { processJobsByRoom } from "./processJobsByRoom.js";
 import { type DrawBatchResult, type DrawJob, EMPTY_BATCH } from "./types.js";
 
 export interface ProcessDrawBatchEngineOptions {
   maxAttempts: number;
+  batchSize: number;
+  roomConcurrency: number;
 }
 
 export async function processDrawBatchEngine(
@@ -27,29 +31,25 @@ export async function processDrawBatchEngine(
   opts: ProcessDrawBatchEngineOptions
 ): Promise<DrawBatchResult> {
   const repo = new GameRepo(supabase);
-
-  const { data, error } = await supabase.rpc("rpc_pick_draw_jobs");
-  if (error) throw new Error(`rpc_pick_draw_jobs failed: ${error.message}`);
-
-  const jobs = (data ?? []) as DrawJob[];
+  const jobs = await pickDrawJobs(supabase, opts.batchSize);
   if (jobs.length === 0) return { ...EMPTY_BATCH };
 
-  const result: DrawBatchResult = { ...EMPTY_BATCH, picked: jobs.length };
-
-  for (const job of jobs) {
-    try {
-      await applyMarksAndEvaluate(supabase, repo, log, job.room_id, job.draw_number);
-      await completeJob(supabase, job);
-      await stampDrawProcessed(supabase, repo, log, job);
-      result.done += 1;
-    } catch (err) {
-      const handled = await handleFailure(supabase, log, job, opts, err);
-      if (handled === "dead-letter") result.deadLettered += 1;
-      else result.requeued += 1;
+  const partial = await processJobsByRoom(
+    jobs,
+    opts.roomConcurrency,
+    async (job) => {
+      try {
+        await applyMarksAndEvaluate(supabase, repo, log, job.room_id, job.draw_number);
+        await completeJob(supabase, job);
+        await stampDrawProcessed(supabase, repo, log, job);
+        return "done" as const;
+      } catch (err) {
+        return handleFailure(supabase, log, job, opts, err);
+      }
     }
-  }
+  );
 
-  return result;
+  return { picked: jobs.length, ...partial };
 }
 
 async function completeJob(supabase: SupabaseAdmin, job: DrawJob): Promise<void> {

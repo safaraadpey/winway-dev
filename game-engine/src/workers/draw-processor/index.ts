@@ -18,6 +18,7 @@ import type { WorkerContext } from "../context.js";
  *  - GAME_RUNTIME=legacy_db -> idle (cron still owns draws; no double processing).
  *  - Redis leader lock -> only one engine replica drains at a time (until sharded, B11).
  *  - Reentrancy guard -> overlapping timers never run concurrent batches in-process.
+ *  - Per-room parallelism -> different rooms drain concurrently; one room stays serial.
  */
 export function startDrawProcessor(ctx: WorkerContext): () => void {
   const { supabase, config, log, redis } = ctx;
@@ -76,15 +77,15 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
     };
 
     // engine mode → full TS business logic; hybrid → orchestrate DB RPCs.
+    const batchOpts = {
+      maxAttempts: config.drawProcessorMaxAttempts,
+      batchSize: config.drawProcessorBatchSize,
+      roomConcurrency: config.drawProcessorRoomConcurrency,
+    };
+
     const runBatch = executesBusinessLogic(config.runtime)
-      ? () =>
-          processDrawBatchEngine(supabase, log, {
-            maxAttempts: config.drawProcessorMaxAttempts,
-          })
-      : () =>
-          processDrawBatch(supabase, log, {
-            maxAttempts: config.drawProcessorMaxAttempts,
-          });
+      ? () => processDrawBatchEngine(supabase, log, batchOpts)
+      : () => processDrawBatch(supabase, log, batchOpts);
 
     for (let batch = 0; !stopped && batch < config.drawProcessorMaxBatchesPerTick; batch++) {
       const res = await runBatch();

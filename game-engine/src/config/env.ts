@@ -26,6 +26,8 @@ export interface EngineConfig {
   drawProcessorMaxAttempts: number;
   /** TTL (seconds) for the draw-processor Redis leader lock. */
   drawProcessorLockTtlSec: number;
+  /** Max rooms whose draw_jobs drain in parallel per batch (serial within a room). */
+  drawProcessorRoomConcurrency: number;
   roomSchedulerIntervalMs: number;
   tournamentTickIntervalMs: number;
   tournamentTickBatchLimit: number;
@@ -87,6 +89,9 @@ export function loadConfig(): EngineConfig {
     ),
     drawProcessorLockTtlSec: Number(
       process.env.DRAW_PROCESSOR_LOCK_TTL_SEC ?? "30"
+    ),
+    drawProcessorRoomConcurrency: Number(
+      process.env.DRAW_PROCESSOR_ROOM_CONCURRENCY ?? "4"
     ),
     roomSchedulerIntervalMs: Number(
       process.env.ROOM_SCHEDULER_INTERVAL_MS ?? "1000"

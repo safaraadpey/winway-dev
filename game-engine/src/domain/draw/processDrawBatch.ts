@@ -1,10 +1,16 @@
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import type { Logger } from "../../metrics/logger.js";
+import { pickDrawJobs } from "./pickDrawJobs.js";
+import { processJobsByRoom } from "./processJobsByRoom.js";
 import { type DrawBatchResult, type DrawJob, EMPTY_BATCH } from "./types.js";
 
 export interface ProcessDrawBatchOptions {
   /** Requeue a failing job until attempts reaches this, then park as 'failed'. */
   maxAttempts: number;
+  /** Max jobs to claim per pick (rpc_pick_draw_jobs p_limit). */
+  batchSize: number;
+  /** Max rooms processed in parallel; jobs within a room stay serial. */
+  roomConcurrency: number;
 }
 
 /**
@@ -17,38 +23,33 @@ export interface ProcessDrawBatchOptions {
  *                                      (idempotent) when a full house is found
  *   4. mark draw_jobs done; stamp draws.processed_at when the draw is fully consumed
  *
- * Payout is NOT called here directly — fn_evaluate_room_after_draw owns settlement,
- * exactly like the current DB batch worker, so behaviour is identical to prod.
+ * Jobs from different rooms run in parallel (up to roomConcurrency); within one room
+ * draw order is preserved serially.
  */
 export async function processDrawBatch(
   supabase: SupabaseAdmin,
   log: Logger,
   opts: ProcessDrawBatchOptions
 ): Promise<DrawBatchResult> {
-  const { data, error } = await supabase.rpc("rpc_pick_draw_jobs");
-  if (error) {
-    throw new Error(`rpc_pick_draw_jobs failed: ${error.message}`);
-  }
-
-  const jobs = (data ?? []) as DrawJob[];
+  const jobs = await pickDrawJobs(supabase, opts.batchSize);
   if (jobs.length === 0) return { ...EMPTY_BATCH };
 
-  const result: DrawBatchResult = { ...EMPTY_BATCH, picked: jobs.length };
-
-  for (const job of jobs) {
-    try {
-      await applyDraw(supabase, job);
-      await completeJob(supabase, job);
-      await stampDrawProcessed(supabase, log, job);
-      result.done += 1;
-    } catch (err) {
-      const handled = await handleJobFailure(supabase, log, job, opts, err);
-      if (handled === "dead-letter") result.deadLettered += 1;
-      else result.requeued += 1;
+  const partial = await processJobsByRoom(
+    jobs,
+    opts.roomConcurrency,
+    async (job) => {
+      try {
+        await applyDraw(supabase, job);
+        await completeJob(supabase, job);
+        await stampDrawProcessed(supabase, log, job);
+        return "done" as const;
+      } catch (err) {
+        return handleJobFailure(supabase, log, job, opts, err);
+      }
     }
-  }
+  );
 
-  return result;
+  return { picked: jobs.length, ...partial };
 }
 
 async function applyDraw(supabase: SupabaseAdmin, job: DrawJob): Promise<void> {
