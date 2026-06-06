@@ -14,6 +14,7 @@
 import { pickNextNumber } from "../../core/index.js";
 import type { Logger } from "../../metrics/logger.js";
 import { GameRepo, parseBytea } from "../../repositories/index.js";
+import type { RoomStateManager } from "../../state/room-state.manager.js";
 
 const FIRST_DRAW_DELAY_SEC = 10; // fn_manage_waiting_rooms: first draw 10s after start
 const DEFAULT_DRAW_INTERVAL_SEC = 3;
@@ -34,6 +35,11 @@ function addSeconds(base: Date, seconds: number): string {
   return new Date(base.getTime() + seconds * 1000).toISOString();
 }
 
+function isDuplicateDrawError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes("draws_room_number_uniq") || msg.includes("duplicate key");
+}
+
 /**
  * Promote due waiting rooms that reached min_players to `playing` and schedule
  * their first draw; rooms that did not reach min_players have their countdown
@@ -42,7 +48,8 @@ function addSeconds(base: Date, seconds: number): string {
 export async function manageWaitingRooms(
   repo: GameRepo,
   log: Logger,
-  limit = 50
+  limit = 50,
+  stateManager?: RoomStateManager
 ): Promise<ManageWaitingResult> {
   const now = new Date();
   const nowIso = now.toISOString();
@@ -61,7 +68,10 @@ export async function manageWaitingRooms(
         addSeconds(now, FIRST_DRAW_DELAY_SEC),
         nowIso
       );
-      if (ok) promoted += 1;
+      if (ok) {
+        promoted += 1;
+        stateManager?.preload(room.id);
+      }
     } else {
       await repo.extendRoomCountdown(
         room.id,
@@ -92,7 +102,8 @@ export interface ManageLiveResult {
 export async function manageRoomLiveActions(
   repo: GameRepo,
   log: Logger,
-  limit = 200
+  limit = 200,
+  stateManager?: RoomStateManager
 ): Promise<ManageLiveResult> {
   const now = new Date();
   const nowIso = now.toISOString();
@@ -102,31 +113,75 @@ export async function manageRoomLiveActions(
   let finished = 0;
 
   for (const room of rooms) {
-    const seed = parseBytea(room.room_seed);
-    if (!seed) {
-      log.error("room has no room_seed but is playing", { roomId: room.id });
-      continue;
+    try {
+      const liveRoom = await repo.getRoom(room.id);
+      if (!liveRoom || liveRoom.status !== "playing") continue;
+      if (await repo.hasUnpaidFullWinner(room.id)) {
+        stateManager?.evict(room.id);
+        continue;
+      }
+
+      const seed = parseBytea(room.room_seed);
+      if (!seed) {
+        log.error("room has no room_seed but is playing", { roomId: room.id });
+        continue;
+      }
+
+      const state = stateManager?.get(room.id);
+
+      // DB is authoritative for scheduler decisions; keep memory in sync when loaded.
+      const [dbDrawn, dbUnprocessed] = await Promise.all([
+        repo.getDrawnNumbers(room.id),
+        repo.getUnprocessedDrawNumbers(room.id),
+      ]);
+      if (state) {
+        state.syncDrawSchedulerState(dbDrawn, dbUnprocessed);
+      }
+
+      // Backpressure: do not draw while a prior draw is still unprocessed.
+      if (dbUnprocessed.length > 0) continue;
+
+      const next = pickNextNumber(seed, dbDrawn);
+
+      if (next === null) {
+        await repo.setRoomFinished(room.id, nowIso);
+        stateManager?.evict(room.id);
+        finished += 1;
+        continue;
+      }
+
+      try {
+        await repo.insertDraw(room.id, next, nowIso);
+        if (state) {
+          state.recordDrawInserted(next);
+        } else {
+          stateManager?.preload(room.id);
+        }
+        drew += 1;
+      } catch (err) {
+        if (!isDuplicateDrawError(err)) throw err;
+        log.warn("scheduler skipped duplicate draw number", {
+          roomId: room.id,
+          number: next,
+        });
+        const [resyncDrawn, resyncUnprocessed] = await Promise.all([
+          repo.getDrawnNumbers(room.id),
+          repo.getUnprocessedDrawNumbers(room.id),
+        ]);
+        state?.syncDrawSchedulerState(resyncDrawn, resyncUnprocessed);
+      }
+
+      await repo.setNextDrawAt(
+        room.id,
+        addSeconds(now, drawIntervalSec(room.meta)),
+        nowIso
+      );
+    } catch (err) {
+      log.error("room-scheduler live room error", {
+        roomId: room.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
-
-    // Backpressure: do not draw while a previous draw is still unprocessed.
-    if (await repo.hasUnprocessedDraw(room.id)) continue;
-
-    const drawn = await repo.getDrawnNumbers(room.id);
-    const next = pickNextNumber(seed, drawn);
-
-    if (next === null) {
-      await repo.setRoomFinished(room.id, nowIso);
-      finished += 1;
-      continue;
-    }
-
-    await repo.insertDraw(room.id, next, nowIso);
-    await repo.setNextDrawAt(
-      room.id,
-      addSeconds(now, drawIntervalSec(room.meta)),
-      nowIso
-    );
-    drew += 1;
   }
 
   if (drew > 0 || finished > 0) {

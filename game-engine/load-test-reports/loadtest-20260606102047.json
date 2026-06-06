@@ -1,0 +1,95 @@
+{
+  "scenario": {
+    "rooms": 20,
+    "ticketsPerRoom": 200,
+    "drawIntervalSec": 3,
+    "minDrawsPerRoom": 50,
+    "tag": "loadtest-20260606102047",
+    "durationSec": 2402.64
+  },
+  "verdict": {
+    "passed": false,
+    "backlogDetected": false,
+    "summary": "Only 0/20 rooms reached 50 draws."
+  },
+  "draws": {
+    "samples": 49,
+    "averageProcessingMs": 2306.46,
+    "p95ProcessingMs": 4817.21,
+    "p99ProcessingMs": 6387.41,
+    "peakQueueSize": 9,
+    "averageQueueSize": 0.06,
+    "peakQueueWaitMs": 5568,
+    "averageQueueWaitMs": 1018.04
+  },
+  "db": {
+    "estimatedTotalQueries": 248,
+    "averageQueriesPerDraw": 5.06
+  },
+  "slowestOperations": [
+    {
+      "step": "stampDrawProcessed",
+      "averageMs": 518.4,
+      "p95Ms": 905.69,
+      "maxMs": 950.37
+    },
+    {
+      "step": "rpc_pick_draw_jobs",
+      "averageMs": 179.38,
+      "p95Ms": 760.71,
+      "maxMs": 906.42
+    },
+    {
+      "step": "completeJob",
+      "averageMs": 283.61,
+      "p95Ms": 749.23,
+      "maxMs": 903.42
+    },
+    {
+      "step": "insertMarksForDraw",
+      "averageMs": 306.89,
+      "p95Ms": 736.71,
+      "maxMs": 760.23
+    },
+    {
+      "step": "evaluateRoomAfterDraw",
+      "averageMs": 0.15,
+      "p95Ms": 0.33,
+      "maxMs": 0.6
+    },
+    {
+      "step": "insertResults",
+      "averageMs": 0.07,
+      "p95Ms": 0.11,
+      "maxMs": 0.11
+    }
+  ],
+  "capacity": {
+    "observedDrawsPerSecond": 0.02,
+    "requiredDrawsPerSecond": 6.67,
+    "estimatedMaxRooms": 4,
+    "roomConcurrencyAssumed": 4
+  },
+  "perRoomDrawCounts": {
+    "e3a27c0f-f374-48fb-920d-46a27e4db89f": 0,
+    "9571fe01-b8d2-4122-9205-100a50426a30": 0,
+    "3cb4a244-18c7-4279-9a84-921f8efc20a9": 0,
+    "ab7136c3-2d00-44d8-bdf5-72af320f876c": 0,
+    "dd72e3eb-732d-44cb-a56a-d2317cbbbdc7": 0,
+    "30f8babb-bdf2-4d67-b5fe-f378991afa04": 0,
+    "631a21ab-b76c-47a1-9271-c4030f3a1a70": 0,
+    "a4490152-2c62-4e72-a682-7e1331eb1f0e": 0,
+    "b7a6c09f-3491-4931-866c-c0366e02b35f": 0,
+    "9185004f-f82e-422c-ba58-aacd52e1bffa": 0,
+    "30bb8cb1-ff67-4e83-8b53-80ff05298b8b": 0,
+    "e93fbf80-3d87-4f77-b415-acdada56e66e": 0,
+    "05e1a8ad-09cd-475c-beb6-a11adb680d6e": 0,
+    "7e371c21-ef1d-4c97-895f-2cfab1eee278": 0,
+    "a84acad3-ab84-46ec-b39b-8a5ffe14614c": 0,
+    "e501ba64-7b23-4409-96b3-11098fa941a6": 0,
+    "3d5e5142-5032-48ee-b17d-c49b11edf2d9": 0,
+    "6ecf2be3-f826-45c9-bf9a-e71657cb0f4e": 0,
+    "15d6dfc0-5fb2-4e2e-886c-536690bae057": 0,
+    "e7f442d2-1f54-41e9-8f28-2ea0a2f067b7": 0
+  }
+}

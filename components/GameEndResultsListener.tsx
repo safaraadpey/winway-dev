@@ -7,7 +7,7 @@ import { useSession } from "@/lib/contexts/SessionContext";
 import { traceFetch } from "@/lib/debug/netTrace";
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 import GameResultsDialog, { type Winner } from "@/components/GameResultsDialog";
-import { fetchRoomResults } from "@/services/rooms";
+import { fetchRoomResultsWhenPrizesReady } from "@/services/rooms";
 import {
   buildGameResultsKey,
   hasSeenGameResults,
@@ -435,7 +435,7 @@ export default function GameEndResultsListener() {
       roomId: next.roomId,
       pathname,
     });
-    fetchRoomResults(next.roomId)
+    fetchRoomResultsWhenPrizesReady(next.roomId)
       .then((r) => {
         if (!isMountedRef.current) return;
         setResults(r);

@@ -9,7 +9,10 @@
     "start": "node dist/index.js",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "load-test:draw": "tsx scripts/load-test-draw.ts"
+    "load-test:draw": "tsx scripts/load-test-draw.ts",
+    "analyze:load-test-log": "tsx scripts/analyze-load-test-log.ts",
+    "analyze:load-test-log:v2": "tsx scripts/analyze-load-test-log.ts ./load-test-v2.log",
+    "test": "node --import tsx --test src/**/*.test.ts"
   },
   "engines": {
     "node": ">=20"

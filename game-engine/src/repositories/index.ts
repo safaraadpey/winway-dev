@@ -114,6 +114,29 @@ export class GameRepo {
     if (error) fail("setRoomSettling", error.message);
   }
 
+  /** Full-house result exists but prizes not paid yet. */
+  async hasUnpaidFullWinner(roomId: string): Promise<boolean> {
+    const { data, error } = await this.db
+      .from("results")
+      .select("id")
+      .eq("room_id", roomId)
+      .eq("win_type", "full")
+      .is("paid_at", null)
+      .limit(1);
+    if (error) fail("hasUnpaidFullWinner", error.message);
+    return (data?.length ?? 0) > 0;
+  }
+
+  /** Room should run fn_finish_room_and_settle (new full win or stuck settling). */
+  async roomNeedsSettlement(roomId: string): Promise<boolean> {
+    const room = await this.getRoom(roomId);
+    if (!room || room.status === "finished" || room.status === "cancelled") {
+      return false;
+    }
+    if (room.status === "settling") return true;
+    return this.hasUnpaidFullWinner(roomId);
+  }
+
   async setNextDrawAt(roomId: string, nextDrawAtIso: string, nowIso: string): Promise<void> {
     const { error } = await this.db
       .from("rooms")
@@ -152,6 +175,16 @@ export class GameRepo {
     return (count ?? 0) > 0;
   }
 
+  async getUnprocessedDrawNumbers(roomId: string): Promise<number[]> {
+    const { data, error } = await this.db
+      .from("draws")
+      .select("number")
+      .eq("room_id", roomId)
+      .is("processed_at", null);
+    if (error) fail("getUnprocessedDrawNumbers", error.message);
+    return (data ?? []).map((d: { number: number }) => d.number);
+  }
+
   async insertDraw(roomId: string, number: number, nowIso: string): Promise<void> {
     const { error } = await this.db.from("draws").insert({
       room_id: roomId,
@@ -186,12 +219,13 @@ export class GameRepo {
     return (data ?? []) as TicketRow[];
   }
 
-  async getCardNumbers(poolCardIds: string[]): Promise<CardNumberRow[]> {
+  async getCardNumbers(poolCardIds: (string | number)[]): Promise<CardNumberRow[]> {
     if (poolCardIds.length === 0) return [];
+    const ids = [...new Set(poolCardIds.map((id) => String(id)))];
     const { data, error } = await this.db
       .from("card_numbers")
       .select("pool_card_id,value,row_no")
-      .in("pool_card_id", poolCardIds);
+      .in("pool_card_id", ids);
     if (error) fail("getCardNumbers", error.message);
     return (data ?? []) as CardNumberRow[];
   }
@@ -261,6 +295,26 @@ export class GameRepo {
     if (error) fail("insertResults", error.message);
   }
 
+  // ---- draw_jobs recovery ------------------------------------------------
+
+  /** Requeue jobs stuck in `processing` (crash/OOM recovery). */
+  async requeueStaleProcessingJobs(
+    staleSec: number
+  ): Promise<{ requeued: number; roomIds: string[] }> {
+    const cutoff = new Date(Date.now() - staleSec * 1000).toISOString();
+    const nowIso = new Date().toISOString();
+    const { data, error } = await this.db
+      .from("draw_jobs")
+      .update({ status: "queued", updated_at: nowIso })
+      .eq("status", "processing")
+      .lt("updated_at", cutoff)
+      .select("id,room_id");
+    if (error) fail("requeueStaleProcessingJobs", error.message);
+    const rows = (data ?? []) as { id: number; room_id: string }[];
+    const roomIds = [...new Set(rows.map((r) => r.room_id))];
+    return { requeued: rows.length, roomIds };
+  }
+
   // ---- ding --------------------------------------------------------------
 
   async stampDrawProcessed(roomId: string, number: number, nowIso: string): Promise<void> {
@@ -271,5 +325,31 @@ export class GameRepo {
       .eq("number", number)
       .is("processed_at", null);
     if (error) fail("stampDrawProcessed", error.message);
+  }
+
+  /** Single RPC: marks + results + job done + processed_at stamp. */
+  async finalizeEngineDrawJob(args: {
+    jobId: number;
+    roomId: string;
+    drawNumber: number;
+    marks: { ticket_id: string; value: number }[];
+    results: {
+      room_id: string;
+      user_id: string;
+      ticket_id: string;
+      win_type: string;
+      draw_number: number;
+    }[];
+    setFirstLineDrawNumber: boolean;
+  }): Promise<void> {
+    const { error } = await this.db.rpc("rpc_finalize_engine_draw_job", {
+      p_job_id: args.jobId,
+      p_room_id: args.roomId,
+      p_draw_number: args.drawNumber,
+      p_marks: args.marks,
+      p_results: args.results,
+      p_set_first_line_draw_number: args.setFirstLineDrawNumber,
+    });
+    if (error) fail("rpc_finalize_engine_draw_job", error.message);
   }
 }

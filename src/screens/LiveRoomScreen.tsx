@@ -5,6 +5,7 @@ import {
   fetchLiveRoomSnapshot,
   type LiveRoomSnapshot,
   fetchRoomResults,
+  fetchRoomResultsWhenPrizesReady,
   type RoomResultsResponse,
 } from "@/services/rooms";
 import BingoCardDemo from "@/components/BingoCardDemo";
@@ -111,7 +112,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     setResultsRequested(true);
 
     try {
-      const res = await fetchRoomResults(roomId);
+      const res = await fetchRoomResultsWhenPrizesReady(roomId);
       setResults(res);
       setShowResultsDialog(true);
       markSeenGameResults(key);

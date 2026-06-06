@@ -1,0 +1,58 @@
+{
+  "scenario": {
+    "rooms": 20,
+    "ticketsPerRoom": 200,
+    "drawIntervalSec": 3,
+    "minDrawsPerRoom": 50,
+    "tag": "loadtest-20260606062711",
+    "durationSec": 1562.05
+  },
+  "verdict": {
+    "passed": true,
+    "backlogDetected": false,
+    "summary": "Engine sustained 20 rooms × 200 tickets without significant backlog."
+  },
+  "draws": {
+    "samples": 0,
+    "averageProcessingMs": 0,
+    "p95ProcessingMs": 0,
+    "p99ProcessingMs": 0,
+    "peakQueueSize": 6,
+    "averageQueueSize": 1.69,
+    "peakQueueWaitMs": 0,
+    "averageQueueWaitMs": 0
+  },
+  "db": {
+    "estimatedTotalQueries": 0,
+    "averageQueriesPerDraw": 0
+  },
+  "slowestOperations": [],
+  "capacity": {
+    "observedDrawsPerSecond": 0,
+    "requiredDrawsPerSecond": 6.67,
+    "estimatedMaxRooms": 0,
+    "roomConcurrencyAssumed": 4
+  },
+  "perRoomDrawCounts": {
+    "d164c2df-ed3d-4603-83d6-5ec6dd3b3c14": 65,
+    "80cbbe1d-8dbb-47ea-99c2-91e4ac717288": 66,
+    "0a43655f-8dd3-4560-9334-11d3decac424": 66,
+    "8106ce12-dbf6-431e-ac16-3555409f6aff": 66,
+    "125223d2-26f4-459e-bda9-51b149a5e497": 66,
+    "635f8da7-9b82-4a2e-8a6b-cc29424e0133": 66,
+    "824d2ba9-ac3f-45a2-a8a8-a4284674c7ae": 63,
+    "efa614f1-791c-489a-9e90-378b4b8eb2f1": 66,
+    "f9ff2894-60d2-4c90-9964-0db042ae3300": 66,
+    "114228c7-7b73-422f-b70a-c98733ba288f": 66,
+    "9ee7954b-5f3d-4f8e-a495-b84afbe27caf": 66,
+    "c819caf1-31c5-49a3-acac-ac6d79e0e8dd": 66,
+    "59e6c401-f17b-474f-b108-bec05532e498": 61,
+    "39117559-0089-4739-aa29-37847a04c18a": 66,
+    "13dc7a09-7a82-4435-b4a6-ad7a4c2efaae": 60,
+    "dec3bc19-aab2-461c-af00-9e7ece87818f": 66,
+    "34f44651-a0da-4f4c-9448-af99ab3039f1": 66,
+    "fcaeda99-3efb-48b1-a8f3-d735b5158dbd": 66,
+    "96023f90-124e-4dad-a7b1-d5f18be9edf8": 66,
+    "7752f3af-8d99-4e1c-92df-e6ba3a93757a": 66
+  }
+}

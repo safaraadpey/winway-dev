@@ -1,0 +1,179 @@
+{
+  "scenario": {
+    "rooms": 20,
+    "ticketsPerRoom": 200,
+    "drawIntervalSec": 3,
+    "minDrawsPerRoom": 50,
+    "tag": "log-analysis",
+    "durationSec": 0
+  },
+  "verdict": {
+    "passed": false,
+    "backlogDetected": false,
+    "summary": "P95 6973.9ms exceeds 3s interval budget."
+  },
+  "draws": {
+    "samples": 2046,
+    "averageProcessingMs": 4064.24,
+    "p95ProcessingMs": 6973.9,
+    "p99ProcessingMs": 9741.15,
+    "peakQueueSize": 0,
+    "averageQueueSize": 0,
+    "peakQueueWaitMs": 11736,
+    "averageQueueWaitMs": 1718.56
+  },
+  "db": {
+    "estimatedTotalQueries": 20095,
+    "averageQueriesPerDraw": 9.821603128054742
+  },
+  "slowestOperations": [
+    {
+      "step": "stampDrawProcessed",
+      "averageMs": 639.08,
+      "p95Ms": 1160.44,
+      "maxMs": 4797.54
+    },
+    {
+      "step": "insertResults",
+      "averageMs": 292.7,
+      "p95Ms": 887.85,
+      "maxMs": 4783.62
+    },
+    {
+      "step": "completeJob",
+      "averageMs": 286.83,
+      "p95Ms": 667.84,
+      "maxMs": 5532.1
+    },
+    {
+      "step": "getMarksForTickets",
+      "averageMs": 283.01,
+      "p95Ms": 660.5,
+      "maxMs": 944.13
+    },
+    {
+      "step": "getResults",
+      "averageMs": 252.59,
+      "p95Ms": 622.58,
+      "maxMs": 1032.66
+    },
+    {
+      "step": "getRoom",
+      "averageMs": 287.54,
+      "p95Ms": 593.58,
+      "maxMs": 959.31
+    },
+    {
+      "step": "getRoomTickets",
+      "averageMs": 220.76,
+      "p95Ms": 481.55,
+      "maxMs": 881.73
+    },
+    {
+      "step": "getCardNumbers",
+      "averageMs": 215.37,
+      "p95Ms": 361.88,
+      "maxMs": 920.51
+    }
+  ],
+  "capacity": {
+    "observedDrawsPerSecond": 0,
+    "requiredDrawsPerSecond": 6.67,
+    "estimatedMaxRooms": 2,
+    "roomConcurrencyAssumed": 4
+  },
+  "perRoomDrawCounts": {
+    "660d1110-666f-4260-a3e6-66abbc913daf": 32,
+    "a0e84566-c69b-4885-9fec-923e2957bb92": 33,
+    "eaea99e2-e3f0-4fe6-a84f-09c0f4ed4fd9": 33,
+    "e1f4314f-d241-45f5-8019-3ad03d4b1c79": 33,
+    "06f1bbf1-609d-4b22-b52b-ff300dc15e68": 32,
+    "1d00a2c2-a381-4f5a-8613-847bd4b389ef": 33,
+    "2fcb74ff-ff6d-494f-97a1-8c25fb879371": 33,
+    "6ec19605-803e-46af-b9c5-7b35a1431617": 33,
+    "9d87a1e6-291d-46de-8b35-4f97f482ff3d": 33,
+    "6821ff56-f4be-41f2-ad38-8f720e0817af": 32,
+    "436a31c6-07df-41d2-bdbc-10daa076fe96": 32,
+    "c1bc0b6c-4ee1-4a45-b924-72be041d6a2e": 33,
+    "315f9d66-a7f2-4fdb-9fe1-bcdded178022": 33,
+    "d1d2b094-cf80-48fe-a0df-c718afb98ae6": 33,
+    "7162d49f-d7d0-4490-937f-2997d1b175b4": 33,
+    "48c8c39c-9f9a-45f0-8086-c991ae1dba0e": 33,
+    "cbf3610a-a22e-4345-aa47-7fd2370fe042": 33,
+    "502aded6-7d17-43be-8003-062be1321ec5": 32,
+    "acf5c916-ac3c-4428-a2a1-7c3e481c2786": 32,
+    "eb4458d6-6331-42b4-a59a-c702f00d9518": 32,
+    "d164c2df-ed3d-4603-83d6-5ec6dd3b3c14": 65,
+    "0a43655f-8dd3-4560-9334-11d3decac424": 67,
+    "80cbbe1d-8dbb-47ea-99c2-91e4ac717288": 67,
+    "635f8da7-9b82-4a2e-8a6b-cc29424e0133": 66,
+    "125223d2-26f4-459e-bda9-51b149a5e497": 67,
+    "8106ce12-dbf6-431e-ac16-3555409f6aff": 67,
+    "824d2ba9-ac3f-45a2-a8a8-a4284674c7ae": 63,
+    "114228c7-7b73-422f-b70a-c98733ba288f": 66,
+    "c819caf1-31c5-49a3-acac-ac6d79e0e8dd": 66,
+    "f9ff2894-60d2-4c90-9964-0db042ae3300": 66,
+    "9ee7954b-5f3d-4f8e-a495-b84afbe27caf": 66,
+    "efa614f1-791c-489a-9e90-378b4b8eb2f1": 66,
+    "59e6c401-f17b-474f-b108-bec05532e498": 61,
+    "39117559-0089-4739-aa29-37847a04c18a": 66,
+    "dec3bc19-aab2-461c-af00-9e7ece87818f": 66,
+    "13dc7a09-7a82-4435-b4a6-ad7a4c2efaae": 60,
+    "34f44651-a0da-4f4c-9448-af99ab3039f1": 66,
+    "fcaeda99-3efb-48b1-a8f3-d735b5158dbd": 66,
+    "96023f90-124e-4dad-a7b1-d5f18be9edf8": 66,
+    "7752f3af-8d99-4e1c-92df-e6ba3a93757a": 66,
+    "a4c9da1b-b518-4a03-8a9c-503f728a8948": 3,
+    "c3d459e5-2fdc-4f83-afb7-f8621a821f9b": 81
+  },
+  "slowest": [
+    {
+      "step": "stampDrawProcessed",
+      "avg": 639.075571847506,
+      "p95": 1160.44,
+      "max": 4797.54
+    },
+    {
+      "step": "insertResults",
+      "avg": 292.69837499999966,
+      "p95": 887.85,
+      "max": 4783.62
+    },
+    {
+      "step": "completeJob",
+      "avg": 286.82821114369557,
+      "p95": 667.84,
+      "max": 5532.1
+    },
+    {
+      "step": "getMarksForTickets",
+      "avg": 283.0103720693168,
+      "p95": 660.5,
+      "max": 944.13
+    },
+    {
+      "step": "getResults",
+      "avg": 252.58629459734956,
+      "p95": 622.58,
+      "max": 1032.66
+    },
+    {
+      "step": "getRoom",
+      "avg": 287.54403669724735,
+      "p95": 593.58,
+      "max": 959.31
+    },
+    {
+      "step": "getRoomTickets",
+      "avg": 220.7640876656474,
+      "p95": 481.55,
+      "max": 881.73
+    },
+    {
+      "step": "getCardNumbers",
+      "avg": 215.3712945973501,
+      "p95": 361.88,
+      "max": 920.51
+    }
+  ]
+}

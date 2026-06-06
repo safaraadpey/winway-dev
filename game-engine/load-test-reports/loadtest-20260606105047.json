@@ -1,0 +1,95 @@
+{
+  "scenario": {
+    "rooms": 20,
+    "ticketsPerRoom": 200,
+    "drawIntervalSec": 3,
+    "minDrawsPerRoom": 50,
+    "tag": "loadtest-20260606105047",
+    "durationSec": 534.3
+  },
+  "verdict": {
+    "passed": true,
+    "backlogDetected": false,
+    "summary": "Engine sustained 20 rooms × 200 tickets without significant backlog."
+  },
+  "draws": {
+    "samples": 363,
+    "averageProcessingMs": 1414.41,
+    "p95ProcessingMs": 2216.78,
+    "p99ProcessingMs": 3076.44,
+    "peakQueueSize": 4,
+    "averageQueueSize": 0.95,
+    "peakQueueWaitMs": 2127,
+    "averageQueueWaitMs": 175.69
+  },
+  "db": {
+    "estimatedTotalQueries": 1839,
+    "averageQueriesPerDraw": 5.07
+  },
+  "slowestOperations": [
+    {
+      "step": "stampDrawProcessed",
+      "averageMs": 519.18,
+      "p95Ms": 924,
+      "maxMs": 1531.22
+    },
+    {
+      "step": "rpc_pick_draw_jobs",
+      "averageMs": 204.81,
+      "p95Ms": 620.77,
+      "maxMs": 982.38
+    },
+    {
+      "step": "completeJob",
+      "averageMs": 265.03,
+      "p95Ms": 598.73,
+      "maxMs": 857.11
+    },
+    {
+      "step": "insertMarksForDraw",
+      "averageMs": 245.91,
+      "p95Ms": 540.29,
+      "maxMs": 878.78
+    },
+    {
+      "step": "insertResults",
+      "averageMs": 55.29,
+      "p95Ms": 524.07,
+      "maxMs": 802.66
+    },
+    {
+      "step": "evaluateRoomAfterDraw",
+      "averageMs": 0.14,
+      "p95Ms": 0.21,
+      "maxMs": 0.65
+    }
+  ],
+  "capacity": {
+    "observedDrawsPerSecond": 0.68,
+    "requiredDrawsPerSecond": 6.67,
+    "estimatedMaxRooms": 7,
+    "roomConcurrencyAssumed": 4
+  },
+  "perRoomDrawCounts": {
+    "752acdf4-6e00-4517-8c1f-22da02ff36f3": 53,
+    "0b9b053a-7dfa-4af2-995b-21768f4f481e": 52,
+    "ba53db40-68ab-4aff-b0d1-4ddb7fd2a389": 54,
+    "f3b7e3cd-6b3c-4e5a-89e7-071c85363feb": 53,
+    "70ea7020-f9dc-46d0-9d5d-e02e5ba3faef": 54,
+    "929270c0-68e1-4d3f-9e63-d62e8774e4de": 54,
+    "d7b57023-6071-48a9-8115-77cc2d872676": 54,
+    "174b6ccd-72c4-4b68-a1b3-e87697b95723": 55,
+    "618a3f19-cdff-4533-824a-66182eba8823": 51,
+    "dc658b8c-363b-48a5-8a62-960a4a55cda9": 52,
+    "7c837796-3147-429c-8a49-593f88320b13": 56,
+    "2f39e7f2-64cf-4772-a50c-c1f504f575c5": 50,
+    "5b97b6c4-6c77-4ca5-82ea-12bda6095e38": 56,
+    "fb52f0df-6a95-4eff-a819-efbc3cfb529a": 52,
+    "bf4c79b4-8b01-4c2a-814a-76a49afb6afc": 55,
+    "cb2e5992-558d-4742-a950-651c99ae6404": 56,
+    "2298bf97-b309-47f8-86e0-302f0dff69ea": 55,
+    "0900832b-cd8e-4a48-b5f2-6c8b3a21a255": 53,
+    "2e437468-d6f0-47ea-9660-62be801d4b56": 53,
+    "d6471a64-1bc8-4bbc-8fb2-0bcaa58cf003": 54
+  }
+}

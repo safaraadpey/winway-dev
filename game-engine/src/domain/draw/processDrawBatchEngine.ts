@@ -12,14 +12,15 @@
  */
 
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
+import { settleRoomIfNeeded } from "../../finance/settleRoom.js";
 import type { Logger } from "../../metrics/logger.js";
 import {
   buildDrawPerformanceReport,
   recordDrawSample,
   timedStep,
-  type DrawStepBreakdown,
 } from "../../metrics/drawPerformance.js";
 import { GameRepo } from "../../repositories/index.js";
+import type { RoomStateManager } from "../../state/room-state.manager.js";
 import { applyMarksAndEvaluate } from "./evaluateDraw.js";
 import { pickDrawJobs } from "./pickDrawJobs.js";
 import { processJobsByRoom } from "./processJobsByRoom.js";
@@ -34,7 +35,8 @@ export interface ProcessDrawBatchEngineOptions {
 export async function processDrawBatchEngine(
   supabase: SupabaseAdmin,
   log: Logger,
-  opts: ProcessDrawBatchEngineOptions
+  opts: ProcessDrawBatchEngineOptions,
+  stateManager: RoomStateManager
 ): Promise<DrawBatchResult> {
   const repo = new GameRepo(supabase);
 
@@ -63,8 +65,10 @@ export async function processDrawBatchEngine(
           supabase,
           repo,
           log,
+          stateManager,
           job.room_id,
-          job.draw_number
+          job.draw_number,
+          { persist: false, deferSettlement: true }
         );
         const breakdown = { ...evalResult.breakdown };
         breakdown.rpc_pick_draw_jobs = {
@@ -73,11 +77,47 @@ export async function processDrawBatchEngine(
           durationMs: Math.round(pickPerJobMs * 100) / 100,
         };
 
-        const completeStep = await timedStep(() => completeJob(supabase, job));
-        breakdown.completeJob = completeStep.timing;
+        const persistence = evalResult.persistence;
+        if (!persistence) {
+          throw new Error("engine draw missing persistence payload");
+        }
 
-        const stampTiming = await stampDrawProcessed(supabase, repo, log, job);
-        breakdown.stampDrawProcessed = stampTiming;
+        const finalizeStep = await timedStep(() =>
+          repo.finalizeEngineDrawJob({
+            jobId: job.id,
+            roomId: job.room_id,
+            drawNumber: job.draw_number,
+            marks: persistence.marks,
+            results: persistence.results,
+            setFirstLineDrawNumber: persistence.setFirstLineDrawNumber,
+          })
+        );
+        breakdown.rpc_finalize_engine_draw_job = finalizeStep.timing;
+
+        let settled = evalResult.settled;
+        try {
+          const settleStep = await timedStep(() =>
+            settleRoomIfNeeded(supabase, repo, job.room_id, {
+              fullWinnerThisDraw: evalResult.fullWinnerThisDraw,
+            })
+          );
+          if (settleStep.result) {
+            breakdown.fn_finish_room_and_settle = settleStep.timing;
+            settled = true;
+            stateManager.evict(job.room_id);
+            log.info("room settled (full winner)", {
+              roomId: job.room_id,
+              drawNumber: job.draw_number,
+            });
+          }
+        } catch (settleErr) {
+          log.error("room settlement failed (draw already finalized)", {
+            roomId: job.room_id,
+            drawNumber: job.draw_number,
+            error:
+              settleErr instanceof Error ? settleErr.message : String(settleErr),
+          });
+        }
 
         const report = buildDrawPerformanceReport({
           roomId: job.room_id,
@@ -89,7 +129,7 @@ export async function processDrawBatchEngine(
           marksInserted: evalResult.marksInserted,
           marksReadCount: evalResult.marksReadCount,
           queueWaitMs,
-          settled: evalResult.settled,
+          settled,
           breakdown,
         });
 
@@ -104,52 +144,6 @@ export async function processDrawBatchEngine(
   );
 
   return { picked: jobs.length, ...partial };
-}
-
-async function completeJob(supabase: SupabaseAdmin, job: DrawJob): Promise<void> {
-  const { error } = await supabase
-    .from("draw_jobs")
-    .update({ status: "done", updated_at: new Date().toISOString() })
-    .eq("id", job.id);
-  if (error) throw new Error(`draw_jobs done update: ${error.message}`);
-}
-
-async function stampDrawProcessed(
-  supabase: SupabaseAdmin,
-  repo: GameRepo,
-  log: Logger,
-  job: DrawJob
-): Promise<DrawStepBreakdown["stampDrawProcessed"]> {
-  const stampStart = new Date().toISOString();
-  const t0 = performance.now();
-  try {
-    const { count, error } = await supabase
-      .from("draw_jobs")
-      .select("id", { count: "exact", head: true })
-      .eq("room_id", job.room_id)
-      .eq("draw_number", job.draw_number)
-      .neq("status", "done");
-    if (error) throw error;
-    if ((count ?? 0) > 0) {
-      return {
-        startTime: stampStart,
-        endTime: new Date().toISOString(),
-        durationMs: Math.round((performance.now() - t0) * 100) / 100,
-      };
-    }
-    await repo.stampDrawProcessed(job.room_id, job.draw_number, new Date().toISOString());
-  } catch (err) {
-    log.warn("stamp draws.processed_at skipped", {
-      roomId: job.room_id,
-      drawNumber: job.draw_number,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-  return {
-    startTime: stampStart,
-    endTime: new Date().toISOString(),
-    durationMs: Math.round((performance.now() - t0) * 100) / 100,
-  };
 }
 
 async function handleFailure(

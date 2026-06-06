@@ -31,6 +31,12 @@ export interface EngineConfig {
   roomSchedulerIntervalMs: number;
   tournamentTickIntervalMs: number;
   tournamentTickBatchLimit: number;
+  /** Sync full marks snapshot every N processed draws (0 = disabled). */
+  roomStateCheckpointEvery: number;
+  /** Requeue draw_jobs in `processing` older than this (seconds). */
+  drawJobStaleSec: number;
+  /** How often to run stale-job reaper (milliseconds). */
+  drawJobReapIntervalMs: number;
 }
 
 function parseRoles(raw: string | undefined): Set<EngineRole> {
@@ -101,6 +107,13 @@ export function loadConfig(): EngineConfig {
     ),
     tournamentTickBatchLimit: Number(
       process.env.TOURNAMENT_TICK_BATCH_LIMIT ?? "50"
+    ),
+    roomStateCheckpointEvery: Number(
+      process.env.ROOM_STATE_CHECKPOINT_EVERY ?? "10"
+    ),
+    drawJobStaleSec: Number(process.env.DRAW_JOB_STALE_SEC ?? "120"),
+    drawJobReapIntervalMs: Number(
+      process.env.DRAW_JOB_REAP_INTERVAL_MS ?? "30000"
     ),
   };
 }

@@ -41,8 +41,8 @@ export function startRoomScheduler(ctx: WorkerContext): () => void {
 
     try {
       if (executesBusinessLogic(config.runtime)) {
-        await manageWaitingRooms(repo, log, 50);
-        await manageRoomLiveActions(repo, log, 200);
+        await manageWaitingRooms(repo, log, 50, ctx.roomState);
+        await manageRoomLiveActions(repo, log, 200, ctx.roomState);
       } else {
         await callDbScheduler(ctx);
       }

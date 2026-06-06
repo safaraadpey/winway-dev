@@ -698,6 +698,25 @@ export type RoomResultsResponse = {
   tournamentId: string | null;
 };
 
+/** Poll until settlement writes reward_amount (results insert with 0 first). */
+export async function fetchRoomResultsWhenPrizesReady(
+  roomId: string,
+  maxAttempts = 30,
+  delayMs = 500
+): Promise<RoomResultsResponse> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const res = await fetchRoomResults(roomId);
+    const winners = [...res.lineWinners, ...res.fullWinners];
+    if (winners.length === 0 || winners.every((w) => w.prizeAmount > 0)) {
+      return res;
+    }
+    if (attempt < maxAttempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  return fetchRoomResults(roomId);
+}
+
 export async function fetchRoomResults(
   roomId: string
 ): Promise<RoomResultsResponse> {

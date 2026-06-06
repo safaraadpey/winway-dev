@@ -8,6 +8,8 @@ import {
   fetchDrawQueueMetrics,
   snapshotDrawAggregateMetrics,
 } from "../../metrics/drawPerformance.js";
+import { reapStaleDrawJobs } from "../../domain/draw/reapStaleJobs.js";
+import { GameRepo } from "../../repositories/index.js";
 import { redisKeys } from "../../redis/keys.js";
 import { releaseLock, tryAcquireLock } from "../../redis/locks.js";
 import { executesBusinessLogic } from "../../runtime.js";
@@ -32,6 +34,22 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
   let stopped = false;
   let inFlight = false;
   let idleLogged = false;
+  let redisLockDegraded = false;
+  let lastReapMs = 0;
+  const repo = new GameRepo(supabase);
+
+  const maybeReapStaleJobs = async (): Promise<void> => {
+    if (!executesBusinessLogic(config.runtime)) return;
+    const now = Date.now();
+    if (now - lastReapMs < config.drawJobReapIntervalMs) return;
+    lastReapMs = now;
+    await reapStaleDrawJobs({
+      repo,
+      log,
+      staleSec: config.drawJobStaleSec,
+      roomState: ctx.roomState,
+    });
+  };
 
   const tick = async (): Promise<void> => {
     if (stopped || inFlight) return;
@@ -47,21 +65,33 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
 
     inFlight = true;
     let haveLock = false;
+    let lockHeld = false;
     try {
+      await maybeReapStaleJobs();
       if (redis) {
-        haveLock = await tryAcquireLock(
-          redis,
-          lockKey,
-          config.drawProcessorLockTtlSec,
-          lockToken
-        );
-        if (!haveLock) return;
+        try {
+          haveLock = await tryAcquireLock(
+            redis,
+            lockKey,
+            config.drawProcessorLockTtlSec,
+            lockToken
+          );
+          lockHeld = haveLock;
+          if (!haveLock) return;
+        } catch (lockErr) {
+          if (!redisLockDegraded) {
+            redisLockDegraded = true;
+            log.warn("redis lock failed; continuing single-instance mode", {
+              error: errMessage(lockErr),
+            });
+          }
+        }
       }
       await drain();
     } catch (err) {
       log.error("draw-processor tick error", { error: errMessage(err) });
     } finally {
-      if (redis && haveLock) {
+      if (redis && lockHeld) {
         await releaseLock(redis, lockKey, lockToken).catch((err: unknown) =>
           log.error("draw-processor lock release failed", {
             error: errMessage(err),
@@ -88,7 +118,7 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
     };
 
     const runBatch = executesBusinessLogic(config.runtime)
-      ? () => processDrawBatchEngine(supabase, log, batchOpts)
+      ? () => processDrawBatchEngine(supabase, log, batchOpts, ctx.roomState)
       : () => processDrawBatch(supabase, log, batchOpts);
 
     for (let batch = 0; !stopped && batch < config.drawProcessorMaxBatchesPerTick; batch++) {

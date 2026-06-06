@@ -16,6 +16,10 @@ import {
   createRedisConnection,
   type RedisHandle,
 } from "./redis/client.js";
+import { reapStaleDrawJobs } from "./domain/draw/reapStaleJobs.js";
+import { executesBusinessLogic } from "./runtime.js";
+import { GameRepo } from "./repositories/index.js";
+import { RoomStateManager } from "./state/index.js";
 import { startDrawProcessor } from "./workers/draw-processor/index.js";
 import { startRoomScheduler } from "./workers/room-scheduler/index.js";
 import { startTournamentOrchestrator } from "./workers/tournament-orchestrator/index.js";
@@ -48,7 +52,17 @@ async function main(): Promise<void> {
 
   const stops: Array<() => void> = [];
 
-  const workerCtx = { supabase, config, log, redis };
+  const repo = new GameRepo(supabase);
+  const roomState = new RoomStateManager(repo, log, config.roomStateCheckpointEvery);
+  if (executesBusinessLogic(config.runtime)) {
+    await reapStaleDrawJobs({
+      repo,
+      log,
+      staleSec: config.drawJobStaleSec,
+      roomState,
+    });
+  }
+  const workerCtx = { supabase, config, log, redis, roomState };
 
   if (config.roles.has("scheduler")) {
     stops.push(startRoomScheduler(workerCtx));

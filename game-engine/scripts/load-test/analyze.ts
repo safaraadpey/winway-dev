@@ -2,6 +2,7 @@ import type { DrawPerformanceReport } from "./types.js";
 
 const DB_QUERY_STEPS = new Set([
   "rpc_pick_draw_jobs",
+  "rpc_finalize_engine_draw_job",
   "getRoom",
   "getRoomTickets",
   "getCardNumbers",
@@ -86,7 +87,14 @@ export function countDbQueries(report: DrawPerformanceReport): number {
   let n = 0;
   for (const [step, timing] of Object.entries(report.breakdown)) {
     if (DB_QUERY_STEPS.has(step) && timing.durationMs > 0) n += 1;
-    if (step === "stampDrawProcessed" && timing.durationMs > 0) n += 1;
+    // stampDrawProcessed also issues a pre-check count query in legacy path
+    if (
+      step === "stampDrawProcessed" &&
+      timing.durationMs > 0 &&
+      report.breakdown.rpc_finalize_engine_draw_job.durationMs === 0
+    ) {
+      n += 1;
+    }
   }
   return n;
 }
