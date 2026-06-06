@@ -156,6 +156,42 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     dataRef.current = data;
   }, [data]);
 
+  const prevCalledNumbersRef = useRef<number[]>([]);
+
+  const detectMarkOnMyCards = useCallback(
+    (number: number, snapshot: LiveRoomSnapshot | null | undefined): boolean => {
+      if (!snapshot?.cards?.length) return false;
+      return snapshot.cards.some((c) => {
+        if (!c.is_my_card) return false;
+        return c.card?.some((row) => row.some((v) => v === number)) ?? false;
+      });
+    },
+    []
+  );
+
+  const scheduleDingSyncForNumber = useCallback(
+    (number: number, snapshot: LiveRoomSnapshot | null | undefined) => {
+      if (!roomId || number == null) return;
+      if (!detectMarkOnMyCards(number, snapshot)) return;
+      scheduleDingBalanceSync?.(`${roomId}:${number}`, true);
+    },
+    [roomId, detectMarkOnMyCards, scheduleDingBalanceSync]
+  );
+
+  // Polling + realtime هر دو calledNumbers را آپدیت می‌کنند؛
+  // بعد از جدا شدن game-engine، processed_at ممکن است دیر یا اصلاً از realtime نرسد.
+  useEffect(() => {
+    if (!data) return;
+
+    const prev = prevCalledNumbersRef.current;
+    const newNumbers = calledNumbers.filter((n) => !prev.includes(n));
+    prevCalledNumbersRef.current = calledNumbers;
+
+    for (const number of newNumbers) {
+      scheduleDingSyncForNumber(number, data);
+    }
+  }, [calledNumbers, data, scheduleDingSyncForNumber]);
+
   // محاسبه و آپدیت countdown تا اولین draw بر اساس next_draw_at و server_now
   useEffect(() => {
     // فقط وقتی هنوز هیچ عددی نیومده (draw اول)
@@ -382,18 +418,9 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
           // Play number audio with minimal latency (client-only, Web Audio API)
           void playNumber(number);
 
-          // اگر این draw روی یکی از کارت‌های کاربر mark دارد، sync موجودی Ding را schedule کن
+          // اگر processed_at از realtime رسید، sync را اینجا هم تریگر کن (کلید یکسان با polling)
           try {
-            const snapshot = dataRef.current;
-            const markDetected =
-              !!snapshot?.cards?.some((c) => {
-                if (!c.is_my_card) return false;
-                return c.card?.some((row) => row.some((v) => v === number)) ?? false;
-              });
-
-            if (drawId && markDetected) {
-              scheduleDingBalanceSync?.(drawId, true);
-            }
+            scheduleDingSyncForNumber(number, dataRef.current);
           } catch (e) {
             console.warn("[LiveRoom] ding sync scheduling failed:", e);
           }
@@ -521,7 +548,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       }
       supabase.removeChannel(channel);
     };
-  }, [roomId, tryOpenResultsDialog]);
+  }, [roomId, tryOpenResultsDialog, scheduleDingSyncForNumber]);
 
   // userId فعلی
   const currentUserId = useMemo(() => {

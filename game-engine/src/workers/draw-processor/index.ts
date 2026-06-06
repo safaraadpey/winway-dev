@@ -4,6 +4,10 @@ import {
   processDrawBatchEngine,
 } from "../../domain/draw/index.js";
 import type { DrawBatchResult } from "../../domain/draw/index.js";
+import {
+  fetchDrawQueueMetrics,
+  snapshotDrawAggregateMetrics,
+} from "../../metrics/drawPerformance.js";
 import { redisKeys } from "../../redis/keys.js";
 import { releaseLock, tryAcquireLock } from "../../redis/locks.js";
 import { executesBusinessLogic } from "../../runtime.js";
@@ -98,6 +102,49 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
 
     if (totals.picked > 0) {
       log.info("draw-processor batch", { ...totals });
+    }
+
+    if (executesBusinessLogic(config.runtime)) {
+      await logDrawPerformanceMetrics(supabase, log, totals.done > 0);
+    }
+  };
+
+  const logDrawPerformanceMetrics = async (
+    db: typeof supabase,
+    logger: typeof log,
+    hadCompletions: boolean
+  ): Promise<void> => {
+    try {
+      const [queue, aggregates] = await Promise.all([
+        fetchDrawQueueMetrics(db),
+        Promise.resolve(snapshotDrawAggregateMetrics()),
+      ]);
+      if (
+        !hadCompletions &&
+        aggregates.sampleCount === 0 &&
+        queue.queueLength === 0 &&
+        queue.activeRooms === 0
+      ) {
+        return;
+      }
+      logger.info("draw-performance-metrics", {
+        drawsProcessedPerSecond: aggregates.drawsProcessedPerSecond,
+        averageDrawProcessingMs: aggregates.averageDrawProcessingMs,
+        p95DrawProcessingMs: aggregates.p95DrawProcessingMs,
+        p99DrawProcessingMs: aggregates.p99DrawProcessingMs,
+        averageQueueWaitMs: aggregates.averageQueueWaitMs,
+        p95QueueWaitMs: aggregates.p95QueueWaitMs,
+        sampleCount: aggregates.sampleCount,
+        queueLength: queue.queueLength,
+        processingLength: queue.processingLength,
+        failedLength: queue.failedLength,
+        activeRooms: queue.activeRooms,
+        activeTickets: queue.activeTickets,
+      });
+    } catch (err) {
+      logger.warn("draw-performance-metrics skipped", {
+        error: errMessage(err),
+      });
     }
   };
 

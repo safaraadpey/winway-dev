@@ -15,6 +15,12 @@ import {
 import { finishRoomAndSettle } from "../../finance/index.js";
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import type { Logger } from "../../metrics/logger.js";
+import {
+  type DrawStepBreakdown,
+  emptyBreakdown,
+  timedStep,
+  timedStepSync,
+} from "../../metrics/drawPerformance.js";
 import { GameRepo } from "../../repositories/index.js";
 
 const EVAL_STATUSES = new Set(["reserved", "confirmed", "consumed"]);
@@ -23,6 +29,11 @@ export interface EvaluateDrawResult {
   marksInserted: number;
   newResults: number;
   settled: boolean;
+  ticketCount: number;
+  cardCount: number;
+  cardNumberRows: number;
+  marksReadCount: number;
+  breakdown: DrawStepBreakdown;
 }
 
 export async function applyMarksAndEvaluate(
@@ -33,14 +44,24 @@ export async function applyMarksAndEvaluate(
   drawNumber: number
 ): Promise<EvaluateDrawResult> {
   const now = new Date().toISOString();
-  const room = await repo.getRoom(roomId);
+  const breakdown = emptyBreakdown();
+
+  const roomStep = await timedStep(() => repo.getRoom(roomId));
+  breakdown.getRoom = roomStep.timing;
+  const room = roomStep.result;
   if (!room) throw new Error(`room ${roomId} not found`);
 
-  const tickets = (await repo.getRoomTickets(roomId)).filter((t) =>
-    EVAL_STATUSES.has(t.reservation_status)
-  );
+  const ticketsStep = await timedStep(async () => {
+    const all = await repo.getRoomTickets(roomId);
+    return all.filter((t) => EVAL_STATUSES.has(t.reservation_status));
+  });
+  breakdown.getRoomTickets = ticketsStep.timing;
+  const tickets = ticketsStep.result;
+
   const poolCardIds = [...new Set(tickets.map((t) => t.pool_card_id))];
-  const cardNumbers = await repo.getCardNumbers(poolCardIds);
+  const cardNumbersStep = await timedStep(() => repo.getCardNumbers(poolCardIds));
+  breakdown.getCardNumbers = cardNumbersStep.timing;
+  const cardNumbers = cardNumbersStep.result;
 
   const cellsByCard = new Map<string, { value: number; rowNo: number }[]>();
   for (const cn of cardNumbers) {
@@ -48,17 +69,21 @@ export async function applyMarksAndEvaluate(
     cellsByCard.get(cn.pool_card_id)!.push({ value: cn.value, rowNo: cn.row_no });
   }
 
-  // 1) Apply marks for the drawn number (rpc_apply_marks_for_draw).
   const markRows = tickets
     .filter((t) =>
       (cellsByCard.get(t.pool_card_id) ?? []).some((c) => c.value === drawNumber)
     )
     .map((t) => ({ ticket_id: t.id, value: drawNumber }));
-  await repo.insertMarksForDraw(markRows, now);
 
-  // 2) Recompute marks per ticket and evaluate (fn_evaluate_room_after_draw).
+  const insertMarksStep = await timedStep(() => repo.insertMarksForDraw(markRows, now));
+  breakdown.insertMarksForDraw = insertMarksStep.timing;
+
   const ticketIds = tickets.map((t) => t.id);
-  const markedByTicket = await repo.getMarksForTickets(ticketIds);
+  const marksStep = await timedStep(() => repo.getMarksForTickets(ticketIds));
+  breakdown.getMarksForTickets = marksStep.timing;
+  const markedByTicket = marksStep.result;
+  let marksReadCount = 0;
+  for (const marked of markedByTicket.values()) marksReadCount += marked.size;
 
   const cards: TicketCard[] = tickets.map((t) => ({
     ticketId: t.id,
@@ -69,7 +94,9 @@ export async function applyMarksAndEvaluate(
     })),
   }));
 
-  const existing = await repo.getResults(roomId);
+  const resultsStep = await timedStep(() => repo.getResults(roomId));
+  breakdown.getResults = resultsStep.timing;
+  const existing = resultsStep.result;
   const existingLine = new Set(
     existing.filter((r) => r.win_type === "line").map((r) => r.ticket_id)
   );
@@ -77,33 +104,42 @@ export async function applyMarksAndEvaluate(
     existing.filter((r) => r.win_type === "full").map((r) => r.ticket_id)
   );
 
-  const evalOut = evaluateRoomAfterDraw({
-    drawNumber,
-    firstLineDrawNumber: room.first_line_draw_number,
-    markedByTicket,
-    tickets: cards,
-    existingLineTickets: existingLine,
-    existingFullTickets: existingFull,
-  });
-
-  await repo.insertResults(
-    evalOut.newResults.map((r) => ({
-      room_id: roomId,
-      user_id: r.userId,
-      ticket_id: r.ticketId,
-      win_type: r.winType,
-      draw_number: drawNumber,
-    }))
+  const evalStep = timedStepSync(() =>
+    evaluateRoomAfterDraw({
+      drawNumber,
+      firstLineDrawNumber: room.first_line_draw_number,
+      markedByTicket,
+      tickets: cards,
+      existingLineTickets: existingLine,
+      existingFullTickets: existingFull,
+    })
   );
+  breakdown.evaluateRoomAfterDraw = evalStep.timing;
+  const evalOut = evalStep.result;
 
-  if (evalOut.setFirstLineDrawNumber) {
-    await repo.setFirstLineDrawNumber(roomId, drawNumber);
-  }
+  const insertResultsStep = await timedStep(async () => {
+    await repo.insertResults(
+      evalOut.newResults.map((r) => ({
+        room_id: roomId,
+        user_id: r.userId,
+        ticket_id: r.ticketId,
+        win_type: r.winType,
+        draw_number: drawNumber,
+      }))
+    );
+    if (evalOut.setFirstLineDrawNumber) {
+      await repo.setFirstLineDrawNumber(roomId, drawNumber);
+    }
+  });
+  breakdown.insertResults = insertResultsStep.timing;
 
   let settled = false;
   if (evalOut.fullWinnerThisDraw) {
-    await repo.setRoomSettling(roomId, now);
-    await finishRoomAndSettle(supabase, roomId);
+    const settleStep = await timedStep(async () => {
+      await repo.setRoomSettling(roomId, now);
+      await finishRoomAndSettle(supabase, roomId);
+    });
+    breakdown.fn_finish_room_and_settle = settleStep.timing;
     settled = true;
     log.info("room settled (full winner)", { roomId, drawNumber });
   }
@@ -112,5 +148,10 @@ export async function applyMarksAndEvaluate(
     marksInserted: markRows.length,
     newResults: evalOut.newResults.length,
     settled,
+    ticketCount: tickets.length,
+    cardCount: poolCardIds.length,
+    cardNumberRows: cardNumbers.length,
+    marksReadCount,
+    breakdown,
   };
 }

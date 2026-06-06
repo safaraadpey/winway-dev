@@ -313,7 +313,7 @@ export default function MergedPlayerHeader({
                 {formatBalance(dingBalance)}
               </motion.span>
               <motion.div
-                animate={isAnimating ? { scale: [1, 1.15, 1] } : {}}
+                animate={isAnimating ? { scale: [1, 1.25, 1] } : {}}
                 transition={{ duration: 0.6, ease: "easeOut" }}
               >
                 <Image

@@ -112,10 +112,16 @@ export function useBalances(): Balances {
   const currentBalanceRef = useRef<number>(0);
 
   // ---- Ding balance sync guards (API-based, per-draw) ----
-  const lastFetchedDrawIdRef = useRef<string | null>(null);
+  const activeSyncDrawIdRef = useRef<string | null>(null);
   const pendingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const inFlightRef = useRef<boolean>(false);
   const scheduledCountRef = useRef<Record<string, number>>({});
+
+  const releaseActiveSync = (drawId: string) => {
+    if (activeSyncDrawIdRef.current === drawId) {
+      activeSyncDrawIdRef.current = null;
+    }
+  };
 
   const refreshWalletBalances = async (): Promise<void> => {
     try {
@@ -424,29 +430,36 @@ export function useBalances(): Balances {
     const prevCount = scheduledCountRef.current[drawId] ?? 0;
     scheduledCountRef.current[drawId] = prevCount + 1;
 
-    if (lastFetchedDrawIdRef.current === drawId) {
-      console.log("[dingSync] schedule ignored (already scheduled for draw)", { drawId, count: scheduledCountRef.current[drawId] });
+    if (activeSyncDrawIdRef.current === drawId) {
+      console.log("[dingSync] schedule ignored (sync already active)", { drawId, count: scheduledCountRef.current[drawId] });
       return;
     }
 
-    lastFetchedDrawIdRef.current = drawId;
+    activeSyncDrawIdRef.current = drawId;
 
     if (pendingTimerRef.current) {
       clearTimeout(pendingTimerRef.current);
       pendingTimerRef.current = null;
     }
 
-    const initialDelay = 100;
+    // Game-engine may credit ding seconds after the number appears in the UI.
+    const initialDelay = 200;
     console.log("[dingSync] scheduled", { drawId, markDetected: true, initialDelayMs: initialDelay });
 
     pendingTimerRef.current = setTimeout(() => {
       pendingTimerRef.current = null;
       void (async function attempt(attemptIndex: number) {
-        const maxRetries = 2; // after first attempt, retry up to 2 times
+        const maxRetries = 6;
         if (!isMountedRef.current) return;
-        if (lastFetchedDrawIdRef.current !== drawId) return;
+        if (activeSyncDrawIdRef.current !== drawId) return;
         if (inFlightRef.current) {
-          console.log("[dingSync] inFlight, skipping attempt", { drawId, attemptIndex });
+          const waitMs = 150;
+          console.log("[dingSync] inFlight, deferring attempt", { drawId, attemptIndex, waitMs });
+          setTimeout(() => {
+            if (!isMountedRef.current) return;
+            if (activeSyncDrawIdRef.current !== drawId) return;
+            void attempt(attemptIndex);
+          }, waitMs);
           return;
         }
 
@@ -469,7 +482,7 @@ export function useBalances(): Balances {
           });
 
           if (!isMountedRef.current) return;
-          if (lastFetchedDrawIdRef.current !== drawId) return;
+          if (activeSyncDrawIdRef.current !== drawId) return;
 
           // Always update ref + state to server truth
           // Animate only on increase
@@ -496,28 +509,39 @@ export function useBalances(): Balances {
                 setIsAnimating(false);
                 animationTimeoutRef.current = null;
               }, 800);
+              releaseActiveSync(drawId);
             }, COIN_ANIMATION_DELAY);
-          } else {
-            // no increase: just sync state
+          } else if (serverBalance !== prevBalance) {
+            // no increase: sync state without animation (avoid clobbering pending animate)
             setDingBalance(serverBalance);
             currentBalanceRef.current = serverBalance;
           }
 
           // Conditional retry: markDetected is true but server didn't increase yet
           if (serverBalance <= prevBalance && attemptIndex < maxRetries) {
-            const retryDelay = 250 + Math.floor(Math.random() * 151); // 250..400
+            const retryDelay = 500 + Math.floor(Math.random() * 301); // 500..800
             console.log("[dingSync] retry scheduled", { drawId, attemptIndex, retryDelayMs: retryDelay });
             setTimeout(() => {
               if (!isMountedRef.current) return;
-              if (lastFetchedDrawIdRef.current !== drawId) return;
-              if (inFlightRef.current) return;
+              if (activeSyncDrawIdRef.current !== drawId) return;
               void attempt(attemptIndex + 1);
             }, retryDelay);
           } else if (serverBalance <= prevBalance && attemptIndex >= maxRetries) {
             console.warn("[dingSync] no increase after max retries", { drawId, prevBalance, serverBalance });
+            releaseActiveSync(drawId);
           }
         } catch (err) {
           console.warn("[dingSync] fetch failed", { drawId, attemptIndex, err });
+          if (attemptIndex < maxRetries) {
+            const retryDelay = 500 + Math.floor(Math.random() * 301);
+            setTimeout(() => {
+              if (!isMountedRef.current) return;
+              if (activeSyncDrawIdRef.current !== drawId) return;
+              void attempt(attemptIndex + 1);
+            }, retryDelay);
+          } else {
+            releaseActiveSync(drawId);
+          }
         } finally {
           inFlightRef.current = false;
         }

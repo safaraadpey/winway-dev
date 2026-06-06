@@ -13,6 +13,12 @@
 
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import type { Logger } from "../../metrics/logger.js";
+import {
+  buildDrawPerformanceReport,
+  recordDrawSample,
+  timedStep,
+  type DrawStepBreakdown,
+} from "../../metrics/drawPerformance.js";
 import { GameRepo } from "../../repositories/index.js";
 import { applyMarksAndEvaluate } from "./evaluateDraw.js";
 import { pickDrawJobs } from "./pickDrawJobs.js";
@@ -31,17 +37,65 @@ export async function processDrawBatchEngine(
   opts: ProcessDrawBatchEngineOptions
 ): Promise<DrawBatchResult> {
   const repo = new GameRepo(supabase);
-  const jobs = await pickDrawJobs(supabase, opts.batchSize);
+
+  const pickStep = await timedStep(() => pickDrawJobs(supabase, opts.batchSize));
+  const jobs = pickStep.result;
   if (jobs.length === 0) return { ...EMPTY_BATCH };
+
+  const pickPerJobMs =
+    jobs.length > 0 ? pickStep.timing.durationMs / jobs.length : 0;
+
+  log.info("draw-performance-batch", {
+    rpc_pick_draw_jobs: pickStep.timing,
+    jobsPicked: jobs.length,
+    pickMsPerJob: Math.round(pickPerJobMs * 100) / 100,
+  });
 
   const partial = await processJobsByRoom(
     jobs,
     opts.roomConcurrency,
     async (job) => {
+      const processingStartedMs = Date.now();
+      const queueWaitMs = Math.max(0, processingStartedMs - Date.parse(job.created_at));
+
       try {
-        await applyMarksAndEvaluate(supabase, repo, log, job.room_id, job.draw_number);
-        await completeJob(supabase, job);
-        await stampDrawProcessed(supabase, repo, log, job);
+        const evalResult = await applyMarksAndEvaluate(
+          supabase,
+          repo,
+          log,
+          job.room_id,
+          job.draw_number
+        );
+        const breakdown = { ...evalResult.breakdown };
+        breakdown.rpc_pick_draw_jobs = {
+          startTime: pickStep.timing.startTime,
+          endTime: pickStep.timing.endTime,
+          durationMs: Math.round(pickPerJobMs * 100) / 100,
+        };
+
+        const completeStep = await timedStep(() => completeJob(supabase, job));
+        breakdown.completeJob = completeStep.timing;
+
+        const stampTiming = await stampDrawProcessed(supabase, repo, log, job);
+        breakdown.stampDrawProcessed = stampTiming;
+
+        const report = buildDrawPerformanceReport({
+          roomId: job.room_id,
+          drawId: job.id,
+          drawNumber: job.draw_number,
+          ticketCount: evalResult.ticketCount,
+          cardCount: evalResult.cardCount,
+          cardNumberRows: evalResult.cardNumberRows,
+          marksInserted: evalResult.marksInserted,
+          marksReadCount: evalResult.marksReadCount,
+          queueWaitMs,
+          settled: evalResult.settled,
+          breakdown,
+        });
+
+        recordDrawSample(report.totalDurationMs, queueWaitMs);
+        log.info("draw-performance", { DrawPerformance: report });
+
         return "done" as const;
       } catch (err) {
         return handleFailure(supabase, log, job, opts, err);
@@ -65,7 +119,9 @@ async function stampDrawProcessed(
   repo: GameRepo,
   log: Logger,
   job: DrawJob
-): Promise<void> {
+): Promise<DrawStepBreakdown["stampDrawProcessed"]> {
+  const stampStart = new Date().toISOString();
+  const t0 = performance.now();
   try {
     const { count, error } = await supabase
       .from("draw_jobs")
@@ -74,7 +130,13 @@ async function stampDrawProcessed(
       .eq("draw_number", job.draw_number)
       .neq("status", "done");
     if (error) throw error;
-    if ((count ?? 0) > 0) return;
+    if ((count ?? 0) > 0) {
+      return {
+        startTime: stampStart,
+        endTime: new Date().toISOString(),
+        durationMs: Math.round((performance.now() - t0) * 100) / 100,
+      };
+    }
     await repo.stampDrawProcessed(job.room_id, job.draw_number, new Date().toISOString());
   } catch (err) {
     log.warn("stamp draws.processed_at skipped", {
@@ -83,6 +145,11 @@ async function stampDrawProcessed(
       error: err instanceof Error ? err.message : String(err),
     });
   }
+  return {
+    startTime: stampStart,
+    endTime: new Date().toISOString(),
+    durationMs: Math.round((performance.now() - t0) * 100) / 100,
+  };
 }
 
 async function handleFailure(
