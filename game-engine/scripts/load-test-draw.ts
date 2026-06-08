@@ -21,7 +21,7 @@ import { mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   buildLoadTestReport,
   formatReportMarkdown,
@@ -114,7 +114,7 @@ async function checkHealth(url: string): Promise<void> {
 }
 
 async function countQueuedJobs(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   roomIds: string[]
 ): Promise<{ queued: number; processing: number }> {
   const [queued, processing] = await Promise.all([
@@ -136,7 +136,7 @@ async function countQueuedJobs(
 }
 
 async function countProcessedDrawsPerRoom(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   roomIds: string[]
 ): Promise<Record<string, number>> {
   const counts: Record<string, number> = Object.fromEntries(
