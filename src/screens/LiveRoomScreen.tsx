@@ -28,11 +28,14 @@ import { isMusicEnabled } from "@/lib/audio-settings";
 import { useDrawRevealQueue } from "@/lib/hooks/useDrawRevealQueue";
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 
-type LineWinner = {
+type CardWinner = {
   ticketId: string;
   userId: string;
   drawNumber: number;
 };
+
+type LineWinner = CardWinner;
+type FullWinner = CardWinner;
 
 interface LiveRoomScreenProps {
   roomId: string;
@@ -56,10 +59,10 @@ const ACTIVE_ROOM_STATUSES = new Set([
 
 const PLAYING_ROOM_STATUSES = new Set(["running", "playing", "live"]);
 
-function mapLineWinnersFromApi(
+function mapWinnersFromApi(
   winners: RoomResultsResponse["lineWinners"],
   cards: LiveRoomSnapshot["cards"]
-): LineWinner[] {
+): CardWinner[] {
   if (!winners?.length) return [];
 
   return winners
@@ -76,14 +79,46 @@ function mapLineWinnersFromApi(
         drawNumber: winner.drawNumber ?? 0,
       };
     })
-    .filter((w): w is LineWinner => w !== null);
+    .filter((w): w is CardWinner => w !== null);
 }
 
-function lineWinnersEqual(a: LineWinner[], b: LineWinner[]): boolean {
+function cardWinnersEqual(a: CardWinner[], b: CardWinner[]): boolean {
   if (a.length !== b.length) return false;
-  const key = (w: LineWinner) => `${w.ticketId}:${w.drawNumber}`;
+  const key = (w: CardWinner) => `${w.ticketId}:${w.drawNumber}`;
   const setA = new Set(a.map(key));
   return b.every((w) => setA.has(key(w)));
+}
+
+function isRoomTerminalStatus(status: string): boolean {
+  const normalized = (status || "").trim().toLowerCase();
+  return (
+    normalized !== "" &&
+    !["running", "playing", "live", "waiting"].includes(normalized)
+  );
+}
+
+function isFullWinRevealedInUi(
+  fullWinners: FullWinner[],
+  calledNumbers: number[]
+): boolean {
+  if (fullWinners.length === 0) return true;
+  return fullWinners.every((w) => {
+    const draw = w.drawNumber;
+    if (draw == null || draw === 0) return true;
+    return calledNumbers.includes(draw);
+  });
+}
+
+/** پاپ‌آپ نتایج فقط وقتی UI عدد برنده پر را نشان داده (یا اتاق terminal است). */
+function canOpenResultsDialog(
+  fullWinners: FullWinner[],
+  calledNumbers: number[],
+  status: string
+): boolean {
+  const terminal = isRoomTerminalStatus(status);
+  if (!terminal && fullWinners.length === 0) return false;
+  if (!isFullWinRevealedInUi(fullWinners, calledNumbers)) return false;
+  return terminal || fullWinners.length > 0;
 }
 
 export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
@@ -98,6 +133,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   const [loading, setLoading] = useState<boolean>(true);
 
   const [lineWinners, setLineWinners] = useState<LineWinner[]>([]);
+  const [fullWinners, setFullWinners] = useState<FullWinner[]>([]);
 
   const [results, setResults] = useState<RoomResultsResponse | null>(null);
   const [resultsRequested, setResultsRequested] = useState(false);
@@ -114,8 +150,29 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     resultsRequestedRef.current = resultsRequested;
   }, [resultsRequested]);
 
+  const fullWinnersRef = useRef<FullWinner[]>([]);
+  const calledNumbersRef = useRef<number[]>([]);
+
   const tryOpenResultsDialog = useCallback(async () => {
     if (resultsRequestedRef.current || openingResultsRef.current) return;
+
+    const status = (
+      dataRef.current?.room?.status ||
+      roomStatusRef.current ||
+      ""
+    )
+      .trim()
+      .toLowerCase();
+
+    if (
+      !canOpenResultsDialog(
+        fullWinnersRef.current,
+        calledNumbersRef.current,
+        status
+      )
+    ) {
+      return;
+    }
 
     const key = buildGameResultsKey({
       roomName: roomId,
@@ -128,12 +185,19 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     resultsRequestedRef.current = true;
     setResultsRequested(true);
 
+    const isTournamentRoom = !!dataRef.current?.tournament?.id;
+
     try {
-      const res = await fetchRoomResultsWhenPrizesReady(roomId);
+      const res = await fetchRoomResultsWhenPrizesReady(roomId, {
+        maxAttempts: isTournamentRoom ? 10 : 30,
+        delayMs: isTournamentRoom ? 200 : 500,
+      });
       setResults(res);
       setShowResultsDialog(true);
       markSeenGameResults(key);
-      scheduleWalletBalanceSync?.(`room-settled:${roomId}`);
+      if (!isTournamentRoom) {
+        scheduleWalletBalanceSync?.(`room-settled:${roomId}`);
+      }
     } catch (err) {
       console.error("[LiveRoom] winners fetch error:", err);
       setShowResultsDialog(true);
@@ -143,33 +207,38 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     }
   }, [roomId, scheduleWalletBalanceSync]);
 
-  const syncLineWinnersFromApi = useCallback(
+  const syncWinnersFromApi = useCallback(
     async (snapshot: LiveRoomSnapshot | null | undefined) => {
       if (!snapshot) return;
-      if (snapshot.tournament?.id) {
-        setLineWinners([]);
-        return;
-      }
       try {
         const roomResults = await fetchRoomResults(roomId);
-        const next = mapLineWinnersFromApi(
-          roomResults.lineWinners,
+        if (!snapshot.tournament?.id) {
+          const nextLine = mapWinnersFromApi(
+            roomResults.lineWinners,
+            snapshot.cards
+          );
+          setLineWinners((prev) =>
+            cardWinnersEqual(prev, nextLine) ? prev : nextLine
+          );
+        }
+        const nextFull = mapWinnersFromApi(
+          roomResults.fullWinners,
           snapshot.cards
         );
-        setLineWinners((prev) =>
-          lineWinnersEqual(prev, next) ? prev : next
+        setFullWinners((prev) =>
+          cardWinnersEqual(prev, nextFull) ? prev : nextFull
         );
       } catch (err) {
-        console.warn("[LiveRoom] line winners sync failed:", err);
+        console.warn("[LiveRoom] winners sync failed:", err);
       }
     },
     [roomId]
   );
 
-  const syncLineWinnersFromApiRef = useRef(syncLineWinnersFromApi);
+  const syncWinnersFromApiRef = useRef(syncWinnersFromApi);
   useEffect(() => {
-    syncLineWinnersFromApiRef.current = syncLineWinnersFromApi;
-  }, [syncLineWinnersFromApi]);
+    syncWinnersFromApiRef.current = syncWinnersFromApi;
+  }, [syncWinnersFromApi]);
 
   // Countdown تا اولین draw (نمایش در جای عدد current در DrawStrip وقتی هنوز عددی نداریم)
   const [firstDrawCountdownSec, setFirstDrawCountdownSec] = useState<number | null>(null);
@@ -220,13 +289,33 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     (number: number) => {
       void playNumber(number);
       creditDingForRevealedNumber(number, dataRef.current);
-      void syncLineWinnersFromApiRef.current(dataRef.current);
+      void syncWinnersFromApiRef.current(dataRef.current);
     },
     [creditDingForRevealedNumber]
   );
 
   const { calledNumbers, syncFromServer, reset: resetDrawReveal } =
     useDrawRevealQueue(revealIntervalMs, handleDrawReveal);
+
+  useEffect(() => {
+    fullWinnersRef.current = fullWinners;
+  }, [fullWinners]);
+
+  useEffect(() => {
+    calledNumbersRef.current = calledNumbers;
+  }, [calledNumbers]);
+
+  useEffect(() => {
+    if (resultsRequestedRef.current) return;
+    const status = (data?.room?.status || "").trim().toLowerCase();
+    if (!canOpenResultsDialog(fullWinners, calledNumbers, status)) return;
+    void tryOpenResultsDialog();
+  }, [
+    data?.room?.status,
+    fullWinners,
+    calledNumbers,
+    tryOpenResultsDialog,
+  ]);
 
   useEffect(() => {
     drawIntervalSecRef.current =
@@ -282,14 +371,14 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
           : snapshot
       );
       applyDrawsFromSnapshot(snapshot.draws);
-      await syncLineWinnersFromApi(snapshot);
+      await syncWinnersFromApi(snapshot);
       console.log("[LiveRoom] draw sync poll (realtime draw stale)");
     } catch (err) {
       console.warn("[LiveRoom] draw sync poll error:", err);
     } finally {
       pollInFlightRef.current = false;
     }
-  }, [roomId, applyDrawsFromSnapshot, syncLineWinnersFromApi]);
+  }, [roomId, applyDrawsFromSnapshot, syncWinnersFromApi]);
 
   const applyDrawsFromSnapshotRef = useRef(applyDrawsFromSnapshot);
   useEffect(() => {
@@ -318,7 +407,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       const isTerminal = ["settling", "finished", "cancelled"].includes(
         nextStatus
       );
-      await syncLineWinnersFromApi(snapshot);
+      await syncWinnersFromApi(snapshot);
       if (isTerminal) void tryOpenResultsDialog();
 
       markRealtimeActivity();
@@ -331,7 +420,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   }, [
     roomId,
     applyDrawsFromSnapshot,
-    syncLineWinnersFromApi,
+    syncWinnersFromApi,
     tryOpenResultsDialog,
     markRealtimeActivity,
   ]);
@@ -452,7 +541,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
             .trim()
             .toLowerCase();
           markRealtimeActivity();
-          await syncLineWinnersFromApi(snapshot);
+          await syncWinnersFromApi(snapshot);
         }
       } catch (err: any) {
         console.error("[LiveRoom] snapshot load error:", err);
@@ -469,7 +558,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     return () => {
       isMounted = false;
     };
-  }, [roomId, applyDrawsFromSnapshot, syncLineWinnersFromApi, markRealtimeActivity]);
+  }, [roomId, applyDrawsFromSnapshot, syncWinnersFromApi, markRealtimeActivity]);
 
   useEffect(() => {
     roomStatusRef.current = (data?.room?.status || "").trim().toLowerCase();
@@ -566,7 +655,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       });
 
       applyDrawsFromSnapshotRef.current([{ number, created_at: createdAt }]);
-      void syncLineWinnersFromApiRef.current(dataRef.current);
+      void syncWinnersFromApiRef.current(dataRef.current);
     };
 
     const channel = supabase
@@ -611,8 +700,9 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
             (newStatus === "waiting" || newStatus === "running" || newStatus === "playing");
           
           if (isNewGame) {
-            console.log("[LiveRoom] New game started, resetting lineWinners");
+            console.log("[LiveRoom] New game started, resetting winners");
             setLineWinners([]);
+            setFullWinners([]);
           }
 
           setData((prev) =>
@@ -662,16 +752,24 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
           }
 
           if (newRow.win_type === "full") {
-            console.log("[LiveRoom] full win detected → open results");
-            setData((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    room: { ...prev.room, status: "finished" },
-                  }
-                : prev
-            );
-            void tryOpenResultsDialog();
+            const rawDraw = newRow.draw_number ?? newRow.draw;
+            const fullEntry: FullWinner = {
+              ticketId: newRow.ticket_id,
+              userId: newRow.user_id,
+              drawNumber:
+                rawDraw === null || rawDraw === undefined
+                  ? 0
+                  : Number(rawDraw),
+            };
+
+            setFullWinners((prev) => {
+              if (prev.some((w) => w.ticketId === fullEntry.ticketId)) return prev;
+              const next = [...prev, fullEntry];
+              console.log("[LiveRoom] fullWinners updated →", next);
+              return next;
+            });
+
+            console.log("[LiveRoom] full win detected (wait for UI reveal)");
           }
         }
       );
@@ -718,13 +816,11 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     scheduleWalletBalanceSync?.(`room-finished:${roomId}`);
     void refreshAllBalances?.();
     invalidateActiveGames?.();
-    void tryOpenResultsDialog();
   }, [
     data?.room.status,
     roomId,
     scheduleWalletBalanceSync,
     refreshAllBalances,
-    tryOpenResultsDialog,
     invalidateActiveGames,
   ]);
 
@@ -811,6 +907,13 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       (w) => w.drawNumber == null || calledNumbers.includes(w.drawNumber)
     );
 
+  const hasRevealedFullWinner = fullWinners.some(
+    (w) =>
+      w.drawNumber == null ||
+      w.drawNumber === 0 ||
+      calledNumbers.includes(w.drawNumber)
+  );
+
   return (
     <div className="h-full bg-black/40 text-white overflow-hidden">
       <div className="max-w-3xl mx-auto h-full flex flex-col">
@@ -832,6 +935,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
               tournamentName={data.tournament?.title ?? null}
               roundNumber={data.tournament?.round_no ?? null}
               hasLineWinner={hasRevealedLineWinner}
+              hasFullWinner={hasRevealedFullWinner}
             />
 
             <DrawStrip
@@ -868,6 +972,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
                 isMyCard={card.is_my_card}
                 linePrize={true}
                 lineWinners={data.tournament?.id ? [] : lineWinners}
+                fullWinners={fullWinners}
                 cardData={card.card}
               />
             </div>
@@ -894,8 +999,9 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
             </span>
           </span>
         }
-        proofSeed={(results as any)?.seed ?? null}
-        proofCommitHash={(results as any)?.commitHash ?? null}
+        proofSeed={results?.seed ?? null}
+        proofCommitHash={results?.commitHash ?? null}
+        drawVerification={results?.drawVerification ?? null}
         currentUserId={currentUserId}
         lineWinners={results?.lineWinners ?? []}
         fullWinners={results?.fullWinners ?? []}

@@ -69,6 +69,7 @@ interface MergedPlayerHeaderProps {
   tomanBalance: number;
   loading?: boolean;
   isAnimating?: boolean;
+  isTomanAnimating?: boolean;
   showBackButton?: boolean;
   onBackClick?: () => void;
   onRefreshBalances?: () => Promise<void> | void;
@@ -80,6 +81,7 @@ export default function MergedPlayerHeader({
   tomanBalance,
   loading = false,
   isAnimating = false,
+  isTomanAnimating = false,
   showBackButton = false,
   onBackClick,
   onRefreshBalances,
@@ -240,8 +242,22 @@ export default function MergedPlayerHeader({
   // فقط کپسول Ding باید انیمیشن glow داشته باشد؛ کپسول Toman ثابت بماند
   const dingCapsuleAnimate = capsuleAnimate;
   const dingAmountAnimate = amountAnimate;
-  const tomanCapsuleAnimate = {};
-  const tomanAmountAnimate = {};
+  const tomanCapsuleAnimate = isTomanAnimating
+    ? {
+        boxShadow: [
+          "0 0 0px rgba(251, 191, 36, 0)",
+          "0 0 22px rgba(251, 191, 36, 0.75)",
+          "0 0 14px rgba(251, 191, 36, 0.45)",
+          "0 0 0px rgba(251, 191, 36, 0)",
+        ],
+      }
+    : {};
+  const tomanAmountAnimate = isTomanAnimating
+    ? {
+        color: ["#ffffff", "#fcd34d", "#fde047", "#ffffff"],
+        scale: [1, 1.12, 1],
+      }
+    : {};
 
   return (
     <div className={styles.container}>
@@ -267,9 +283,10 @@ export default function MergedPlayerHeader({
       <div className={`${styles.row2} ${showBackButton ? "" : styles.row2NoBackButton}`}>
         {/* Toman Capsule */}
         <motion.div
+          data-wallet-toman-target
           className={capsuleClass(styles.tomanBg)}
           animate={tomanCapsuleAnimate}
-          transition={{ duration: 0.8, ease: "easeInOut" }}
+          transition={{ duration: 0.85, ease: "easeInOut" }}
           onClick={
             refreshDisabled ? undefined : () => void handleRefreshBalances()
           }

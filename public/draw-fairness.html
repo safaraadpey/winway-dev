@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>بررسی قرعه — dingmoney</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: #0e0e0f;
+      color: #fff;
+      font-family: Tahoma, "Segoe UI", sans-serif;
+    }
+    body {
+      padding: 16px 16px 32px;
+      overflow-y: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    body::-webkit-scrollbar { display: none; }
+    .wrap { max-width: 420px; margin: 0 auto; display: grid; gap: 20px; }
+    h1 {
+      margin: 0;
+      text-align: center;
+      font-size: 1.25rem;
+      color: #feeeb4;
+    }
+    .lead {
+      margin: 0;
+      text-align: right;
+      font-size: 13px;
+      line-height: 1.7;
+      color: rgba(255,255,255,.7);
+    }
+    .card {
+      border: 1px solid #1f2837;
+      background: rgba(0,0,0,.4);
+      border-radius: 16px;
+      padding: 16px;
+      font-size: 13px;
+      line-height: 1.7;
+      color: rgba(255,255,255,.85);
+    }
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      color: #feeeb4;
+    }
+    .card ol { margin: 0; padding-right: 20px; }
+    .card li { margin-bottom: 8px; }
+    .code {
+      display: block;
+      margin-top: 8px;
+      padding: 8px;
+      border-radius: 10px;
+      background: rgba(0,0,0,.5);
+      font-family: Consolas, monospace;
+      font-size: 11px;
+      direction: ltr;
+      text-align: left;
+      color: #a7f3d0;
+      word-break: break-all;
+    }
+    .code.sky { color: #bae6fd; }
+    .note {
+      margin: 12px 0 0;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,.1);
+      font-size: 12px;
+      color: rgba(251,191,36,.85);
+    }
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .json-box {
+      overflow: hidden;
+      border-radius: 16px;
+      border: 1px solid #2a3a52;
+      background: rgba(0,0,0,.5);
+    }
+    .json-box:focus-within { border-color: #2a92b2; }
+    .json-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      border-bottom: 1px solid #2a3a52;
+      padding: 6px 8px;
+    }
+    .paste-btn {
+      border: 1px solid rgba(255,255,255,.2);
+      background: rgba(255,255,255,.1);
+      color: rgba(255,255,255,.9);
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .paste-btn:active { opacity: .8; }
+    .paste-error {
+      margin: 6px 0 0;
+      text-align: right;
+      font-size: 12px;
+      color: #fca5a5;
+    }
+    textarea {
+      display: block;
+      width: 100%;
+      min-height: 200px;
+      resize: vertical;
+      border: none;
+      background: transparent;
+      color: rgba(255,255,255,.9);
+      padding: 12px;
+      font-family: Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      direction: ltr;
+      outline: none;
+    }
+    .btn {
+      width: 100%;
+      border: none;
+      border-radius: 16px;
+      padding: 14px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-primary {
+      background: #2a92b2;
+      color: #fff;
+      box-shadow: 0 8px 20px rgba(0,0,0,.25);
+    }
+    .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-secondary {
+      background: transparent;
+      color: rgba(255,255,255,.85);
+      border: 1px solid rgba(255,255,255,.2);
+    }
+    .error {
+      border: 1px solid rgba(248,113,113,.5);
+      background: rgba(69,10,10,.4);
+      color: #fecaca;
+      border-radius: 16px;
+      padding: 12px 16px;
+      font-size: 13px;
+    }
+    .result {
+      border-radius: 16px;
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+    }
+    .result.ok {
+      border: 1px solid rgba(52,211,153,.5);
+      background: rgba(6,78,59,.3);
+    }
+    .result.fail {
+      border: 1px solid rgba(248,113,113,.5);
+      background: rgba(69,10,10,.3);
+    }
+    .result-title {
+      text-align: center;
+      font-size: 18px;
+      font-weight: 800;
+      margin: 0;
+    }
+    .result.ok .result-title { color: #6ee7b7; }
+    .result.fail .result-title { color: #fca5a5; }
+    .check {
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 12px;
+    }
+    .check.pass {
+      border: 1px solid rgba(16,185,129,.3);
+      background: rgba(6,78,59,.2);
+    }
+    .check.fail {
+      border: 1px solid rgba(239,68,68,.3);
+      background: rgba(127,29,29,.2);
+    }
+    .check strong { display: block; margin-bottom: 4px; }
+    .reproduced {
+      font-family: Consolas, monospace;
+      font-size: 11px;
+      direction: ltr;
+      text-align: left;
+      word-break: break-all;
+      border: 1px solid rgba(255,255,255,.1);
+      background: rgba(0,0,0,.4);
+      border-radius: 12px;
+      padding: 8px;
+      color: rgba(255,255,255,.75);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>بررسی قرعه</h1>
+      <p class="lead">
+        برای دریافت اطلاعات provably fair در پایان بازی روی دکمه «کپی هش» بزنید و
+        اطلاعات کپی‌شده را در کادر مشخصات قرعه الصاق کنید و دکمه محاسبه را بزنید.
+      </p>
+    </header>
+
+    <section class="card">
+      <h2>روش محاسبه</h2>
+      <ol>
+        <li>قبل از بازی <b>serverSeedHash</b> (کد commit) در میز نمایش داده و قابل کپی است.</li>
+        <li>
+          پس از بازی <b>serverSeed</b> منتشر می‌شود. تأیید commit:
+          <span class="code">sha256(bytes_from_hex(serverSeed)) = serverSeedHash</span>
+        </li>
+        <li>
+          برای هر قرعه، بین اعداد ۱ تا ۹۰ که هنوز نیامده‌اند، کلید
+          <span class="code sky">sha256(utf8(hex(seed)+':'+n))</span>
+          محاسبه می‌شود و عددی که <b>کمینه</b> کلید را دارد انتخاب می‌شود.
+        </li>
+        <li>ترتیب بازتولید‌شده با <b>drawnNumbers</b> مقایسه می‌شود.</li>
+      </ol>
+      <p class="note">
+        توجه: هش commit روی بایت‌های seed است، نه روی متن hex
+        (<span dir="ltr">sha256(utf8(serverSeed))</span> استفاده نمی‌شود).
+      </p>
+    </section>
+
+    <section>
+      <label for="json">JSON مشخصات قرعه</label>
+      <div class="json-box">
+        <div class="json-toolbar" dir="rtl">
+          <button id="paste" class="paste-btn" type="button">الصاق از کلیپ بورد</button>
+        </div>
+        <textarea id="json" placeholder='{"serverSeed":"...","serverSeedHash":"...","drawnNumbers":[1,2,3]}'></textarea>
+      </div>
+      <p id="paste-error" class="paste-error" hidden></p>
+    </section>
+
+    <button id="calc" class="btn btn-primary" type="button">محاسبه</button>
+
+    <div id="parse-error" class="error" hidden></div>
+    <div id="result" hidden></div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "winway_draw_fairness_json";
+
+    function normalizeRoomSeedHex(raw) {
+      if (!raw) return null;
+      const s = String(raw).trim();
+      if (s.startsWith("\\x")) return s.slice(2).toLowerCase();
+      if (s.startsWith("0x")) return s.slice(2).toLowerCase();
+      return s.toLowerCase();
+    }
+
+    async function sha256HexUtf8(text) {
+      const bytes = new TextEncoder().encode(text);
+      const digest = await crypto.subtle.digest("SHA-256", bytes);
+      return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    async function sha256HexBytes(bytes) {
+      const digest = await crypto.subtle.digest("SHA-256", Uint8Array.from(bytes));
+      return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    async function computeServerSeedHash(serverSeedHex) {
+      const bytes = new Uint8Array(serverSeedHex.length / 2);
+      for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = parseInt(serverSeedHex.slice(i * 2, i * 2 + 2), 16);
+      }
+      return sha256HexBytes(bytes);
+    }
+
+    async function orderingKey(seedHex, candidate) {
+      return sha256HexUtf8(seedHex + ":" + candidate);
+    }
+
+    async function pickNextNumber(seedHex, alreadyDrawn) {
+      let best = null;
+      for (let n = 1; n <= 90; n++) {
+        if (alreadyDrawn.has(n)) continue;
+        const key = await orderingKey(seedHex, n);
+        if (!best || key < best.key) best = { n, key };
+      }
+      return best ? best.n : null;
+    }
+
+    async function reproduceDrawSequence(serverSeedHex, drawCount) {
+      const drawn = [];
+      const seen = new Set();
+      for (let i = 0; i < drawCount; i++) {
+        const next = await pickNextNumber(serverSeedHex, seen);
+        if (next === null) break;
+        drawn.push(next);
+        seen.add(next);
+      }
+      return drawn;
+    }
+
+    function parseDrawVerificationJson(raw) {
+      const trimmed = raw.trim();
+      if (!trimmed) return { input: null, error: "لطفاً JSON را وارد کنید." };
+      let parsed;
+      try { parsed = JSON.parse(trimmed); } catch { return { input: null, error: "فرمت JSON نامعتبر است." }; }
+      if (!parsed || typeof parsed !== "object") return { input: null, error: "JSON باید یک شیء باشد." };
+
+      const serverSeed = parsed.serverSeed;
+      const serverSeedHash = parsed.serverSeedHash;
+      const drawnNumbers = parsed.drawnNumbers;
+
+      if (typeof serverSeed !== "string" || !serverSeed.trim()) return { input: null, error: "فیلد serverSeed الزامی است." };
+      if (typeof serverSeedHash !== "string" || !serverSeedHash.trim()) return { input: null, error: "فیلد serverSeedHash الزامی است." };
+      if (!Array.isArray(drawnNumbers)) return { input: null, error: "فیلد drawnNumbers باید آرایه باشد." };
+
+      const numbers = drawnNumbers.map((n) => Number(n));
+      if (numbers.some((n) => !Number.isInteger(n) || n < 1 || n > 90)) {
+        return { input: null, error: "اعداد drawnNumbers باید بین ۱ تا ۹۰ باشند." };
+      }
+      if (new Set(numbers).size !== numbers.length) {
+        return { input: null, error: "drawnNumbers نباید عدد تکراری داشته باشد." };
+      }
+
+      const drawCount = parsed.drawCount == null ? numbers.length : Number(parsed.drawCount);
+      return {
+        input: {
+          serverSeed: serverSeed.trim(),
+          serverSeedHash: serverSeedHash.trim(),
+          drawnNumbers: numbers,
+          drawCount: Number.isFinite(drawCount) ? drawCount : numbers.length,
+        },
+        error: null,
+      };
+    }
+
+    async function verifyDrawPayload(input) {
+      const checks = [];
+      const normalizedSeed = normalizeRoomSeedHex(input.serverSeed);
+      const normalizedHash = input.serverSeedHash.trim().toLowerCase();
+
+      checks.push({
+        label: "فرمت serverSeed (hex lowercase، ۶۴ کاراکتر)",
+        passed: Boolean(normalizedSeed && /^[0-9a-f]{64}$/.test(normalizedSeed)),
+        detail: normalizedSeed ? "" : "serverSeed باید ۳۲ بایت به‌صورت hex باشد.",
+      });
+      checks.push({
+        label: "فرمت serverSeedHash (hex lowercase، ۶۴ کاراکتر)",
+        passed: /^[0-9a-f]{64}$/.test(normalizedHash),
+        detail: "",
+      });
+
+      let computedHash = null;
+      if (normalizedSeed && /^[0-9a-f]{64}$/.test(normalizedSeed)) {
+        computedHash = await computeServerSeedHash(normalizedSeed);
+        checks.push({
+          label: "تطابق commit: sha256(bytes_from_hex(serverSeed))",
+          passed: computedHash === normalizedHash,
+          detail: computedHash === normalizedHash
+            ? ""
+            : "محاسبه‌شده: " + computedHash.slice(0, 8) + "… — اعلام‌شده: " + normalizedHash.slice(0, 8) + "…",
+        });
+        checks.push({
+          label: "رد الگوریتم اشتباه sha256(utf8(serverSeed))",
+          passed: (await sha256HexUtf8(normalizedSeed)) !== normalizedHash,
+          detail: "هش commit روی بایت‌های decode‌شده است، نه متن hex.",
+        });
+      } else {
+        checks.push({
+          label: "تطابق commit: sha256(bytes_from_hex(serverSeed))",
+          passed: false,
+          detail: "به‌دلیل فرمت نادرست serverSeed قابل محاسبه نیست.",
+        });
+      }
+
+      const expectedCount = input.drawCount ?? input.drawnNumbers.length;
+      checks.push({
+        label: "تطابق drawCount با طول drawnNumbers",
+        passed: expectedCount === input.drawnNumbers.length,
+        detail: expectedCount === input.drawnNumbers.length
+          ? input.drawnNumbers.length + " قرعه"
+          : "drawCount=" + expectedCount + " ولی drawnNumbers.length=" + input.drawnNumbers.length,
+      });
+
+      let reproducedDraws = [];
+      let firstMismatchIndex = null;
+      if (normalizedSeed && /^[0-9a-f]{64}$/.test(normalizedSeed)) {
+        reproducedDraws = await reproduceDrawSequence(normalizedSeed, input.drawnNumbers.length);
+        for (let i = 0; i < input.drawnNumbers.length; i++) {
+          if (reproducedDraws[i] !== input.drawnNumbers[i]) {
+            firstMismatchIndex = i;
+            break;
+          }
+        }
+        const sequenceOk = reproducedDraws.length === input.drawnNumbers.length && firstMismatchIndex === null;
+        checks.push({
+          label: "بازتولید ترتیب قرعه‌ها با SHA256_ORDERING",
+          passed: sequenceOk,
+          detail: sequenceOk
+            ? "همه اعداد با الگوریتم سرور یکسان هستند."
+            : firstMismatchIndex != null
+              ? "اولین اختلاف در قرعه " + (firstMismatchIndex + 1) + ": انتظار " + (reproducedDraws[firstMismatchIndex] ?? "—") + "، دریافت " + input.drawnNumbers[firstMismatchIndex]
+              : "تعداد بازتولید (" + reproducedDraws.length + ") با اعلام‌شده (" + input.drawnNumbers.length + ") فرق دارد.",
+        });
+      } else {
+        checks.push({
+          label: "بازتولید ترتیب قرعه‌ها با SHA256_ORDERING",
+          passed: false,
+          detail: "به‌دلیل فرمت نادرست serverSeed قابل محاسبه نیست.",
+        });
+      }
+
+      return {
+        ok: checks.every((c) => c.passed),
+        checks,
+        reproducedDraws,
+      };
+    }
+
+    function renderResult(outcome) {
+      const el = document.getElementById("result");
+      el.hidden = false;
+      el.className = "result " + (outcome.ok ? "ok" : "fail");
+      let html = '<p class="result-title">' + (outcome.ok ? "✅ قرعه معتبر و provably fair" : "❌ تأیید ناموفق") + "</p>";
+      html += outcome.checks.map(function (c) {
+        return '<div class="check ' + (c.passed ? "pass" : "fail") + '"><strong>' + (c.passed ? "✓ " : "✗ ") + c.label + "</strong>" + (c.detail ? "<div>" + c.detail + "</div>" : "") + "</div>";
+      }).join("");
+      if (outcome.reproducedDraws.length) {
+        html += '<div><div style="font-size:12px;font-weight:600;margin-bottom:6px">اعداد بازتولید‌شده:</div><div class="reproduced">' + outcome.reproducedDraws.join(", ") + "</div></div>";
+      }
+      el.innerHTML = html;
+    }
+
+    const jsonEl = document.getElementById("json");
+    const pasteBtn = document.getElementById("paste");
+    const pasteErrorEl = document.getElementById("paste-error");
+    const calcBtn = document.getElementById("calc");
+    const parseErrorEl = document.getElementById("parse-error");
+    const resultEl = document.getElementById("result");
+
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) jsonEl.value = saved;
+    } catch (_) {}
+
+    jsonEl.addEventListener("input", function () {
+      pasteErrorEl.hidden = true;
+      try { localStorage.setItem(STORAGE_KEY, jsonEl.value); } catch (_) {}
+    });
+
+    pasteBtn.addEventListener("click", async function () {
+      pasteErrorEl.hidden = true;
+      try {
+        const text = await navigator.clipboard.readText();
+        if (!text.trim()) {
+          pasteErrorEl.textContent = "کلیپ بورد خالی است.";
+          pasteErrorEl.hidden = false;
+          return;
+        }
+        jsonEl.value = text;
+        try { localStorage.setItem(STORAGE_KEY, text); } catch (_) {}
+      } catch (_) {
+        pasteErrorEl.textContent = "دسترسی به کلیپ بورد ممکن نیست.";
+        pasteErrorEl.hidden = false;
+      }
+    });
+
+    calcBtn.addEventListener("click", async function () {
+      parseErrorEl.hidden = true;
+      resultEl.hidden = true;
+      calcBtn.disabled = true;
+      calcBtn.textContent = "در حال محاسبه…";
+      try {
+        const { input, error } = parseDrawVerificationJson(jsonEl.value);
+        if (error || !input) {
+          parseErrorEl.textContent = error;
+          parseErrorEl.hidden = false;
+          return;
+        }
+        const outcome = await verifyDrawPayload(input);
+        renderResult(outcome);
+      } finally {
+        calcBtn.disabled = false;
+        calcBtn.textContent = "محاسبه";
+      }
+    });
+  </script>
+</body>
+</html>

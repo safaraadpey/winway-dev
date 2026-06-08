@@ -74,6 +74,8 @@ export interface Balances {
   loading: boolean;
   error: string | null;
   isAnimating: boolean;
+  isTomanAnimating: boolean;
+  triggerTomanCelebrate: () => void;
   /**
    * Refresh wallet balances (toman + locked) immediately from DB.
    * Useful right after purchase/cancel actions to avoid waiting for realtime delay.
@@ -105,6 +107,8 @@ export function useBalances(): Balances {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
+  const [isTomanAnimating, setIsTomanAnimating] = useState<boolean>(false);
+  const tomanAnimationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Refs برای مدیریت mount و hydration
   const isMountedRef = useRef<boolean>(false);
@@ -422,8 +426,25 @@ export function useBalances(): Balances {
         clearTimeout(balanceUpdateTimeoutRef.current);
         balanceUpdateTimeoutRef.current = null;
       }
+      if (tomanAnimationTimeoutRef.current) {
+        clearTimeout(tomanAnimationTimeoutRef.current);
+        tomanAnimationTimeoutRef.current = null;
+      }
     };
   }, []);
+
+  const triggerTomanCelebrate = () => {
+    if (!isMountedRef.current) return;
+    setIsTomanAnimating(true);
+    if (tomanAnimationTimeoutRef.current) {
+      clearTimeout(tomanAnimationTimeoutRef.current);
+    }
+    tomanAnimationTimeoutRef.current = setTimeout(() => {
+      if (!isMountedRef.current) return;
+      setIsTomanAnimating(false);
+      tomanAnimationTimeoutRef.current = null;
+    }, 900);
+  };
 
   const creditDingOnReveal = (revealKey: string, delta: number) => {
     if (!revealKey || delta <= 0) return;
@@ -506,6 +527,8 @@ export function useBalances(): Balances {
     loading,
     error,
     isAnimating,
+    isTomanAnimating,
+    triggerTomanCelebrate,
     refreshWalletBalances,
     refreshAllBalances,
     creditDingOnReveal,

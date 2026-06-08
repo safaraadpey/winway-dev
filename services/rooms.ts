@@ -3,6 +3,7 @@
 // Supabase-backed service functions for working with `public.room_templates`.
 // این توابع فقط لایه‌ی دسترسی به دیتا هستند و در کامپوننت‌ها/هوک‌ها استفاده می‌شوند.
 
+import type { DrawVerificationSpec } from "@/lib/provablyFairDrawSpec";
 import { supabase } from "@/lib/supabaseClient";
 import {
   RoomTemplatePayload,
@@ -696,27 +697,46 @@ export type RoomResultsResponse = {
   fullWinners: Winner[];
   seed: string | null;
   commitHash: string | null;
+  drawVerification: DrawVerificationSpec | null;
   isTournament: boolean;
   tournamentId: string | null;
 };
 
-/** Poll until settlement writes reward_amount (results insert with 0 first). */
+export type FetchRoomResultsOptions = {
+  maxAttempts?: number;
+  delayMs?: number;
+};
+
+/**
+ * Poll room-results for end-game dialog.
+ * Cash rooms: wait until reward_amount is written on all winners.
+ * Tournament tables: prize stays 0 — return as soon as winners exist.
+ */
 export async function fetchRoomResultsWhenPrizesReady(
   roomId: string,
-  maxAttempts = 30,
-  delayMs = 500
+  options: FetchRoomResultsOptions = {}
 ): Promise<RoomResultsResponse> {
+  const maxAttempts = options.maxAttempts ?? 30;
+  const delayMs = options.delayMs ?? 500;
+
+  let lastRes: RoomResultsResponse | null = null;
+
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const res = await fetchRoomResults(roomId);
+    lastRes = res;
     const winners = [...res.lineWinners, ...res.fullWinners];
-    if (winners.length === 0 || winners.every((w) => w.prizeAmount > 0)) {
+    const skipPrizeWait = res.isTournament;
+
+    if (winners.length > 0 && (skipPrizeWait || winners.every((w) => w.prizeAmount > 0))) {
       return res;
     }
+
     if (attempt < maxAttempts - 1) {
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
   }
-  return fetchRoomResults(roomId);
+
+  return lastRes ?? fetchRoomResults(roomId);
 }
 
 export async function fetchRoomResults(

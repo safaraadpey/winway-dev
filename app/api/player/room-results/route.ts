@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  buildDrawVerificationSpec,
+  type DrawVerificationSpec,
+} from "@/lib/provablyFairDrawSpec";
 import { createServiceClient, getUserFromRequest } from "@/lib/supabaseServer";
 
 type Winner = {
@@ -15,6 +19,7 @@ type RoomResultsResponse = {
   fullWinners: Winner[];
   seed: string | null;
   commitHash: string | null;
+  drawVerification: DrawVerificationSpec | null;
   isTournament: boolean;
   tournamentId: string | null;
 };
@@ -133,6 +138,25 @@ export async function GET(request: NextRequest) {
       isTournament = (templateRow as any)?.room_type === "tournament";
     }
 
+    const { data: drawRows, error: drawsError } = await supabase
+      .from("draws")
+      .select("number")
+      .eq("room_id", roomId)
+      .order("created_at", { ascending: true });
+    if (drawsError) {
+      console.error("room-results draws fetch error:", drawsError);
+    }
+    const drawnNumbers = (drawRows || [])
+      .map((d) => Number(d.number))
+      .filter((n) => Number.isFinite(n) && n >= 1 && n <= 90);
+
+    const drawVerification = buildDrawVerificationSpec({
+      roomId,
+      serverSeedRaw: seed,
+      serverSeedHash: commitHash,
+      drawnNumbers,
+    });
+
     let tournamentId: string | null = null;
     if (isTournament) {
       const { data: trrRow, error: trrError } = await supabase
@@ -152,6 +176,7 @@ export async function GET(request: NextRequest) {
       fullWinners,
       seed,
       commitHash,
+      drawVerification,
       isTournament,
       tournamentId,
     };

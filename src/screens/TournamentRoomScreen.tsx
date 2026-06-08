@@ -452,7 +452,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
       };
     }
 
-    const interval = setInterval(loadTables, 20000);
+    const interval = setInterval(loadTables, 10000);
     return () => {
       active = false;
       clearInterval(interval);

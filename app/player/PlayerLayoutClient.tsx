@@ -1,6 +1,10 @@
 "use client";
 
-import React, { useEffect } from 'react';
+import React, { useEffect } from "react";
+import {
+  WALLET_PRIZE_CELEBRATE_EVENT,
+  type WalletPrizeCelebrateDetail,
+} from "@/lib/walletPrizeCelebrate";
 import { usePathname } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
@@ -25,7 +29,10 @@ export default function PlayerLayoutClient({
     lockedTomanBalance,
     loading,
     isAnimating,
+    isTomanAnimating,
+    triggerTomanCelebrate,
     refreshAllBalances,
+    scheduleWalletBalanceSync,
   } = useBalancesContext();
 
   // نکته: در بک‌اند، هنگام hold برای join، هم balance کم می‌شود و هم locked_amount زیاد.
@@ -52,6 +59,21 @@ export default function PlayerLayoutClient({
   }, [pathname]);
 
   useEffect(() => {
+    const onPrizeCelebrate = (event: Event) => {
+      const amount = (event as CustomEvent<WalletPrizeCelebrateDetail>).detail
+        ?.amount;
+      triggerTomanCelebrate?.();
+      scheduleWalletBalanceSync?.(
+        amount != null ? `prize-celebrate:${amount}` : "prize-celebrate"
+      );
+    };
+    window.addEventListener(WALLET_PRIZE_CELEBRATE_EVENT, onPrizeCelebrate);
+    return () => {
+      window.removeEventListener(WALLET_PRIZE_CELEBRATE_EVENT, onPrizeCelebrate);
+    };
+  }, [triggerTomanCelebrate, scheduleWalletBalanceSync]);
+
+  useEffect(() => {
     console.log('[PlayerLayoutClient] Balance updated:', {
       dingBalance,
       tomanBalance,
@@ -71,6 +93,7 @@ export default function PlayerLayoutClient({
             tomanBalance={availableTomanBalance}
             loading={loading}
             isAnimating={isAnimating}
+            isTomanAnimating={isTomanAnimating}
             showBackButton={showBackButton}
             onBackClick={onBackClick || undefined}
             onRefreshBalances={refreshAllBalances}

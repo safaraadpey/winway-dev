@@ -7,6 +7,20 @@ type TournamentActiveTable = {
   players: number;
   cardCount: number;
   roundNo: number | null;
+  tableNo: number | null;
+  winnerNames?: string[];
+  isFinished?: boolean;
+};
+
+const FINISHED_ROOM_STATUSES = new Set(["finished", "settling", "settled"]);
+
+const pickDisplayName = (
+  nickname: string | null | undefined,
+  username: string | null | undefined,
+  email: string | null | undefined
+) => {
+  const fromEmail = email?.split("@")?.[0]?.trim() || null;
+  return nickname?.trim() || username?.trim() || fromEmail || "بازیکن";
 };
 
 export async function GET(request: Request) {
@@ -36,7 +50,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const ticketPrice = Number((tournament as any).ticket_price || 0);
+    const ticketPrice = Number((tournament as { ticket_price?: number | null }).ticket_price || 0);
 
     const { data: roundRooms, error: roundErr } = await supabase
       .from("tournament_round_rooms")
@@ -53,7 +67,7 @@ export async function GET(request: Request) {
       });
     }
 
-    const roomIds = (roundRooms as any[])
+    const roomIds = (roundRooms as { room_id: string | null }[])
       .map((row) => row.room_id)
       .filter(Boolean) as string[];
 
@@ -66,9 +80,8 @@ export async function GET(request: Request) {
 
     const { data: assignments, error: assignmentsErr } = await supabase
       .from("tournament_round_assignments")
-      .select("room_id, user_id, cards_count")
-      .eq("tournament_id", tournamentId)
-      .in("room_id", roomIds);
+      .select("room_id, game_room_id, user_id, cards_count")
+      .eq("tournament_id", tournamentId);
 
     if (assignmentsErr) {
       console.error("GET /api/player/tournament-active-tables assignments error:", assignmentsErr);
@@ -78,53 +91,123 @@ export async function GET(request: Request) {
       );
     }
 
-    const roomStats = new Map<
-      string,
-      {
-        players: Set<string>;
-        cards: number;
-      }
-    >();
+    const roomStats = new Map<string, { players: Set<string>; cards: number }>();
 
-    (assignments || []).forEach((row: any) => {
-      const roomId = row.room_id as string | null;
-      if (!roomId) return;
+    (assignments || []).forEach((row: {
+      room_id?: string | null;
+      game_room_id?: string | null;
+      user_id?: string | null;
+      cards_count?: number | null;
+    }) => {
+      const roomId = (row.game_room_id || row.room_id) as string | null;
+      if (!roomId || !roomIds.includes(roomId)) return;
       if (!roomStats.has(roomId)) {
         roomStats.set(roomId, { players: new Set(), cards: 0 });
       }
       const stats = roomStats.get(roomId)!;
-      if (row.user_id) {
-        stats.players.add(row.user_id as string);
-      }
+      if (row.user_id) stats.players.add(row.user_id);
       stats.cards += Number(row.cards_count || 0);
     });
 
-    const tables: TournamentActiveTable[] = (roundRooms as any[]).map((row: any) => {
-      const roomId = row.room_id as string;
+    const { data: roomRows, error: roomsErr } = await supabase
+      .from("rooms")
+      .select("id, status")
+      .in("id", roomIds);
+
+    if (roomsErr) {
+      console.error("GET /api/player/tournament-active-tables rooms error:", roomsErr);
+    }
+
+    const finishedRoomIds = new Set<string>();
+    (roomRows || []).forEach((row: { id: string; status?: string | null }) => {
+      const status = (row.status || "").trim().toLowerCase();
+      if (FINISHED_ROOM_STATUSES.has(status)) {
+        finishedRoomIds.add(row.id);
+      }
+    });
+
+    const winnersByRoom = new Map<string, string[]>();
+    const winnerUserIds = new Set<string>();
+
+    if (finishedRoomIds.size > 0) {
+      const { data: roomWinners, error: winnersErr } = await supabase
+        .from("room_winners")
+        .select("room_id, user_id")
+        .in("room_id", Array.from(finishedRoomIds));
+
+      if (winnersErr) {
+        console.error("GET /api/player/tournament-active-tables winners error:", winnersErr);
+      } else {
+        (roomWinners || []).forEach((row: { room_id?: string | null; user_id?: string | null }) => {
+          const roomId = row.room_id as string | null;
+          const userId = row.user_id as string | null;
+          if (!roomId || !userId) return;
+          if (!winnersByRoom.has(roomId)) winnersByRoom.set(roomId, []);
+          const list = winnersByRoom.get(roomId)!;
+          if (!list.includes(userId)) list.push(userId);
+          winnerUserIds.add(userId);
+        });
+      }
+    }
+
+    const namesByUserId = new Map<string, string>();
+    if (winnerUserIds.size > 0) {
+      const { data: users, error: usersErr } = await supabase
+        .from("users")
+        .select("id, username, email, user_profiles(nickname)")
+        .in("id", Array.from(winnerUserIds));
+
+      if (usersErr) {
+        console.error("GET /api/player/tournament-active-tables users error:", usersErr);
+      } else {
+        (users || []).forEach((u: {
+          id: string;
+          username?: string | null;
+          email?: string | null;
+          user_profiles?: { nickname?: string | null } | { nickname?: string | null }[] | null;
+        }) => {
+          const profile = Array.isArray(u.user_profiles) ? u.user_profiles[0] : u.user_profiles;
+          namesByUserId.set(
+            u.id,
+            pickDisplayName(profile?.nickname, u.username, u.email)
+          );
+        });
+      }
+    }
+
+    const tables: TournamentActiveTable[] = (roundRooms as {
+      room_id: string;
+      round_no: number | null;
+      table_no: number | null;
+    }[]).map((row) => {
+      const roomId = row.room_id;
       const stats = roomStats.get(roomId) || { players: new Set<string>(), cards: 0 };
       const cardCount = stats.cards;
+      const isFinished = finishedRoomIds.has(roomId);
+      const winnerIds = winnersByRoom.get(roomId) || [];
+      const winnerNames = winnerIds.map((id) => namesByUserId.get(id) || "بازیکن");
+
       return {
         id: roomId,
         prize: ticketPrice * cardCount,
         players: stats.players.size,
         cardCount,
         roundNo: row.round_no ?? null,
+        tableNo: row.table_no ?? null,
+        ...(isFinished ? { isFinished: true, winnerNames } : {}),
       };
     });
 
     const currentRoundNo =
-      (roundRooms as any[])
-        .map((row: any) => row.round_no)
-        .filter((value: any) => value != null)
-        .sort((a: number, b: number) => b - a)[0] ?? null;
+      (roundRooms as { round_no: number | null }[])
+        .map((row) => row.round_no)
+        .filter((value): value is number => value != null)
+        .sort((a, b) => b - a)[0] ?? null;
 
     return NextResponse.json({ tables, currentRoundNo });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("GET /api/player/tournament-active-tables error:", err);
-    return NextResponse.json(
-      { error: "internal_error", message: "Failed to load tournament active tables." },
-      { status: 500 }
-    );
+    const message = err instanceof Error ? err.message : "Failed to load tournament active tables.";
+    return NextResponse.json({ error: "internal_error", message }, { status: 500 });
   }
 }
-

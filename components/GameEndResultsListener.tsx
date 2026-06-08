@@ -7,7 +7,10 @@ import { useSession } from "@/lib/contexts/SessionContext";
 import { traceFetch } from "@/lib/debug/netTrace";
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 import GameResultsDialog, { type Winner } from "@/components/GameResultsDialog";
-import { fetchRoomResultsWhenPrizesReady } from "@/services/rooms";
+import {
+  fetchRoomResultsWhenPrizesReady,
+  type RoomResultsResponse,
+} from "@/services/rooms";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import {
   buildGameResultsKey,
@@ -22,12 +25,7 @@ type ActiveRoomLite = {
   cardPrice: number;
 };
 
-type RoomResults = {
-  lineWinners: Winner[];
-  fullWinners: Winner[];
-  isTournament: boolean;
-  tournamentId: string | null;
-};
+type RoomResults = RoomResultsResponse;
 
 const ACTIVE_ROOMS_POLL_MS = 12000;
 
@@ -444,7 +442,15 @@ export default function GameEndResultsListener() {
       })
       .catch(() => {
         if (!isMountedRef.current) return;
-        setResults({ lineWinners: [], fullWinners: [], isTournament: false, tournamentId: null });
+        setResults({
+          lineWinners: [],
+          fullWinners: [],
+          seed: null,
+          commitHash: null,
+          drawVerification: null,
+          isTournament: false,
+          tournamentId: null,
+        });
       });
   }, [
     enabled,
@@ -493,8 +499,9 @@ export default function GameEndResultsListener() {
             </span>
           ) : undefined
         }
-        proofSeed={(results as any)?.seed ?? null}
-        proofCommitHash={(results as any)?.commitHash ?? null}
+        proofSeed={results?.seed ?? null}
+        proofCommitHash={results?.commitHash ?? null}
+        drawVerification={results?.drawVerification ?? null}
       />
     </>
   );

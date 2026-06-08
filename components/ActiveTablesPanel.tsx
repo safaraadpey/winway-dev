@@ -11,6 +11,7 @@ export interface ActiveTable {
   roundNo?: number | null;
   tableNo?: number | null;
   winnerNames?: string[];
+  isFinished?: boolean;
 }
 
 interface ActiveTablesPanelProps {
@@ -53,6 +54,7 @@ export default function ActiveTablesPanel({
               roundNo={table.roundNo}
               tableNo={table.tableNo}
               winnerNames={table.winnerNames}
+              isFinished={table.isFinished}
               onClick={onTableClick ? () => onTableClick(table.id) : undefined}
             />
           ))

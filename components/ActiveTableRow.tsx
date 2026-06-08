@@ -9,6 +9,7 @@ interface ActiveTableRowProps {
   roundNo?: number | null;
   tableNo?: number | null;
   winnerNames?: string[];
+  isFinished?: boolean;
   onClick?: () => void;
 }
 
@@ -22,6 +23,7 @@ export default function ActiveTableRow({
   roundNo,
   tableNo,
   winnerNames,
+  isFinished = false,
   onClick,
 }: ActiveTableRowProps) {
   const formatNumber = (num: number): string => {
@@ -29,6 +31,7 @@ export default function ActiveTableRow({
   };
 
   const hasWinners = Boolean(winnerNames && winnerNames.length > 0);
+  const showResult = isFinished || hasWinners;
 
   const leftLabel = (() => {
     if (roundNo != null) {
@@ -63,9 +66,9 @@ export default function ActiveTableRow({
       }
     >
       <span className="text-gray-800 font-semibold text-sm shrink-0">{leftLabel}</span>
-      {hasWinners ? (
+      {showResult ? (
         <span className="text-emerald-700 font-semibold text-sm text-left truncate">
-          {winnerNames!.join("، ")}
+          {hasWinners ? winnerNames!.join("، ") : "در حال تسویه..."}
         </span>
       ) : (
         <div className="flex items-center gap-4 shrink-0">

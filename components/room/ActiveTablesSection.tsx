@@ -50,6 +50,7 @@ export default function ActiveTablesSection({
               roundNo={table.roundNo}
               tableNo={table.tableNo}
               winnerNames={table.winnerNames}
+              isFinished={table.isFinished}
               onClick={onTableClick ? () => onTableClick(table.id) : undefined}
             />
           ))

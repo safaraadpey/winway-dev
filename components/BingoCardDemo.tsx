@@ -21,6 +21,8 @@ export type LineWinner = {
   drawNumber: number;
 };
 
+export type FullWinner = LineWinner;
+
 interface BingoCardDemoProps {
   calledNumbers?: number[];
   isWinner?: boolean;
@@ -34,6 +36,7 @@ interface BingoCardDemoProps {
   cardData?: BingoCardData;
   ticketId?: string;
   lineWinners?: LineWinner[];
+  fullWinners?: FullWinner[];
 }
 
 /**
@@ -60,6 +63,7 @@ export default function BingoCardDemo({
   cardData,
   ticketId,
   lineWinners = [],
+  fullWinners = [],
 }: BingoCardDemoProps) {
   const defaultCard: BingoCardData = [
     [2, 19, 22, 36, null, null, null, 73, null],
@@ -354,14 +358,21 @@ export default function BingoCardDemo({
   const cellSizeClass = size === 'large' ? styles.cellLarge : styles.cellSmall;
   const labelSizeClass = size === 'large' ? styles.headerLabelLarge : styles.headerLabelSmall;
 
-  const isLineWinner = Boolean(
-    ticketId &&
-    lineWinners?.some((w) => {
-      if (String(w.ticketId) !== String(ticketId)) return false;
-      const draw = w.drawNumber;
-      return draw == null || calledNumbers.includes(draw);
-    })
-  );
+  const isWinnerRevealed = (
+    winners: Array<{ ticketId: string; drawNumber: number }> | undefined
+  ) =>
+    Boolean(
+      ticketId &&
+      winners?.some((w) => {
+        if (String(w.ticketId) !== String(ticketId)) return false;
+        const draw = w.drawNumber;
+        return draw == null || draw === 0 || calledNumbers.includes(draw);
+      })
+    );
+
+  const isLineWinner = isWinnerRevealed(lineWinners);
+  const isFullWinner = isWinnerRevealed(fullWinners);
+  const hasWinnerBorder = isLineWinner || isFullWinner;
 
   return (
     <div 
@@ -381,7 +392,7 @@ export default function BingoCardDemo({
       )}
 
       <div
-        className={`${styles.outer} ${isLineWinner ? styles.outerLineWinner : ""}`}
+        className={`${styles.outer} ${hasWinnerBorder ? styles.outerLineWinner : ""}`}
       >
         {/* Wrapper با بکگراند اصلی کارت */}
         <div className={styles.wrapper}>
