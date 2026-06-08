@@ -25,6 +25,8 @@ import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import { playNumber, unlockAndPreloadOnUserGesture } from "@/lib/number-audio";
 import { playLiveRoomMusic, stopLiveRoomMusic } from "@/lib/audio/music";
 import { isMusicEnabled } from "@/lib/audio-settings";
+import { useDrawRevealQueue } from "@/lib/hooks/useDrawRevealQueue";
+import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 
 type LineWinner = {
   ticketId: string;
@@ -35,6 +37,24 @@ type LineWinner = {
 interface LiveRoomScreenProps {
   roomId: string;
 }
+
+/** اگر این مدت هیچ draw sync نشد (ریل‌تایم + poll)، یک بار draw poll می‌زنیم. */
+const DRAW_SYNC_BUFFER_MS = 1500;
+const DEFAULT_DRAW_INTERVAL_SEC = 3;
+/** fallback کامل snapshot (status/winners) */
+const REALTIME_STALE_MS = 12_000;
+const REALTIME_WATCHDOG_TICK_MS = 2_000;
+const DRAW_WATCHDOG_TICK_MS = 1_000;
+
+const ACTIVE_ROOM_STATUSES = new Set([
+  "waiting",
+  "running",
+  "playing",
+  "live",
+  "settling",
+]);
+
+const PLAYING_ROOM_STATUSES = new Set(["running", "playing", "live"]);
 
 function mapLineWinnersFromApi(
   winners: RoomResultsResponse["lineWinners"],
@@ -68,14 +88,15 @@ function lineWinnersEqual(a: LineWinner[], b: LineWinner[]): boolean {
 
 export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   const router = useRouter();
-  const { setShowStatusBar } = useHeaderVisibility();
-  const { scheduleDingBalanceSync } = useBalancesContext();
+  const { setShowStatusBar, setBalanceRefreshDisabled } = useHeaderVisibility();
+  const { creditDingOnReveal, scheduleWalletBalanceSync, refreshAllBalances } =
+    useBalancesContext();
+  const { invalidate: invalidateActiveGames } = useActiveGamesContext();
 
   const [data, setData] = useState<LiveRoomSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  const [calledNumbers, setCalledNumbers] = useState<number[]>([]);
   const [lineWinners, setLineWinners] = useState<LineWinner[]>([]);
 
   const [results, setResults] = useState<RoomResultsResponse | null>(null);
@@ -83,19 +104,15 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   const [showResultsDialog, setShowResultsDialog] = useState(false);
   const resultsRequestedRef = useRef(false);
   const openingResultsRef = useRef(false);
+  const lastRealtimeActivityRef = useRef(Date.now());
+  const lastDrawSyncAtRef = useRef(Date.now());
+  const pollInFlightRef = useRef(false);
+  const roomStatusRef = useRef<string>("");
+  const drawIntervalSecRef = useRef(DEFAULT_DRAW_INTERVAL_SEC);
 
   useEffect(() => {
     resultsRequestedRef.current = resultsRequested;
   }, [resultsRequested]);
-
-  // state پاپ‌آپ فقط با عوض شدن room ریست شود (نه وقتی status هنوز playing است)
-  useEffect(() => {
-    setResultsRequested(false);
-    setShowResultsDialog(false);
-    setResults(null);
-    resultsRequestedRef.current = false;
-    openingResultsRef.current = false;
-  }, [roomId]);
 
   const tryOpenResultsDialog = useCallback(async () => {
     if (resultsRequestedRef.current || openingResultsRef.current) return;
@@ -116,6 +133,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       setResults(res);
       setShowResultsDialog(true);
       markSeenGameResults(key);
+      scheduleWalletBalanceSync?.(`room-settled:${roomId}`);
     } catch (err) {
       console.error("[LiveRoom] winners fetch error:", err);
       setShowResultsDialog(true);
@@ -123,10 +141,11 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     } finally {
       openingResultsRef.current = false;
     }
-  }, [roomId]);
+  }, [roomId, scheduleWalletBalanceSync]);
 
   const syncLineWinnersFromApi = useCallback(
-    async (snapshot: LiveRoomSnapshot) => {
+    async (snapshot: LiveRoomSnapshot | null | undefined) => {
+      if (!snapshot) return;
       if (snapshot.tournament?.id) {
         setLineWinners([]);
         return;
@@ -147,6 +166,11 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     [roomId]
   );
 
+  const syncLineWinnersFromApiRef = useRef(syncLineWinnersFromApi);
+  useEffect(() => {
+    syncLineWinnersFromApiRef.current = syncLineWinnersFromApi;
+  }, [syncLineWinnersFromApi]);
+
   // Countdown تا اولین draw (نمایش در جای عدد current در DrawStrip وقتی هنوز عددی نداریم)
   const [firstDrawCountdownSec, setFirstDrawCountdownSec] = useState<number | null>(null);
   const serverOffsetRef = useRef<number>(0);
@@ -157,41 +181,183 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     dataRef.current = data;
   }, [data]);
 
-  const prevCalledNumbersRef = useRef<number[]>([]);
-
-  const detectMarkOnMyCards = useCallback(
-    (number: number, snapshot: LiveRoomSnapshot | null | undefined): boolean => {
-      if (!snapshot?.cards?.length) return false;
-      return snapshot.cards.some((c) => {
-        if (!c.is_my_card) return false;
-        return c.card?.some((row) => row.some((v) => v === number)) ?? false;
-      });
+  const countMatchedMyCards = useCallback(
+    (number: number, snapshot: LiveRoomSnapshot | null | undefined): number => {
+      if (!snapshot?.cards?.length) return 0;
+      return snapshot.cards.reduce((count, c) => {
+        if (!c.is_my_card) return count;
+        const hasNumber =
+          c.card?.some((row) => row.some((v) => v === number)) ?? false;
+        return hasNumber ? count + 1 : count;
+      }, 0);
     },
     []
   );
 
-  const scheduleDingSyncForNumber = useCallback(
+  const creditDingForRevealedNumber = useCallback(
     (number: number, snapshot: LiveRoomSnapshot | null | undefined) => {
       if (!roomId || number == null) return;
-      if (!detectMarkOnMyCards(number, snapshot)) return;
-      scheduleDingBalanceSync?.(`${roomId}:${number}`, true);
+
+      const matchedCards = countMatchedMyCards(number, snapshot);
+      if (matchedCards <= 0) return;
+
+      const dingPerNumber = Math.max(
+        0,
+        Number(snapshot?.room?.ding_per_number ?? 1) || 1
+      );
+      const delta = matchedCards * dingPerNumber;
+      creditDingOnReveal?.(`${roomId}:${number}`, delta);
     },
-    [roomId, detectMarkOnMyCards, scheduleDingBalanceSync]
+    [roomId, countMatchedMyCards, creditDingOnReveal]
   );
 
-  // Polling + realtime هر دو calledNumbers را آپدیت می‌کنند؛
-  // بعد از جدا شدن game-engine، processed_at ممکن است دیر یا اصلاً از realtime نرسد.
+  const revealIntervalMs = Math.max(
+    (data?.room?.draw_interval_sec ?? DEFAULT_DRAW_INTERVAL_SEC) * 1000,
+    1000
+  );
+
+  const handleDrawReveal = useCallback(
+    (number: number) => {
+      void playNumber(number);
+      creditDingForRevealedNumber(number, dataRef.current);
+      void syncLineWinnersFromApiRef.current(dataRef.current);
+    },
+    [creditDingForRevealedNumber]
+  );
+
+  const { calledNumbers, syncFromServer, reset: resetDrawReveal } =
+    useDrawRevealQueue(revealIntervalMs, handleDrawReveal);
+
   useEffect(() => {
-    if (!data) return;
+    drawIntervalSecRef.current =
+      data?.room?.draw_interval_sec ?? DEFAULT_DRAW_INTERVAL_SEC;
+  }, [data?.room?.draw_interval_sec]);
 
-    const prev = prevCalledNumbersRef.current;
-    const newNumbers = calledNumbers.filter((n) => !prev.includes(n));
-    prevCalledNumbersRef.current = calledNumbers;
+  const syncFromServerRef = useRef(syncFromServer);
+  useEffect(() => {
+    syncFromServerRef.current = syncFromServer;
+  }, [syncFromServer]);
 
-    for (const number of newNumbers) {
-      scheduleDingSyncForNumber(number, data);
+  const markRealtimeActivity = useCallback(() => {
+    lastRealtimeActivityRef.current = Date.now();
+  }, []);
+
+  const markDrawSync = useCallback(() => {
+    const now = Date.now();
+    lastDrawSyncAtRef.current = now;
+    lastRealtimeActivityRef.current = now;
+  }, []);
+
+  const applyDrawsFromSnapshot = useCallback(
+    (draws: LiveRoomSnapshot["draws"]) => {
+      syncFromServer(draws);
+      markDrawSync();
+    },
+    [syncFromServer, markDrawSync]
+  );
+
+  const runDrawSyncPoll = useCallback(async () => {
+    if (!roomId || pollInFlightRef.current) return;
+
+    const status = roomStatusRef.current;
+    if (!PLAYING_ROOM_STATUSES.has(status)) return;
+
+    pollInFlightRef.current = true;
+    try {
+      const snapshot = await fetchLiveRoomSnapshot(roomId);
+      roomStatusRef.current = (snapshot.room.status || "").trim().toLowerCase();
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              room: {
+                ...prev.room,
+                status: snapshot.room.status,
+                next_draw_at: snapshot.room.next_draw_at ?? null,
+                draw_interval_sec: snapshot.room.draw_interval_sec,
+                ding_per_number: snapshot.room.ding_per_number,
+              },
+              server_now: snapshot.server_now,
+            }
+          : snapshot
+      );
+      applyDrawsFromSnapshot(snapshot.draws);
+      await syncLineWinnersFromApi(snapshot);
+      console.log("[LiveRoom] draw sync poll (realtime draw stale)");
+    } catch (err) {
+      console.warn("[LiveRoom] draw sync poll error:", err);
+    } finally {
+      pollInFlightRef.current = false;
     }
-  }, [calledNumbers, data, scheduleDingSyncForNumber]);
+  }, [roomId, applyDrawsFromSnapshot, syncLineWinnersFromApi]);
+
+  const applyDrawsFromSnapshotRef = useRef(applyDrawsFromSnapshot);
+  useEffect(() => {
+    applyDrawsFromSnapshotRef.current = applyDrawsFromSnapshot;
+  }, [applyDrawsFromSnapshot]);
+
+  const runDrawSyncPollRef = useRef(runDrawSyncPoll);
+  useEffect(() => {
+    runDrawSyncPollRef.current = runDrawSyncPoll;
+  }, [runDrawSyncPoll]);
+
+  const runFallbackPoll = useCallback(async () => {
+    if (!roomId || pollInFlightRef.current) return;
+
+    const status = roomStatusRef.current;
+    if (status && !ACTIVE_ROOM_STATUSES.has(status)) return;
+
+    pollInFlightRef.current = true;
+    try {
+      const snapshot = await fetchLiveRoomSnapshot(roomId);
+      const nextStatus = (snapshot.room.status || "").trim().toLowerCase();
+      roomStatusRef.current = nextStatus;
+      setData(snapshot);
+      applyDrawsFromSnapshot(snapshot.draws);
+
+      const isTerminal = ["settling", "finished", "cancelled"].includes(
+        nextStatus
+      );
+      await syncLineWinnersFromApi(snapshot);
+      if (isTerminal) void tryOpenResultsDialog();
+
+      markRealtimeActivity();
+      console.log("[LiveRoom] fallback poll synced (realtime was stale)");
+    } catch (err) {
+      console.warn("[LiveRoom] fallback poll error:", err);
+    } finally {
+      pollInFlightRef.current = false;
+    }
+  }, [
+    roomId,
+    applyDrawsFromSnapshot,
+    syncLineWinnersFromApi,
+    tryOpenResultsDialog,
+    markRealtimeActivity,
+  ]);
+
+  const runFallbackPollRef = useRef(runFallbackPoll);
+  useEffect(() => {
+    runFallbackPollRef.current = runFallbackPoll;
+  }, [runFallbackPoll]);
+
+  const markRealtimeActivityRef = useRef(markRealtimeActivity);
+  useEffect(() => {
+    markRealtimeActivityRef.current = markRealtimeActivity;
+  }, [markRealtimeActivity]);
+
+  // state پاپ‌آپ و صف نمایش اعداد با عوض شدن room ریست شود
+  useEffect(() => {
+    resetDrawReveal();
+    setResultsRequested(false);
+    setShowResultsDialog(false);
+    setResults(null);
+    resultsRequestedRef.current = false;
+    openingResultsRef.current = false;
+    lastRealtimeActivityRef.current = Date.now();
+    lastDrawSyncAtRef.current = Date.now();
+    roomStatusRef.current = "";
+  }, [roomId, resetDrawReveal]);
 
   // محاسبه و آپدیت countdown تا اولین draw بر اساس next_draw_at و server_now
   useEffect(() => {
@@ -234,6 +400,14 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     return () => setShowStatusBar(true);
   }, [setShowStatusBar]);
 
+  // غیرفعال کردن refresh دستی ding/toman در هدر حین بازی فعال
+  useEffect(() => {
+    const status = (data?.room?.status || "").trim().toLowerCase();
+    const isActivePlay = PLAYING_ROOM_STATUSES.has(status);
+    setBalanceRefreshDisabled(isActivePlay);
+    return () => setBalanceRefreshDisabled(false);
+  }, [data?.room?.status, setBalanceRefreshDisabled]);
+
   // One-time user gesture to unlock WebAudio + start preloading number sounds
   useEffect(() => {
     const cleanup = unlockAndPreloadOnUserGesture(window);
@@ -265,7 +439,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
         if (!isMounted) return;
 
         setData(snapshot);
-        setCalledNumbers(snapshot.draws.map((d) => d.number));
+        applyDrawsFromSnapshot(snapshot.draws);
         setError(null);
 
         console.log(
@@ -273,7 +447,13 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
           snapshot.draws.map((d) => d.number)
         );
 
-        if (isMounted) await syncLineWinnersFromApi(snapshot);
+        if (isMounted) {
+          roomStatusRef.current = (snapshot.room.status || "")
+            .trim()
+            .toLowerCase();
+          markRealtimeActivity();
+          await syncLineWinnersFromApi(snapshot);
+        }
       } catch (err: any) {
         console.error("[LiveRoom] snapshot load error:", err);
         if (isMounted) {
@@ -289,85 +469,55 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     return () => {
       isMounted = false;
     };
-  }, [roomId, syncLineWinnersFromApi]);
+  }, [roomId, applyDrawsFromSnapshot, syncLineWinnersFromApi, markRealtimeActivity]);
 
-  // Polling سبک: فقط sync UI از API (بدون دست‌کاری status / draw_jobs در DB)
-  const roomStatusRef = useRef<string>("");
   useEffect(() => {
     roomStatusRef.current = (data?.room?.status || "").trim().toLowerCase();
   }, [data?.room?.status]);
 
+  // watchdog draw: در playing اگر ریل‌تایم draw نیامد، ~draw_interval+1.5s poll
   useEffect(() => {
     if (!roomId) return;
 
     let cancelled = false;
-    const ACTIVE = new Set(["waiting", "running", "playing", "live", "settling"]);
-
-    const poll = async () => {
+    const tick = () => {
       if (cancelled) return;
-
       const status = roomStatusRef.current;
-      if (status && !ACTIVE.has(status)) return;
+      if (!PLAYING_ROOM_STATUSES.has(status)) return;
 
-      try {
-        const snapshot = await fetchLiveRoomSnapshot(roomId);
-        if (cancelled) return;
-
-        const status = (snapshot.room.status || "").trim().toLowerCase();
-        roomStatusRef.current = status;
-        setData(snapshot);
-        setCalledNumbers((prev) => {
-          const next = snapshot.draws.map((d) => d.number);
-          for (const n of next) {
-            if (!prev.includes(n)) void playNumber(n);
-          }
-          return next;
-        });
-
-        const isTerminal = ["settling", "finished", "cancelled"].includes(status);
-        await syncLineWinnersFromApi(snapshot);
-        if (isTerminal) void tryOpenResultsDialog();
-      } catch (err) {
-        console.warn("[LiveRoom] poll error:", err);
+      const staleMs =
+        drawIntervalSecRef.current * 1000 + DRAW_SYNC_BUFFER_MS;
+      if (Date.now() - lastDrawSyncAtRef.current >= staleMs) {
+        void runDrawSyncPollRef.current();
       }
     };
 
-    const interval = setInterval(poll, 3000);
+    const interval = setInterval(tick, DRAW_WATCHDOG_TICK_MS);
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [roomId, tryOpenResultsDialog, syncLineWinnersFromApi]);
+  }, [roomId]);
 
-  // برنده full ثبت شده ولی status هنوز playing (تسویه عقب افتاده)
+  // watchdog کامل: status/winners/cards — ۱۲ ثانیه سکوت
   useEffect(() => {
-    if (!roomId || !data) return;
-
-    const status = (data.room.status || "").trim().toLowerCase();
-    const stillPlaying = ["running", "playing", "live", "waiting"].includes(status);
-    if (!stillPlaying) return;
+    if (!roomId) return;
 
     let cancelled = false;
-
-    const checkResults = async () => {
-      if (cancelled || resultsRequestedRef.current) return;
-      try {
-        const res = await fetchRoomResults(roomId);
-        if (cancelled || !res.fullWinners?.length) return;
-        await tryOpenResultsDialog();
-      } catch (err) {
-        console.warn("[LiveRoom] endgame results check failed:", err);
+    const tick = () => {
+      if (cancelled) return;
+      const elapsed = Date.now() - lastRealtimeActivityRef.current;
+      if (elapsed >= REALTIME_STALE_MS) {
+        void runFallbackPollRef.current();
       }
     };
 
-    const interval = setInterval(checkResults, 4000);
-    void checkResults();
-
+    const interval = setInterval(tick, REALTIME_WATCHDOG_TICK_MS);
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [roomId, data, data?.room?.status, tryOpenResultsDialog]);
+  }, [roomId]);
 
   // ریل‌تایم: draws + rooms + results
   useEffect(() => {
@@ -375,79 +525,61 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
 
     console.log("[LiveRoom] realtime useEffect mount for room", roomId);
 
+    let hadSubscribed = false;
+
+    const handleDrawUpdate = (payload: {
+      old: Record<string, unknown>;
+      new: Record<string, unknown>;
+    }) => {
+      const rowRoomId = payload.new?.room_id as string | undefined;
+      if (rowRoomId !== roomId) return;
+
+      const oldProcessed = payload.old?.processed_at ?? null;
+      const newProcessed = payload.new?.processed_at ?? null;
+      const number = payload.new?.number as number | undefined;
+      const drawId = payload.new?.id as string | undefined;
+
+      console.log("[LiveRoom] RT draw payload", {
+        number,
+        oldProcessed,
+        newProcessed,
+        drawId,
+      });
+
+      if (oldProcessed !== null && oldProcessed !== undefined) return;
+      if (!newProcessed) return;
+      if (number == null) return;
+
+      const createdAt =
+        (payload.new?.created_at as string | undefined) ||
+        (payload.new?.timestamp as string | undefined) ||
+        new Date().toISOString();
+
+      setData((prev) => {
+        if (!prev) return prev;
+        if (prev.draws.some((d) => d.number === number)) return prev;
+
+        return {
+          ...prev,
+          draws: [...prev.draws, { number, created_at: createdAt }],
+        };
+      });
+
+      applyDrawsFromSnapshotRef.current([{ number, created_at: createdAt }]);
+      void syncLineWinnersFromApiRef.current(dataRef.current);
+    };
+
     const channel = supabase
       .channel(`live-room-${roomId}`)
-      // برای دیباگ: هر event روی draws
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "draws",
-        },
-        (payload) => {
-          console.log("🔥 [LiveRoom] ANY draw event:", payload);
-        }
-      )
-      // اعداد جدید (UPDATE با processed_at)
       .on(
         "postgres_changes",
         {
           event: "UPDATE",
           schema: "public",
           table: "draws",
-          filter: `room_id=eq.${roomId}`,
         },
         (payload) => {
-          const oldProcessed = (payload.old as any)?.processed_at ?? null;
-          const newProcessed = (payload.new as any)?.processed_at ?? null;
-          const number = (payload.new as any)?.number as number | undefined;
-          const drawId = (payload.new as any)?.id as string | undefined;
-
-          console.log("[LiveRoom] RT draw payload", {
-            number,
-            oldProcessed,
-            newProcessed,
-            drawId,
-          });
-
-          // فقط وقتی از null → مقدار ست شده
-          if (oldProcessed !== null && oldProcessed !== undefined) return;
-          if (!newProcessed) return;
-          if (number == null) return;
-
-          // Play number audio with minimal latency (client-only, Web Audio API)
-          void playNumber(number);
-
-          // اگر processed_at از realtime رسید، sync را اینجا هم تریگر کن (کلید یکسان با polling)
-          try {
-            scheduleDingSyncForNumber(number, dataRef.current);
-          } catch (e) {
-            console.warn("[LiveRoom] ding sync scheduling failed:", e);
-          }
-
-          setCalledNumbers((prev) => {
-            if (prev.includes(number)) return prev;
-            const next = [...prev, number];
-            console.log("[LiveRoom] calledNumbers updated →", next);
-            return next;
-          });
-
-          // draws را در data نیز آپدیت کن (برای سازگاری با سایر کامپوننت‌ها)
-          setData((prev) => {
-            if (!prev) return prev;
-            if (prev.draws.some((d) => d.number === number)) return prev;
-
-            const createdAt =
-              (payload.new as any)?.created_at ||
-              (payload.new as any)?.timestamp ||
-              new Date().toISOString();
-
-            return {
-              ...prev,
-              draws: [...prev.draws, { number, created_at: createdAt }],
-            };
-          });
+          handleDrawUpdate(payload as { old: Record<string, unknown>; new: Record<string, unknown> });
         }
       )
       // تغییر status در rooms (waiting/playing/settling/finished)
@@ -463,6 +595,8 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
           const oldStatus = (payload.old as any)?.status;
           const newStatus = (payload.new as any)?.status;
           if (!newStatus || oldStatus === newStatus) return;
+
+          markRealtimeActivityRef.current();
 
           console.log(
             "[LiveRoom] rooms realtime status update",
@@ -505,11 +639,17 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
           const newRow = payload.new as any;
           if (!newRow) return;
 
+          markRealtimeActivityRef.current();
+
           if (newRow.win_type === "line") {
+            const rawDraw = newRow.draw_number ?? newRow.draw;
             const entry: LineWinner = {
               ticketId: newRow.ticket_id,
               userId: newRow.user_id,
-              drawNumber: newRow.draw_number ?? newRow.draw ?? 0,
+              drawNumber:
+                rawDraw === null || rawDraw === undefined
+                  ? 0
+                  : Number(rawDraw),
             };
 
             setLineWinners((prev) => {
@@ -538,6 +678,13 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
 
     const subscription = channel.subscribe((status) => {
       console.log("[LiveRoom] channel status:", status);
+      if (status === "SUBSCRIBED") {
+        if (hadSubscribed) {
+          console.log("[LiveRoom] channel reconnected → catch-up poll");
+          void runFallbackPollRef.current();
+        }
+        hadSubscribed = true;
+      }
     });
 
     return () => {
@@ -549,7 +696,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       }
       supabase.removeChannel(channel);
     };
-  }, [roomId, tryOpenResultsDialog, scheduleDingSyncForNumber]);
+  }, [roomId, tryOpenResultsDialog]);
 
   // userId فعلی
   const currentUserId = useMemo(() => {
@@ -558,7 +705,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     return mine?.player_id ?? null;
   }, [data]);
 
-  // status از realtime/poll به settling|finished رسید
+  // status از realtime/fallback به settling|finished رسید
   useEffect(() => {
     const status = (data?.room.status || "").trim().toLowerCase();
     const isFinished =
@@ -568,8 +715,18 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     if (!isFinished) return;
 
     console.log("[LiveRoom] room finished with status:", status);
+    scheduleWalletBalanceSync?.(`room-finished:${roomId}`);
+    void refreshAllBalances?.();
+    invalidateActiveGames?.();
     void tryOpenResultsDialog();
-  }, [data?.room.status, tryOpenResultsDialog]);
+  }, [
+    data?.room.status,
+    roomId,
+    scheduleWalletBalanceSync,
+    refreshAllBalances,
+    tryOpenResultsDialog,
+    invalidateActiveGames,
+  ]);
 
   // ---- رندر ----
 
@@ -648,6 +805,12 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     (a, b) => Number(b.is_my_card) - Number(a.is_my_card)
   );
 
+  const hasRevealedLineWinner =
+    !data.tournament?.id &&
+    lineWinners.some(
+      (w) => w.drawNumber == null || calledNumbers.includes(w.drawNumber)
+    );
+
   return (
     <div className="h-full bg-black/40 text-white overflow-hidden">
       <div className="max-w-3xl mx-auto h-full flex flex-col">
@@ -668,7 +831,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
               isTournament={!!data.tournament?.id}
               tournamentName={data.tournament?.title ?? null}
               roundNumber={data.tournament?.round_no ?? null}
-              hasLineWinner={!data.tournament?.id && lineWinners.length > 0}
+              hasLineWinner={hasRevealedLineWinner}
             />
 
             <DrawStrip

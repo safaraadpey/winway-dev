@@ -201,11 +201,17 @@ export default function MergedPlayerHeader({
   };
 
   const handleRefreshKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (refreshDisabled) return;
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       void handleRefreshBalances();
     }
   };
+
+  const capsuleClass = (bgClass: string) =>
+    `${styles.balanceCapsule} ${bgClass}${
+      refreshDisabled ? "" : ` ${styles.refreshableCapsule}`
+    }`;
 
   const capsuleAnimate = isAnimating
     ? {
@@ -261,13 +267,15 @@ export default function MergedPlayerHeader({
       <div className={`${styles.row2} ${showBackButton ? "" : styles.row2NoBackButton}`}>
         {/* Toman Capsule */}
         <motion.div
-          className={`${styles.balanceCapsule} ${styles.tomanBg} ${styles.refreshableCapsule}`}
+          className={capsuleClass(styles.tomanBg)}
           animate={tomanCapsuleAnimate}
           transition={{ duration: 0.8, ease: "easeInOut" }}
-          onClick={() => void handleRefreshBalances()}
-          role="button"
-          tabIndex={0}
-          onKeyDown={handleRefreshKeyDown}
+          onClick={
+            refreshDisabled ? undefined : () => void handleRefreshBalances()
+          }
+          role={refreshDisabled ? undefined : "button"}
+          tabIndex={refreshDisabled ? undefined : 0}
+          onKeyDown={refreshDisabled ? undefined : handleRefreshKeyDown}
         >
           {loading ? (
             <span className={styles.loadingText}>...</span>
@@ -293,13 +301,15 @@ export default function MergedPlayerHeader({
 
         {/* Ding Capsule */}
         <motion.div
-          className={`${styles.balanceCapsule} ${styles.dingBg} ${styles.refreshableCapsule}`}
+          className={capsuleClass(styles.dingBg)}
           animate={dingCapsuleAnimate}
           transition={{ duration: 0.8, ease: "easeInOut" }}
-          onClick={() => void handleRefreshBalances()}
-          role="button"
-          tabIndex={0}
-          onKeyDown={handleRefreshKeyDown}
+          onClick={
+            refreshDisabled ? undefined : () => void handleRefreshBalances()
+          }
+          role={refreshDisabled ? undefined : "button"}
+          tabIndex={refreshDisabled ? undefined : 0}
+          onKeyDown={refreshDisabled ? undefined : handleRefreshKeyDown}
         >
           {loading ? (
             <span className={styles.loadingText}>...</span>

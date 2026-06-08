@@ -274,36 +274,27 @@ export default function BingoCardDemo({
   }, [lineWinners]);
 
   const winnerRows = useMemo(() => {
-    // اگر قبلاً برنده خط نمایش داده شده، همان مقدار قبلی را برگردان
     if (hasShownLineWinnerRef.current) {
       return winnerRowsRef.current;
     }
 
     if (!ticketId) return [];
-    if (!lineWinners || lineWinners.length === 0) return [];
-    
-    // پیدا کردن اولین برنده خط (با کمترین drawNumber)
-    const firstLineWinner = lineWinners.reduce((first, current) => {
-      if (!first) return current;
-      const currentDraw = current.drawNumber ?? Infinity;
-      const firstDraw = first.drawNumber ?? Infinity;
-      return currentDraw < firstDraw ? current : first;
-    }, null as LineWinner | null);
-    
-    if (!firstLineWinner) return [];
-    
-    // فقط اگر این کارت اولین برنده خط است، خط طلایی را نمایش بده
-    if (String(firstLineWinner.ticketId) !== String(ticketId)) return [];
+    if (!lineWinners?.length) return [];
 
-    // فقط اعداد تا لحظه برنده شدن خط را در نظر بگیر
-    // drawNumber در results همان عدد اعلام‌شده‌ای است که win روی آن ثبت شده
-    const winDrawNumber = firstLineWinner.drawNumber ?? null;
-    const winDrawIndex =
-      winDrawNumber === null ? -1 : calledNumbers.indexOf(winDrawNumber);
-    const numbersAtLineWin =
-      winDrawIndex >= 0 ? calledNumbers.slice(0, winDrawIndex + 1) : calledNumbers;
+    const myLineWin = lineWinners.find(
+      (w) => String(w.ticketId) === String(ticketId)
+    );
+    if (!myLineWin) return [];
 
-    // پیدا کردن سطرهای کامل شده این کارت در لحظه‌ی win
+    const winDrawNumber = myLineWin.drawNumber ?? null;
+    if (winDrawNumber == null) return [];
+
+    // افکت برنده خط هم‌زمان با reveal همان عدد در UI نمایش داده شود
+    if (!calledNumbers.includes(winDrawNumber)) return [];
+
+    const winDrawIndex = calledNumbers.indexOf(winDrawNumber);
+    const numbersAtLineWin = calledNumbers.slice(0, winDrawIndex + 1);
+
     const rowsAtWin = card.reduce((rows: number[], row, idx) => {
       const values = row.filter((n): n is number => n !== null);
       if (values.length > 0 && values.every((n) => numbersAtLineWin.includes(n))) {
@@ -312,14 +303,12 @@ export default function BingoCardDemo({
       return rows;
     }, []);
 
-    // فقط یک سطر (اولین سطر کامل‌شده در لحظه‌ی win) را نگه دار
     const rows = rowsAtWin.length > 0 ? [rowsAtWin[0]] : [];
 
-    // اگر سطر برنده پیدا شد، آن را ذخیره کن و flag را true کن
     if (rows.length > 0) {
       winnerRowsRef.current = rows;
       hasShownLineWinnerRef.current = true;
-      console.log('[BingoCardDemo] Line winner displayed for ticket:', ticketId, 'rows:', rows);
+      console.log("[BingoCardDemo] Line winner displayed for ticket:", ticketId, "rows:", rows);
     }
 
     return rows;
@@ -365,11 +354,13 @@ export default function BingoCardDemo({
   const cellSizeClass = size === 'large' ? styles.cellLarge : styles.cellSmall;
   const labelSizeClass = size === 'large' ? styles.headerLabelLarge : styles.headerLabelSmall;
 
-  // آیا این کارت برنده خط است؟ (برای بوردر طلایی)
   const isLineWinner = Boolean(
     ticketId &&
-    lineWinners?.length > 0 &&
-    lineWinners.some((w) => String(w.ticketId) === String(ticketId))
+    lineWinners?.some((w) => {
+      if (String(w.ticketId) !== String(ticketId)) return false;
+      const draw = w.drawNumber;
+      return draw == null || calledNumbers.includes(draw);
+    })
   );
 
   return (

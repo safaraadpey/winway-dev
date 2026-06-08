@@ -14,9 +14,7 @@ export function ActiveGamesProvider({ children }: { children: ReactNode }) {
    * Override via NEXT_PUBLIC_ACTIVE_GAMES_SOURCE:
    * - "orchestrator" | "legacy"
    */
-  const source =
-    process.env.NEXT_PUBLIC_ACTIVE_GAMES_SOURCE ??
-    (process.env.NODE_ENV === "production" ? "legacy" : "orchestrator");
+  const source = process.env.NEXT_PUBLIC_ACTIVE_GAMES_SOURCE ?? "orchestrator";
 
   const orchestrator = getActiveGamesOrchestrator();
   const snapshot = useSyncExternalStore(

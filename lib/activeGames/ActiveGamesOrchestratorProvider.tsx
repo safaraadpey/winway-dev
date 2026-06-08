@@ -14,9 +14,7 @@ import { useSession } from "@/lib/contexts/SessionContext";
 export function ActiveGamesOrchestratorProvider({ children }: { children: ReactNode }) {
   const orchestratorRef = useRef<ReturnType<typeof getActiveGamesOrchestrator> | null>(null);
   const session = useSession();
-  const source =
-    process.env.NEXT_PUBLIC_ACTIVE_GAMES_SOURCE ??
-    (process.env.NODE_ENV === "production" ? "legacy" : "orchestrator");
+  const source = process.env.NEXT_PUBLIC_ACTIVE_GAMES_SOURCE ?? "orchestrator";
 
   useEffect(() => {
     // If orchestrator is not the selected engine, do not even create/enable it.

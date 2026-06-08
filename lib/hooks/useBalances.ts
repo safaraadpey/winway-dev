@@ -84,10 +84,14 @@ export interface Balances {
    */
   refreshAllBalances?: () => Promise<void>;
   /**
-   * Sync dingBalance from server via API, once per draw (guarded + bounded retries).
-   * markDetected=true یعنی این draw قطعاً روی یکی از کارت‌های کاربر mark داشته است.
+   * Credit ding locally when a draw number is revealed in LiveRoom.
+   * delta = matched card count × ding_per_number (computed in LiveRoom).
    */
-  scheduleDingBalanceSync?: (drawId: string, markDetected: boolean) => void;
+  creditDingOnReveal?: (revealKey: string, delta: number) => void;
+  /**
+   * Poll wallet balance after room settlement (prize payout / hold release).
+   */
+  scheduleWalletBalanceSync?: (reason?: string) => void;
 }
 
 /**
@@ -111,17 +115,11 @@ export function useBalances(): Balances {
   const balanceUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const currentBalanceRef = useRef<number>(0);
 
-  // ---- Ding balance sync guards (API-based, per-draw) ----
-  const activeSyncDrawIdRef = useRef<string | null>(null);
-  const pendingTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const inFlightRef = useRef<boolean>(false);
-  const scheduledCountRef = useRef<Record<string, number>>({});
-
-  const releaseActiveSync = (drawId: string) => {
-    if (activeSyncDrawIdRef.current === drawId) {
-      activeSyncDrawIdRef.current = null;
-    }
-  };
+  // ---- Ding reveal credits (local, synced to server on hydrate / game end) ----
+  const creditedRevealKeysRef = useRef<Set<string>>(new Set());
+  const activeWalletSyncKeyRef = useRef<string | null>(null);
+  const walletSyncTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const currentTomanBalanceRef = useRef<number>(0);
 
   const refreshWalletBalances = async (): Promise<void> => {
     try {
@@ -141,8 +139,11 @@ export function useBalances(): Balances {
       if (walletError) return;
       if (!isMountedRef.current) return;
 
-      setTomanBalance(Number(walletData?.balance ?? 0) || 0);
-      setLockedTomanBalance(Number((walletData as any)?.locked_amount ?? 0) || 0);
+      const balance = Number((walletData as any)?.balance ?? 0) || 0;
+      const locked = Number((walletData as any)?.locked_amount ?? 0) || 0;
+      setTomanBalance(balance);
+      setLockedTomanBalance(locked);
+      currentTomanBalanceRef.current = balance;
     } catch (err) {
       console.warn("[useBalances] refreshWalletBalances failed", err);
     }
@@ -296,6 +297,7 @@ export function useBalances(): Balances {
             const locked = Number((walletData as any)?.locked_amount ?? 0) || 0;
             setTomanBalance(balance);
             setLockedTomanBalance(locked);
+            currentTomanBalanceRef.current = balance;
           }
         }
 
@@ -323,7 +325,7 @@ export function useBalances(): Balances {
         }
 
         // مرحله 3: realtime برای ding_balances حذف شده است؛
-        // DingBalance فقط با API و از روی draw sync می‌شود.
+        // هیدراسیون و پایان بازی از API؛ در LiveRoom با creditDingOnReveal محلی sync می‌شود.
 
         // Subscribe به تغییرات wallet balance
         if (walletChannelRef.current) {
@@ -347,6 +349,7 @@ export function useBalances(): Balances {
                 const locked = Number((payload.new as any)?.locked_amount ?? 0) || 0;
                 setTomanBalance(newBalance);
                 setLockedTomanBalance(locked);
+                currentTomanBalanceRef.current = newBalance;
               }
             }
           )
@@ -405,9 +408,9 @@ export function useBalances(): Balances {
         walletChannelRef.current = null;
       }
       data?.subscription?.unsubscribe();
-      if (pendingTimerRef.current) {
-        clearTimeout(pendingTimerRef.current);
-        pendingTimerRef.current = null;
+      if (walletSyncTimerRef.current) {
+        clearTimeout(walletSyncTimerRef.current);
+        walletSyncTimerRef.current = null;
       }
       // Cleanup animation timeout
       if (animationTimeoutRef.current) {
@@ -422,131 +425,78 @@ export function useBalances(): Balances {
     };
   }, []);
 
-  // API-based ding sync per draw, with bounded retry
-  const scheduleDingBalanceSync = (drawId: string, markDetected: boolean) => {
-    if (!drawId) return;
-    if (!markDetected) return;
+  const creditDingOnReveal = (revealKey: string, delta: number) => {
+    if (!revealKey || delta <= 0) return;
+    if (creditedRevealKeysRef.current.has(revealKey)) return;
+    creditedRevealKeysRef.current.add(revealKey);
 
-    const prevCount = scheduledCountRef.current[drawId] ?? 0;
-    scheduledCountRef.current[drawId] = prevCount + 1;
+    const prevBalance = currentBalanceRef.current;
+    const nextBalance = prevBalance + delta;
 
-    if (activeSyncDrawIdRef.current === drawId) {
-      console.log("[dingSync] schedule ignored (sync already active)", { drawId, count: scheduledCountRef.current[drawId] });
-      return;
+    console.log("[dingReveal] credit", { revealKey, delta, prevBalance, nextBalance });
+
+    const COIN_ANIMATION_DELAY = 400;
+    if (balanceUpdateTimeoutRef.current) {
+      clearTimeout(balanceUpdateTimeoutRef.current);
     }
+    balanceUpdateTimeoutRef.current = setTimeout(() => {
+      if (!isMountedRef.current) return;
+      setDingBalance(nextBalance);
+      currentBalanceRef.current = nextBalance;
 
-    activeSyncDrawIdRef.current = drawId;
+      if (isDingEnabled()) {
+        playDingSound(audioContextRef);
+      }
 
-    if (pendingTimerRef.current) {
-      clearTimeout(pendingTimerRef.current);
-      pendingTimerRef.current = null;
-    }
-
-    // Game-engine may credit ding seconds after the number appears in the UI.
-    const initialDelay = 200;
-    console.log("[dingSync] scheduled", { drawId, markDetected: true, initialDelayMs: initialDelay });
-
-    pendingTimerRef.current = setTimeout(() => {
-      pendingTimerRef.current = null;
-      void (async function attempt(attemptIndex: number) {
-        const maxRetries = 6;
+      if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current);
+      setIsAnimating(true);
+      animationTimeoutRef.current = setTimeout(() => {
         if (!isMountedRef.current) return;
-        if (activeSyncDrawIdRef.current !== drawId) return;
-        if (inFlightRef.current) {
-          const waitMs = 150;
-          console.log("[dingSync] inFlight, deferring attempt", { drawId, attemptIndex, waitMs });
-          setTimeout(() => {
-            if (!isMountedRef.current) return;
-            if (activeSyncDrawIdRef.current !== drawId) return;
-            void attempt(attemptIndex);
-          }, waitMs);
-          return;
-        }
+        setIsAnimating(false);
+        animationTimeoutRef.current = null;
+      }, 800);
+      balanceUpdateTimeoutRef.current = null;
+    }, COIN_ANIMATION_DELAY);
+  };
 
-        inFlightRef.current = true;
-        const prevBalance = currentBalanceRef.current;
-        const startedAt = Date.now();
+  const scheduleWalletBalanceSync = (reason = "settlement") => {
+    if (activeWalletSyncKeyRef.current === reason) return;
+    activeWalletSyncKeyRef.current = reason;
 
-        try {
-          console.log("[dingSync] fetching", { drawId, attemptIndex, prevBalance });
-          const { balance: serverBalance, updated_at } = await fetchDingBalanceFromApi();
-          const elapsedMs = Date.now() - startedAt;
+    if (walletSyncTimerRef.current) {
+      clearTimeout(walletSyncTimerRef.current);
+      walletSyncTimerRef.current = null;
+    }
 
-          console.log("[dingSync] fetched", {
-            drawId,
-            attemptIndex,
-            elapsedMs,
-            prevBalance,
-            serverBalance,
-            updated_at,
-          });
+    const maxRetries = 8;
+    const retryDelayMs = 450;
 
-          if (!isMountedRef.current) return;
-          if (activeSyncDrawIdRef.current !== drawId) return;
+    const attempt = async (index: number) => {
+      if (!isMountedRef.current) return;
+      if (activeWalletSyncKeyRef.current !== reason) return;
 
-          // Always update ref + state to server truth
-          // Animate only on increase
-          if (hasHydratedRef.current && serverBalance > prevBalance) {
-            const increase = serverBalance - prevBalance;
-            console.log("[dingSync] increase detected -> animate", { drawId, increase, prevBalance, serverBalance });
+      const prevBalance = currentTomanBalanceRef.current;
+      await refreshWalletBalances();
 
-            // keep coin-sync behavior
-            const COIN_ANIMATION_DELAY = 400;
-            if (balanceUpdateTimeoutRef.current) clearTimeout(balanceUpdateTimeoutRef.current);
-            balanceUpdateTimeoutRef.current = setTimeout(() => {
-              if (!isMountedRef.current) return;
-              setDingBalance(serverBalance);
-              currentBalanceRef.current = serverBalance;
-              // Respect user setting (sound controls popup)
-              if (isDingEnabled()) {
-                playDingSound(audioContextRef);
-              }
+      if (!isMountedRef.current) return;
+      if (activeWalletSyncKeyRef.current !== reason) return;
 
-              if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current);
-              setIsAnimating(true);
-              animationTimeoutRef.current = setTimeout(() => {
-                if (!isMountedRef.current) return;
-                setIsAnimating(false);
-                animationTimeoutRef.current = null;
-              }, 800);
-              releaseActiveSync(drawId);
-            }, COIN_ANIMATION_DELAY);
-          } else if (serverBalance !== prevBalance) {
-            // no increase: sync state without animation (avoid clobbering pending animate)
-            setDingBalance(serverBalance);
-            currentBalanceRef.current = serverBalance;
-          }
+      const synced = currentTomanBalanceRef.current !== prevBalance;
+      if (synced || index >= maxRetries - 1) {
+        activeWalletSyncKeyRef.current = null;
+        return;
+      }
 
-          // Conditional retry: markDetected is true but server didn't increase yet
-          if (serverBalance <= prevBalance && attemptIndex < maxRetries) {
-            const retryDelay = 500 + Math.floor(Math.random() * 301); // 500..800
-            console.log("[dingSync] retry scheduled", { drawId, attemptIndex, retryDelayMs: retryDelay });
-            setTimeout(() => {
-              if (!isMountedRef.current) return;
-              if (activeSyncDrawIdRef.current !== drawId) return;
-              void attempt(attemptIndex + 1);
-            }, retryDelay);
-          } else if (serverBalance <= prevBalance && attemptIndex >= maxRetries) {
-            console.warn("[dingSync] no increase after max retries", { drawId, prevBalance, serverBalance });
-            releaseActiveSync(drawId);
-          }
-        } catch (err) {
-          console.warn("[dingSync] fetch failed", { drawId, attemptIndex, err });
-          if (attemptIndex < maxRetries) {
-            const retryDelay = 500 + Math.floor(Math.random() * 301);
-            setTimeout(() => {
-              if (!isMountedRef.current) return;
-              if (activeSyncDrawIdRef.current !== drawId) return;
-              void attempt(attemptIndex + 1);
-            }, retryDelay);
-          } else {
-            releaseActiveSync(drawId);
-          }
-        } finally {
-          inFlightRef.current = false;
-        }
-      })(0);
-    }, initialDelay);
+      walletSyncTimerRef.current = setTimeout(() => {
+        walletSyncTimerRef.current = null;
+        void attempt(index + 1);
+      }, retryDelayMs);
+    };
+
+    walletSyncTimerRef.current = setTimeout(() => {
+      walletSyncTimerRef.current = null;
+      void attempt(0);
+    }, 200);
   };
 
   return {
@@ -558,6 +508,7 @@ export function useBalances(): Balances {
     isAnimating,
     refreshWalletBalances,
     refreshAllBalances,
-    scheduleDingBalanceSync,
+    creditDingOnReveal,
+    scheduleWalletBalanceSync,
   };
 }

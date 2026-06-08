@@ -30,8 +30,16 @@ export interface ActiveGames {
   invalidate?: () => void;
 }
 
-const POLLING_INTERVAL = 60000; // 60 seconds fallback (realtime is primary)
-const EMPTY_BACKOFF_STEPS_MS = [60000, 120000, 300000] as const;
+import {
+  ACTIVE_GAMES_EMPTY_BACKOFF_MS,
+  ACTIVE_GAMES_POLL_MS,
+} from "@/lib/activeGames/constants";
+import {
+  patchActiveRoomsFromRoomUpdate,
+  syncRoomStatusMap,
+} from "@/lib/activeGames/activeRoomPatch";
+
+const REALTIME_REFETCH_DEBOUNCE_MS = 150;
 
 /**
  * Hook برای دریافت روم‌های فعال پلیر
@@ -44,8 +52,7 @@ export function useActiveGames(): ActiveGames {
    * Override via NEXT_PUBLIC_ACTIVE_GAMES_SOURCE.
    */
   const source =
-    process.env.NEXT_PUBLIC_ACTIVE_GAMES_SOURCE ??
-    (process.env.NODE_ENV === "production" ? "legacy" : "orchestrator");
+    process.env.NEXT_PUBLIC_ACTIVE_GAMES_SOURCE ?? "orchestrator";
 
   // When orchestrator is enabled, this hook becomes a thin reader and must not
   // create its own fetch/poll/realtime side-effects.
@@ -76,6 +83,8 @@ export function useActiveGames(): ActiveGames {
   const subscriptionRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const etagRef = useRef<string | null>(null);
   const trackedRoomIdsRef = useRef<Set<string>>(new Set());
+  const roomStatusByIdRef = useRef<Map<string, string>>(new Map());
+  const roomsRef = useRef<ActiveRoom[]>([]);
   const fetchActiveRoomsRef = useRef<(skipEtag?: boolean, source?: ActiveGamesFetchSource) => Promise<number | null> | null>(null) as MutableRefObject<(skipEtag?: boolean, source?: ActiveGamesFetchSource) => Promise<number | null> | null>;
 
   const clearPollTimer = () => {
@@ -160,12 +169,12 @@ export function useActiveGames(): ActiveGames {
         const currentCount = trackedRoomIdsRef.current.size;
         // keep polling cadence consistent with current "empty/non-empty" state
         if (currentCount === 0) {
-          emptyBackoffStepRef.current = Math.min(emptyBackoffStepRef.current + 1, EMPTY_BACKOFF_STEPS_MS.length);
-          const delay = EMPTY_BACKOFF_STEPS_MS[Math.max(0, emptyBackoffStepRef.current - 1)] ?? EMPTY_BACKOFF_STEPS_MS[0];
+          emptyBackoffStepRef.current = Math.min(emptyBackoffStepRef.current + 1, ACTIVE_GAMES_EMPTY_BACKOFF_MS.length);
+          const delay = ACTIVE_GAMES_EMPTY_BACKOFF_MS[Math.max(0, emptyBackoffStepRef.current - 1)] ?? ACTIVE_GAMES_EMPTY_BACKOFF_MS[0];
           scheduleNextPoll(delay, "etag-304-empty");
         } else {
           emptyBackoffStepRef.current = 0;
-          scheduleNextPoll(POLLING_INTERVAL, "etag-304-nonempty");
+          scheduleNextPoll(ACTIVE_GAMES_POLL_MS, "etag-304-nonempty");
         }
         return currentCount;
       }
@@ -179,6 +188,7 @@ export function useActiveGames(): ActiveGames {
 
       if (isMountedRef.current) {
         const nextRooms: ActiveRoom[] = data.rooms || [];
+        roomsRef.current = nextRooms;
         setRooms(nextRooms);
         setError(null);
         setLoading(false);
@@ -186,8 +196,8 @@ export function useActiveGames(): ActiveGames {
           etagRef.current = newEtag;
         }
 
-        // Track current rooms so `rooms` realtime doesn't wake us when empty.
         trackedRoomIdsRef.current = new Set(nextRooms.map((r) => r.roomId).filter(Boolean));
+        syncRoomStatusMap(nextRooms, roomStatusByIdRef.current);
 
         activeGamesMetrics.patch({
           reason: "fetch-success",
@@ -198,12 +208,12 @@ export function useActiveGames(): ActiveGames {
         // Adjust polling: when empty -> heavy backoff; when non-empty -> normal polling.
         const count = nextRooms.length;
         if (count === 0) {
-          emptyBackoffStepRef.current = Math.min(emptyBackoffStepRef.current + 1, EMPTY_BACKOFF_STEPS_MS.length);
-          const delay = EMPTY_BACKOFF_STEPS_MS[Math.max(0, emptyBackoffStepRef.current - 1)] ?? EMPTY_BACKOFF_STEPS_MS[0];
+          emptyBackoffStepRef.current = Math.min(emptyBackoffStepRef.current + 1, ACTIVE_GAMES_EMPTY_BACKOFF_MS.length);
+          const delay = ACTIVE_GAMES_EMPTY_BACKOFF_MS[Math.max(0, emptyBackoffStepRef.current - 1)] ?? ACTIVE_GAMES_EMPTY_BACKOFF_MS[0];
           scheduleNextPoll(delay, "empty-backoff");
         } else {
           emptyBackoffStepRef.current = 0;
-          scheduleNextPoll(POLLING_INTERVAL, "nonempty");
+          scheduleNextPoll(ACTIVE_GAMES_POLL_MS, "nonempty");
         }
       }
       activeGamesMetrics.fetchEnd(source, 200, {
@@ -269,13 +279,11 @@ export function useActiveGames(): ActiveGames {
           },
           (payload) => {
             console.log("[useActiveGames] Tickets change detected:", payload.eventType);
-            // Debounce: wait 500ms before refetching
             setTimeout(() => {
               if (isMountedRef.current) {
-                // Realtime event is a strong signal; bypass ETag to avoid 304 collisions/stale validators.
                 void fetchActiveRooms(true, "realtime");
               }
-            }, 500);
+            }, REALTIME_REFETCH_DEBOUNCE_MS);
           }
         )
         .on(
@@ -286,27 +294,35 @@ export function useActiveGames(): ActiveGames {
             table: "rooms",
           },
           (payload) => {
-            const roomId = (payload.new as any)?.id;
-            const newStatus = (payload.new as any)?.status;
-            const oldStatus = (payload.old as any)?.status;
-            
-            // فقط اگر status تغییر کرده باشد
-            if (roomId && newStatus && newStatus !== oldStatus) {
-              // Only react to rooms we currently track; prevents waking when rooms list is empty.
-              if (!trackedRoomIdsRef.current.has(roomId)) return;
-              const isActiveStatus = ["waiting", "playing", "live", "settling"].includes(newStatus);
-              const wasActiveStatus = oldStatus && ["waiting", "playing", "live", "settling"].includes(oldStatus);
-              
-              // اگر روم به حالت فعال رفت یا از حالت فعال خارج شد، refetch کن
-              if (isActiveStatus || wasActiveStatus) {
-                console.log("[useActiveGames] Room status change detected:", roomId, oldStatus, "→", newStatus);
-                setTimeout(() => {
-                  if (isMountedRef.current) {
-                    // Realtime event is a strong signal; bypass ETag to avoid 304 collisions/stale validators.
-                    void fetchActiveRooms(true, "realtime");
-                  }
-                }, 500);
+            const roomId = (payload.new as any)?.id as string | undefined;
+            if (!roomId) return;
+            if (!trackedRoomIdsRef.current.has(roomId) && !roomStatusByIdRef.current.has(roomId)) {
+              return;
+            }
+
+            const patch = patchActiveRoomsFromRoomUpdate(
+              roomsRef.current,
+              roomStatusByIdRef.current,
+              payload as { new?: Record<string, unknown> }
+            );
+
+            if (patch.changed) {
+              roomsRef.current = patch.rooms;
+              trackedRoomIdsRef.current = new Set(
+                patch.rooms.map((r) => r.roomId).filter(Boolean)
+              );
+              if (isMountedRef.current) {
+                setRooms(patch.rooms);
               }
+              return;
+            }
+
+            if (patch.action === "resync") {
+              setTimeout(() => {
+                if (isMountedRef.current) {
+                  void fetchActiveRooms(true, "realtime");
+                }
+              }, REALTIME_REFETCH_DEBOUNCE_MS);
             }
           }
         )

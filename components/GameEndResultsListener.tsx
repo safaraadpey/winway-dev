@@ -8,6 +8,7 @@ import { traceFetch } from "@/lib/debug/netTrace";
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 import GameResultsDialog, { type Winner } from "@/components/GameResultsDialog";
 import { fetchRoomResultsWhenPrizesReady } from "@/services/rooms";
+import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import {
   buildGameResultsKey,
   hasSeenGameResults,
@@ -48,9 +49,7 @@ export default function GameEndResultsListener() {
     activeGames = null;
   }
   const activeRoomsFromContext = activeGames?.rooms ?? [];
-  const source =
-    process.env.NEXT_PUBLIC_ACTIVE_GAMES_SOURCE ??
-    (process.env.NODE_ENV === "production" ? "legacy" : "orchestrator");
+  const source = process.env.NEXT_PUBLIC_ACTIVE_GAMES_SOURCE ?? "orchestrator";
 
   // Keep this listener lightweight on auth/public routes
   const enabled = Boolean(session.authReady && session.userId && session.accessToken);
@@ -76,6 +75,7 @@ export default function GameEndResultsListener() {
   const pollEnabledRef = useRef(false);
 
   const currentUserId = session.userId;
+  const { scheduleWalletBalanceSync } = useBalancesContext();
 
   const shouldSuppressBecauseLiveRoomAlreadyHandlesIt = useMemo(() => {
     // GameRoom (and LiveRoomScreen inside it) already shows results dialog on finish.
@@ -187,6 +187,7 @@ export default function GameEndResultsListener() {
             const cardPrice = Number((payload.new as any)?.card_price ?? room.cardPrice ?? 0);
             const roomName = normalizeRoomName(roomCode, cardPrice);
 
+            activeGames?.invalidate?.();
             enqueueIfNew({ roomId, roomName, status, finishedAtHint: updatedAt });
           }
         )
@@ -439,12 +440,19 @@ export default function GameEndResultsListener() {
       .then((r) => {
         if (!isMountedRef.current) return;
         setResults(r);
+        scheduleWalletBalanceSync?.(`room-settled:${next.roomId}`);
       })
       .catch(() => {
         if (!isMountedRef.current) return;
         setResults({ lineWinners: [], fullWinners: [], isTournament: false, tournamentId: null });
       });
-  }, [enabled, dialogOpen, queue, shouldSuppressBecauseLiveRoomAlreadyHandlesIt]);
+  }, [
+    enabled,
+    dialogOpen,
+    queue,
+    shouldSuppressBecauseLiveRoomAlreadyHandlesIt,
+    scheduleWalletBalanceSync,
+  ]);
 
   const handleClose = () => {
     setDialogOpen(false);

@@ -638,6 +638,8 @@ export interface LiveRoomSnapshot {
     line_reward_percentage: number;
     full_reward_percentage: number;
     commission_rate: number;
+    ding_per_number?: number;
+    draw_interval_sec?: number;
   };
   tournament?: {
     id: string;

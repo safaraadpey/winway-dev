@@ -16,6 +16,8 @@ type LiveRoomResponse = {
     line_reward_percentage: number;
     full_reward_percentage: number;
     commission_rate: number;
+    ding_per_number: number;
+    draw_interval_sec: number;
   };
   tournament?: {
     id: string;
@@ -74,7 +76,9 @@ export async function GET(request: Request) {
         line_reward_percentage,
         full_reward_percentage,
         commission_rate,
-        room_template_id
+        room_template_id,
+        ding_per_number,
+        meta
       `
       )
       .eq("id", roomId)
@@ -91,6 +95,7 @@ export async function GET(request: Request) {
       line_reward_percentage: number | null;
       full_reward_percentage: number | null;
       commission_rate: number | null;
+      ding_per_number: number | null;
     } | null = null;
 
     if (room.room_template_id) {
@@ -100,7 +105,8 @@ export async function GET(request: Request) {
           `
           line_reward_percentage,
           full_reward_percentage,
-          commission_rate
+          commission_rate,
+          ding_per_number
         `
         )
         .eq("id", room.room_template_id)
@@ -108,6 +114,21 @@ export async function GET(request: Request) {
 
       template = templateRow ?? null;
     }
+
+    const roomMeta =
+      room.meta && typeof room.meta === "object"
+        ? (room.meta as Record<string, unknown>)
+        : null;
+    const rawDrawInterval = roomMeta?.["draw_interval_sec"];
+    const drawIntervalSec = Math.max(
+      Number.isFinite(Number(rawDrawInterval))
+        ? Math.trunc(Number(rawDrawInterval))
+        : 3,
+      1
+    );
+    const resolvedDingPerNumber = Number(
+      room.ding_per_number ?? template?.ding_per_number ?? 1
+    );
 
     const resolvedCommissionRateRaw =
       room.commission_rate ??
@@ -142,6 +163,7 @@ export async function GET(request: Request) {
       .from("draws")
       .select("number, created_at")
       .eq("room_id", roomId)
+      .not("processed_at", "is", null)
       .order("created_at", { ascending: true });
 
     if (drawsError) {
@@ -286,6 +308,8 @@ export async function GET(request: Request) {
         line_reward_percentage: resolvedLinePct,
         full_reward_percentage: resolvedFullPct,
         commission_rate: resolvedCommissionRate,
+        ding_per_number: resolvedDingPerNumber,
+        draw_interval_sec: drawIntervalSec,
       },
       tournament,
       server_now: new Date().toISOString(),

@@ -26,7 +26,7 @@ type CacheEntry = {
 const CACHE = new Map<string, CacheEntry>();
 
 /** Max age before we revalidate against DB even if ETag matches. */
-export const CACHE_MAX_AGE_MS = 45_000;
+export const CACHE_MAX_AGE_MS = 15_000;
 
 const MAX_ENTRIES = 5_000;
 
@@ -47,6 +47,10 @@ export function getCachedActiveRooms(userId: string): CacheEntry | undefined {
     return undefined;
   }
   return entry;
+}
+
+export function invalidateCachedActiveRooms(userId: string): void {
+  CACHE.delete(userId);
 }
 
 export function setCachedActiveRooms(

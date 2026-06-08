@@ -17,7 +17,8 @@ export default function PlayerLayoutClient({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { showHeader, showBackButton, onBackClick } = useHeaderVisibility();
+  const { showHeader, showBackButton, onBackClick, balanceRefreshDisabled } =
+    useHeaderVisibility();
   const {
     dingBalance,
     tomanBalance,
@@ -73,7 +74,7 @@ export default function PlayerLayoutClient({
             showBackButton={showBackButton}
             onBackClick={onBackClick || undefined}
             onRefreshBalances={refreshAllBalances}
-            refreshDisabled={loading}
+            refreshDisabled={loading || balanceRefreshDisabled}
           />
         )}
         <MyActiveGames />

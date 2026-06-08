@@ -9,6 +9,9 @@ interface HeaderVisibilityContextType {
   setShowBackButton: (show: boolean) => void;
   showStatusBar: boolean;
   setShowStatusBar: (show: boolean) => void;
+  /** غیرفعال کردن refresh دستی ding/toman در هدر (مثلاً حین بازی زنده) */
+  balanceRefreshDisabled: boolean;
+  setBalanceRefreshDisabled: (disabled: boolean) => void;
   onBackClick?: (() => void) | null;
   setOnBackClick: (callback: (() => void) | null) => void;
 }
@@ -19,6 +22,8 @@ export function HeaderVisibilityProvider({ children }: { children: ReactNode }) 
   const [showHeader, setShowHeader] = useState<boolean>(true);
   const [showBackButton, setShowBackButton] = useState<boolean>(false);
   const [showStatusBar, setShowStatusBar] = useState<boolean>(true);
+  const [balanceRefreshDisabled, setBalanceRefreshDisabled] =
+    useState<boolean>(false);
   const [onBackClick, setOnBackClick] = useState<(() => void) | null>(null);
 
   return (
@@ -29,6 +34,8 @@ export function HeaderVisibilityProvider({ children }: { children: ReactNode }) 
       setShowBackButton,
       showStatusBar,
       setShowStatusBar,
+      balanceRefreshDisabled,
+      setBalanceRefreshDisabled,
       onBackClick,
       setOnBackClick
     }}>
