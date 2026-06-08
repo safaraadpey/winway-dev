@@ -30,7 +30,7 @@ export class RoomRuntimeState {
   readonly roomId: string;
   room: RoomRow;
   readonly tickets: TicketRow[];
-  private ticketCards: TicketCard[];
+  private ticketCards: TicketCard[] = [];
   readonly cellsByCard: Map<string, CardCell[]>;
   readonly markedByTicket: Map<string, Set<number>>;
   readonly existingLineTickets: Set<string>;
