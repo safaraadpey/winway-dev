@@ -8,7 +8,6 @@ import {
   isPauseCycleConfigured,
   rollJoinDelaySeconds,
   rollTicketCount,
-  type SchedulerRuntimeState,
 } from "./schedulerCycle.js";
 import { pickDevPlayerForJoin } from "./selectDevPlayer.js";
 import { shuffle } from "./random.js";
@@ -215,7 +214,7 @@ export async function runDevPlayerManager(
       skipped.maxPerTick += 1;
       continue;
     }
-    eligibleTemplates.push({ templateId, template, limit: limit! });
+    eligibleTemplates.push({ templateId, template: template!, limit: limit! });
   }
 
   if (eligibleTemplates.length === 0) {
