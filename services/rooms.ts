@@ -4,6 +4,7 @@
 // این توابع فقط لایه‌ی دسترسی به دیتا هستند و در کامپوننت‌ها/هوک‌ها استفاده می‌شوند.
 
 import type { DrawVerificationSpec } from "@/lib/provablyFairDrawSpec";
+import type { ProcessedDraw } from "@/lib/draw-order";
 import { supabase } from "@/lib/supabaseClient";
 import {
   RoomTemplatePayload,
@@ -648,12 +649,7 @@ export interface LiveRoomSnapshot {
     round_no: number | null;
   } | null;
   server_now?: string;
-  draws: Array<{
-    id: string;
-    number: number;
-    created_at: string;
-    processed_at: string;
-  }>;
+  draws: ProcessedDraw[];
   cards: Array<{
     ticket_id: string;
     player_id: string | null;
