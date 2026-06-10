@@ -13,6 +13,8 @@ const DB_QUERY_STEPS = new Set([
   "fn_finish_room_and_settle",
   "completeJob",
   "stampDrawProcessed",
+  "aggregateDingForDraw",
+  "rpc_apply_ding_credits_for_draw",
 ]);
 
 export interface QueueSample {

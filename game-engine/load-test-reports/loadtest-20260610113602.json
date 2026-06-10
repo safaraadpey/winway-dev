@@ -1,0 +1,77 @@
+{
+  "scenario": {
+    "rooms": 20,
+    "ticketsPerRoom": 200,
+    "drawIntervalSec": 3,
+    "minDrawsPerRoom": 50,
+    "tag": "loadtest-20260610113602",
+    "durationSec": 435.59
+  },
+  "verdict": {
+    "passed": true,
+    "backlogDetected": false,
+    "summary": "Engine sustained 20 rooms × 200 tickets without significant backlog."
+  },
+  "draws": {
+    "samples": 255,
+    "averageProcessingMs": 741.32,
+    "p95ProcessingMs": 1229.81,
+    "p99ProcessingMs": 1480.57,
+    "peakQueueSize": 4,
+    "averageQueueSize": 0.63,
+    "peakQueueWaitMs": 1134,
+    "averageQueueWaitMs": 300.95
+  },
+  "db": {
+    "estimatedTotalQueries": 510,
+    "averageQueriesPerDraw": 2
+  },
+  "slowestOperations": [
+    {
+      "step": "rpc_finalize_engine_draw_job",
+      "averageMs": 250.66,
+      "p95Ms": 559.17,
+      "maxMs": 960.39
+    },
+    {
+      "step": "rpc_pick_draw_jobs",
+      "averageMs": 189.57,
+      "p95Ms": 554.14,
+      "maxMs": 782.73
+    },
+    {
+      "step": "evaluateRoomAfterDraw",
+      "averageMs": 0.14,
+      "p95Ms": 0.24,
+      "maxMs": 0.71
+    }
+  ],
+  "capacity": {
+    "observedDrawsPerSecond": 0.59,
+    "requiredDrawsPerSecond": 6.67,
+    "estimatedMaxRooms": 27,
+    "roomConcurrencyAssumed": 8
+  },
+  "perRoomDrawCounts": {
+    "a6682dc0-0164-4e65-996d-963f7af05c6d": 57,
+    "39b48b5a-6c9d-4d4e-a56a-c28d317c7f1d": 56,
+    "c73d0c31-b517-4735-978f-32c011c3f7a5": 52,
+    "77c0e1eb-b30f-4014-b078-035b2130bf75": 60,
+    "00fcb1e2-ba71-4e20-bdd3-8023622db895": 58,
+    "7a319c68-109d-47d9-8feb-247aff5ef2ed": 58,
+    "c8bad6fa-863c-4169-8c9c-683014802158": 61,
+    "ce9df9e8-1ca2-4f37-afb6-5b8caaee12aa": 61,
+    "022d149c-d7c4-4297-9547-2d7f47057dec": 60,
+    "f07e1fd4-8547-406b-a1c1-118d11215c0a": 57,
+    "51ed5950-a18b-45a3-97ba-f91f6c81d4bb": 55,
+    "37f80457-7628-4fb5-a5d7-af83d012564b": 54,
+    "f60aa094-e364-4901-bc55-872edfa02d76": 55,
+    "6430e3a0-5dde-4745-86df-0143dfcb2583": 56,
+    "2c4db457-fc5b-457d-8e5e-edfa5ebc619c": 57,
+    "e99d4f3e-748d-4bd2-bd08-3ab988096714": 57,
+    "9d5918f7-52b8-4a5e-b950-84100f9db17e": 57,
+    "0b832a54-38a7-4006-bc98-10f4f4e68f6a": 56,
+    "b8a255e0-680e-43f2-8191-dabd9fc6d20e": 63,
+    "425aad17-1c20-45da-9cc5-f534ac5dc659": 59
+  }
+}

@@ -24,6 +24,8 @@ export interface RoomStateSnapshot {
   existingFullTickets: Set<string>;
   drawnNumbers: number[];
   unprocessedDrawNumbers: Set<number>;
+  /** room_templates.ding_per_number loaded once with the snapshot. */
+  templateDingPerNumber: number | null;
 }
 
 export class RoomRuntimeState {
@@ -37,6 +39,7 @@ export class RoomRuntimeState {
   readonly existingFullTickets: Set<string>;
   private readonly drawnNumbers: number[];
   private readonly unprocessedDrawNumbers: Set<number>;
+  readonly templateDingPerNumber: number | null;
   drawsProcessed = 0;
 
   constructor(snapshot: RoomStateSnapshot) {
@@ -49,8 +52,32 @@ export class RoomRuntimeState {
     this.existingFullTickets = snapshot.existingFullTickets;
     this.drawnNumbers = [...snapshot.drawnNumbers];
     this.unprocessedDrawNumbers = new Set(snapshot.unprocessedDrawNumbers);
+    this.templateDingPerNumber = snapshot.templateDingPerNumber;
 
     this.rebuildTicketCards();
+  }
+
+  /**
+   * Count ding-eligible cards per user for this draw (reserved, not cancelled).
+   * Uses marks inserted this draw — no DB join on card_numbers.
+   */
+  countDingMatchedByUser(
+    marks: readonly { ticket_id: string; value: number }[],
+    drawNumber: number
+  ): Map<string, number> {
+    const ticketById = new Map(this.tickets.map((t) => [t.id, t]));
+    const matched = new Map<string, number>();
+    for (const mark of marks) {
+      if (mark.value !== drawNumber) continue;
+      const ticket = ticketById.get(mark.ticket_id);
+      if (!ticket || ticket.cancelled_at !== null) continue;
+      if (ticket.reservation_status !== "reserved") continue;
+      matched.set(
+        ticket.player_user_id,
+        (matched.get(ticket.player_user_id) ?? 0) + 1
+      );
+    }
+    return matched;
   }
 
   private rebuildTicketCards(): void {

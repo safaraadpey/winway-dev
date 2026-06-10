@@ -67,6 +67,16 @@ export class GameRepo {
     return (data ?? []) as RoomRow[];
   }
 
+  async getTemplateDingPerNumber(templateId: string): Promise<number | null> {
+    const { data, error } = await this.db
+      .from("room_templates")
+      .select("ding_per_number")
+      .eq("id", templateId)
+      .maybeSingle();
+    if (error) fail("getTemplateDingPerNumber", error.message);
+    return (data as { ding_per_number: number | null } | null)?.ding_per_number ?? null;
+  }
+
   async getRoom(roomId: string): Promise<RoomRow | null> {
     const { data, error } = await this.db
       .from("rooms")
@@ -318,6 +328,23 @@ export class GameRepo {
   }
 
   // ---- ding --------------------------------------------------------------
+
+  /** Batch insert ding_transactions + balance bumps + ding_aggregated_at lock. */
+  async applyDingCreditsForDraw(args: {
+    roomId: string;
+    drawNumber: number;
+    dingPerCard: number;
+    credits: { user_id: string; amount: number; matched_cards: number }[];
+  }): Promise<number> {
+    const { data, error } = await this.db.rpc("rpc_apply_ding_credits_for_draw", {
+      p_room_id: args.roomId,
+      p_draw_number: args.drawNumber,
+      p_ding_per_card: args.dingPerCard,
+      p_credits: args.credits,
+    });
+    if (error) fail("rpc_apply_ding_credits_for_draw", error.message);
+    return typeof data === "number" ? data : Number(data ?? 0);
+  }
 
   async stampDrawProcessed(roomId: string, number: number, nowIso: string): Promise<void> {
     const { error } = await this.db

@@ -59,6 +59,12 @@ export interface EvaluateDrawOptions {
   persist?: boolean;
   /** When true, caller runs settlement after persistence (engine batch path). */
   deferSettlement?: boolean;
+  /**
+   * Reconcile marks/results/room from DB before this draw.
+   * Default false — hot path trusts in-memory state loaded once via RoomStateManager.
+   * Use only for explicit recovery (otherwise evict room and reload snapshot).
+   */
+  syncFromDb?: boolean;
 }
 
 export async function applyMarksAndEvaluateWithState(
@@ -72,22 +78,25 @@ export async function applyMarksAndEvaluateWithState(
 ): Promise<EvaluateDrawResult> {
   const persist = opts.persist !== false;
   const deferSettlement = opts.deferSettlement === true;
+  const syncFromDb = opts.syncFromDb === true;
   const now = new Date().toISOString();
   const breakdown = emptyBreakdown();
 
-  const ticketIds = state.getTickets().map((t) => t.id);
-  const syncStep = await timedStep(async () => {
-    const [dbMarks, dbResults, room] = await Promise.all([
-      repo.getMarksForTickets(ticketIds),
-      repo.getResults(state.roomId),
-      repo.getRoom(state.roomId),
-    ]);
-    state.mergeMarksFromDb(dbMarks);
-    state.syncExistingResults(dbResults);
-    if (room) state.room = room;
-  });
-  breakdown.getMarksForTickets = syncStep.timing;
-  breakdown.getResults = syncStep.timing;
+  if (syncFromDb) {
+    const ticketIds = state.getTickets().map((t) => t.id);
+    const syncStep = await timedStep(async () => {
+      const [dbMarks, dbResults, room] = await Promise.all([
+        repo.getMarksForTickets(ticketIds),
+        repo.getResults(state.roomId),
+        repo.getRoom(state.roomId),
+      ]);
+      state.mergeMarksFromDb(dbMarks);
+      state.syncExistingResults(dbResults);
+      if (room) state.room = room;
+    });
+    breakdown.getMarksForTickets = syncStep.timing;
+    breakdown.getResults = syncStep.timing;
+  }
 
   const memoryStep = timedStepSync(() => {
     const rows = state.applyMarkForDraw(drawNumber);

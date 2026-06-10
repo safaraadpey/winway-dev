@@ -1,5 +1,7 @@
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import type { Logger } from "../../metrics/logger.js";
+import { GameRepo } from "../../repositories/index.js";
+import { aggregateDingForDraw } from "../ding/index.js";
 import { pickDrawJobs } from "./pickDrawJobs.js";
 import { processJobsByRoom } from "./processJobsByRoom.js";
 import { type DrawBatchResult, type DrawJob, EMPTY_BATCH } from "./types.js";
@@ -31,6 +33,7 @@ export async function processDrawBatch(
   log: Logger,
   opts: ProcessDrawBatchOptions
 ): Promise<DrawBatchResult> {
+  const repo = new GameRepo(supabase);
   const jobs = await pickDrawJobs(supabase, opts.batchSize);
   if (jobs.length === 0) return { ...EMPTY_BATCH };
 
@@ -42,6 +45,7 @@ export async function processDrawBatch(
         await applyDraw(supabase, job);
         await completeJob(supabase, job);
         await stampDrawProcessed(supabase, log, job);
+        await aggregateDingForDraw(supabase, repo, log, job.room_id, job.draw_number);
         return "done" as const;
       } catch (err) {
         return handleJobFailure(supabase, log, job, opts, err);

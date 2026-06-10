@@ -39,6 +39,11 @@ export async function loadRoomSnapshot(
     cellsByCard.get(cardId)!.push({ value: cn.value, rowNo: cn.row_no });
   }
 
+  let templateDingPerNumber: number | null = null;
+  if (room.room_template_id) {
+    templateDingPerNumber = await repo.getTemplateDingPerNumber(room.room_template_id);
+  }
+
   const ticketIds = tickets.map((t) => t.id);
   const markedByTicket = await repo.getMarksForTickets(ticketIds);
   const results = await repo.getResults(roomId);
@@ -61,6 +66,7 @@ export async function loadRoomSnapshot(
     existingFullTickets,
     drawnNumbers,
     unprocessedDrawNumbers: new Set(unprocessedDrawNumbers),
+    templateDingPerNumber,
   };
 
   const state = new RoomRuntimeState(snapshot);

@@ -21,6 +21,7 @@ export type DrawStepBreakdown = {
   completeJob: StepTiming;
   stampDrawProcessed: StepTiming;
   rpc_finalize_engine_draw_job: StepTiming;
+  aggregateDingForDraw: StepTiming;
 };
 
 export type DrawStepKey = keyof DrawStepBreakdown;
@@ -46,6 +47,7 @@ export function emptyBreakdown(): DrawStepBreakdown {
     completeJob: { ...ZERO_TIMING },
     stampDrawProcessed: { ...ZERO_TIMING },
     rpc_finalize_engine_draw_job: { ...ZERO_TIMING },
+    aggregateDingForDraw: { ...ZERO_TIMING },
   };
 }
 

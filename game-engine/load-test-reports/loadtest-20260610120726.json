@@ -1,0 +1,83 @@
+{
+  "scenario": {
+    "rooms": 20,
+    "ticketsPerRoom": 200,
+    "drawIntervalSec": 3,
+    "minDrawsPerRoom": 50,
+    "tag": "loadtest-20260610120726",
+    "durationSec": 405.25
+  },
+  "verdict": {
+    "passed": true,
+    "backlogDetected": false,
+    "summary": "Engine sustained 20 rooms × 200 tickets without significant backlog."
+  },
+  "draws": {
+    "samples": 224,
+    "averageProcessingMs": 944.47,
+    "p95ProcessingMs": 1481.27,
+    "p99ProcessingMs": 2135.08,
+    "peakQueueSize": 3,
+    "averageQueueSize": 0.64,
+    "peakQueueWaitMs": 1596,
+    "averageQueueWaitMs": 261.89
+  },
+  "db": {
+    "estimatedTotalQueries": 672,
+    "averageQueriesPerDraw": 3
+  },
+  "slowestOperations": [
+    {
+      "step": "aggregateDingForDraw",
+      "averageMs": 247.93,
+      "p95Ms": 570.85,
+      "maxMs": 750.78
+    },
+    {
+      "step": "rpc_pick_draw_jobs",
+      "averageMs": 190.67,
+      "p95Ms": 493.08,
+      "maxMs": 748.22
+    },
+    {
+      "step": "rpc_finalize_engine_draw_job",
+      "averageMs": 243.83,
+      "p95Ms": 426.64,
+      "maxMs": 917.14
+    },
+    {
+      "step": "evaluateRoomAfterDraw",
+      "averageMs": 0.15,
+      "p95Ms": 0.26,
+      "maxMs": 1.44
+    }
+  ],
+  "capacity": {
+    "observedDrawsPerSecond": 0.55,
+    "requiredDrawsPerSecond": 6.67,
+    "estimatedMaxRooms": 21,
+    "roomConcurrencyAssumed": 8
+  },
+  "perRoomDrawCounts": {
+    "1cc626af-ee68-403c-9556-3736f6f526db": 55,
+    "b45b00db-b960-415c-945a-b85a38f1bcf6": 58,
+    "2520418e-f452-4e5f-b107-6096ad219736": 57,
+    "1917e65c-8a7d-47a1-890f-40dcf0d009e1": 57,
+    "c31350cf-ea17-409c-9e09-81962799497c": 57,
+    "d9c9acbb-4807-4912-bd71-4bab9956c0d1": 55,
+    "fe6f2866-62d0-4653-af07-071a37ac28aa": 54,
+    "fb0a4ea8-cce7-40f8-80db-6fee92b258af": 56,
+    "8e916573-4023-42c9-aecd-8b4dfb6ced70": 56,
+    "433b2fb4-512b-4c3f-9d23-6227fb05349d": 58,
+    "363fc120-c3b2-4f7a-beee-380f1bd5fe4d": 59,
+    "4de3b6d4-eae6-4eb6-81b6-44c4c524e8e1": 56,
+    "a4d2cb98-ada9-4f9f-b61a-2925ac1454bb": 51,
+    "5693bfff-9a40-4d4e-af34-98afbebcc662": 52,
+    "59a867a5-d3eb-4022-b90b-6bd22065d4d8": 56,
+    "d5de5fad-db14-438c-9410-d2d8cc86e248": 56,
+    "32f1d6da-5c71-4092-9bb3-722b6fde5e84": 56,
+    "6559d3ca-b51e-4f7a-acfb-d2d2ad273d33": 50,
+    "37ff4940-290f-4290-9a45-a1504b203c95": 60,
+    "77c88d5e-738d-498b-88e4-afa724bd82b3": 59
+  }
+}

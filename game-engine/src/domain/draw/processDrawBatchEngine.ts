@@ -5,13 +5,12 @@
  * stamp), but marks + win evaluation run in TypeScript (applyMarksAndEvaluate)
  * instead of via DB RPCs.
  *
- * Ding is intentionally NOT aggregated here: stamping draws.processed_at fires
- * the existing DB trigger trg_aggregate_ding_on_processed_at (which we do not
- * delete), so ding stays exactly-once and trigger-driven during migration. The
- * TS port (domain/ding) is available for when that trigger is disabled.
+ * Ding is aggregated in TypeScript (aggregateDingForDrawFromState) after finalize
+ * stamps processed_at. The DB trigger trg_aggregate_ding_on_processed_at is disabled.
  */
 
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
+import { aggregateDingForDrawFromState } from "../ding/index.js";
 import { settleRoomIfNeeded } from "../../finance/settleRoom.js";
 import type { Logger } from "../../metrics/logger.js";
 import {
@@ -93,6 +92,21 @@ export async function processDrawBatchEngine(
           })
         );
         breakdown.rpc_finalize_engine_draw_job = finalizeStep.timing;
+
+        const state = stateManager.get(job.room_id);
+        if (state) {
+          const dingStep = await timedStep(() =>
+            aggregateDingForDrawFromState(
+              supabase,
+              repo,
+              log,
+              state,
+              job.draw_number,
+              persistence.marks
+            )
+          );
+          breakdown.aggregateDingForDraw = dingStep.timing;
+        }
 
         let settled = evalResult.settled;
         try {

@@ -50,6 +50,7 @@ function makeState(): RoomRuntimeState {
     existingFullTickets: new Set(),
     drawnNumbers: [],
     unprocessedDrawNumbers: new Set(),
+    templateDingPerNumber: null,
   });
 }
 
@@ -107,8 +108,67 @@ describe("RoomRuntimeState", () => {
       existingFullTickets: new Set(),
       drawnNumbers: [],
       unprocessedDrawNumbers: new Set(),
+      templateDingPerNumber: null,
     });
     assert.equal(RoomRuntimeState.isBroken(state), true);
+  });
+
+  it("countDingMatchedByUser counts only reserved tickets", () => {
+    const room = {
+      id: "room-1",
+      status: "playing" as const,
+      currency: "IRR",
+      room_seed: null,
+      room_template_id: null,
+      next_draw_at: null,
+      starts_at: null,
+      min_players: 1,
+      countdown_sec: 120,
+      first_line_draw_number: null,
+      line_reward_percentage: null,
+      full_reward_percentage: null,
+      ding_per_number: null,
+      meta: null,
+    };
+    const state = new RoomRuntimeState({
+      room,
+      tickets: [
+        {
+          id: "t1",
+          room_id: "room-1",
+          player_user_id: "u1",
+          pool_card_id: "c1",
+          price: 100,
+          reservation_status: "reserved",
+          cancelled_at: null,
+        },
+        {
+          id: "t2",
+          room_id: "room-1",
+          player_user_id: "u2",
+          pool_card_id: "c2",
+          price: 100,
+          reservation_status: "consumed",
+          cancelled_at: null,
+        },
+      ],
+      cellsByCard: new Map(),
+      markedByTicket: new Map(),
+      existingLineTickets: new Set(),
+      existingFullTickets: new Set(),
+      drawnNumbers: [],
+      unprocessedDrawNumbers: new Set(),
+      templateDingPerNumber: null,
+    });
+    const matched = state.countDingMatchedByUser(
+      [
+        { ticket_id: "t1", value: 7 },
+        { ticket_id: "t2", value: 7 },
+      ],
+      7
+    );
+    assert.equal(matched.get("u1"), 1);
+    assert.equal(matched.has("u2"), false);
   });
 
   it("mergeMarksFromDb unions marks into memory", () => {
