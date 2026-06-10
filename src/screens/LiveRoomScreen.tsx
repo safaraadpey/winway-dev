@@ -25,6 +25,10 @@ import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import { playNumber, unlockAndPreloadOnUserGesture } from "@/lib/number-audio";
 import { playLiveRoomMusic, stopLiveRoomMusic } from "@/lib/audio/music";
 import { isMusicEnabled } from "@/lib/audio-settings";
+import {
+  mergeDrawLists,
+  type ProcessedDraw,
+} from "@/lib/draw-order";
 import { useDrawRevealQueue } from "@/lib/hooks/useDrawRevealQueue";
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 
@@ -48,6 +52,8 @@ const DEFAULT_DRAW_INTERVAL_SEC = 3;
 const REALTIME_STALE_MS = 12_000;
 const REALTIME_WATCHDOG_TICK_MS = 2_000;
 const DRAW_WATCHDOG_TICK_MS = 1_000;
+/** شمارش معکوس بصری DrawStrip قبل از اولین عدد (جدا از next_draw_at سرور). */
+const VISUAL_PRE_DRAW_COUNTDOWN_START = 5;
 
 const ACTIVE_ROOM_STATUSES = new Set([
   "waiting",
@@ -109,12 +115,15 @@ function isFullWinRevealedInUi(
   });
 }
 
-/** پاپ‌آپ نتایج فقط وقتی UI عدد برنده پر را نشان داده (یا اتاق terminal است). */
+/** پاپ‌آپ نتایج بعد از خواندن همه اعداد صف و رسیدن به عدد برنده پر. */
 function canOpenResultsDialog(
   fullWinners: FullWinner[],
   calledNumbers: number[],
+  serverDrawCount: number,
   status: string
 ): boolean {
+  if (serverDrawCount > calledNumbers.length) return false;
+
   const terminal = isRoomTerminalStatus(status);
   if (!terminal && fullWinners.length === 0) return false;
   if (!isFullWinRevealedInUi(fullWinners, calledNumbers)) return false;
@@ -168,6 +177,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       !canOpenResultsDialog(
         fullWinnersRef.current,
         calledNumbersRef.current,
+        dataRef.current?.draws?.length ?? 0,
         status
       )
     ) {
@@ -240,9 +250,8 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     syncWinnersFromApiRef.current = syncWinnersFromApi;
   }, [syncWinnersFromApi]);
 
-  // Countdown تا اولین draw (نمایش در جای عدد current در DrawStrip وقتی هنوز عددی نداریم)
+  // شمارش معکوس بصری تا اولین draw در DrawStrip (۵→…→۰، سپس ماندن روی ۰)
   const [firstDrawCountdownSec, setFirstDrawCountdownSec] = useState<number | null>(null);
-  const serverOffsetRef = useRef<number>(0);
 
   // برای استفاده داخل callback های realtime (جلوگیری از stale closure)
   const dataRef = useRef<LiveRoomSnapshot | null>(null);
@@ -308,10 +317,20 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   useEffect(() => {
     if (resultsRequestedRef.current) return;
     const status = (data?.room?.status || "").trim().toLowerCase();
-    if (!canOpenResultsDialog(fullWinners, calledNumbers, status)) return;
+    if (
+      !canOpenResultsDialog(
+        fullWinners,
+        calledNumbers,
+        data?.draws?.length ?? 0,
+        status
+      )
+    ) {
+      return;
+    }
     void tryOpenResultsDialog();
   }, [
     data?.room?.status,
+    data?.draws?.length,
     fullWinners,
     calledNumbers,
     tryOpenResultsDialog,
@@ -359,6 +378,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
         prev
           ? {
               ...prev,
+              draws: snapshot.draws,
               room: {
                 ...prev.room,
                 status: snapshot.room.status,
@@ -446,42 +466,27 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     lastRealtimeActivityRef.current = Date.now();
     lastDrawSyncAtRef.current = Date.now();
     roomStatusRef.current = "";
+    setFirstDrawCountdownSec(null);
   }, [roomId, resetDrawReveal]);
 
-  // محاسبه و آپدیت countdown تا اولین draw بر اساس next_draw_at و server_now
   useEffect(() => {
-    // فقط وقتی هنوز هیچ عددی نیومده (draw اول)
     if (calledNumbers.length > 0) {
       setFirstDrawCountdownSec(null);
       return;
     }
 
-    const nextDrawAt = data?.room?.next_draw_at ?? null;
-    const serverNowIso = data?.server_now ?? null;
+    setFirstDrawCountdownSec(VISUAL_PRE_DRAW_COUNTDOWN_START);
 
-    if (!nextDrawAt || !serverNowIso) {
-      setFirstDrawCountdownSec(null);
-      return;
-    }
+    const id = setInterval(() => {
+      setFirstDrawCountdownSec((prev) => {
+        if (prev == null) return VISUAL_PRE_DRAW_COUNTDOWN_START;
+        if (prev <= 0) return 0;
+        return prev - 1;
+      });
+    }, 1000);
 
-    const serverNowMs = new Date(serverNowIso).getTime();
-    const clientNowMs = Date.now();
-    serverOffsetRef.current = serverNowMs - clientNowMs;
-
-    const deadlineMs = new Date(nextDrawAt).getTime();
-
-    const tick = () => {
-      const now = Date.now() + serverOffsetRef.current;
-      const remainingMs = deadlineMs - now;
-      const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
-      // صفر هم نمایش داده شود (به‌جای اینکه null شود)
-      setFirstDrawCountdownSec(remainingSec);
-    };
-
-    tick();
-    const id = setInterval(tick, 250);
     return () => clearInterval(id);
-  }, [calledNumbers.length, data?.room?.next_draw_at, data?.server_now]);
+  }, [calledNumbers.length, roomId]);
 
   // مخفی کردن استاتوس‌بار
   useEffect(() => {
@@ -527,6 +532,9 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
         const snapshot = await fetchLiveRoomSnapshot(roomId);
         if (!isMounted) return;
 
+        roomStatusRef.current = (snapshot.room.status || "")
+          .trim()
+          .toLowerCase();
         setData(snapshot);
         applyDrawsFromSnapshot(snapshot.draws);
         setError(null);
@@ -537,9 +545,6 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
         );
 
         if (isMounted) {
-          roomStatusRef.current = (snapshot.room.status || "")
-            .trim()
-            .toLowerCase();
           markRealtimeActivity();
           await syncWinnersFromApi(snapshot);
         }
@@ -639,23 +644,37 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       if (!newProcessed) return;
       if (number == null) return;
 
+      const processedAt =
+        typeof newProcessed === "string" ? newProcessed : null;
+      if (!processedAt) {
+        void runDrawSyncPollRef.current();
+        return;
+      }
+
       const createdAt =
         (payload.new?.created_at as string | undefined) ||
         (payload.new?.timestamp as string | undefined) ||
-        new Date().toISOString();
+        processedAt;
 
-      setData((prev) => {
-        if (!prev) return prev;
-        if (prev.draws.some((d) => d.number === number)) return prev;
+      const incomingDraw: ProcessedDraw = {
+        id: drawId,
+        number,
+        created_at: createdAt,
+        processed_at: processedAt,
+      };
 
-        return {
-          ...prev,
-          draws: [...prev.draws, { number, created_at: createdAt }],
-        };
-      });
+      const prev = dataRef.current;
+      if (!prev) {
+        void runDrawSyncPollRef.current();
+        return;
+      }
 
-      applyDrawsFromSnapshotRef.current([{ number, created_at: createdAt }]);
-      void syncWinnersFromApiRef.current(dataRef.current);
+      const draws = mergeDrawLists(prev.draws, [incomingDraw]);
+      const nextSnapshot = { ...prev, draws };
+      dataRef.current = nextSnapshot;
+      setData(nextSnapshot);
+      applyDrawsFromSnapshotRef.current(draws);
+      void syncWinnersFromApiRef.current(nextSnapshot);
     };
 
     const channel = supabase

@@ -207,6 +207,32 @@ export class GameRepo {
     if (error) fail("insertDraw", error.message);
   }
 
+  /** Lock room row, enforce backpressure, insert draw + bump next_draw_at atomically. */
+  async insertDrawIfReady(
+    roomId: string,
+    number: number,
+    nowIso: string,
+    drawIntervalSec: number
+  ): Promise<"inserted" | "backpressure" | "duplicate" | "not_playing"> {
+    const { data, error } = await this.db.rpc("rpc_insert_draw_if_ready", {
+      p_room_id: roomId,
+      p_number: number,
+      p_now: nowIso,
+      p_draw_interval_sec: drawIntervalSec,
+    });
+    if (error) fail("rpc_insert_draw_if_ready", error.message);
+    const outcome = String(data ?? "");
+    if (
+      outcome === "inserted" ||
+      outcome === "backpressure" ||
+      outcome === "duplicate" ||
+      outcome === "not_playing"
+    ) {
+      return outcome;
+    }
+    fail("rpc_insert_draw_if_ready", `unexpected outcome: ${outcome}`);
+  }
+
   async getDraw(roomId: string, number: number): Promise<DrawRow | null> {
     const { data, error } = await this.db
       .from("draws")

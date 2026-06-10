@@ -11,7 +11,10 @@ export function groupJobsByRoom(jobs: DrawJob[]): Map<string, DrawJob[]> {
     byRoom.set(job.room_id, list);
   }
   for (const list of byRoom.values()) {
-    list.sort((a, b) => a.draw_number - b.draw_number);
+    list.sort(
+      (a, b) =>
+        a.created_at.localeCompare(b.created_at) || a.id - b.id
+    );
   }
   return byRoom;
 }

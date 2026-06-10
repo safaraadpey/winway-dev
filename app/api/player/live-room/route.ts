@@ -25,7 +25,12 @@ type LiveRoomResponse = {
     round_no: number | null;
   } | null;
   server_now: string;
-  draws: Array<{ number: number; created_at: string }>;
+  draws: Array<{
+    id: string;
+    number: number;
+    created_at: string;
+    processed_at: string;
+  }>;
   cards: Array<{
     ticket_id: string;
     player_id: string | null;
@@ -161,10 +166,10 @@ export async function GET(request: Request) {
 
     const { data: draws, error: drawsError } = await supabase
       .from("draws")
-      .select("number, created_at")
+      .select("id, number, created_at, processed_at")
       .eq("room_id", roomId)
       .not("processed_at", "is", null)
-      .order("created_at", { ascending: true });
+      .order("processed_at", { ascending: true });
 
     if (drawsError) {
       console.error("live-room fetch draws error:", drawsError);
@@ -314,8 +319,10 @@ export async function GET(request: Request) {
       tournament,
       server_now: new Date().toISOString(),
       draws: (draws || []).map((d: any) => ({
+        id: d.id,
         number: d.number,
         created_at: d.created_at,
+        processed_at: d.processed_at,
       })),
       cards,
     };

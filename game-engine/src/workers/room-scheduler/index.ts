@@ -1,8 +1,11 @@
+import { randomUUID } from "node:crypto";
 import {
   manageRoomLiveActions,
   manageWaitingRooms,
 } from "../../domain/room/index.js";
 import { GameRepo } from "../../repositories/index.js";
+import { redisKeys } from "../../redis/keys.js";
+import { releaseLock, tryAcquireLock } from "../../redis/locks.js";
 import { executesBusinessLogic, isIdle } from "../../runtime.js";
 import type { WorkerContext } from "../context.js";
 
@@ -15,16 +18,18 @@ import type { WorkerContext } from "../context.js";
  *                 (fn_manage_waiting_rooms + fn_manage_room_live_actions).
  *   - engine    : engine runs the TS port (domain/room) end to end.
  *
- * A Redis leader lock should gate this when running multiple replicas (B12);
- * single-instance mode is safe as-is.
+ * Redis leader lock prevents multiple replicas from inserting draws concurrently.
  */
 export function startRoomScheduler(ctx: WorkerContext): () => void {
-  const { supabase, config, log } = ctx;
+  const { supabase, config, log, redis } = ctx;
   const repo = new GameRepo(supabase);
+  const lockToken = randomUUID();
+  const lockKey = redisKeys.schedulerLeader();
 
   let stopped = false;
   let inFlight = false;
   let idleLogged = false;
+  let redisLockDegraded = false;
 
   const tick = async (): Promise<void> => {
     if (stopped || inFlight) return;
@@ -39,7 +44,28 @@ export function startRoomScheduler(ctx: WorkerContext): () => void {
     idleLogged = false;
     inFlight = true;
 
+    let lockHeld = false;
     try {
+      if (redis) {
+        try {
+          const haveLock = await tryAcquireLock(
+            redis,
+            lockKey,
+            config.drawProcessorLockTtlSec,
+            lockToken
+          );
+          lockHeld = haveLock;
+          if (!haveLock) return;
+        } catch (lockErr) {
+          if (!redisLockDegraded) {
+            redisLockDegraded = true;
+            log.warn("room-scheduler redis lock failed; continuing single-instance mode", {
+              error: errMessage(lockErr),
+            });
+          }
+        }
+      }
+
       if (executesBusinessLogic(config.runtime)) {
         await manageWaitingRooms(repo, log, 50, ctx.roomState);
         await manageRoomLiveActions(repo, log, 200, ctx.roomState);
@@ -51,6 +77,13 @@ export function startRoomScheduler(ctx: WorkerContext): () => void {
         error: err instanceof Error ? err.message : String(err),
       });
     } finally {
+      if (redis && lockHeld) {
+        await releaseLock(redis, lockKey, lockToken).catch((err: unknown) =>
+          log.error("room-scheduler lock release failed", {
+            error: errMessage(err),
+          })
+        );
+      }
       inFlight = false;
     }
   };
@@ -72,4 +105,8 @@ export function startRoomScheduler(ctx: WorkerContext): () => void {
 async function callDbScheduler(ctx: WorkerContext): Promise<void> {
   const { error } = await ctx.supabase.rpc("fn_heartbeat_tick");
   if (error) throw new Error(`fn_heartbeat_tick: ${error.message}`);
+}
+
+function errMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }

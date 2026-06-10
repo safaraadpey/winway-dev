@@ -16,7 +16,7 @@ import type { Logger } from "../../metrics/logger.js";
 import { GameRepo, parseBytea } from "../../repositories/index.js";
 import type { RoomStateManager } from "../../state/room-state.manager.js";
 
-const FIRST_DRAW_DELAY_SEC = 10; // fn_manage_waiting_rooms: first draw 10s after start
+const FIRST_DRAW_DELAY_SEC = 25; // fn_manage_waiting_rooms: first draw 25s after start
 const DEFAULT_DRAW_INTERVAL_SEC = 3;
 const DEFAULT_COUNTDOWN_SEC = 120;
 
@@ -33,11 +33,6 @@ function drawIntervalSec(meta: Record<string, unknown> | null): number {
 
 function addSeconds(base: Date, seconds: number): string {
   return new Date(base.getTime() + seconds * 1000).toISOString();
-}
-
-function isDuplicateDrawError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  return msg.includes("draws_room_number_uniq") || msg.includes("duplicate key");
 }
 
 /**
@@ -138,9 +133,6 @@ export async function manageRoomLiveActions(
         state.syncDrawSchedulerState(dbDrawn, dbUnprocessed);
       }
 
-      // Backpressure: do not draw while a prior draw is still unprocessed.
-      if (dbUnprocessed.length > 0) continue;
-
       const next = pickNextNumber(seed, dbDrawn);
 
       if (next === null) {
@@ -150,30 +142,40 @@ export async function manageRoomLiveActions(
         continue;
       }
 
-      try {
-        await repo.insertDraw(room.id, next, nowIso);
+      const intervalSec = drawIntervalSec(room.meta);
+      const outcome = await repo.insertDrawIfReady(
+        room.id,
+        next,
+        nowIso,
+        intervalSec
+      );
+
+      if (outcome === "backpressure" || outcome === "not_playing") {
+        continue;
+      }
+
+      if (outcome === "inserted") {
         if (state) {
           state.recordDrawInserted(next);
         } else {
           stateManager?.preload(room.id);
         }
         drew += 1;
-      } catch (err) {
-        if (!isDuplicateDrawError(err)) throw err;
-        log.warn("scheduler skipped duplicate draw number", {
-          roomId: room.id,
-          number: next,
-        });
-        const [resyncDrawn, resyncUnprocessed] = await Promise.all([
-          repo.getDrawnNumbers(room.id),
-          repo.getUnprocessedDrawNumbers(room.id),
-        ]);
-        state?.syncDrawSchedulerState(resyncDrawn, resyncUnprocessed);
+        continue;
       }
 
+      log.warn("scheduler skipped duplicate draw number", {
+        roomId: room.id,
+        number: next,
+      });
+      const [resyncDrawn, resyncUnprocessed] = await Promise.all([
+        repo.getDrawnNumbers(room.id),
+        repo.getUnprocessedDrawNumbers(room.id),
+      ]);
+      state?.syncDrawSchedulerState(resyncDrawn, resyncUnprocessed);
       await repo.setNextDrawAt(
         room.id,
-        addSeconds(now, drawIntervalSec(room.meta)),
+        addSeconds(now, intervalSec),
         nowIso
       );
     } catch (err) {

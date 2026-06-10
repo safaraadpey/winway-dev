@@ -648,7 +648,12 @@ export interface LiveRoomSnapshot {
     round_no: number | null;
   } | null;
   server_now?: string;
-  draws: Array<{ number: number; created_at: string }>;
+  draws: Array<{
+    id: string;
+    number: number;
+    created_at: string;
+    processed_at: string;
+  }>;
   cards: Array<{
     ticket_id: string;
     player_id: string | null;

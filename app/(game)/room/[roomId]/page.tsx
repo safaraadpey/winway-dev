@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import BingoCard, { type BingoCardData } from "@/components/BingoCard";
+import { sortDraws } from "@/lib/draw-order";
 import { fetchLiveRoomSnapshot, type LiveRoomSnapshot } from "@/services/rooms";
 
 interface GamePageProps {
@@ -44,7 +45,7 @@ export default function GamePage({ params }: GamePageProps) {
   }, [params.roomId]);
 
   const calledNumbers = useMemo(
-    () => snapshot?.draws?.map((d) => d.number) ?? [],
+    () => sortDraws(snapshot?.draws ?? []).map((d) => d.number),
     [snapshot]
   );
 
