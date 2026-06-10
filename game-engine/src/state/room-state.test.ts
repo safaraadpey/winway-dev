@@ -195,4 +195,23 @@ describe("RoomRuntimeState", () => {
     assert.equal(rows.length, 1);
     assert.equal(state.getMarks().get("t1")!.size, 1);
   });
+
+  it("needsReconcile after load and on checkpoint boundary", () => {
+    const state = makeState();
+    assert.equal(state.needsReconcile(10), false);
+
+    state.markLoadedFromDb();
+    assert.equal(state.needsReconcile(10), true);
+    state.noteReconcileDone();
+    assert.equal(state.needsReconcile(10), false);
+
+    for (let i = 0; i < 10; i++) state.recordDrawProcessed(i + 1);
+    assert.equal(state.needsReconcile(10), true);
+  });
+
+  it("requestReconcile forces next evaluate sync", () => {
+    const state = makeState();
+    state.requestReconcile();
+    assert.equal(state.needsReconcile(0), true);
+  });
 });

@@ -41,6 +41,10 @@ export class RoomRuntimeState {
   private readonly unprocessedDrawNumbers: Set<number>;
   readonly templateDingPerNumber: number | null;
   drawsProcessed = 0;
+  /** First evaluate after DB snapshot load — merge marks/results from DB. */
+  private reconcileAfterLoad = false;
+  /** Stale-job recovery or explicit invalidation — merge before next evaluate. */
+  private forceReconcile = false;
 
   constructor(snapshot: RoomStateSnapshot) {
     this.roomId = snapshot.room.id;
@@ -218,5 +222,30 @@ export class RoomRuntimeState {
 
   static filterEvalTickets(tickets: TicketRow[]): TicketRow[] {
     return tickets.filter((t) => EVAL_STATUSES.has(t.reservation_status));
+  }
+
+  /** Call once when snapshot is loaded from DB (not a continuous in-memory session). */
+  markLoadedFromDb(): void {
+    this.reconcileAfterLoad = true;
+  }
+
+  /** Invalidate RAM cache; next evaluate merges from DB (e.g. stale job requeue). */
+  requestReconcile(): void {
+    this.forceReconcile = true;
+  }
+
+  /**
+   * Whether to read marks/results from DB before this draw's evaluation.
+   * Hot path: false. Reload, recovery, and every checkpointEvery draws: true.
+   */
+  needsReconcile(checkpointEvery: number): boolean {
+    if (this.reconcileAfterLoad || this.forceReconcile) return true;
+    if (checkpointEvery <= 0) return false;
+    return this.drawsProcessed > 0 && this.drawsProcessed % checkpointEvery === 0;
+  }
+
+  noteReconcileDone(): void {
+    this.reconcileAfterLoad = false;
+    this.forceReconcile = false;
   }
 }

@@ -12,9 +12,11 @@
  */
 
 import { pickNextNumber } from "../../core/index.js";
+import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import type { Logger } from "../../metrics/logger.js";
 import { GameRepo, parseBytea } from "../../repositories/index.js";
 import type { RoomStateManager } from "../../state/room-state.manager.js";
+import { finishExhaustedRoom } from "./reconcileWinners.js";
 
 const FIRST_DRAW_DELAY_SEC = 25; // fn_manage_waiting_rooms: first draw 25s after start
 const DEFAULT_DRAW_INTERVAL_SEC = 3;
@@ -95,6 +97,7 @@ export interface ManageLiveResult {
  * room is finished. Mirrors fn_manage_room_live_actions.
  */
 export async function manageRoomLiveActions(
+  supabase: SupabaseAdmin,
   repo: GameRepo,
   log: Logger,
   limit = 200,
@@ -136,9 +139,16 @@ export async function manageRoomLiveActions(
       const next = pickNextNumber(seed, dbDrawn);
 
       if (next === null) {
-        await repo.setRoomFinished(room.id, nowIso);
-        stateManager?.evict(room.id);
-        finished += 1;
+        const outcome = await finishExhaustedRoom(
+          supabase,
+          repo,
+          log,
+          room.id,
+          stateManager
+        );
+        if (outcome === "settled" || outcome === "finished") {
+          finished += 1;
+        }
         continue;
       }
 

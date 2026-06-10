@@ -65,6 +65,15 @@ export class RoomStateManager {
     this.loading.delete(roomId);
   }
 
+  /** Mark resident state stale without evicting (e.g. before requeued job retry). */
+  requestReconcile(roomId: string): void {
+    this.states.get(roomId)?.requestReconcile();
+  }
+
+  getCheckpointEvery(): number {
+    return this.checkpointEvery;
+  }
+
   async maybeCheckpoint(state: RoomRuntimeState): Promise<void> {
     if (this.checkpointEvery <= 0) return;
     if (state.drawsProcessed % this.checkpointEvery !== 0) return;
@@ -88,6 +97,7 @@ export class RoomStateManager {
 
   private async load(roomId: string): Promise<RoomRuntimeState> {
     const { state, loadDurationMs } = await loadRoomSnapshot(this.repo, roomId);
+    state.markLoadedFromDb();
     this.states.set(roomId, state);
     this.log.info("room state loaded", { roomId, loadDurationMs, tickets: state.getTickets().length });
     return state;

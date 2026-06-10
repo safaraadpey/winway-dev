@@ -39,6 +39,12 @@ export interface EngineConfig {
   drawJobStaleSec: number;
   /** How often to run stale-job reaper (milliseconds). */
   drawJobReapIntervalMs: number;
+  /** TTL (seconds) for per-room draw processing lock (0 = disabled). */
+  drawRoomLockTtlSec: number;
+  /** How often to repair unsettled finished rooms (0 = disabled). */
+  roomJanitorIntervalMs: number;
+  /** Max rooms repaired per janitor tick. */
+  roomJanitorBatchLimit: number;
   devPlayerSchedulerIntervalMs: number;
   devPlayerProcessorIntervalMs: number;
   devPlayerProcessorBatchLimit: number;
@@ -124,6 +130,11 @@ export function loadConfig(): EngineConfig {
     drawJobReapIntervalMs: Number(
       process.env.DRAW_JOB_REAP_INTERVAL_MS ?? "30000"
     ),
+    drawRoomLockTtlSec: Number(process.env.DRAW_ROOM_LOCK_TTL_SEC ?? "120"),
+    roomJanitorIntervalMs: Number(
+      process.env.ROOM_JANITOR_INTERVAL_MS ?? "60000"
+    ),
+    roomJanitorBatchLimit: Number(process.env.ROOM_JANITOR_BATCH_LIMIT ?? "20"),
     devPlayerSchedulerIntervalMs: Number(
       process.env.DEV_PLAYER_SCHEDULER_INTERVAL_MS ?? "60000"
     ),

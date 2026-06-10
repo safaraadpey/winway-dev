@@ -115,6 +115,8 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
       maxAttempts: config.drawProcessorMaxAttempts,
       batchSize: config.drawProcessorBatchSize,
       roomConcurrency: config.drawProcessorRoomConcurrency,
+      redis,
+      drawRoomLockTtlSec: config.drawRoomLockTtlSec,
     };
 
     const runBatch = executesBusinessLogic(config.runtime)

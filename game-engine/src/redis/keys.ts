@@ -23,4 +23,8 @@ export const redisKeys = {
   /** Per-room draw job dedupe (optional, P1+) */
   drawJobInflight: (roomId: string, drawNumber: number) =>
     `${REDIS_PREFIX}:draw:inflight:${roomId}:${drawNumber}`,
+
+  /** Serializes draw-job processing for one room across engine replicas. */
+  drawRoomProcessor: (roomId: string) =>
+    `${REDIS_PREFIX}:lock:draw-room:${roomId}`,
 } as const;

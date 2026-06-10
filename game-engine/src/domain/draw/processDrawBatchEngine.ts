@@ -18,6 +18,8 @@ import {
   recordDrawSample,
   timedStep,
 } from "../../metrics/drawPerformance.js";
+import { redisKeys } from "../../redis/keys.js";
+import type { GameRedis } from "../../redis/types.js";
 import { GameRepo } from "../../repositories/index.js";
 import type { RoomStateManager } from "../../state/room-state.manager.js";
 import { applyMarksAndEvaluate } from "./evaluateDraw.js";
@@ -29,6 +31,8 @@ export interface ProcessDrawBatchEngineOptions {
   maxAttempts: number;
   batchSize: number;
   roomConcurrency: number;
+  redis?: GameRedis | null;
+  drawRoomLockTtlSec?: number;
 }
 
 export async function processDrawBatchEngine(
@@ -51,6 +55,29 @@ export async function processDrawBatchEngine(
     jobsPicked: jobs.length,
     pickMsPerJob: Math.round(pickPerJobMs * 100) / 100,
   });
+
+  const roomLock =
+    opts.redis && (opts.drawRoomLockTtlSec ?? 0) > 0
+      ? {
+          redis: opts.redis,
+          ttlSec: opts.drawRoomLockTtlSec!,
+          keyFn: (roomId: string) => redisKeys.drawRoomProcessor(roomId),
+          onLockMiss: async (roomId: string, missed: readonly DrawJob[]) => {
+            const now = new Date().toISOString();
+            for (const job of missed) {
+              await supabase
+                .from("draw_jobs")
+                .update({ status: "queued", updated_at: now })
+                .eq("id", job.id)
+                .eq("status", "processing");
+            }
+            log.info("draw room lock miss; jobs requeued", {
+              roomId,
+              jobs: missed.length,
+            });
+          },
+        }
+      : undefined;
 
   const partial = await processJobsByRoom(
     jobs,
@@ -154,7 +181,8 @@ export async function processDrawBatchEngine(
       } catch (err) {
         return handleFailure(supabase, log, job, opts, err);
       }
-    }
+    },
+    roomLock
   );
 
   return { picked: jobs.length, ...partial };

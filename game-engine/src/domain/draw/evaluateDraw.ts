@@ -22,6 +22,7 @@ import {
   timedStepSync,
 } from "../../metrics/drawPerformance.js";
 import { GameRepo } from "../../repositories/index.js";
+import { reconcileRuntimeStateFromDb } from "../../state/reconcileFromDb.js";
 import type { RoomRuntimeState } from "../../state/room-state.js";
 import type { RoomStateManager } from "../../state/room-state.manager.js";
 
@@ -59,11 +60,7 @@ export interface EvaluateDrawOptions {
   persist?: boolean;
   /** When true, caller runs settlement after persistence (engine batch path). */
   deferSettlement?: boolean;
-  /**
-   * Reconcile marks/results/room from DB before this draw.
-   * Default false — hot path trusts in-memory state loaded once via RoomStateManager.
-   * Use only for explicit recovery (otherwise evict room and reload snapshot).
-   */
+  /** Force DB reconcile before evaluate (default: auto via needsReconcile). */
   syncFromDb?: boolean;
 }
 
@@ -78,24 +75,24 @@ export async function applyMarksAndEvaluateWithState(
 ): Promise<EvaluateDrawResult> {
   const persist = opts.persist !== false;
   const deferSettlement = opts.deferSettlement === true;
-  const syncFromDb = opts.syncFromDb === true;
+  const checkpointEvery = stateManager.getCheckpointEvery();
+  const shouldReconcile =
+    opts.syncFromDb === true ||
+    (opts.syncFromDb !== false &&
+      state.needsReconcile(checkpointEvery));
   const now = new Date().toISOString();
   const breakdown = emptyBreakdown();
 
-  if (syncFromDb) {
-    const ticketIds = state.getTickets().map((t) => t.id);
-    const syncStep = await timedStep(async () => {
-      const [dbMarks, dbResults, room] = await Promise.all([
-        repo.getMarksForTickets(ticketIds),
-        repo.getResults(state.roomId),
-        repo.getRoom(state.roomId),
-      ]);
-      state.mergeMarksFromDb(dbMarks);
-      state.syncExistingResults(dbResults);
-      if (room) state.room = room;
-    });
+  if (shouldReconcile) {
+    const syncStep = await timedStep(() => reconcileRuntimeStateFromDb(repo, state));
     breakdown.getMarksForTickets = syncStep.timing;
     breakdown.getResults = syncStep.timing;
+    state.noteReconcileDone();
+    log.info("room state reconciled from db", {
+      roomId: state.roomId,
+      drawNumber,
+      drawsProcessed: state.drawsProcessed,
+    });
   }
 
   const memoryStep = timedStepSync(() => {

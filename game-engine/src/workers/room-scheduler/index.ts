@@ -3,6 +3,7 @@ import {
   manageRoomLiveActions,
   manageWaitingRooms,
 } from "../../domain/room/index.js";
+import { repairUnsettledFinishedRooms } from "../../domain/room/janitorRepair.js";
 import { GameRepo } from "../../repositories/index.js";
 import { redisKeys } from "../../redis/keys.js";
 import { releaseLock, tryAcquireLock } from "../../redis/locks.js";
@@ -30,6 +31,24 @@ export function startRoomScheduler(ctx: WorkerContext): () => void {
   let inFlight = false;
   let idleLogged = false;
   let redisLockDegraded = false;
+  let lastJanitorMs = 0;
+
+  const maybeRunJanitor = async (): Promise<void> => {
+    if (!executesBusinessLogic(config.runtime)) return;
+    if (config.roomJanitorIntervalMs <= 0) return;
+    const now = Date.now();
+    if (now - lastJanitorMs < config.roomJanitorIntervalMs) return;
+    lastJanitorMs = now;
+    try {
+      await repairUnsettledFinishedRooms(
+        supabase,
+        log,
+        config.roomJanitorBatchLimit
+      );
+    } catch (err) {
+      log.error("room-janitor tick error", { error: errMessage(err) });
+    }
+  };
 
   const tick = async (): Promise<void> => {
     if (stopped || inFlight) return;
@@ -68,7 +87,8 @@ export function startRoomScheduler(ctx: WorkerContext): () => void {
 
       if (executesBusinessLogic(config.runtime)) {
         await manageWaitingRooms(repo, log, 50, ctx.roomState);
-        await manageRoomLiveActions(repo, log, 200, ctx.roomState);
+        await manageRoomLiveActions(supabase, repo, log, 200, ctx.roomState);
+        await maybeRunJanitor();
       } else {
         await callDbScheduler(ctx);
       }

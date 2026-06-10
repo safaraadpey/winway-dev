@@ -187,6 +187,31 @@ export class GameRepo {
     return (count ?? 0) > 0;
   }
 
+  /** Queued or processing draw_jobs remain for this room. */
+  async hasPendingDrawJobs(roomId: string): Promise<boolean> {
+    const { count, error } = await this.db
+      .from("draw_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("room_id", roomId)
+      .in("status", ["queued", "processing"]);
+    if (error) fail("hasPendingDrawJobs", error.message);
+    return (count ?? 0) > 0;
+  }
+
+  /** Latest drawn ball number (by insert time). */
+  async getLastDrawNumber(roomId: string): Promise<number | null> {
+    const { data, error } = await this.db
+      .from("draws")
+      .select("number")
+      .eq("room_id", roomId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) fail("getLastDrawNumber", error.message);
+    const n = (data as { number: number } | null)?.number;
+    return n == null ? null : Number(n);
+  }
+
   async getUnprocessedDrawNumbers(roomId: string): Promise<number[]> {
     const { data, error } = await this.db
       .from("draws")
