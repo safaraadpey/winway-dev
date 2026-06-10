@@ -78,7 +78,7 @@ very large balances are introduced, switch `core/money` to a decimal library
 3. **Ding in `engine` mode** relies on the existing DB trigger (to avoid double
    credit) until the trigger is intentionally disabled; the TS port is ready and
    idempotent.
-4. **Edge functions** (`bot-schedule-worker`) and admin/report RPCs are untouched.
+4. **Edge functions** (`dev-schedule-worker`) and admin/report RPCs are untouched.
 
 ## 6. How to verify parity (shadow testing)
 

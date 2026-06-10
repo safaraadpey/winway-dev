@@ -11,6 +11,12 @@ export const redisKeys = {
   /** Distributed lock: tournament tick */
   tournamentTickLeader: () => `${REDIS_PREFIX}:lock:tournament-tick`,
 
+  /** Distributed lock: dev-player scheduler tick */
+  devPlayerSchedulerLeader: () => `${REDIS_PREFIX}:lock:dev-player-scheduler`,
+
+  /** Distributed lock: dev-player schedule processor */
+  devPlayerProcessorLeader: () => `${REDIS_PREFIX}:lock:dev-player-processor`,
+
   /** Short TTL cache for lobby snapshot (optional, P1) */
   lobbySnapshot: () => `${REDIS_PREFIX}:cache:lobby-snapshot`,
 

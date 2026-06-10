@@ -23,6 +23,8 @@ import { RoomStateManager } from "./state/index.js";
 import { startDrawProcessor } from "./workers/draw-processor/index.js";
 import { startRoomScheduler } from "./workers/room-scheduler/index.js";
 import { startTournamentOrchestrator } from "./workers/tournament-orchestrator/index.js";
+import { startDevPlayerProcessor } from "./workers/dev-player/processor.js";
+import { startDevPlayerScheduler } from "./workers/dev-player/scheduler.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -72,6 +74,12 @@ async function main(): Promise<void> {
   }
   if (config.roles.has("tournament-orchestrator")) {
     stops.push(startTournamentOrchestrator(workerCtx));
+  }
+  if (config.roles.has("dev-player-scheduler")) {
+    stops.push(startDevPlayerScheduler(workerCtx));
+  }
+  if (config.roles.has("dev-player-processor")) {
+    stops.push(startDevPlayerProcessor(workerCtx));
   }
 
   if (stops.length === 0) {

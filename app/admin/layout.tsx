@@ -6,6 +6,7 @@ import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import DingHeader from "@/components/DingHeader";
 import EntryBannerModal from "@/components/EntryBannerModal";
 import ClientAuthGuard from "@/components/auth/ClientAuthGuard";
+import AdminPanelAuthGuard from "@/components/auth/AdminPanelAuthGuard";
 
 function AdminLayoutContent({
   children,
@@ -44,7 +45,9 @@ export default function AdminLayout({
   return (
     <HeaderVisibilityProvider>
       <ClientAuthGuard>
-        <AdminLayoutContent>{children}</AdminLayoutContent>
+        <AdminPanelAuthGuard>
+          <AdminLayoutContent>{children}</AdminLayoutContent>
+        </AdminPanelAuthGuard>
       </ClientAuthGuard>
     </HeaderVisibilityProvider>
   );

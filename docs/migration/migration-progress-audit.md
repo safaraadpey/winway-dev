@@ -78,7 +78,7 @@
 | A2 | `fn_admin_create/update/delete/set_status_tournament`, `fn_admin_games_report` | admin | DB | KEEP/WRAP | Admin business ops; called from admin pages/API | Medium | Medium | Route admin mutations through an engine admin command later |
 | A3 | `fn_dashboard_*`, leaderboards (`get_*_leaders`), `fn_player_*` | reporting | DB | KEEP | Pure read/reporting; no migration value | Low | Low | Keep (optionally cache) |
 | A4 | `fn_heartbeat_log` (cron 8), `fn_ping_presence` | presence | DB | KEEP | Presence logging; high-frequency, cheap in DB | Low | Low | Keep |
-| A5 | Edge fn `bot-schedule-worker` (cron 21) | bots | Edge | KEEP | Bot room scheduling via `fn_pick_bot_room_schedules` | Medium | Medium | Keep; could become an engine worker post-cutover |
+| A5 | Edge fn `dev-schedule-worker` (cron 21) | dev-players | Edge | KEEP | Dev player room scheduling via `fn_pick_dev_room_schedules` | Medium | Medium | Keep; could become an engine worker post-cutover |
 | A6 | Edge fn `draw-worker` (cron 5, inactive) | draw | Edge | DEPRECATE | Superseded by engine draw-processor; already disabled | Low | Low | Remove after cutover (cleanup only) |
 | A7 | Maintenance crons: `fn_maintain_heartbeat_log_partitions` (19), `fn_cleanup_retention` (20) | ops | DB | KEEP | DB housekeeping | Low | Low | Keep |
 
@@ -189,7 +189,7 @@ Ordered: highest business impact first; within each tier, lowest-risk first.
 11. **[F1–F5, T6, T8] Keep ledger + atomic money RPCs in DB** — do not migrate;
     use `core/*` mirrors for shadow parity only.
 12. **[A2] Route admin tournament mutations through an engine admin command** (logic DB).
-13. **[A5] Optionally convert `bot-schedule-worker` edge fn to an engine worker** post-cutover.
+13. **[A5] Optionally convert `dev-schedule-worker` edge fn to an engine worker** post-cutover.
 14. **[A6] Remove the disabled `draw-worker` edge function** (cleanup).
 
 ---

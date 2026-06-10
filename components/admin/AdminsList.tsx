@@ -19,6 +19,7 @@ const SUB_ROLE_TABS: { key: AdminSubRoleFilter; label: string }[] = [
   { key: "finance", label: "مالی" },
   { key: "support", label: "پشتیبانی" },
   { key: "room", label: "اتاق‌ها" },
+  { key: "dev_panel", label: "Dev Panel" },
 ];
 
 function formatShortId(shortId: string): string {
@@ -41,6 +42,7 @@ const SUB_ROLE_LABELS: Record<AdminSubRole | "manager", string> = {
   finance: "مالی",
   support: "پشتیبانی",
   room: "اتاق‌ها",
+  dev_panel: "Dev Panel",
 };
 
 export default function AdminsList({ pageTitle }: AdminsListProps) {
@@ -377,7 +379,7 @@ export default function AdminsList({ pageTitle }: AdminsListProps) {
                     </button>
                     {showRoleDropdown === admin.id && (
                       <div className="absolute right-0 top-full mt-1 rounded-lg bg-[#1f2933] border border-[#374151] overflow-hidden z-10 min-w-[140px] max-w-[80vw]">
-                        {(["manager", "finance", "support", "room"] as const).map((role) => (
+                        {(["manager", "finance", "support", "room", "dev_panel"] as const).map((role) => (
                           <button
                             key={role}
                             onClick={() => {

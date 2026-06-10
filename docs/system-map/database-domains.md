@@ -25,7 +25,7 @@ There is no separate `finance` schema object set (financial logic lives in
 | --- | --- |
 | `user_role` | `admin`, `super`, `agent`, `player` |
 | `user_status` | `active`, `suspended`, `deleted` |
-| `admin_sub_role` | `finance`, `support`, `room`, `bot_admin` (NULL = full manager) |
+| `admin_sub_role` | `finance`, `support`, `room`, `dev_panel` (NULL = full manager) |
 | `room_status` | `idle`, `live`, `finished`, `cancelled`, `waiting`, `playing`, `settling` |
 | `room_template_status` | `active`, `draining`, `inactive` |
 | `room_type` | `normal`, `tournament` |
@@ -37,11 +37,11 @@ There is no separate `finance` schema object set (financial logic lives in
 | `tournament_round_room_status` | `created`, `running`, `finished` |
 | `tournament_table_size_mode` | `fixed`, `range` |
 | `tournament_remainder_policy` | `adaptive_tables`, `uniform_with_bye`, `uniform_with_ghost` |
-| `bot_schedule_status` | `draft`, `approved`, `processing`, `done`, `failed`, `cancelled` |
+| `dev_schedule_status` | `draft`, `approved`, `processing`, `done`, `failed`, `cancelled` |
 | `tournament.lock_status` | `held`, `released`, `captured` |
 
 > NOTE / discrepancy: `docs/backend/admin-sub-roles.md` lists `manager` as an enum
-> value. The live DB enum does **not** contain `manager`; it contains `bot_admin`.
+> value. The live DB enum does **not** contain `manager`; it contains `dev_panel`.
 > Full-access admins are represented by `admin_sub_role IS NULL`.
 
 ---
@@ -88,7 +88,8 @@ Views: `user_profiles_view` (joins users + profile + commissions).
 | `draw_jobs` | 3,735 | Work queue: `room_id`, `draw_number`, `status` (`queued`/`done`), `attempts`. |
 | `results` | 0 | Win records: `room_id`, `user_id`, `ticket_id`, `win_type` (`line`/`full`), `reward_amount`, `draw_number`, `paid_at`. |
 | `room_winners` | 12 | `room_id`, `ticket_id`, `user_id`, `weight` — synced from `results`. |
-| `bot_room_schedules` | 0 | Scheduled bot joins (`user_id`, `room_template_id`, `ticket_count`, `scheduled_at`, `status`, results). |
+| `dev_room_schedules` | 0 | Scheduled dev player joins (`user_id`, `room_template_id`, `ticket_count`, `scheduled_at`, `status`, results). |
+| `dev_player_configs` | 0 | Per-user dev player settings from Dev Panel (`is_enabled`, `play_windows`, price bounds, `max_ticket_count`). |
 | `debug_room_status_log` | 228 | Audit of room status transitions (trigger-written). |
 
 Views: `v_active_pool`, `v_card_hits`, `v_row_hits`,
@@ -264,6 +265,6 @@ RLS is **enabled** on all `public` business tables. Key patterns:
 > SECURITY NOTE (from introspection advisory): 16 tables have **RLS disabled** —
 > `tournament.tournament_tick_log`, `tournament.template_reservations`,
 > `public.heartbeat_log_default`, `public.debug_room_status_log`,
-> `public.bot_room_schedules`, `public.app_runtime_flags`, and the
+> `public.dev_room_schedules`, `public.app_runtime_flags`, and the
 > `public.heartbeat_log_YYYYMMDD` partitions. These are exposed to anon/authenticated
 > via the Supabase client. This is the current state, reported as-is.

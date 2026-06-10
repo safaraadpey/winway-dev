@@ -2,7 +2,9 @@ export type GameRuntime = "legacy_db" | "hybrid" | "engine";
 export type EngineRole =
   | "scheduler"
   | "draw-processor"
-  | "tournament-orchestrator";
+  | "tournament-orchestrator"
+  | "dev-player-scheduler"
+  | "dev-player-processor";
 
 export interface EngineConfig {
   supabaseUrl: string;
@@ -37,6 +39,11 @@ export interface EngineConfig {
   drawJobStaleSec: number;
   /** How often to run stale-job reaper (milliseconds). */
   drawJobReapIntervalMs: number;
+  devPlayerSchedulerIntervalMs: number;
+  devPlayerProcessorIntervalMs: number;
+  devPlayerProcessorBatchLimit: number;
+  devPlayerSchedulerLockTtlSec: number;
+  devPlayerProcessorLockTtlSec: number;
 }
 
 function parseRoles(raw: string | undefined): Set<EngineRole> {
@@ -44,6 +51,8 @@ function parseRoles(raw: string | undefined): Set<EngineRole> {
     "scheduler",
     "draw-processor",
     "tournament-orchestrator",
+    "dev-player-scheduler",
+    "dev-player-processor",
   ];
   const set = new Set<EngineRole>();
   for (const part of (raw ?? "").split(",")) {
@@ -114,6 +123,21 @@ export function loadConfig(): EngineConfig {
     drawJobStaleSec: Number(process.env.DRAW_JOB_STALE_SEC ?? "120"),
     drawJobReapIntervalMs: Number(
       process.env.DRAW_JOB_REAP_INTERVAL_MS ?? "30000"
+    ),
+    devPlayerSchedulerIntervalMs: Number(
+      process.env.DEV_PLAYER_SCHEDULER_INTERVAL_MS ?? "60000"
+    ),
+    devPlayerProcessorIntervalMs: Number(
+      process.env.DEV_PLAYER_PROCESSOR_INTERVAL_MS ?? "60000"
+    ),
+    devPlayerProcessorBatchLimit: Number(
+      process.env.DEV_PLAYER_PROCESSOR_BATCH_LIMIT ?? "10"
+    ),
+    devPlayerSchedulerLockTtlSec: Number(
+      process.env.DEV_PLAYER_SCHEDULER_LOCK_TTL_SEC ?? "55"
+    ),
+    devPlayerProcessorLockTtlSec: Number(
+      process.env.DEV_PLAYER_PROCESSOR_LOCK_TTL_SEC ?? "55"
     ),
   };
 }

@@ -9,7 +9,7 @@
 | --- | --- | --- |
 | Player/User | `users`, `user_profiles`, `user_notes` | — |
 | Agent/Affiliation | `player_affiliation`, `invitation_links`, `player_signups`, `user_commissions` | `users` |
-| Game | `rooms`, `tickets`, `marks`, `draws`, `draw_jobs`, `results`, `room_winners`, `card_pools`, `card_pool_cards`, `card_numbers`, `room_templates`, `bot_room_schedules` | `users`, `card_pools` |
+| Game | `rooms`, `tickets`, `marks`, `draws`, `draw_jobs`, `results`, `room_winners`, `card_pools`, `card_pool_cards`, `card_numbers`, `room_templates`, `dev_room_schedules`, `dev_player_configs` | `users`, `card_pools` |
 | Financial | `wallets`, `transactions` | all domains (via `fn_wallet_apply_delta`) |
 | Commission | `commissions_log`, `tournament_commission_snapshots/payouts/log` | `tickets`, `rooms`, `player_affiliation`, `user_commissions`, `tournaments` |
 | Ding | `ding_balances`, `ding_transactions` | `draws`, `tickets`, `card_numbers`, `rooms`, `room_templates` |

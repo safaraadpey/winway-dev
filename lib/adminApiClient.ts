@@ -118,7 +118,7 @@ export async function callAdminApi<T = any>(
 export async function setUserRole(
   userId: string,
   newRole: 'player' | 'agent' | 'super' | 'admin',
-  adminSubRole?: 'manager' | 'finance' | 'support' | 'room' | null
+  adminSubRole?: 'manager' | 'finance' | 'support' | 'room' | 'dev_panel' | null
 ): Promise<void> {
   await callAdminApi('/api/admin/users/set-role', {
     method: 'POST',
@@ -135,7 +135,7 @@ export async function setUserRole(
  */
 export async function setAdminSubRole(
   adminId: string,
-  newSubRole: 'manager' | 'finance' | 'support' | 'room' | null
+  newSubRole: 'manager' | 'finance' | 'support' | 'room' | 'dev_panel' | null
 ): Promise<void> {
   await callAdminApi('/api/admin/admins/set-sub-role', {
     method: 'POST',

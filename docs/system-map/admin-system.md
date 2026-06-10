@@ -61,14 +61,14 @@ client. Base allowed roles for most routes: `admin`, `super`, `agent`.
 | `card-pool/{generate,status,active,history,download}` | GET/POST | `role='admin'` | `card_pools`, `card_pool_cards`, RPC `fn_generate_card_pool` | `generate_card_pool` |
 
 > Sub-role API accepts `null|finance|support|room` (frontend `manager` is mapped to
-> NULL in `set-role`). **`bot_admin` is never referenced in the frontend/API.**
+> NULL in `set-role`). **`dev_panel`** users are routed to `/dev-panel` (isolated Dev Panel).
 
 ## Permission model (as implemented)
 
 Two parallel systems:
 
 ### A. `admin_sub_role` (identity label) — `lib/auth-helpers.ts`
-- Code type: `'manager' | 'finance' | 'support' | 'room'` (no `bot_admin`).
+- Code type: `'manager' | 'finance' | 'support' | 'room' | 'dev_panel'`.
 - `admin_sub_role IS NULL` (DB "مدیر کل") or frontend `'manager'` = full access.
 - `canAccessSection('finance'|'support'|'room')`: NULL/`manager` see all; others only
   their own section.
@@ -124,12 +124,12 @@ Two parallel systems:
 ## Admin sub-role discrepancy (factual)
 | Source | Enum values |
 | --- | --- |
-| Live DB (`public.admin_sub_role`) | `finance`, `support`, `room`, `bot_admin` |
+| Live DB (`public.admin_sub_role`) | `finance`, `support`, `room`, `dev_panel` |
 | Winway migration `sql/migrations/add_admin_sub_role.sql` | `manager`, `finance`, `support`, `room` |
-| Frontend code (`auth-helpers.ts`) | `manager`, `finance`, `support`, `room` |
+| Frontend code (`auth-helpers.ts`) | `manager`, `finance`, `support`, `room`, `dev_panel` |
 
-The frontend treats NULL (and the legacy `manager`) as full manager; the live DB
-enum has `bot_admin` which no app code references. Recorded as-is.
+The frontend treats NULL (and the legacy `manager`) as full manager; `dev_panel`
+admins use the isolated Dev Panel at `/dev-panel`.
 
 ## Components (`components/admin/**`)
 - `TransactionsManager.tsx`: bulk cash desk via `transferWalletForUsersBulk`

@@ -12,7 +12,7 @@ export interface DashboardUserInfo {
   role: "admin" | "agent" | "super" | "player";
   referralCode: string | null;
   parentId?: string | null;
-  adminSubRole?: "manager" | "finance" | "support" | "room" | null; // فقط برای role="admin"
+  adminSubRole?: "manager" | "finance" | "support" | "room" | "dev_panel" | null; // فقط برای role="admin"
 }
 
 export interface FinancialSummary {

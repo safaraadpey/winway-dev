@@ -44,7 +44,27 @@ import { supabase } from './supabaseClient';
 /**
  * نوع نقش فرعی ادمین
  */
-export type AdminSubRole = 'manager' | 'finance' | 'support' | 'room';
+export type AdminSubRole = 'manager' | 'finance' | 'support' | 'room' | 'dev_panel';
+
+export function isDevPanelSubRole(
+  adminSubRole: AdminSubRole | string | null | undefined
+): boolean {
+  return adminSubRole === 'dev_panel';
+}
+
+export function canAccessAdminPanel(
+  role: UserRole | string | undefined,
+  adminSubRole: AdminSubRole | string | null | undefined
+): boolean {
+  return role === 'admin' && !isDevPanelSubRole(adminSubRole);
+}
+
+export function canAccessDevPanel(
+  role: UserRole | string | undefined,
+  adminSubRole: AdminSubRole | string | null | undefined
+): boolean {
+  return role === 'admin' && isDevPanelSubRole(adminSubRole);
+}
 
 /**
  * نوع نقش اصلی کاربر

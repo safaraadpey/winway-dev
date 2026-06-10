@@ -107,6 +107,9 @@ DECLARE
   v_generated integer := 0;
   v_new_built integer;
   v_now timestamptz := now();
+  -- UK Housie: col 1 = 1-9, col 2 = 10-19, ..., col 9 = 80-90
+  v_col_mins constant integer[] := ARRAY[1,10,20,30,40,50,60,70,80];
+  v_col_maxs constant integer[] := ARRAY[9,19,29,39,49,59,69,79,90];
 BEGIN
   IF p_batch_size IS NULL OR p_batch_size <= 0 THEN
     RAISE EXCEPTION 'p_batch_size must be positive';
@@ -164,8 +167,8 @@ BEGIN
       -- generate numbers for selected positions
       FOR v_pos_index IN 1..5 LOOP
         v_col_no := v_row_positions[v_pos_index];
-        v_col_min := (v_col_no - 1) * 10 + 1;
-        v_col_max := v_col_no * 10;
+        v_col_min := v_col_mins[v_col_no];
+        v_col_max := v_col_maxs[v_col_no];
 
         v_attempts := 0;
         LOOP
@@ -222,8 +225,8 @@ BEGIN
     -- ensure each column has at least one number
     FOR v_col_no IN 1..9 LOOP
       IF NOT v_col_has_number[v_col_no] THEN
-        v_col_min := (v_col_no - 1) * 10 + 1;
-        v_col_max := v_col_no * 10;
+        v_col_min := v_col_mins[v_col_no];
+        v_col_max := v_col_maxs[v_col_no];
         v_attempts := 0;
         LOOP
           v_attempts := v_attempts + 1;

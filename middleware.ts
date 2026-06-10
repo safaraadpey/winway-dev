@@ -22,7 +22,10 @@ export function middleware(req: NextRequest) {
   const adminHost = process.env.ADMIN_APP_HOST || DEFAULT_ADMIN_HOST;
 
   const isMainHost = host === mainHost || host === `www.${mainHost}`;
-  if (isMainHost && pathname.startsWith("/admin")) {
+  if (
+    isMainHost &&
+    (pathname.startsWith("/admin") || pathname.startsWith("/dev-panel"))
+  ) {
     return NextResponse.redirect(buildRedirectUrl(req, adminHost));
   }
 

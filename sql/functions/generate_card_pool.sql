@@ -151,8 +151,8 @@ BEGIN
           v_col_no := v_row_positions[v_pos_index];
           
           -- تعیین محدوده اعداد برای این ستون
-          v_col_min := (v_col_no - 1) * 10 + 1;
-          v_col_max := v_col_no * 10;
+          v_col_min := (ARRAY[1,10,20,30,40,50,60,70,80])[v_col_no];
+          v_col_max := (ARRAY[9,19,29,39,49,59,69,79,90])[v_col_no];
           
           -- تولید عدد تا زمانی که یکتا باشد
           v_attempts := 0;
@@ -216,8 +216,8 @@ BEGIN
         IF NOT v_col_has_number[v_col_no] THEN
           -- اگر ستونی عدد ندارد، باید یک عدد اضافه کنیم
           -- این حالت نادر است اما باید رفع شود
-          v_col_min := (v_col_no - 1) * 10 + 1;
-          v_col_max := v_col_no * 10;
+          v_col_min := (ARRAY[1,10,20,30,40,50,60,70,80])[v_col_no];
+          v_col_max := (ARRAY[9,19,29,39,49,59,69,79,90])[v_col_no];
           
           v_attempts := 0;
           LOOP

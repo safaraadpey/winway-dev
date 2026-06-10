@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. Validation new_sub_role
-    const validSubRoles = [null, 'finance', 'support', 'room']
+    const validSubRoles = [null, 'finance', 'support', 'room', 'dev_panel']
     if (!validSubRoles.includes(new_sub_role)) {
       return NextResponse.json(
         { ok: false, error: 'validation_error', message: 'invalid sub_role' },

@@ -430,7 +430,7 @@ export async function loadDashboardUserInfo(): Promise<DashboardUserInfo | null>
   const rawSubRole = (dbUser as any)?.admin_sub_role ?? null;
   const loweredSubRole =
     rawSubRole && typeof rawSubRole === "string" ? rawSubRole.toLowerCase() : null;
-  const allowedSubRoles = ["manager", "finance", "support", "room"];
+  const allowedSubRoles = ["manager", "finance", "support", "room", "dev_panel"];
   const adminSubRole =
     loweredSubRole !== null && allowedSubRoles.includes(loweredSubRole)
     ? (loweredSubRole as DashboardUserInfo["adminSubRole"])

@@ -136,7 +136,7 @@ enforces non-negative unless `allow_negative`).
 | Room templates | `app/admin/room-templates` (RLS `is_admin_active`) | Changes future room economics. |
 | Card pool | `app/api/admin/card-pool/*`, `fn_generate_card_pool`, `activate_card_pool` | Changes the active deck for new rooms. |
 | Banners | `entry_banners` (manager-only writes) | Login banners shown to users. |
-| Bot schedules | `bot_room_schedules`, `fn_pick_bot_room_schedules` | Schedules bot joins. |
+| Dev player schedules | `dev_room_schedules`, `fn_pick_dev_room_schedules` | Schedules dev player joins. |
 
 Sensitive admin operations are recorded in `admin_audit_log`
 (`action`, `target_table`, `target_id`, `payload`, ip/user-agent).

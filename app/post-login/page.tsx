@@ -115,6 +115,9 @@ export default function PostLoginPage() {
                 case "room":
                   redirectToAdmin("/admin/room-templates");
                   break;
+                case "dev_panel":
+                  redirectToAdmin("/dev-panel/dashboard");
+                  break;
                 case "manager":
                 default:
                   // مدیر کل یا بدون sub_role

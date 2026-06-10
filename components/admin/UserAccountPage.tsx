@@ -393,7 +393,11 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
           ? "مدیر مالی"
           : adminSubRole === "support"
           ? "مدیر پشتیبانی"
-          : "مدیر اتاق‌ها"
+          : adminSubRole === "room"
+          ? "مدیر اتاق‌ها"
+          : adminSubRole === "dev_panel"
+          ? "Dev Panel"
+          : "ادمین"
         : roleLabels[newRole];
 
     setPendingRoleChange({
@@ -479,6 +483,7 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
           { value: "finance", label: "مدیر مالی" },
           { value: "support", label: "مدیر پشتیبانی" },
           { value: "room", label: "مدیر اتاق‌ها" },
+          { value: "dev_panel", label: "Dev Panel" },
         ]
       },
     ];
@@ -882,6 +887,8 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
                         ? "مدیر پشتیبانی"
                         : user.adminSubRole === "room"
                         ? "مدیر اتاق‌ها"
+                        : user.adminSubRole === "dev_panel"
+                        ? "Dev Panel"
                         : "ادمین"
                       : "نامشخص"}
                   </span>
@@ -1282,6 +1289,7 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
                 { value: "finance" as AdminSubRole, label: "مدیر مالی" },
                 { value: "support" as AdminSubRole, label: "مدیر پشتیبانی" },
                 { value: "room" as AdminSubRole, label: "مدیر اتاق‌ها" },
+                { value: "dev_panel" as AdminSubRole, label: "Dev Panel" },
               ].map((subRole) => (
                 <button
                   key={subRole.value || "manager"}

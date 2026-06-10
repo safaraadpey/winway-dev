@@ -31,6 +31,8 @@ function fail(op: string, message: string): never {
   throw new Error(`repo ${op}: ${message}`);
 }
 
+export { DevPlayerRepo } from "./devPlayerRepo.js";
+
 export class GameRepo {
   constructor(private readonly db: SupabaseAdmin) {}
 

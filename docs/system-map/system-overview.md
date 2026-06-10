@@ -21,7 +21,7 @@ A real-time **Housie/90-ball Bingo** platform ("DingMoney / winway") with:
 | Web app | Next.js 14 (`app/`, `components/`, `lib/`, `services/`, `src/`) | Player, agent, and admin UIs + API routes. Talks to Supabase. |
 | Database | Supabase Postgres | Source of truth for ALL game/financial state. Holds business logic in PL/pgSQL across `public`, `game_core`, `game_finance`, `game_pool`, `tournament` schemas. |
 | Scheduler | `pg_cron` jobs | The live engine: room ticks, draw processing, tournament ticks, janitor, pool build (see `game-engine-reality.md`). |
-| Edge functions | Supabase Edge | `bot-schedule-worker` (active, 1/min); `draw-worker` (inactive). |
+| Edge functions | Supabase Edge | `dev-schedule-worker` (active, 1/min); `draw-worker` (inactive). |
 | Node game-engine | `game-engine/` (TypeScript) | Standalone draw-processor + worker scaffold. Currently dormant (`GAME_RUNTIME=legacy_db`); only draw-processor implemented. |
 | Redis (optional) | ioredis / Upstash REST | Only used by the Node engine for a draw-processor leader lock. |
 
@@ -40,8 +40,8 @@ A real-time **Housie/90-ball Bingo** platform ("DingMoney / winway") with:
 
 - `users.role` ∈ {`admin`, `super`, `agent`, `player`}; `users.parent_id` builds the
   tree; `players` also resolved into `player_affiliation(user_id → agent_id, super_id)`.
-- `admin_sub_role` ∈ {`finance`, `support`, `room`, `bot_admin`} (DB) / treated by
-  the app as {`manager`(=NULL), `finance`, `support`, `room`}; NULL = full manager.
+- `admin_sub_role` ∈ {`finance`, `support`, `room`, `dev_panel`} (DB) / treated by
+  the app as {`manager`(=NULL), `finance`, `support`, `room`, `dev_panel`}; NULL = full manager.
 - A specific super-admin is recognized by username **`adminzero`** in several flows.
 
 ## The eight requested systems — where they live
@@ -77,8 +77,8 @@ A real-time **Housie/90-ball Bingo** platform ("DingMoney / winway") with:
   `tournament-orchestrator` are stubs. The DB cron is the live engine.
 - `trg_rooms_after_live` and `trg_tickets_after_paid` triggers are **no-ops**.
 - 16 tables have **RLS disabled** (heartbeat partitions, debug/log/runtime tables,
-  `bot_room_schedules`, `app_runtime_flags`, `tournament.*` diagnostics) — see
+  `dev_room_schedules`, `app_runtime_flags`, `tournament.*` diagnostics) — see
   `database-domains.md` §5.
-- DB enum `admin_sub_role` includes `bot_admin`, which no app code references; the
-  app uses a `manager` alias that the DB stores as NULL.
+- DB enum `admin_sub_role` includes `dev_panel` for the isolated Dev Panel (`/dev-panel`);
+  full-access admins use `admin_sub_role IS NULL` (app alias `manager`).
 - `app/player/wallet` and `app/ding` are placeholder pages ("در حال توسعه").

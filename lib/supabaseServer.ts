@@ -101,6 +101,17 @@ export async function verifyManagerAccess(userId: string): Promise<boolean> {
 }
 
 /**
+ * فقط ادمین با sub_role = dev_panel
+ */
+export async function verifyDevPanelAccess(userId: string): Promise<boolean> {
+  const adminInfo = await verifyAdminAccess(userId)
+  if (!adminInfo || !adminInfo.isAdmin) {
+    return false
+  }
+  return adminInfo.adminSubRole === 'dev_panel'
+}
+
+/**
  * Helper function برای استخراج user از request
  * از Authorization header (Bearer token) استفاده می‌کند
  * 
@@ -339,6 +350,23 @@ export function createServiceClient() {
  * @returns context شامل session, adminUser, supabase (service client)
  * @throws Error اگر کاربر لاگین نیست یا admin نیست
  */
+export async function getDevPanelContextOrThrow(request: Request): Promise<{
+  session: {
+    user: { id: string };
+    adminUser: { id: string; role: string; admin_sub_role: string | null };
+    role: string;
+    adminSubRole: string | null;
+  };
+  supabase: ReturnType<typeof createServiceClient>;
+}> {
+  const context = await getAdminContextOrThrow(request)
+  const allowed = await verifyDevPanelAccess(context.session.user.id)
+  if (!allowed) {
+    throw new Error('FORBIDDEN_DEV_PANEL')
+  }
+  return context
+}
+
 export async function getAdminContextOrThrow(request: Request): Promise<{
   session: {
     user: { id: string };

@@ -24,7 +24,7 @@ Verified from `cron.job`:
 | 16 | every 5s | `SELECT tournament.fn_tick_due_tournaments()` | ✅ |
 | 19 | daily 03:10 | `fn_maintain_heartbeat_log_partitions(2,7)` | ✅ |
 | 20 | daily 03:30 | `fn_cleanup_retention()` | ✅ |
-| 21 | every minute | http_post → edge function `bot-schedule-worker` | ✅ |
+| 21 | every minute | http_post → edge function `dev-schedule-worker` | ✅ |
 | 5 | every 1s | http_post → edge function `draw-worker` | ❌ (inactive) |
 
 **Consequences (current behavior):**
@@ -38,7 +38,7 @@ Verified from `cron.job`:
   cancels stuck `playing` rooms with no consumed tickets (releasing holds), and
   re-settles stuck `settling` rooms.
 - **Card pool**: job 15 incrementally builds pools (`fn_generate_card_pool_step`).
-- **Bots**: job 21 invokes the `bot-schedule-worker` edge function each minute.
+- **Dev players**: job 21 invokes the `dev-schedule-worker` edge function each minute.
 - The external `draw-worker` edge function (job 5) is **disabled**.
 
 ### 2. Node `game-engine` service (`game-engine/src`) — mostly scaffold
@@ -117,7 +117,7 @@ authoritative. This is the current production reality.
 | Tournament tick | cron `fn_tick_due_tournaments` | 5s |
 | Card pool build | cron `fn_generate_card_pool_step` | 30s |
 | Stuck-room janitor | cron `fn_janitor_sweep` | 60s |
-| Bot schedules | edge fn `bot-schedule-worker` | 60s |
+| Dev player schedules | edge fn `dev-schedule-worker` | 60s |
 | Heartbeat partition maint. | cron `fn_maintain_heartbeat_log_partitions` | daily |
 | Retention cleanup | cron `fn_cleanup_retention` | daily |
 | (Disabled) external draw worker | edge fn `draw-worker` | inactive |

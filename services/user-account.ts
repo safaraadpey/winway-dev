@@ -999,7 +999,7 @@ export async function toggleUserSuspension(userId: string): Promise<{ success: b
 export async function changeUserRole(
   userId: string,
   newRole: "player" | "agent" | "super" | "admin",
-  adminSubRole?: "manager" | "finance" | "support" | "room" | null
+  adminSubRole?: "manager" | "finance" | "support" | "room" | "dev_panel" | null
 ): Promise<{ success: boolean; error?: string }> {
   try {
     // استفاده از Admin API به جای direct database access

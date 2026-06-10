@@ -14,7 +14,7 @@ export interface AdminSummary {
   permissions?: AdminPermissions; // دسترسی‌های admin
 }
 
-export type AdminSubRoleFilter = "all" | "manager" | "finance" | "support" | "room";
+export type AdminSubRoleFilter = "all" | "manager" | "finance" | "support" | "room" | "dev_panel";
 
 export interface AdminsListResult {
   admins: AdminSummary[];
