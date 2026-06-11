@@ -184,6 +184,8 @@ describe("RoomRuntimeState", () => {
     state.syncDrawSchedulerState([1, 2, 3], [2]);
     assert.deepEqual([...state.getDrawnNumbers()], [1, 2, 3]);
     assert.equal(state.hasUnprocessedDraw(), true);
+    assert.equal(state.hasEarlierUnprocessedDraw(3), true);
+    assert.equal(state.hasEarlierUnprocessedDraw(2), false);
     state.syncDrawSchedulerState([1, 2, 3], []);
     assert.equal(state.hasUnprocessedDraw(), false);
   });

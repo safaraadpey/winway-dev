@@ -212,6 +212,13 @@ export class RoomRuntimeState {
     return this.unprocessedDrawNumbers.size > 0;
   }
 
+  hasEarlierUnprocessedDraw(drawNumber: number): boolean {
+    for (const n of this.unprocessedDrawNumbers) {
+      if (n < drawNumber) return true;
+    }
+    return false;
+  }
+
   recordDrawInserted(drawNumber: number): void {
     if (!this.drawnNumbers.includes(drawNumber)) {
       this.drawnNumbers.push(drawNumber);

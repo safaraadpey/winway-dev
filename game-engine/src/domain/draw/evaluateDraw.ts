@@ -97,25 +97,15 @@ export async function applyMarksAndEvaluateWithState(
     opts.syncFromDb === true ||
     (opts.syncFromDb !== false &&
       state.needsReconcile(checkpointEvery, drawNumber));
+  const shouldRefreshAuthority =
+    !shouldReconcile && state.room.first_line_draw_number == null;
   const now = new Date().toISOString();
   const breakdown = emptyBreakdown();
-
-  const authorityStep = await timedStep(() =>
-    refreshRoomAuthorityFromDb(repo, state)
-  );
-  breakdown.getResults = authorityStep.timing;
 
   if (shouldReconcile) {
     const syncStep = await timedStep(() => reconcileRuntimeStateFromDb(repo, state));
     breakdown.getMarksForTickets = syncStep.timing;
-    breakdown.getResults = {
-      startTime: authorityStep.timing.startTime,
-      endTime: syncStep.timing.endTime,
-      durationMs:
-        Math.round(
-          (authorityStep.timing.durationMs + syncStep.timing.durationMs) * 100
-        ) / 100,
-    };
+    breakdown.getResults = syncStep.timing;
     state.noteReconcileDone();
     log.info("room state reconciled from db", {
       roomId: state.roomId,
@@ -123,6 +113,11 @@ export async function applyMarksAndEvaluateWithState(
       drawsProcessed: state.drawsProcessed,
       outOfOrder,
     });
+  } else if (shouldRefreshAuthority) {
+    const authorityStep = await timedStep(() =>
+      refreshRoomAuthorityFromDb(repo, state)
+    );
+    breakdown.getResults = authorityStep.timing;
   }
 
   const markingEngine = opts.markingEngine ?? "scan";

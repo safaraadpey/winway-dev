@@ -6,13 +6,18 @@
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import type { Logger } from "../../metrics/logger.js";
 import type { GameRepo } from "../../repositories/index.js";
+import type { RoomRuntimeState } from "../../state/room-state.js";
 import type { DrawJob } from "./types.js";
 
 export async function shouldDeferDrawJob(
   repo: GameRepo,
   roomId: string,
-  drawNumber: number
+  drawNumber: number,
+  state?: RoomRuntimeState
 ): Promise<boolean> {
+  if (state) {
+    return state.hasEarlierUnprocessedDraw(drawNumber);
+  }
   return repo.hasEarlierUnprocessedDraws(roomId, drawNumber);
 }
 

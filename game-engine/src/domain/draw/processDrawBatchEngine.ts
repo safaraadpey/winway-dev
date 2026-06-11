@@ -25,7 +25,7 @@ import type { GameRedis } from "../../redis/types.js";
 import { GameRepo } from "../../repositories/index.js";
 import type { RoomStateManager } from "../../state/room-state.manager.js";
 import { deferDrawJobToQueue, shouldDeferDrawJob } from "./drawJobOrdering.js";
-import { applyMarksAndEvaluate } from "./evaluateDraw.js";
+import { applyMarksAndEvaluateWithState } from "./evaluateDraw.js";
 import { pickDrawJobs } from "./pickDrawJobs.js";
 import { processJobsByRoom } from "./processJobsByRoom.js";
 import { type DrawBatchResult, type DrawJob, EMPTY_BATCH } from "./types.js";
@@ -94,17 +94,26 @@ export async function processDrawBatchEngine(
       const queueWaitMs = Math.max(0, processingStartedMs - Date.parse(job.created_at));
 
       try {
-        if (await shouldDeferDrawJob(repo, job.room_id, job.draw_number)) {
+        const roomState = await stateManager.ensureLoaded(job.room_id);
+
+        if (
+          await shouldDeferDrawJob(
+            repo,
+            job.room_id,
+            job.draw_number,
+            roomState
+          )
+        ) {
           stateManager.requestReconcile(job.room_id);
           return deferDrawJobToQueue(supabase, log, job);
         }
 
-        const evalResult = await applyMarksAndEvaluate(
+        const evalResult = await applyMarksAndEvaluateWithState(
           supabase,
           repo,
           log,
+          roomState,
           stateManager,
-          job.room_id,
           job.draw_number,
           {
             persist: false,
@@ -139,7 +148,7 @@ export async function processDrawBatchEngine(
         );
         breakdown.rpc_finalize_engine_draw_job = finalizeStep.timing;
 
-        const state = stateManager.get(job.room_id);
+        const state = roomState;
         if (state) {
           const dingStep = await timedStep(() =>
             aggregateDingForDrawFromState(
