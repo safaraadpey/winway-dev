@@ -122,7 +122,7 @@ function benchBitmask(
 
   const t0 = performance.now();
   for (const n of drawSequence) {
-    const markResult = applyMarkForDrawBitmask({
+    applyMarkForDrawBitmask({
       drawNumber: n,
       numberIndex: registry.numberIndex,
       assignmentsByCardId: assignments.assignmentsByCardId,
