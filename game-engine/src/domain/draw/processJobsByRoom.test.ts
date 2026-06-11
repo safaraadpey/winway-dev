@@ -21,18 +21,18 @@ function job(
 }
 
 describe("groupJobsByRoom", () => {
-  it("orders jobs by created_at within a room, not ball number", () => {
+  it("orders jobs by draw_number within a room (created_at tiebreaker)", () => {
     const room = "room-a";
     const grouped = groupJobsByRoom([
-      job(2, room, 43, "2026-06-10T14:29:10.672Z"),
-      job(1, room, 19, "2026-06-10T14:29:09.395Z"),
+      job(2, room, 55, "2026-06-10T14:29:10.672Z"),
+      job(1, room, 8, "2026-06-10T14:29:11.000Z"),
     ]);
 
     const list = grouped.get(room);
     assert.ok(list);
     assert.deepEqual(
       list.map((j) => j.draw_number),
-      [19, 43]
+      [8, 55]
     );
   });
 });

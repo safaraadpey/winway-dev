@@ -9,6 +9,8 @@
  * stamps processed_at. The DB trigger trg_aggregate_ding_on_processed_at is disabled.
  */
 
+import type { MarkingEngineMode } from "../../config/env.js";
+import type { GlobalCardRegistry } from "../../core/card-registry/types.js";
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import { aggregateDingForDrawFromState } from "../ding/index.js";
 import { settleRoomIfNeeded } from "../../finance/settleRoom.js";
@@ -22,6 +24,7 @@ import { redisKeys } from "../../redis/keys.js";
 import type { GameRedis } from "../../redis/types.js";
 import { GameRepo } from "../../repositories/index.js";
 import type { RoomStateManager } from "../../state/room-state.manager.js";
+import { deferDrawJobToQueue, shouldDeferDrawJob } from "./drawJobOrdering.js";
 import { applyMarksAndEvaluate } from "./evaluateDraw.js";
 import { pickDrawJobs } from "./pickDrawJobs.js";
 import { processJobsByRoom } from "./processJobsByRoom.js";
@@ -33,6 +36,10 @@ export interface ProcessDrawBatchEngineOptions {
   roomConcurrency: number;
   redis?: GameRedis | null;
   drawRoomLockTtlSec?: number;
+  markingEngine?: MarkingEngineMode;
+  cardRegistry?: GlobalCardRegistry | null;
+  markingBitmaskAuthorityAllowed?: boolean;
+  markingParitySummaryEvery?: number;
 }
 
 export async function processDrawBatchEngine(
@@ -87,6 +94,11 @@ export async function processDrawBatchEngine(
       const queueWaitMs = Math.max(0, processingStartedMs - Date.parse(job.created_at));
 
       try {
+        if (await shouldDeferDrawJob(repo, job.room_id, job.draw_number)) {
+          stateManager.requestReconcile(job.room_id);
+          return deferDrawJobToQueue(supabase, log, job);
+        }
+
         const evalResult = await applyMarksAndEvaluate(
           supabase,
           repo,
@@ -94,7 +106,14 @@ export async function processDrawBatchEngine(
           stateManager,
           job.room_id,
           job.draw_number,
-          { persist: false, deferSettlement: true }
+          {
+            persist: false,
+            deferSettlement: true,
+            markingEngine: opts.markingEngine,
+            cardRegistry: opts.cardRegistry,
+            markingBitmaskAuthorityAllowed: opts.markingBitmaskAuthorityAllowed,
+            markingParitySummaryEvery: opts.markingParitySummaryEvery,
+          }
         );
         const breakdown = { ...evalResult.breakdown };
         breakdown.rpc_pick_draw_jobs = {

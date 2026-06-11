@@ -27,4 +27,26 @@ export const redisKeys = {
   /** Serializes draw-job processing for one room across engine replicas. */
   drawRoomProcessor: (roomId: string) =>
     `${REDIS_PREFIX}:lock:draw-room:${roomId}`,
+
+  // ---- Phase 1: room state replication (RAM authoritative; Redis for recovery) ----
+
+  /** Room game status + scheduler fields (HASH). */
+  roomStateMeta: (roomId: string) => `${REDIS_PREFIX}:room:${roomId}:meta`,
+
+  /** Per-assignment 15-bit masks (HASH: ticketId → mask uint). */
+  roomCardMasks: (roomId: string) => `${REDIS_PREFIX}:room:${roomId}:masks`,
+
+  /** Drawn numbers in order (LIST). */
+  roomDrawHistory: (roomId: string) => `${REDIS_PREFIX}:room:${roomId}:draws`,
+
+  /** Line/full winner ticket ids (SET per win type). */
+  roomLineWinners: (roomId: string) => `${REDIS_PREFIX}:room:${roomId}:winners:line`,
+  roomFullWinners: (roomId: string) => `${REDIS_PREFIX}:room:${roomId}:winners:full`,
+
+  /** cardId → ticketIds JSON blob for fast room recovery. */
+  roomAssignmentIndex: (roomId: string) =>
+    `${REDIS_PREFIX}:room:${roomId}:assignments`,
+
+  /** Global card registry version stamp (STRING). */
+  cardRegistryVersion: () => `${REDIS_PREFIX}:cache:card-registry:version`,
 } as const;

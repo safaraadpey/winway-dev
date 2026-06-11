@@ -2,6 +2,7 @@ import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import type { Logger } from "../../metrics/logger.js";
 import { GameRepo } from "../../repositories/index.js";
 import { aggregateDingForDraw } from "../ding/index.js";
+import { deferDrawJobToQueue, shouldDeferDrawJob } from "./drawJobOrdering.js";
 import { pickDrawJobs } from "./pickDrawJobs.js";
 import { processJobsByRoom } from "./processJobsByRoom.js";
 import { type DrawBatchResult, type DrawJob, EMPTY_BATCH } from "./types.js";
@@ -42,6 +43,10 @@ export async function processDrawBatch(
     opts.roomConcurrency,
     async (job) => {
       try {
+        if (await shouldDeferDrawJob(repo, job.room_id, job.draw_number)) {
+          return deferDrawJobToQueue(supabase, log, job);
+        }
+
         await applyDraw(supabase, job);
         await completeJob(supabase, job);
         await stampDrawProcessed(supabase, log, job);

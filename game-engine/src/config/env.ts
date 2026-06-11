@@ -1,4 +1,7 @@
 export type GameRuntime = "legacy_db" | "hybrid" | "engine";
+
+/** Marking engine mode (Phase 1 — parallel engines). */
+export type MarkingEngineMode = "scan" | "bitmask" | "dual";
 export type EngineRole =
   | "scheduler"
   | "draw-processor"
@@ -50,6 +53,18 @@ export interface EngineConfig {
   devPlayerProcessorBatchLimit: number;
   devPlayerSchedulerLockTtlSec: number;
   devPlayerProcessorLockTtlSec: number;
+  /**
+   * Marking engine: scan (legacy), bitmask (O(affected_cards)), dual (both + compare).
+   * Default scan — production unchanged until benchmarks pass.
+   */
+  markingEngine: MarkingEngineMode;
+  /**
+   * When false, MARKING_ENGINE=bitmask is downgraded to dual shadow.
+   * Keep false until 100% live-traffic parity is proven.
+   */
+  markingBitmaskAuthorityAllowed: boolean;
+  /** Emit parity summary log every N dual-mode validations (0 = end-of-batch only). */
+  markingParitySummaryEvery: number;
 }
 
 function parseRoles(raw: string | undefined): Set<EngineRole> {
@@ -77,6 +92,11 @@ function requireEnv(name: string): string {
 function parseRuntime(raw: string | undefined): GameRuntime {
   if (raw === "hybrid" || raw === "engine" || raw === "legacy_db") return raw;
   return "legacy_db";
+}
+
+function parseMarkingEngine(raw: string | undefined): MarkingEngineMode {
+  if (raw === "bitmask" || raw === "dual") return raw;
+  return "scan";
 }
 
 function optionalEnv(name: string): string | null {
@@ -149,6 +169,12 @@ export function loadConfig(): EngineConfig {
     ),
     devPlayerProcessorLockTtlSec: Number(
       process.env.DEV_PLAYER_PROCESSOR_LOCK_TTL_SEC ?? "55"
+    ),
+    markingEngine: parseMarkingEngine(process.env.MARKING_ENGINE),
+    markingBitmaskAuthorityAllowed:
+      process.env.MARKING_BITMASK_AUTHORITY_ALLOWED === "true",
+    markingParitySummaryEvery: Number(
+      process.env.MARKING_PARITY_SUMMARY_EVERY ?? "500"
     ),
   };
 }

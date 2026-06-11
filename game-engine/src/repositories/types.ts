@@ -49,6 +49,21 @@ export interface CardNumberRow {
   row_no: number;
 }
 
+export interface CardDefinitionMaskRow {
+  pool_card_id: string;
+  line1_mask: number;
+  line2_mask: number;
+  line3_mask: number;
+  full_mask: number;
+  cell_count: number;
+}
+
+export interface CardNumberIndexRow {
+  value: number;
+  pool_card_id: string;
+  bit_position: number;
+}
+
 export interface ResultRow {
   id: string;
   room_id: string;

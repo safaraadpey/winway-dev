@@ -96,10 +96,29 @@ export interface DevPlayerTemplateRoomLimitPayload {
   max_dev_players_per_room: number | null;
 }
 
+export interface DevPlayerRuntimeStats {
+  activeRoomsCount: number;
+  busyDevPlayersCount: number;
+  idleDevPlayersCount: number;
+  pendingSchedulesCount: number;
+  schedulerPhase: "work" | "pause" | null;
+  updatedAt: string;
+}
+
+export const DEFAULT_DEV_PLAYER_RUNTIME_STATS: DevPlayerRuntimeStats = {
+  activeRoomsCount: 0,
+  busyDevPlayersCount: 0,
+  idleDevPlayersCount: 0,
+  pendingSchedulesCount: 0,
+  schedulerPhase: null,
+  updatedAt: new Date(0).toISOString(),
+};
+
 export interface DevPlayerSettingsResult {
   settings: DevPlayerSettings;
   activePlayers: DevPlayerActiveRow[];
   activePlayerCount: number;
+  runtimeStats: DevPlayerRuntimeStats;
   templates: DevPlayerTemplateOption[];
   joinPresets: DevPlayerJoinPreset[];
 }

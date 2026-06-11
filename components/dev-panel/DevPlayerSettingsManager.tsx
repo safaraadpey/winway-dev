@@ -13,6 +13,7 @@ import {
 import type { DevPlayWindow } from "@/src/types/dev-players";
 import {
   DEFAULT_DEV_PLAYER_SETTINGS,
+  DEFAULT_DEV_PLAYER_RUNTIME_STATS,
   DEFAULT_JOIN_PRESET_PLAY_WINDOWS,
   DEFAULT_PROCESSOR_TICK_INTERVAL_SECONDS,
   DEFAULT_SCHEDULER_TICK_INTERVAL_SECONDS,
@@ -26,6 +27,7 @@ import {
   DEFAULT_TEMPLATE_MAX_JOINS_PER_TICK,
   type DevPlayerActiveRow,
   type DevPlayerJoinPreset,
+  type DevPlayerRuntimeStats,
   type DevPlayerSettings,
   type DevPlayerTemplateOption,
 } from "@/src/types/dev-player-settings";
@@ -298,33 +300,155 @@ function TemplateBadges({ template }: { template: DevPlayerTemplateOption }) {
   );
 }
 
+function ToggleSwitch({
+  checked,
+  disabled,
+  loading,
+  onChange,
+  ariaLabel,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  loading?: boolean;
+  onChange: (value: boolean) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      disabled={disabled || loading}
+      onClick={() => onChange(!checked)}
+      className={`relative mt-0.5 h-6 w-12 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+        checked ? "bg-violet-600" : "bg-gray-600"
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+          checked ? "translate-x-6" : "translate-x-0"
+        } ${loading ? "opacity-70" : ""}`}
+      />
+    </button>
+  );
+}
+
+function DevPlayerRuntimeReport({
+  stats,
+  systemEnabled,
+  schedulerEnabled,
+  activePlayerCount,
+  refreshing,
+  onRefresh,
+}: {
+  stats: DevPlayerRuntimeStats;
+  systemEnabled: boolean;
+  schedulerEnabled: boolean;
+  activePlayerCount: number;
+  refreshing: boolean;
+  onRefresh: () => void;
+}) {
+  const statItems = [
+    { label: "روم فعال", value: stats.activeRoomsCount },
+    { label: "پلیر مشغول", value: stats.busyDevPlayersCount },
+    { label: "پلیر آماده", value: stats.idleDevPlayersCount },
+    { label: "job در صف", value: stats.pendingSchedulesCount },
+  ];
+
+  return (
+    <div className="rounded-xl border border-violet-900/40 bg-violet-950/10 px-3 py-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="text-sm font-medium text-violet-100">گزارش Dev Mode</div>
+          <p className="mt-1 text-xs text-gray-400">
+            {systemEnabled
+              ? `${activePlayerCount.toLocaleString("fa-IR")} پلیر فعال در config`
+              : "سیستم خاموش است — آمار زنده به‌روز نمی‌شود."}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={refreshing || !systemEnabled}
+          aria-label="بروزرسانی گزارش"
+          className="shrink-0 rounded-lg border border-gray-700 px-2 py-1 text-xs text-violet-200 transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {refreshing ? "..." : "↻"}
+        </button>
+      </div>
+
+      {systemEnabled ? (
+        <>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {statItems.map((item) => (
+              <div
+                key={item.label}
+                className="rounded-lg border border-gray-800 bg-[#151515] px-3 py-2"
+              >
+                <div className="text-[11px] text-gray-400">{item.label}</div>
+                <div className="mt-0.5 text-lg font-semibold text-white">
+                  {item.value.toLocaleString("fa-IR")}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+            {schedulerEnabled && stats.schedulerPhase ? (
+              <span
+                className={`rounded-full px-2 py-0.5 ${
+                  stats.schedulerPhase === "work"
+                    ? "bg-emerald-900/40 text-emerald-200"
+                    : "bg-amber-900/40 text-amber-200"
+                }`}
+              >
+                Scheduler: {stats.schedulerPhase === "work" ? "فعالیت" : "وقفه"}
+              </span>
+            ) : null}
+            <span>
+              آخرین بروزرسانی:{" "}
+              {new Date(stats.updatedAt).toLocaleTimeString("fa-IR", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              })}
+            </span>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function ToggleRow({
   label,
   description,
   checked,
   disabled,
+  loading,
   onChange,
 }: {
   label: string;
   description?: string;
   checked: boolean;
   disabled?: boolean;
+  loading?: boolean;
   onChange: (value: boolean) => void;
 }) {
   return (
-    <label className="flex items-start justify-between gap-3 rounded-xl border border-gray-800 bg-[#1a1a1a] px-3 py-3">
-      <div>
+    <div className="flex items-start justify-between gap-3 rounded-xl border border-gray-800 bg-[#1a1a1a] px-3 py-3">
+      <div className="min-w-0 flex-1">
         <div className="text-sm font-medium text-white">{label}</div>
         {description && <div className="mt-1 text-xs text-gray-400">{description}</div>}
       </div>
-      <input
-        type="checkbox"
+      <ToggleSwitch
         checked={checked}
         disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-        className="mt-1 h-5 w-5 rounded border-gray-600 bg-[#1f2933] text-violet-600"
+        loading={loading}
+        ariaLabel={label}
+        onChange={onChange}
       />
-    </label>
+    </div>
   );
 }
 
@@ -550,7 +674,7 @@ export default function DevPlayerSettingsManager() {
   const router = useRouter();
   const { setShowHeader, setShowBackButton, setOnBackClick } = useHeaderVisibility();
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingToggle, setSavingToggle] = useState<"system" | "scheduler" | null>(null);
   const [savingJoinPreset, setSavingJoinPreset] = useState(false);
   const [draft, setDraft] = useState<DraftState>(settingsToDraft(DEFAULT_DEV_PLAYER_SETTINGS));
   const [joinDraft, setJoinDraft] = useState<JoinPresetDraft>(emptyJoinPresetDraft());
@@ -558,6 +682,10 @@ export default function DevPlayerSettingsManager() {
   const [activeJoinPresetId, setActiveJoinPresetId] = useState<string | null>(null);
   const [activePlayers, setActivePlayers] = useState<DevPlayerActiveRow[]>([]);
   const [activePlayerCount, setActivePlayerCount] = useState(0);
+  const [runtimeStats, setRuntimeStats] = useState<DevPlayerRuntimeStats>(
+    DEFAULT_DEV_PLAYER_RUNTIME_STATS
+  );
+  const [refreshingRuntime, setRefreshingRuntime] = useState(false);
   const [templates, setTemplates] = useState<DevPlayerTemplateOption[]>([]);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [expandedTemplateLimitId, setExpandedTemplateLimitId] = useState<string | null>(null);
@@ -590,6 +718,7 @@ export default function DevPlayerSettingsManager() {
     );
     setActivePlayers(result.activePlayers);
     setActivePlayerCount(result.activePlayerCount);
+    setRuntimeStats(result.runtimeStats ?? DEFAULT_DEV_PLAYER_RUNTIME_STATS);
     setTemplates(loadedTemplates);
     setUpdatedAt(result.settings.updatedAt);
   }, []);
@@ -607,9 +736,42 @@ export default function DevPlayerSettingsManager() {
     }
   }, [applySettingsResult]);
 
+  const refreshRuntimeStats = useCallback(async (options?: { showSpinner?: boolean }) => {
+    try {
+      if (options?.showSpinner) {
+        setRefreshingRuntime(true);
+      }
+      const result = await loadDevPlayerSettings();
+      setRuntimeStats(result.runtimeStats ?? DEFAULT_DEV_PLAYER_RUNTIME_STATS);
+      setActivePlayers(result.activePlayers);
+      setActivePlayerCount(result.activePlayerCount);
+    } catch (error) {
+      console.error("refreshRuntimeStats error:", error);
+      if (options?.showSpinner) {
+        toast.error("خطا در بروزرسانی گزارش");
+      }
+    } finally {
+      if (options?.showSpinner) {
+        setRefreshingRuntime(false);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     fetchSettings();
   }, [fetchSettings]);
+
+  useEffect(() => {
+    if (!draft.systemEnabled) return;
+
+    const intervalId = window.setInterval(() => {
+      void refreshRuntimeStats();
+    }, 15000);
+
+    return () => window.clearInterval(intervalId);
+  }, [draft.systemEnabled, refreshRuntimeStats]);
+
+  const refreshRuntimeReport = () => refreshRuntimeStats({ showSpinner: true });
 
   const patchDraft = (patch: Partial<DraftState>) => {
     setDraft((prev) => ({ ...prev, ...patch }));
@@ -715,19 +877,57 @@ export default function DevPlayerSettingsManager() {
     }
   };
 
-  const handleSave = async () => {
-    setSaving(true);
+  const persistSettings = async (
+    nextDraft: DraftState,
+    options: { successMessage?: string; toggle: "system" | "scheduler" }
+  ) => {
+    setSavingToggle(options.toggle);
+
     try {
       const result = await saveDevPlayerSettings(
-        draftToPayload(draft, activeJoinPresetId)
+        draftToPayload(nextDraft, activeJoinPresetId)
       );
       applySettingsResult(result);
-      toast.success("تنظیمات ذخیره شد");
+      if (options.successMessage) {
+        toast.success(options.successMessage);
+      }
+      return true;
     } catch (error: any) {
       console.error("saveDevPlayerSettings error:", error);
       toast.error(error?.message || "خطا در ذخیره تنظیمات");
+      return false;
     } finally {
-      setSaving(false);
+      setSavingToggle(null);
+    }
+  };
+
+  const handleSystemEnabledChange = async (value: boolean) => {
+    const previous = draft.systemEnabled;
+    const nextDraft = { ...draft, systemEnabled: value };
+    patchDraft({ systemEnabled: value });
+
+    const ok = await persistSettings(nextDraft, {
+      toggle: "system",
+      successMessage: value
+        ? "سیستم Dev Player فعال شد و تنظیمات tick، وقفه و timezone اعمال شد"
+        : "سیستم Dev Player خاموش شد",
+    });
+    if (!ok) {
+      patchDraft({ systemEnabled: previous });
+    }
+  };
+
+  const handleSchedulerEnabledChange = async (value: boolean) => {
+    const previous = draft.schedulerEnabled;
+    const nextDraft = { ...draft, schedulerEnabled: value };
+    patchDraft({ schedulerEnabled: value });
+
+    const ok = await persistSettings(nextDraft, {
+      toggle: "scheduler",
+      successMessage: value ? "Scheduler فعال شد" : "Scheduler خاموش شد",
+    });
+    if (!ok) {
+      patchDraft({ schedulerEnabled: previous });
     }
   };
 
@@ -740,7 +940,7 @@ export default function DevPlayerSettingsManager() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0E0E0F] p-4 pb-28">
+    <div className="min-h-screen bg-[#0E0E0F] p-4 pb-4">
       <div className="mx-auto max-w-2xl space-y-4">
         <div>
           <h1 className="text-xl font-bold text-white">تنظیمات Dev Player</h1>
@@ -757,16 +957,25 @@ export default function DevPlayerSettingsManager() {
         <SectionCard title="کنترل سیستم">
           <ToggleRow
             label="فعال‌سازی سیستم Dev Player"
-            description="وقتی خاموش است، هیچ join خودکاری انجام نمی‌شود."
+            description="وقتی خاموش است، هیچ join خودکاری انجام نمی‌شود. tick، وقفه و timezone با روشن کردن ذخیره و اعمال می‌شوند."
             checked={draft.systemEnabled}
-            onChange={(value) => patchDraft({ systemEnabled: value })}
+            loading={savingToggle === "system"}
+            onChange={handleSystemEnabledChange}
+          />
+          <DevPlayerRuntimeReport
+            stats={runtimeStats}
+            systemEnabled={draft.systemEnabled}
+            schedulerEnabled={draft.schedulerEnabled}
+            activePlayerCount={activePlayerCount}
+            refreshing={refreshingRuntime}
+            onRefresh={refreshRuntimeReport}
           />
           <ToggleRow
             label="فعال‌سازی Scheduler"
             description="ساخت خودکار dev_room_schedules از preset فعال و config بازیکنان."
             checked={draft.schedulerEnabled}
-            disabled={!draft.systemEnabled}
-            onChange={(value) => patchDraft({ schedulerEnabled: value })}
+            loading={savingToggle === "scheduler"}
+            onChange={handleSchedulerEnabledChange}
           />
           <label className="block space-y-1">
             <span className="text-xs text-gray-400">فاصله tick اسکدولر (ثانیه)</span>
@@ -774,7 +983,7 @@ export default function DevPlayerSettingsManager() {
               type="number"
               min={MIN_SCHEDULER_TICK_INTERVAL_SECONDS}
               max={MAX_SCHEDULER_TICK_INTERVAL_SECONDS}
-              disabled={!draft.systemEnabled || !draft.schedulerEnabled}
+              disabled={draft.systemEnabled}
               value={draft.schedulerTickIntervalSeconds}
               onChange={(e) => patchDraft({ schedulerTickIntervalSeconds: e.target.value })}
               className="w-full rounded-lg border border-gray-700 bg-[#1f2933] px-3 py-2 text-sm text-white disabled:opacity-50"
@@ -790,7 +999,7 @@ export default function DevPlayerSettingsManager() {
               type="number"
               min={MIN_PROCESSOR_TICK_INTERVAL_SECONDS}
               max={MAX_PROCESSOR_TICK_INTERVAL_SECONDS}
-              disabled={!draft.systemEnabled || !draft.schedulerEnabled}
+              disabled={draft.systemEnabled}
               value={draft.processorTickIntervalSeconds}
               onChange={(e) => patchDraft({ processorTickIntervalSeconds: e.target.value })}
               className="w-full rounded-lg border border-gray-700 bg-[#1f2933] px-3 py-2 text-sm text-white disabled:opacity-50"
@@ -808,7 +1017,7 @@ export default function DevPlayerSettingsManager() {
                 type="number"
                 min={MIN_SCHEDULER_PAUSE_SECONDS}
                 max={MAX_SCHEDULER_PAUSE_SECONDS}
-                disabled={!draft.systemEnabled || !draft.schedulerEnabled}
+                disabled={draft.systemEnabled}
                 value={draft.schedulerPauseAfterSeconds}
                 onChange={(e) => patchDraft({ schedulerPauseAfterSeconds: e.target.value })}
                 placeholder="—"
@@ -824,7 +1033,7 @@ export default function DevPlayerSettingsManager() {
                 type="number"
                 min={MIN_SCHEDULER_PAUSE_SECONDS}
                 max={MAX_SCHEDULER_PAUSE_SECONDS}
-                disabled={!draft.systemEnabled || !draft.schedulerEnabled}
+                disabled={draft.systemEnabled}
                 value={draft.schedulerPauseDurationSeconds}
                 onChange={(e) => patchDraft({ schedulerPauseDurationSeconds: e.target.value })}
                 placeholder="—"
@@ -839,6 +1048,7 @@ export default function DevPlayerSettingsManager() {
             <span className="text-xs text-gray-400">منطقه زمانی</span>
             <input
               value={draft.timezone}
+              disabled={draft.systemEnabled}
               onChange={(e) => patchDraft({ timezone: e.target.value })}
               className="w-full rounded-lg border border-gray-700 bg-[#1f2933] px-3 py-2 text-sm text-white"
             />
@@ -1069,15 +1279,6 @@ export default function DevPlayerSettingsManager() {
             onManageUsers={() => router.push("/dev-panel/users")}
           />
         </SectionCard>
-
-        <button
-          type="button"
-          disabled={saving}
-          onClick={handleSave}
-          className="sticky bottom-4 w-full rounded-xl bg-violet-700 py-3 text-sm font-semibold text-white shadow-lg disabled:opacity-50"
-        >
-          {saving ? "در حال ذخیره..." : "ذخیره تنظیمات"}
-        </button>
       </div>
     </div>
   );

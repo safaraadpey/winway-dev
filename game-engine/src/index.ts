@@ -18,6 +18,7 @@ import {
 } from "./redis/client.js";
 import { reapStaleDrawJobs } from "./domain/draw/reapStaleJobs.js";
 import { executesBusinessLogic } from "./runtime.js";
+import { getGlobalCardRegistry } from "./core/card-registry/index.js";
 import { GameRepo } from "./repositories/index.js";
 import { RoomStateManager } from "./state/index.js";
 import { startDrawProcessor } from "./workers/draw-processor/index.js";
@@ -61,6 +62,9 @@ async function main(): Promise<void> {
 
   const repo = new GameRepo(supabase);
   const roomState = new RoomStateManager(repo, log, config.roomStateCheckpointEvery);
+  if (executesBusinessLogic(config.runtime) && config.markingEngine !== "scan") {
+    await getGlobalCardRegistry(repo, log);
+  }
   if (executesBusinessLogic(config.runtime)) {
     await reapStaleDrawJobs({
       repo,

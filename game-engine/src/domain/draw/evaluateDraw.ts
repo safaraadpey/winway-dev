@@ -12,9 +12,14 @@
  *   - Draw loop: memory apply → memory evaluate → persistence writes only
  */
 
+import type { MarkingEngineMode } from "../../config/env.js";
+import { getGlobalCardRegistry } from "../../core/card-registry/index.js";
+import type { GlobalCardRegistry } from "../../core/card-registry/types.js";
 import { settleRoomIfNeeded } from "../../finance/settleRoom.js";
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import type { Logger } from "../../metrics/logger.js";
+import { processDrawMarking } from "../../runtime/marking-engine.js";
+import { getMismatchReporter } from "../../runtime/mismatch-reporter.js";
 import {
   type DrawStepBreakdown,
   emptyBreakdown,
@@ -22,7 +27,10 @@ import {
   timedStepSync,
 } from "../../metrics/drawPerformance.js";
 import { GameRepo } from "../../repositories/index.js";
-import { reconcileRuntimeStateFromDb } from "../../state/reconcileFromDb.js";
+import {
+  refreshRoomAuthorityFromDb,
+  reconcileRuntimeStateFromDb,
+} from "../../state/reconcileFromDb.js";
 import type { RoomRuntimeState } from "../../state/room-state.js";
 import type { RoomStateManager } from "../../state/room-state.manager.js";
 
@@ -62,6 +70,14 @@ export interface EvaluateDrawOptions {
   deferSettlement?: boolean;
   /** Force DB reconcile before evaluate (default: auto via needsReconcile). */
   syncFromDb?: boolean;
+  /** Marking engine mode (default scan). */
+  markingEngine?: MarkingEngineMode;
+  /** Preloaded global card registry (bitmask/dual modes). */
+  cardRegistry?: GlobalCardRegistry | null;
+  /** Block bitmask as authoritative (default false). */
+  markingBitmaskAuthorityAllowed?: boolean;
+  /** Parity summary log interval for dual mode. */
+  markingParitySummaryEvery?: number;
 }
 
 export async function applyMarksAndEvaluateWithState(
@@ -76,33 +92,82 @@ export async function applyMarksAndEvaluateWithState(
   const persist = opts.persist !== false;
   const deferSettlement = opts.deferSettlement === true;
   const checkpointEvery = stateManager.getCheckpointEvery();
+  const outOfOrder = state.isOutOfOrderDraw(drawNumber);
   const shouldReconcile =
     opts.syncFromDb === true ||
     (opts.syncFromDb !== false &&
-      state.needsReconcile(checkpointEvery));
+      state.needsReconcile(checkpointEvery, drawNumber));
   const now = new Date().toISOString();
   const breakdown = emptyBreakdown();
+
+  const authorityStep = await timedStep(() =>
+    refreshRoomAuthorityFromDb(repo, state)
+  );
+  breakdown.getResults = authorityStep.timing;
 
   if (shouldReconcile) {
     const syncStep = await timedStep(() => reconcileRuntimeStateFromDb(repo, state));
     breakdown.getMarksForTickets = syncStep.timing;
-    breakdown.getResults = syncStep.timing;
+    breakdown.getResults = {
+      startTime: authorityStep.timing.startTime,
+      endTime: syncStep.timing.endTime,
+      durationMs:
+        Math.round(
+          (authorityStep.timing.durationMs + syncStep.timing.durationMs) * 100
+        ) / 100,
+    };
     state.noteReconcileDone();
     log.info("room state reconciled from db", {
       roomId: state.roomId,
       drawNumber,
       drawsProcessed: state.drawsProcessed,
+      outOfOrder,
     });
   }
 
+  const markingEngine = opts.markingEngine ?? "scan";
+  const bitmaskAuthorityAllowed = opts.markingBitmaskAuthorityAllowed === true;
+  const paritySummaryEvery = opts.markingParitySummaryEvery ?? 500;
+  let registry = opts.cardRegistry ?? null;
+  if ((markingEngine === "bitmask" || markingEngine === "dual") && !registry) {
+    registry = await getGlobalCardRegistry(repo, log);
+  }
+  if (registry && markingEngine !== "scan") {
+    state.syncMasksFromMarks(registry);
+  }
+
   const memoryStep = timedStepSync(() => {
-    const rows = state.applyMarkForDraw(drawNumber);
-    const evalOut = state.evaluateDraw(drawNumber);
-    return { rows, evalOut };
+    const outcome = processDrawMarking(
+      state,
+      drawNumber,
+      markingEngine,
+      bitmaskAuthorityAllowed,
+      registry,
+      log,
+      { wasReconciled: shouldReconcile }
+    );
+    return outcome;
   });
   breakdown.evaluateRoomAfterDraw = memoryStep.timing;
-  const { rows, evalOut } = memoryStep.result;
+  const {
+    markRows: rows,
+    evalOut,
+    policy,
+    validation,
+    validationContext,
+  } = memoryStep.result;
+
+  if (validation && validationContext && policy.shadow === "bitmask") {
+    getMismatchReporter(log, paritySummaryEvery).record(
+      validation,
+      validationContext
+    );
+  }
+
   state.absorbEvaluation(evalOut, drawNumber);
+  if (registry && policy.effective !== "scan") {
+    state.syncMasksFromMarks(registry);
+  }
 
   const resultRows = evalOut.newResults.map((r) => ({
     room_id: state.roomId,

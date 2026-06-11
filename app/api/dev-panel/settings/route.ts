@@ -95,6 +95,82 @@ async function ensureSettingsRow(supabase: any) {
   if (error) throw error;
 }
 
+async function loadDevPlayerRuntimeStats(
+  supabase: any,
+  args: {
+    templateIds: string[];
+    devPlayerUserIds: string[];
+    schedulerEnabled: boolean;
+    schedulerPhase: unknown;
+  }
+): Promise<{
+  activeRoomsCount: number;
+  busyDevPlayersCount: number;
+  idleDevPlayersCount: number;
+  pendingSchedulesCount: number;
+  schedulerPhase: "work" | "pause" | null;
+  updatedAt: string;
+}> {
+  const { templateIds, devPlayerUserIds, schedulerEnabled, schedulerPhase } = args;
+
+  let activeRoomsCount = 0;
+  if (templateIds.length > 0) {
+    const { count, error } = await supabase
+      .from("rooms")
+      .select("id", { count: "exact", head: true })
+      .in("room_template_id", templateIds)
+      .in("status", ["waiting", "playing"]);
+    if (!error) activeRoomsCount = count ?? 0;
+  }
+
+  let busyDevPlayersCount = 0;
+  if (devPlayerUserIds.length > 0) {
+    const { data: rooms, error: roomsError } = await supabase
+      .from("rooms")
+      .select("id")
+      .in("status", ["waiting", "playing"]);
+    if (!roomsError) {
+      const roomIds = (rooms ?? []).map((room: { id: string }) => room.id);
+      if (roomIds.length > 0) {
+        const { data: tickets, error: ticketsError } = await supabase
+          .from("tickets")
+          .select("player_user_id")
+          .in("room_id", roomIds)
+          .in("player_user_id", devPlayerUserIds)
+          .in("reservation_status", ["reserved", "confirmed", "consumed"]);
+        if (!ticketsError) {
+          busyDevPlayersCount = new Set(
+            (tickets ?? []).map((ticket: { player_user_id: string }) => ticket.player_user_id)
+          ).size;
+        }
+      }
+    }
+  }
+
+  let pendingSchedulesCount = 0;
+  const { count: pendingCount, error: pendingError } = await supabase
+    .from("dev_room_schedules")
+    .select("id", { count: "exact", head: true })
+    .in("status", ["approved", "processing", "draft"]);
+  if (!pendingError) pendingSchedulesCount = pendingCount ?? 0;
+
+  const phase =
+    schedulerEnabled && schedulerPhase === "pause"
+      ? "pause"
+      : schedulerEnabled && schedulerPhase === "work"
+        ? "work"
+        : null;
+
+  return {
+    activeRoomsCount,
+    busyDevPlayersCount,
+    idleDevPlayersCount: Math.max(0, devPlayerUserIds.length - busyDevPlayersCount),
+    pendingSchedulesCount,
+    schedulerPhase: phase,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 async function loadSettingsBundle(supabase: any) {
   await ensureSettingsRow(supabase);
 
@@ -245,10 +321,18 @@ async function loadSettingsBundle(supabase: any) {
     };
   });
 
+  const runtimeStats = await loadDevPlayerRuntimeStats(supabase, {
+    templateIds: activePreset?.templateRoomLimitEnabledIds ?? [],
+    devPlayerUserIds: userIds,
+    schedulerEnabled: Boolean(settingsRow.scheduler_enabled),
+    schedulerPhase: settingsRow.scheduler_cycle_phase,
+  });
+
   return {
     settings: mapSettingsRow(settingsRow),
     activePlayers,
     activePlayerCount: activePlayers.length,
+    runtimeStats,
     templates,
     joinPresets,
   };

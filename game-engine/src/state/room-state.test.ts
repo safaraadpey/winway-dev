@@ -214,4 +214,28 @@ describe("RoomRuntimeState", () => {
     state.requestReconcile();
     assert.equal(state.needsReconcile(0), true);
   });
+
+  it("tracks lastProcessedDrawNumber and detects out-of-order draws", () => {
+    const state = makeState();
+    state.recordDrawProcessed(55);
+    assert.equal(state.lastProcessedDrawNumber, 55);
+    assert.equal(state.isOutOfOrderDraw(8), true);
+    assert.equal(state.isOutOfOrderDraw(60), false);
+    assert.equal(state.needsReconcile(10, 8), true);
+  });
+
+  it("replaceExistingResultsFromDb replaces winner sets from DB", () => {
+    const state = makeState();
+    state.existingLineTickets.add("stale");
+    state.replaceExistingResultsFromDb([
+      {
+        ticket_id: "t1",
+        user_id: "u1",
+        win_type: "line",
+        draw_number: 55,
+      },
+    ]);
+    assert.deepEqual([...state.existingLineTickets], ["t1"]);
+    assert.equal(state.room.first_line_draw_number, 55);
+  });
 });

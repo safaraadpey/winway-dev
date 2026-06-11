@@ -13,7 +13,7 @@ export interface RoomLockOptions {
   onLockMiss?: (roomId: string, jobs: readonly DrawJob[]) => Promise<void>;
 }
 
-/** Group picked jobs by room; preserve per-room draw order. */
+/** Group picked jobs by room; process lowest draw_number first per room. */
 export function groupJobsByRoom(jobs: DrawJob[]): Map<string, DrawJob[]> {
   const byRoom = new Map<string, DrawJob[]>();
   for (const job of jobs) {
@@ -24,7 +24,9 @@ export function groupJobsByRoom(jobs: DrawJob[]): Map<string, DrawJob[]> {
   for (const list of byRoom.values()) {
     list.sort(
       (a, b) =>
-        a.created_at.localeCompare(b.created_at) || a.id - b.id
+        a.draw_number - b.draw_number ||
+        a.created_at.localeCompare(b.created_at) ||
+        a.id - b.id
     );
   }
   return byRoom;

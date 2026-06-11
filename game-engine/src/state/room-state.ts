@@ -1,11 +1,25 @@
 /**
  * In-memory runtime state for one playing room.
  * Engine-owned; DB is persistence only.
+ *
+ * Phase 1: dual marking engines
+ *   - scan path: legacy cell iteration (authoritative in dual mode)
+ *   - bitmask path: O(affected_cards) via global reverse index
  */
 
 import type { TicketCard, EvaluateOutput } from "../core/index.js";
 import { evaluateRoomAfterDraw } from "../core/index.js";
+import {
+  applyMarkForDrawBitmask,
+  evaluateRoomAfterDrawBitmask,
+  maskFromMarkedValues,
+} from "../core/bitmask/index.js";
+import type { GlobalCardRegistry } from "../core/card-registry/types.js";
 import type { ResultRow, RoomRow, TicketRow } from "../repositories/types.js";
+import {
+  buildRoomAssignmentIndex,
+  type RoomAssignmentIndex,
+} from "../runtime/room-assignments.js";
 import { normalizePoolCardId } from "./cardId.js";
 
 const EVAL_STATUSES = new Set(["reserved", "confirmed", "consumed"]);
@@ -24,8 +38,12 @@ export interface RoomStateSnapshot {
   existingFullTickets: Set<string>;
   drawnNumbers: number[];
   unprocessedDrawNumbers: Set<number>;
-  /** room_templates.ding_per_number loaded once with the snapshot. */
   templateDingPerNumber: number | null;
+}
+
+/** Isolated state for dual-mode bitmask comparison (no live mutation). */
+export interface BitmaskCompareSnapshot {
+  maskByTicket: Map<string, number>;
 }
 
 export class RoomRuntimeState {
@@ -40,10 +58,16 @@ export class RoomRuntimeState {
   private readonly drawnNumbers: number[];
   private readonly unprocessedDrawNumbers: Set<number>;
   readonly templateDingPerNumber: number | null;
+
+  /** Per-room assignment index: cardId → ticketIds */
+  readonly assignments: RoomAssignmentIndex;
+  /** Per-room card masks: ticketId → 15-bit mask */
+  readonly maskByTicket: Map<string, number>;
+
   drawsProcessed = 0;
-  /** First evaluate after DB snapshot load — merge marks/results from DB. */
+  /** Highest draw_number processed in this engine session (ordering guard). */
+  lastProcessedDrawNumber: number | null = null;
   private reconcileAfterLoad = false;
-  /** Stale-job recovery or explicit invalidation — merge before next evaluate. */
   private forceReconcile = false;
 
   constructor(snapshot: RoomStateSnapshot) {
@@ -58,13 +82,12 @@ export class RoomRuntimeState {
     this.unprocessedDrawNumbers = new Set(snapshot.unprocessedDrawNumbers);
     this.templateDingPerNumber = snapshot.templateDingPerNumber;
 
+    this.assignments = buildRoomAssignmentIndex(this.tickets);
+    this.maskByTicket = new Map();
+
     this.rebuildTicketCards();
   }
 
-  /**
-   * Count ding-eligible cards per user for this draw (reserved, not cancelled).
-   * Uses marks inserted this draw — no DB join on card_numbers.
-   */
   countDingMatchedByUser(
     marks: readonly { ticket_id: string; value: number }[],
     drawNumber: number
@@ -111,7 +134,20 @@ export class RoomRuntimeState {
     return state.getTickets().length > 0 && state.totalCellRows() === 0;
   }
 
-  /** Union DB marks into memory before evaluation (checkpoint/failed-job recovery). */
+  /** Rebuild bitmask state from marked sets + global card registry. */
+  syncMasksFromMarks(registry: GlobalCardRegistry): void {
+    for (const ticket of this.tickets) {
+      const cardId = normalizePoolCardId(ticket.pool_card_id);
+      const valueToBit = registry.valueToBitByCard.get(cardId);
+      if (!valueToBit) continue;
+      const marked = this.markedByTicket.get(ticket.id) ?? new Set<number>();
+      this.maskByTicket.set(
+        ticket.id,
+        maskFromMarkedValues(marked, valueToBit)
+      );
+    }
+  }
+
   mergeMarksFromDb(dbMarks: ReadonlyMap<string, ReadonlySet<number>>): void {
     for (const ticket of this.tickets) {
       const fromDb = dbMarks.get(ticket.id);
@@ -130,12 +166,34 @@ export class RoomRuntimeState {
       if (r.win_type === "line") this.existingLineTickets.add(r.ticket_id);
       else if (r.win_type === "full") this.existingFullTickets.add(r.ticket_id);
     }
+    this.applyFirstLineFromResultsIfUnset(results);
+  }
+
+  /** Authoritative replace from DB (reconcile / pre-eval refresh). */
+  replaceExistingResultsFromDb(results: readonly ResultRow[]): void {
+    this.existingLineTickets.clear();
+    this.existingFullTickets.clear();
+    for (const r of results) {
+      if (r.win_type === "line") this.existingLineTickets.add(r.ticket_id);
+      else if (r.win_type === "full") this.existingFullTickets.add(r.ticket_id);
+    }
+    this.applyFirstLineFromResultsIfUnset(results);
+  }
+
+  private applyFirstLineFromResultsIfUnset(results: readonly ResultRow[]): void {
     if (this.room.first_line_draw_number == null) {
       const firstLine = results.find((r) => r.win_type === "line");
       if (firstLine) {
         this.room = { ...this.room, first_line_draw_number: firstLine.draw_number };
       }
     }
+  }
+
+  isOutOfOrderDraw(drawNumber: number): boolean {
+    return (
+      this.lastProcessedDrawNumber != null &&
+      drawNumber < this.lastProcessedDrawNumber
+    );
   }
 
   getTickets(): readonly TicketRow[] {
@@ -161,7 +219,6 @@ export class RoomRuntimeState {
     this.unprocessedDrawNumbers.add(drawNumber);
   }
 
-  /** Reconcile scheduler/backpressure fields with authoritative DB state. */
   syncDrawSchedulerState(drawnNumbers: number[], unprocessedDrawNumbers: number[]): void {
     this.drawnNumbers.length = 0;
     this.drawnNumbers.push(...drawnNumbers);
@@ -174,10 +231,16 @@ export class RoomRuntimeState {
   recordDrawProcessed(drawNumber: number): void {
     this.unprocessedDrawNumbers.delete(drawNumber);
     this.drawsProcessed += 1;
+    if (
+      this.lastProcessedDrawNumber == null ||
+      drawNumber > this.lastProcessedDrawNumber
+    ) {
+      this.lastProcessedDrawNumber = drawNumber;
+    }
   }
 
-  /** Apply marks for this draw in memory only. Returns rows to persist. */
-  applyMarkForDraw(drawNumber: number): { ticket_id: string; value: number }[] {
+  /** Legacy scan path — iterates all tickets and scans card cells. */
+  applyMarkForDrawScan(drawNumber: number): { ticket_id: string; value: number }[] {
     const rows: { ticket_id: string; value: number }[] = [];
     for (const ticket of this.tickets) {
       const cells = this.cellsByCard.get(normalizePoolCardId(ticket.pool_card_id)) ?? [];
@@ -193,7 +256,12 @@ export class RoomRuntimeState {
     return rows;
   }
 
-  evaluateDraw(drawNumber: number): EvaluateOutput {
+  /** Backward-compatible alias for tests and legacy callers. */
+  applyMarkForDraw(drawNumber: number): { ticket_id: string; value: number }[] {
+    return this.applyMarkForDrawScan(drawNumber);
+  }
+
+  evaluateDrawScan(drawNumber: number): EvaluateOutput {
     return evaluateRoomAfterDraw({
       drawNumber,
       firstLineDrawNumber: this.room.first_line_draw_number,
@@ -202,6 +270,95 @@ export class RoomRuntimeState {
       existingLineTickets: this.existingLineTickets,
       existingFullTickets: this.existingFullTickets,
     });
+  }
+
+  /** Backward-compatible alias. */
+  evaluateDraw(drawNumber: number): EvaluateOutput {
+    return this.evaluateDrawScan(drawNumber);
+  }
+
+  /** Bitmask path — O(affected_cards) marking + O(affected_tickets) win check. */
+  applyMarkAndEvaluateBitmask(
+    drawNumber: number,
+    registry: GlobalCardRegistry
+  ): { markRows: { ticket_id: string; value: number }[]; evalOut: EvaluateOutput } {
+    this.syncMasksFromMarks(registry);
+
+    const markResult = applyMarkForDrawBitmask({
+      drawNumber,
+      numberIndex: registry.numberIndex,
+      assignmentsByCardId: this.assignments.assignmentsByCardId,
+      maskByTicket: this.maskByTicket,
+    });
+
+    for (const row of markResult.markRows) {
+      let marked = this.markedByTicket.get(row.ticket_id);
+      if (!marked) {
+        marked = new Set();
+        this.markedByTicket.set(row.ticket_id, marked);
+      }
+      marked.add(row.value);
+    }
+
+    const evalOut = evaluateRoomAfterDrawBitmask({
+      drawNumber,
+      firstLineDrawNumber: this.room.first_line_draw_number,
+      maskByTicket: this.maskByTicket,
+      ticketCardId: this.assignments.ticketCardId,
+      ticketUserId: this.assignments.ticketUserId,
+      cardDefs: registry.definitions,
+      existingLineTickets: this.existingLineTickets,
+      existingFullTickets: this.existingFullTickets,
+    });
+
+    return { markRows: markResult.markRows, evalOut };
+  }
+
+  /** Snapshot masks for dual-mode comparison without mutating live state. */
+  snapshotForBitmaskCompare(): BitmaskCompareSnapshot {
+    return { maskByTicket: new Map(this.maskByTicket) };
+  }
+
+  applyMarkAndEvaluateBitmaskOnSnapshot(
+    drawNumber: number,
+    registry: GlobalCardRegistry,
+    snapshot: BitmaskCompareSnapshot,
+    preDrawMarks?: ReadonlyMap<string, ReadonlySet<number>>
+  ): {
+    markRows: { ticket_id: string; value: number }[];
+    evalOut: EvaluateOutput;
+    maskByTicket: Map<string, number>;
+  } {
+    const maskByTicket = new Map(snapshot.maskByTicket);
+
+    const marksSource = preDrawMarks ?? this.markedByTicket;
+    for (const ticket of this.tickets) {
+      const cardId = normalizePoolCardId(ticket.pool_card_id);
+      const valueToBit = registry.valueToBitByCard.get(cardId);
+      if (!valueToBit) continue;
+      const marked = marksSource.get(ticket.id) ?? new Set<number>();
+      maskByTicket.set(ticket.id, maskFromMarkedValues(marked, valueToBit));
+    }
+
+    const markResult = applyMarkForDrawBitmask({
+      drawNumber,
+      numberIndex: registry.numberIndex,
+      assignmentsByCardId: this.assignments.assignmentsByCardId,
+      maskByTicket,
+    });
+
+    const evalOut = evaluateRoomAfterDrawBitmask({
+      drawNumber,
+      firstLineDrawNumber: this.room.first_line_draw_number,
+      maskByTicket,
+      ticketCardId: this.assignments.ticketCardId,
+      ticketUserId: this.assignments.ticketUserId,
+      cardDefs: registry.definitions,
+      existingLineTickets: this.existingLineTickets,
+      existingFullTickets: this.existingFullTickets,
+    });
+
+    return { markRows: markResult.markRows, evalOut, maskByTicket };
   }
 
   absorbEvaluation(evalOut: EvaluateOutput, drawNumber: number): void {
@@ -224,22 +381,17 @@ export class RoomRuntimeState {
     return tickets.filter((t) => EVAL_STATUSES.has(t.reservation_status));
   }
 
-  /** Call once when snapshot is loaded from DB (not a continuous in-memory session). */
   markLoadedFromDb(): void {
     this.reconcileAfterLoad = true;
   }
 
-  /** Invalidate RAM cache; next evaluate merges from DB (e.g. stale job requeue). */
   requestReconcile(): void {
     this.forceReconcile = true;
   }
 
-  /**
-   * Whether to read marks/results from DB before this draw's evaluation.
-   * Hot path: false. Reload, recovery, and every checkpointEvery draws: true.
-   */
-  needsReconcile(checkpointEvery: number): boolean {
+  needsReconcile(checkpointEvery: number, drawNumber?: number): boolean {
     if (this.reconcileAfterLoad || this.forceReconcile) return true;
+    if (drawNumber != null && this.isOutOfOrderDraw(drawNumber)) return true;
     if (checkpointEvery <= 0) return false;
     return this.drawsProcessed > 0 && this.drawsProcessed % checkpointEvery === 0;
   }

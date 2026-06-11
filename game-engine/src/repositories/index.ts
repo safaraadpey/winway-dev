@@ -12,6 +12,8 @@
 
 import type { SupabaseAdmin } from "../db/supabase-admin.js";
 import type {
+  CardDefinitionMaskRow,
+  CardNumberIndexRow,
   CardNumberRow,
   DrawRow,
   ResultRow,
@@ -31,10 +33,34 @@ function fail(op: string, message: string): never {
   throw new Error(`repo ${op}: ${message}`);
 }
 
+/** PostgREST default max rows is 1000 — paginate global card tables fully. */
+const GLOBAL_CARD_PAGE_SIZE = 1000;
+
 export { DevPlayerRepo } from "./devPlayerRepo.js";
 
 export class GameRepo {
   constructor(private readonly db: SupabaseAdmin) {}
+
+  private async fetchAllRows<T>(
+    op: string,
+    table: string,
+    select: string
+  ): Promise<T[]> {
+    const all: T[] = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await this.db
+        .from(table)
+        .select(select)
+        .range(from, from + GLOBAL_CARD_PAGE_SIZE - 1);
+      if (error) fail(op, error.message);
+      const page = (data ?? []) as T[];
+      all.push(...page);
+      if (page.length < GLOBAL_CARD_PAGE_SIZE) break;
+      from += GLOBAL_CARD_PAGE_SIZE;
+    }
+    return all;
+  }
 
   // ---- rooms -------------------------------------------------------------
 
@@ -222,6 +248,21 @@ export class GameRepo {
     return (data ?? []).map((d: { number: number }) => d.number);
   }
 
+  /** True when a lower draw_number still lacks processed_at (ordering gate). */
+  async hasEarlierUnprocessedDraws(
+    roomId: string,
+    drawNumber: number
+  ): Promise<boolean> {
+    const { count, error } = await this.db
+      .from("draws")
+      .select("id", { count: "exact", head: true })
+      .eq("room_id", roomId)
+      .is("processed_at", null)
+      .lt("number", drawNumber);
+    if (error) fail("hasEarlierUnprocessedDraws", error.message);
+    return (count ?? 0) > 0;
+  }
+
   async insertDraw(roomId: string, number: number, nowIso: string): Promise<void> {
     const { error } = await this.db.from("draws").insert({
       room_id: roomId,
@@ -291,6 +332,40 @@ export class GameRepo {
       .in("pool_card_id", ids);
     if (error) fail("getCardNumbers", error.message);
     return (data ?? []) as CardNumberRow[];
+  }
+
+  /** Global precomputed win masks — loaded once into CardRegistry. */
+  async getCardDefinitionMasks(): Promise<CardDefinitionMaskRow[]> {
+    return this.fetchAllRows<CardDefinitionMaskRow>(
+      "getCardDefinitionMasks",
+      "card_definition_masks",
+      "pool_card_id,line1_mask,line2_mask,line3_mask,full_mask,cell_count"
+    );
+  }
+
+  /** Global reverse number index — loaded once into CardRegistry. */
+  async getCardNumberIndex(): Promise<CardNumberIndexRow[]> {
+    return this.fetchAllRows<CardNumberIndexRow>(
+      "getCardNumberIndex",
+      "card_number_index",
+      "value,pool_card_id,bit_position"
+    );
+  }
+
+  /** Fallback CardRegistry build when bitmask tables are not yet migrated. */
+  async getAllCardNumbersForRegistry(): Promise<
+    { pool_card_id: string; value: number; row_no: number; col_no: number }[]
+  > {
+    return this.fetchAllRows<{
+      pool_card_id: string;
+      value: number;
+      row_no: number;
+      col_no: number;
+    }>(
+      "getAllCardNumbersForRegistry",
+      "card_numbers",
+      "pool_card_id,value,row_no,col_no"
+    );
   }
 
   async countDistinctActivePlayers(roomId: string): Promise<number> {
