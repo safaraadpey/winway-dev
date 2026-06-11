@@ -155,28 +155,40 @@ export async function processDrawBatchEngine(
         }
 
         let settled = evalResult.settled;
-        try {
-          const settleStep = await timedStep(() =>
-            settleRoomIfNeeded(supabase, repo, job.room_id, {
-              fullWinnerThisDraw: evalResult.fullWinnerThisDraw,
-            })
-          );
-          if (settleStep.result) {
-            breakdown.fn_finish_room_and_settle = settleStep.timing;
-            settled = true;
-            stateManager.evict(job.room_id);
-            log.info("room settled (full winner)", {
+        // Hot-path settle only when this draw produced a full winner, or a full
+        // result already exists for an unfinished room (in-memory recovery from
+        // the authority refresh — covers a crash between finalize and settle
+        // without an extra DB round-trip). The per-draw roomNeedsSettlement()
+        // probe (getRoom + hasUnpaidFullWinner) is removed from the hot path.
+        const hasUnsettledFull =
+          state != null &&
+          state.room.status !== "finished" &&
+          state.existingFullTickets.size > 0;
+        const needsSettle = evalResult.fullWinnerThisDraw || hasUnsettledFull;
+        if (needsSettle) {
+          try {
+            const settleStep = await timedStep(() =>
+              settleRoomIfNeeded(supabase, repo, job.room_id, {
+                fullWinnerThisDraw: true,
+              })
+            );
+            if (settleStep.result) {
+              breakdown.fn_finish_room_and_settle = settleStep.timing;
+              settled = true;
+              stateManager.evict(job.room_id);
+              log.info("room settled (full winner)", {
+                roomId: job.room_id,
+                drawNumber: job.draw_number,
+              });
+            }
+          } catch (settleErr) {
+            log.error("room settlement failed (draw already finalized)", {
               roomId: job.room_id,
               drawNumber: job.draw_number,
+              error:
+                settleErr instanceof Error ? settleErr.message : String(settleErr),
             });
           }
-        } catch (settleErr) {
-          log.error("room settlement failed (draw already finalized)", {
-            roomId: job.room_id,
-            drawNumber: job.draw_number,
-            error:
-              settleErr instanceof Error ? settleErr.message : String(settleErr),
-          });
         }
 
         const report = buildDrawPerformanceReport({
