@@ -1,11 +1,11 @@
 /**
  * Bitmask win evaluation — O(1) per ticket via precomputed masks.
- * Preserves the same business rules as core/winEvaluation.ts.
+ * Bitmask win evaluation — line/full detection + first-line gating.
  */
 
 import { hasFullWin, hasLineWin } from "./masks.js";
 import type { CardDefinitionMasks, CardMask } from "./types.js";
-import type { EvaluateOutput, WinResult } from "../winEvaluation.js";
+import type { EvaluateOutput, WinResult } from "../evaluation-types.js";
 
 export interface BitmaskEvaluateInput {
   drawNumber: number;
@@ -33,7 +33,7 @@ export function evaluateRoomAfterDrawBitmask(
     input.firstLineDrawNumber === null ||
     input.firstLineDrawNumber === input.drawNumber;
 
-  // Match scan/SQL: evaluate every ticket in the room, not only draw-affected ones.
+  // Match SQL fn_evaluate_room_after_draw: evaluate every ticket, not only draw-affected ones.
   // A ticket can become eligible for line/full on a draw that does not mark it
   // (e.g. line gate opens on first_line_draw_number matching this draw).
   const ticketIds = input.affectedTicketIds

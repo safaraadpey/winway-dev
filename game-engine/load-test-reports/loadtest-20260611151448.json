@@ -1,0 +1,76 @@
+{
+  "scenario": {
+    "rooms": 1,
+    "ticketsPerRoom": 30,
+    "drawIntervalSec": 3,
+    "minDrawsPerRoom": 15,
+    "tag": "loadtest-20260611151448",
+    "durationSec": 59.15
+  },
+  "verdict": {
+    "passed": true,
+    "backlogDetected": false,
+    "summary": "Engine sustained 1 rooms × 30 tickets without significant backlog."
+  },
+  "draws": {
+    "samples": 4,
+    "averageProcessingMs": 2693.51,
+    "p95ProcessingMs": 2751.95,
+    "p99ProcessingMs": 2751.95,
+    "peakQueueSize": 1,
+    "averageQueueSize": 0.15,
+    "peakQueueWaitMs": 1238,
+    "averageQueueWaitMs": 869
+  },
+  "db": {
+    "estimatedTotalQueries": 19,
+    "averageQueriesPerDraw": 4.75
+  },
+  "slowestOperations": [
+    {
+      "step": "getMarksForTickets",
+      "averageMs": 466.1,
+      "p95Ms": 708.8,
+      "maxMs": 708.8
+    },
+    {
+      "step": "getResults",
+      "averageMs": 525.26,
+      "p95Ms": 708.8,
+      "maxMs": 708.8
+    },
+    {
+      "step": "aggregateDingForDraw",
+      "averageMs": 363.73,
+      "p95Ms": 606.35,
+      "maxMs": 606.35
+    },
+    {
+      "step": "rpc_pick_draw_jobs",
+      "averageMs": 291.76,
+      "p95Ms": 320.66,
+      "maxMs": 320.66
+    },
+    {
+      "step": "rpc_finalize_engine_draw_job",
+      "averageMs": 294.03,
+      "p95Ms": 310.08,
+      "maxMs": 310.08
+    },
+    {
+      "step": "evaluateRoomAfterDraw",
+      "averageMs": 0.15,
+      "p95Ms": 0.31,
+      "maxMs": 0.31
+    }
+  ],
+  "capacity": {
+    "observedDrawsPerSecond": 0.07,
+    "requiredDrawsPerSecond": 0.33,
+    "estimatedMaxRooms": 7,
+    "roomConcurrencyAssumed": 8
+  },
+  "perRoomDrawCounts": {
+    "3adf9557-5d4f-415f-b3d7-623b68633f00": 15
+  }
+}

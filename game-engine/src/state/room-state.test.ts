@@ -1,7 +1,28 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { buildRegistryFromCardNumbers } from "../core/card-registry/build.js";
 import type { RoomRow, TicketRow } from "../repositories/types.js";
 import { RoomRuntimeState } from "./room-state.js";
+
+const CARD_CELLS = [
+  { pool_card_id: "c1", value: 7, row_no: 1, col_no: 1 },
+  { pool_card_id: "c1", value: 10, row_no: 1, col_no: 3 },
+  { pool_card_id: "c1", value: 19, row_no: 1, col_no: 5 },
+  { pool_card_id: "c1", value: 28, row_no: 1, col_no: 7 },
+  { pool_card_id: "c1", value: 37, row_no: 1, col_no: 9 },
+  { pool_card_id: "c1", value: 14, row_no: 2, col_no: 2 },
+  { pool_card_id: "c1", value: 11, row_no: 2, col_no: 4 },
+  { pool_card_id: "c1", value: 20, row_no: 2, col_no: 6 },
+  { pool_card_id: "c1", value: 29, row_no: 2, col_no: 8 },
+  { pool_card_id: "c1", value: 38, row_no: 2, col_no: 9 },
+  { pool_card_id: "c1", value: 21, row_no: 3, col_no: 1 },
+  { pool_card_id: "c1", value: 12, row_no: 3, col_no: 3 },
+  { pool_card_id: "c1", value: 30, row_no: 3, col_no: 5 },
+  { pool_card_id: "c1", value: 39, row_no: 3, col_no: 7 },
+  { pool_card_id: "c1", value: 40, row_no: 3, col_no: 9 },
+];
+
+const registry = buildRegistryFromCardNumbers(CARD_CELLS);
 
 function makeState(): RoomRuntimeState {
   const room: RoomRow = {
@@ -31,20 +52,9 @@ function makeState(): RoomRuntimeState {
       cancelled_at: null,
     },
   ];
-  const cellsByCard = new Map([
-    [
-      "c1",
-      [
-        { value: 7, rowNo: 1 },
-        { value: 14, rowNo: 1 },
-        { value: 21, rowNo: 2 },
-      ],
-    ],
-  ]);
   return new RoomRuntimeState({
     room,
     tickets,
-    cellsByCard,
     markedByTicket: new Map(),
     existingLineTickets: new Set(),
     existingFullTickets: new Set(),
@@ -55,11 +65,11 @@ function makeState(): RoomRuntimeState {
 }
 
 describe("RoomRuntimeState", () => {
-  it("applyMarkForDraw updates memory marks", () => {
+  it("applyMarkAndEvaluateBitmask updates memory marks", () => {
     const state = makeState();
-    const rows = state.applyMarkForDraw(7);
-    assert.equal(rows.length, 1);
-    assert.equal(rows[0]!.ticket_id, "t1");
+    const { markRows } = state.applyMarkAndEvaluateBitmask(7, registry);
+    assert.equal(markRows.length, 1);
+    assert.equal(markRows[0]!.ticket_id, "t1");
     assert.ok(state.getMarks().get("t1")?.has(7));
   });
 
@@ -72,45 +82,9 @@ describe("RoomRuntimeState", () => {
     assert.equal(state.hasUnprocessedDraw(), false);
   });
 
-  it("isBroken when tickets exist but cells are empty", () => {
-    const room = {
-      id: "room-1",
-      status: "playing" as const,
-      currency: "IRR",
-      room_seed: null,
-      room_template_id: null,
-      next_draw_at: null,
-      starts_at: null,
-      min_players: 1,
-      countdown_sec: 120,
-      first_line_draw_number: null,
-      line_reward_percentage: null,
-      full_reward_percentage: null,
-      ding_per_number: null,
-      meta: null,
-    };
-    const state = new RoomRuntimeState({
-      room,
-      tickets: [
-        {
-          id: "t1",
-          room_id: "room-1",
-          player_user_id: "u1",
-          pool_card_id: "c1",
-          price: 100,
-          reservation_status: "consumed",
-          cancelled_at: null,
-        },
-      ],
-      cellsByCard: new Map(),
-      markedByTicket: new Map(),
-      existingLineTickets: new Set(),
-      existingFullTickets: new Set(),
-      drawnNumbers: [],
-      unprocessedDrawNumbers: new Set(),
-      templateDingPerNumber: null,
-    });
-    assert.equal(RoomRuntimeState.isBroken(state), true);
+  it("isBroken is always false (bitmask uses global card registry)", () => {
+    const state = makeState();
+    assert.equal(RoomRuntimeState.isBroken(state), false);
   });
 
   it("countDingMatchedByUser counts only reserved tickets", () => {
@@ -152,7 +126,6 @@ describe("RoomRuntimeState", () => {
           cancelled_at: null,
         },
       ],
-      cellsByCard: new Map(),
       markedByTicket: new Map(),
       existingLineTickets: new Set(),
       existingFullTickets: new Set(),
@@ -190,11 +163,21 @@ describe("RoomRuntimeState", () => {
     assert.equal(state.hasUnprocessedDraw(), false);
   });
 
-  it("applyMarkForDraw is idempotent in memory", () => {
+  it("hasEarlierUnprocessedDraw uses insertion order not ball value", () => {
     const state = makeState();
-    state.applyMarkForDraw(7);
-    const rows = state.applyMarkForDraw(7);
-    assert.equal(rows.length, 1);
+    state.recordDrawInserted(90);
+    state.recordDrawInserted(15);
+    assert.equal(state.hasEarlierUnprocessedDraw(90), false);
+    assert.equal(state.hasEarlierUnprocessedDraw(15), true);
+    state.recordDrawProcessed(90);
+    assert.equal(state.hasEarlierUnprocessedDraw(15), false);
+  });
+
+  it("applyMarkAndEvaluateBitmask is idempotent in memory", () => {
+    const state = makeState();
+    state.applyMarkAndEvaluateBitmask(7, registry);
+    const { markRows } = state.applyMarkAndEvaluateBitmask(7, registry);
+    assert.equal(markRows.length, 1);
     assert.equal(state.getMarks().get("t1")!.size, 1);
   });
 

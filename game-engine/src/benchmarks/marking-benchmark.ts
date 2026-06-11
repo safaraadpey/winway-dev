@@ -1,5 +1,5 @@
 /**
- * Benchmark: scan-based marking vs bitmask marking.
+ * Benchmark: bitmask marking + win evaluation.
  *
  * Run: npm run benchmark:marking
  * Does not require DB — uses synthetic card pool + room.
@@ -10,7 +10,7 @@ import { evaluateRoomAfterDrawBitmask } from "../core/bitmask/winEvaluation.js";
 import { applyMarkForDrawBitmask } from "../core/bitmask/markDraw.js";
 import { buildRoomAssignmentIndex } from "../runtime/room-assignments.js";
 import type { TicketRow } from "../repositories/types.js";
-import type { CardCell, RoomStateSnapshot } from "../state/room-state.js";
+import type { RoomStateSnapshot } from "../state/room-state.js";
 import { RoomRuntimeState } from "../state/room-state.js";
 
 const CARD_COUNT = 500;
@@ -42,22 +42,8 @@ function generateCardPool(count: number) {
   return rows;
 }
 
-function buildSyntheticRoom(
-  registry: ReturnType<typeof buildRegistryFromCardNumbers>,
-  ticketCount: number
-): RoomRuntimeState {
+function buildSyntheticRoom(ticketCount: number): RoomRuntimeState {
   const tickets: TicketRow[] = [];
-  const cellsByCard = new Map<string, CardCell[]>();
-
-  for (const [cardId] of registry.definitions) {
-    const valueToBit = registry.valueToBitByCard.get(cardId)!;
-    const cells: CardCell[] = [];
-    for (const [value, bit] of valueToBit) {
-      const rowNo = bit < 5 ? 1 : bit < 10 ? 2 : 3;
-      cells.push({ value, rowNo });
-    }
-    cellsByCard.set(cardId, cells);
-  }
 
   for (let i = 0; i < ticketCount; i++) {
     const cardId = `card-${i % CARD_COUNT}`;
@@ -90,7 +76,6 @@ function buildSyntheticRoom(
       meta: null,
     },
     tickets,
-    cellsByCard,
     markedByTicket: new Map(),
     existingLineTickets: new Set(),
     existingFullTickets: new Set(),
@@ -100,15 +85,6 @@ function buildSyntheticRoom(
   };
 
   return new RoomRuntimeState(snapshot);
-}
-
-function benchScan(state: RoomRuntimeState, drawSequence: number[]): number {
-  const t0 = performance.now();
-  for (const n of drawSequence) {
-    state.applyMarkForDrawScan(n);
-    state.evaluateDrawScan(n);
-  }
-  return performance.now() - t0;
 }
 
 function benchBitmask(
@@ -146,7 +122,7 @@ function median(values: number[]): number {
 }
 
 export function runMarkingBenchmark(): void {
-  console.log("=== Marking Engine Benchmark ===");
+  console.log("=== Bitmask Marking Benchmark ===");
   console.log(`Cards: ${CARD_COUNT}, Tickets/room: ${TICKETS_PER_ROOM}, Draws: ${DRAWS_PER_RUN}`);
 
   const poolRows = generateCardPool(CARD_COUNT);
@@ -156,30 +132,22 @@ export function runMarkingBenchmark(): void {
   const drawSequence = Array.from({ length: DRAWS_PER_RUN }, (_, i) => (i * 7 + 11) % 90 + 1);
 
   for (let w = 0; w < WARMUP_RUNS; w++) {
-    benchScan(buildSyntheticRoom(registry, TICKETS_PER_ROOM), drawSequence);
-    benchBitmask(buildSyntheticRoom(registry, TICKETS_PER_ROOM), registry, drawSequence);
+    benchBitmask(buildSyntheticRoom(TICKETS_PER_ROOM), registry, drawSequence);
   }
 
-  const scanTimes: number[] = [];
   const bitmaskTimes: number[] = [];
 
   for (let r = 0; r < BENCHMARK_RUNS; r++) {
-    scanTimes.push(benchScan(buildSyntheticRoom(registry, TICKETS_PER_ROOM), drawSequence));
     bitmaskTimes.push(
-      benchBitmask(buildSyntheticRoom(registry, TICKETS_PER_ROOM), registry, drawSequence)
+      benchBitmask(buildSyntheticRoom(TICKETS_PER_ROOM), registry, drawSequence)
     );
   }
 
-  const scanMedian = median(scanTimes);
   const bitmaskMedian = median(bitmaskTimes);
-  const speedup = scanMedian / bitmaskMedian;
 
   console.log("\n--- Results (median of", BENCHMARK_RUNS, "runs) ---");
-  console.log(`Scan path:    ${scanMedian.toFixed(2)} ms (${(scanMedian / DRAWS_PER_RUN).toFixed(3)} ms/draw)`);
   console.log(`Bitmask path: ${bitmaskMedian.toFixed(2)} ms (${(bitmaskMedian / DRAWS_PER_RUN).toFixed(3)} ms/draw)`);
-  console.log(`Speedup:      ${speedup.toFixed(2)}x`);
-  console.log("\nPer-draw scan complexity:    O(tickets × cells)");
-  console.log("Per-draw bitmask complexity: O(affected_assignments)");
+  console.log("Per-draw complexity: O(affected_assignments)");
 }
 
 const invokedDirectly = process.argv[1]?.includes("marking-benchmark");

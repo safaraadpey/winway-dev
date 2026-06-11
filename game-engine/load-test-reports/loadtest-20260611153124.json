@@ -1,0 +1,70 @@
+{
+  "scenario": {
+    "rooms": 1,
+    "ticketsPerRoom": 30,
+    "drawIntervalSec": 3,
+    "minDrawsPerRoom": 15,
+    "tag": "loadtest-20260611153124",
+    "durationSec": 110.44
+  },
+  "verdict": {
+    "passed": false,
+    "backlogDetected": false,
+    "summary": "Average processing 3207.79ms exceeds sustainable budget for 3s interval."
+  },
+  "draws": {
+    "samples": 2,
+    "averageProcessingMs": 3207.79,
+    "p95ProcessingMs": 3268.55,
+    "p99ProcessingMs": 3268.55,
+    "peakQueueSize": 1,
+    "averageQueueSize": 0.19,
+    "peakQueueWaitMs": 1303,
+    "averageQueueWaitMs": 1111
+  },
+  "db": {
+    "estimatedTotalQueries": 8,
+    "averageQueriesPerDraw": 4
+  },
+  "slowestOperations": [
+    {
+      "step": "getMarksForTickets",
+      "averageMs": 767.65,
+      "p95Ms": 836.44,
+      "maxMs": 836.44
+    },
+    {
+      "step": "getResults",
+      "averageMs": 767.65,
+      "p95Ms": 836.44,
+      "maxMs": 836.44
+    },
+    {
+      "step": "rpc_finalize_engine_draw_job",
+      "averageMs": 285.88,
+      "p95Ms": 288.61,
+      "maxMs": 288.61
+    },
+    {
+      "step": "rpc_pick_draw_jobs",
+      "averageMs": 275.44,
+      "p95Ms": 278.95,
+      "maxMs": 278.95
+    },
+    {
+      "step": "evaluateRoomAfterDraw",
+      "averageMs": 0.19,
+      "p95Ms": 0.29,
+      "maxMs": 0.29
+    }
+  ],
+  "capacity": {
+    "observedDrawsPerSecond": 0.02,
+    "requiredDrawsPerSecond": 0.33,
+    "estimatedMaxRooms": 6,
+    "roomConcurrencyAssumed": 8
+  },
+  "perRoomDrawCounts": {
+    "e9c64224-e070-4d70-a2f1-d88fddf88c0a": 15
+  }
+}

@@ -11,7 +11,7 @@
 
 export * from "./money.js";
 export * from "./rng.js";
-export * from "./winEvaluation.js";
+export * from "./evaluation-types.js";
 export * from "./bitmask/index.js";
 export * from "./card-registry/index.js";
 export * from "./commission.js";

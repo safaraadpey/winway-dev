@@ -12,14 +12,12 @@
  *   - Draw loop: memory apply → memory evaluate → persistence writes only
  */
 
-import type { MarkingEngineMode } from "../../config/env.js";
 import { getGlobalCardRegistry } from "../../core/card-registry/index.js";
 import type { GlobalCardRegistry } from "../../core/card-registry/types.js";
 import { settleRoomIfNeeded } from "../../finance/settleRoom.js";
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import type { Logger } from "../../metrics/logger.js";
 import { processDrawMarking } from "../../runtime/marking-engine.js";
-import { getMismatchReporter } from "../../runtime/mismatch-reporter.js";
 import {
   type DrawStepBreakdown,
   emptyBreakdown,
@@ -70,14 +68,8 @@ export interface EvaluateDrawOptions {
   deferSettlement?: boolean;
   /** Force DB reconcile before evaluate (default: auto via needsReconcile). */
   syncFromDb?: boolean;
-  /** Marking engine mode (default scan). */
-  markingEngine?: MarkingEngineMode;
-  /** Preloaded global card registry (bitmask/dual modes). */
+  /** Preloaded global card registry. */
   cardRegistry?: GlobalCardRegistry | null;
-  /** Block bitmask as authoritative (default false). */
-  markingBitmaskAuthorityAllowed?: boolean;
-  /** Parity summary log interval for dual mode. */
-  markingParitySummaryEvery?: number;
 }
 
 export async function applyMarksAndEvaluateWithState(
@@ -120,49 +112,20 @@ export async function applyMarksAndEvaluateWithState(
     breakdown.getResults = authorityStep.timing;
   }
 
-  const markingEngine = opts.markingEngine ?? "scan";
-  const bitmaskAuthorityAllowed = opts.markingBitmaskAuthorityAllowed === true;
-  const paritySummaryEvery = opts.markingParitySummaryEvery ?? 500;
   let registry = opts.cardRegistry ?? null;
-  if ((markingEngine === "bitmask" || markingEngine === "dual") && !registry) {
+  if (!registry) {
     registry = await getGlobalCardRegistry(repo, log);
   }
-  if (registry && markingEngine !== "scan") {
-    state.syncMasksFromMarks(registry);
-  }
+  state.syncMasksFromMarks(registry);
 
-  const memoryStep = timedStepSync(() => {
-    const outcome = processDrawMarking(
-      state,
-      drawNumber,
-      markingEngine,
-      bitmaskAuthorityAllowed,
-      registry,
-      log,
-      { wasReconciled: shouldReconcile }
-    );
-    return outcome;
-  });
+  const memoryStep = timedStepSync(() =>
+    processDrawMarking(state, drawNumber, registry!)
+  );
   breakdown.evaluateRoomAfterDraw = memoryStep.timing;
-  const {
-    markRows: rows,
-    evalOut,
-    policy,
-    validation,
-    validationContext,
-  } = memoryStep.result;
-
-  if (validation && validationContext && policy.shadow === "bitmask") {
-    getMismatchReporter(log, paritySummaryEvery).record(
-      validation,
-      validationContext
-    );
-  }
+  const { markRows: rows, evalOut } = memoryStep.result;
 
   state.absorbEvaluation(evalOut, drawNumber);
-  if (registry && policy.effective !== "scan") {
-    state.syncMasksFromMarks(registry);
-  }
+  state.syncMasksFromMarks(registry);
 
   const resultRows = evalOut.newResults.map((r) => ({
     room_id: state.roomId,
@@ -188,10 +151,10 @@ export async function applyMarksAndEvaluateWithState(
   state.recordDrawProcessed(drawNumber);
 
   let settled = false;
-  if (!deferSettlement) {
+  if (!deferSettlement && evalOut.fullWinnerThisDraw) {
     const settleStep = await timedStep(() =>
       settleRoomIfNeeded(supabase, repo, state.roomId, {
-        fullWinnerThisDraw: evalOut.fullWinnerThisDraw,
+        fullWinnerThisDraw: true,
       })
     );
     if (settleStep.result) {

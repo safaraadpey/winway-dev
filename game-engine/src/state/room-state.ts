@@ -1,14 +1,9 @@
 /**
  * In-memory runtime state for one playing room.
  * Engine-owned; DB is persistence only.
- *
- * Phase 1: dual marking engines
- *   - scan path: legacy cell iteration (authoritative in dual mode)
- *   - bitmask path: O(affected_cards) via global reverse index
  */
 
-import type { TicketCard, EvaluateOutput } from "../core/index.js";
-import { evaluateRoomAfterDraw } from "../core/index.js";
+import type { EvaluateOutput } from "../core/evaluation-types.js";
 import {
   applyMarkForDrawBitmask,
   evaluateRoomAfterDrawBitmask,
@@ -23,16 +18,11 @@ import {
 import { normalizePoolCardId } from "./cardId.js";
 
 const EVAL_STATUSES = new Set(["reserved", "confirmed", "consumed"]);
-
-export interface CardCell {
-  value: number;
-  rowNo: number;
-}
+const CELLS_PER_CARD = 15;
 
 export interface RoomStateSnapshot {
   room: RoomRow;
   tickets: TicketRow[];
-  cellsByCard: Map<string, CardCell[]>;
   markedByTicket: Map<string, Set<number>>;
   existingLineTickets: Set<string>;
   existingFullTickets: Set<string>;
@@ -41,17 +31,10 @@ export interface RoomStateSnapshot {
   templateDingPerNumber: number | null;
 }
 
-/** Isolated state for dual-mode bitmask comparison (no live mutation). */
-export interface BitmaskCompareSnapshot {
-  maskByTicket: Map<string, number>;
-}
-
 export class RoomRuntimeState {
   readonly roomId: string;
   room: RoomRow;
   readonly tickets: TicketRow[];
-  private ticketCards: TicketCard[] = [];
-  readonly cellsByCard: Map<string, CardCell[]>;
   readonly markedByTicket: Map<string, Set<number>>;
   readonly existingLineTickets: Set<string>;
   readonly existingFullTickets: Set<string>;
@@ -74,7 +57,6 @@ export class RoomRuntimeState {
     this.roomId = snapshot.room.id;
     this.room = snapshot.room;
     this.tickets = snapshot.tickets;
-    this.cellsByCard = snapshot.cellsByCard;
     this.markedByTicket = snapshot.markedByTicket;
     this.existingLineTickets = snapshot.existingLineTickets;
     this.existingFullTickets = snapshot.existingFullTickets;
@@ -84,8 +66,6 @@ export class RoomRuntimeState {
 
     this.assignments = buildRoomAssignmentIndex(this.tickets);
     this.maskByTicket = new Map();
-
-    this.rebuildTicketCards();
   }
 
   countDingMatchedByUser(
@@ -107,31 +87,12 @@ export class RoomRuntimeState {
     return matched;
   }
 
-  private rebuildTicketCards(): void {
-    this.ticketCards = this.tickets.map((t) => ({
-      ticketId: t.id,
-      userId: t.player_user_id,
-      cells: (this.cellsByCard.get(normalizePoolCardId(t.pool_card_id)) ?? []).map(
-        (c) => ({
-          value: c.value,
-          rowNo: c.rowNo,
-        })
-      ),
-    }));
-  }
-
-  getTicketCards(): readonly TicketCard[] {
-    return this.ticketCards;
-  }
-
   totalCellRows(): number {
-    let n = 0;
-    for (const cells of this.cellsByCard.values()) n += cells.length;
-    return n;
+    return this.tickets.length * CELLS_PER_CARD;
   }
 
-  static isBroken(state: RoomRuntimeState): boolean {
-    return state.getTickets().length > 0 && state.totalCellRows() === 0;
+  static isBroken(_state: RoomRuntimeState): boolean {
+    return false;
   }
 
   /** Rebuild bitmask state from marked sets + global card registry. */
@@ -212,9 +173,18 @@ export class RoomRuntimeState {
     return this.unprocessedDrawNumbers.size > 0;
   }
 
+  /** True when a draw inserted *before* this ball is still unprocessed (insertion order). */
   hasEarlierUnprocessedDraw(drawNumber: number): boolean {
-    for (const n of this.unprocessedDrawNumbers) {
-      if (n < drawNumber) return true;
+    const idx = this.drawnNumbers.indexOf(drawNumber);
+    if (idx < 0) {
+      for (const n of this.unprocessedDrawNumbers) {
+        if (n !== drawNumber) return true;
+      }
+      return false;
+    }
+    for (let i = 0; i < idx; i++) {
+      const earlier = this.drawnNumbers[i]!;
+      if (this.unprocessedDrawNumbers.has(earlier)) return true;
     }
     return false;
   }
@@ -246,45 +216,7 @@ export class RoomRuntimeState {
     }
   }
 
-  /** Legacy scan path — iterates all tickets and scans card cells. */
-  applyMarkForDrawScan(drawNumber: number): { ticket_id: string; value: number }[] {
-    const rows: { ticket_id: string; value: number }[] = [];
-    for (const ticket of this.tickets) {
-      const cells = this.cellsByCard.get(normalizePoolCardId(ticket.pool_card_id)) ?? [];
-      if (!cells.some((c) => c.value === drawNumber)) continue;
-      rows.push({ ticket_id: ticket.id, value: drawNumber });
-      let marked = this.markedByTicket.get(ticket.id);
-      if (!marked) {
-        marked = new Set();
-        this.markedByTicket.set(ticket.id, marked);
-      }
-      marked.add(drawNumber);
-    }
-    return rows;
-  }
-
-  /** Backward-compatible alias for tests and legacy callers. */
-  applyMarkForDraw(drawNumber: number): { ticket_id: string; value: number }[] {
-    return this.applyMarkForDrawScan(drawNumber);
-  }
-
-  evaluateDrawScan(drawNumber: number): EvaluateOutput {
-    return evaluateRoomAfterDraw({
-      drawNumber,
-      firstLineDrawNumber: this.room.first_line_draw_number,
-      markedByTicket: this.markedByTicket,
-      tickets: this.ticketCards,
-      existingLineTickets: this.existingLineTickets,
-      existingFullTickets: this.existingFullTickets,
-    });
-  }
-
-  /** Backward-compatible alias. */
-  evaluateDraw(drawNumber: number): EvaluateOutput {
-    return this.evaluateDrawScan(drawNumber);
-  }
-
-  /** Bitmask path — O(affected_cards) marking + O(affected_tickets) win check. */
+  /** Bitmask path — O(affected_cards) marking + full-room win check. */
   applyMarkAndEvaluateBitmask(
     drawNumber: number,
     registry: GlobalCardRegistry
@@ -319,53 +251,6 @@ export class RoomRuntimeState {
     });
 
     return { markRows: markResult.markRows, evalOut };
-  }
-
-  /** Snapshot masks for dual-mode comparison without mutating live state. */
-  snapshotForBitmaskCompare(): BitmaskCompareSnapshot {
-    return { maskByTicket: new Map(this.maskByTicket) };
-  }
-
-  applyMarkAndEvaluateBitmaskOnSnapshot(
-    drawNumber: number,
-    registry: GlobalCardRegistry,
-    snapshot: BitmaskCompareSnapshot,
-    preDrawMarks?: ReadonlyMap<string, ReadonlySet<number>>
-  ): {
-    markRows: { ticket_id: string; value: number }[];
-    evalOut: EvaluateOutput;
-    maskByTicket: Map<string, number>;
-  } {
-    const maskByTicket = new Map(snapshot.maskByTicket);
-
-    const marksSource = preDrawMarks ?? this.markedByTicket;
-    for (const ticket of this.tickets) {
-      const cardId = normalizePoolCardId(ticket.pool_card_id);
-      const valueToBit = registry.valueToBitByCard.get(cardId);
-      if (!valueToBit) continue;
-      const marked = marksSource.get(ticket.id) ?? new Set<number>();
-      maskByTicket.set(ticket.id, maskFromMarkedValues(marked, valueToBit));
-    }
-
-    const markResult = applyMarkForDrawBitmask({
-      drawNumber,
-      numberIndex: registry.numberIndex,
-      assignmentsByCardId: this.assignments.assignmentsByCardId,
-      maskByTicket,
-    });
-
-    const evalOut = evaluateRoomAfterDrawBitmask({
-      drawNumber,
-      firstLineDrawNumber: this.room.first_line_draw_number,
-      maskByTicket,
-      ticketCardId: this.assignments.ticketCardId,
-      ticketUserId: this.assignments.ticketUserId,
-      cardDefs: registry.definitions,
-      existingLineTickets: this.existingLineTickets,
-      existingFullTickets: this.existingFullTickets,
-    });
-
-    return { markRows: markResult.markRows, evalOut, maskByTicket };
   }
 
   absorbEvaluation(evalOut: EvaluateOutput, drawNumber: number): void {

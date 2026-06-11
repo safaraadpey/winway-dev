@@ -125,15 +125,18 @@ export async function manageRoomLiveActions(
         continue;
       }
 
-      const state = stateManager?.get(room.id);
+      let state = stateManager?.get(room.id);
 
-      // DB is authoritative for scheduler decisions; keep memory in sync when loaded.
-      const [dbDrawn, dbUnprocessed] = await Promise.all([
-        repo.getDrawnNumbers(room.id),
-        repo.getUnprocessedDrawNumbers(room.id),
-      ]);
+      let dbDrawn: number[];
       if (state) {
-        state.syncDrawSchedulerState(dbDrawn, dbUnprocessed);
+        const [drawn, unprocessed] = await Promise.all([
+          repo.getDrawnNumbers(room.id),
+          repo.getUnprocessedDrawNumbers(room.id),
+        ]);
+        state.syncDrawSchedulerState(drawn, unprocessed);
+        dbDrawn = drawn;
+      } else {
+        dbDrawn = await repo.getDrawnNumbers(room.id);
       }
 
       const next = pickNextNumber(seed, dbDrawn);
@@ -165,11 +168,10 @@ export async function manageRoomLiveActions(
       }
 
       if (outcome === "inserted") {
-        if (state) {
-          state.recordDrawInserted(next);
-        } else {
-          stateManager?.preload(room.id);
+        if (!state && stateManager) {
+          state = await stateManager.ensureLoaded(room.id);
         }
+        state?.recordDrawInserted(next);
         drew += 1;
         continue;
       }
@@ -178,11 +180,14 @@ export async function manageRoomLiveActions(
         roomId: room.id,
         number: next,
       });
-      const [resyncDrawn, resyncUnprocessed] = await Promise.all([
-        repo.getDrawnNumbers(room.id),
-        repo.getUnprocessedDrawNumbers(room.id),
-      ]);
-      state?.syncDrawSchedulerState(resyncDrawn, resyncUnprocessed);
+      if (state) {
+        const [drawn, unprocessed] = await Promise.all([
+          repo.getDrawnNumbers(room.id),
+          repo.getUnprocessedDrawNumbers(room.id),
+        ]);
+        state.syncDrawSchedulerState(drawn, unprocessed);
+        dbDrawn = drawn;
+      }
       await repo.setNextDrawAt(
         room.id,
         addSeconds(now, intervalSec),

@@ -62,7 +62,7 @@ async function main(): Promise<void> {
 
   const repo = new GameRepo(supabase);
   const roomState = new RoomStateManager(repo, log, config.roomStateCheckpointEvery);
-  if (executesBusinessLogic(config.runtime) && config.markingEngine !== "scan") {
+  if (executesBusinessLogic(config.runtime)) {
     await getGlobalCardRegistry(repo, log);
   }
   if (executesBusinessLogic(config.runtime)) {

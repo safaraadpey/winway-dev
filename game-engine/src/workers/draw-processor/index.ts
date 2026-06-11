@@ -13,7 +13,6 @@ import { GameRepo } from "../../repositories/index.js";
 import { redisKeys } from "../../redis/keys.js";
 import { acquireLeaderLock, releaseLeaderLock } from "../../redis/leaderLock.js";
 import { getGlobalCardRegistry } from "../../core/card-registry/index.js";
-import { getMismatchReporter } from "../../runtime/mismatch-reporter.js";
 import type { GlobalCardRegistry } from "../../core/card-registry/types.js";
 import { executesBusinessLogic } from "../../runtime.js";
 import type { WorkerContext } from "../context.js";
@@ -44,7 +43,7 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
   let cardRegistry: GlobalCardRegistry | null = null;
 
   const ensureCardRegistry = async (): Promise<GlobalCardRegistry | null> => {
-    if (config.markingEngine === "scan") return null;
+    if (!executesBusinessLogic(config.runtime)) return null;
     if (!cardRegistry) {
       cardRegistry = await getGlobalCardRegistry(repo, log);
     }
@@ -116,17 +115,13 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
       deadLettered: 0,
     };
 
-    // engine mode → full TS business logic; hybrid → orchestrate DB RPCs.
     const batchOpts = {
       maxAttempts: config.drawProcessorMaxAttempts,
       batchSize: config.drawProcessorBatchSize,
       roomConcurrency: config.drawProcessorRoomConcurrency,
       redis,
       drawRoomLockTtlSec: config.drawRoomLockTtlSec,
-      markingEngine: config.markingEngine,
       cardRegistry: await ensureCardRegistry(),
-      markingBitmaskAuthorityAllowed: config.markingBitmaskAuthorityAllowed,
-      markingParitySummaryEvery: config.markingParitySummaryEvery,
     };
 
     const runBatch = executesBusinessLogic(config.runtime)
@@ -144,13 +139,6 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
 
     if (totals.picked > 0) {
       log.info("draw-processor batch", { ...totals });
-    }
-
-    if (
-      config.markingEngine === "dual" ||
-      (config.markingEngine === "bitmask" && !config.markingBitmaskAuthorityAllowed)
-    ) {
-      getMismatchReporter(log, config.markingParitySummaryEvery).emitSummary();
     }
 
     if (executesBusinessLogic(config.runtime)) {

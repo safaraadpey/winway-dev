@@ -11,6 +11,37 @@ import type { Logger } from "../../metrics/logger.js";
 import { GameRepo } from "../../repositories/index.js";
 import type { RoomRuntimeState } from "../../state/room-state.js";
 
+export interface DingCreditsPayload {
+  dingPerCard: number;
+  credits: { user_id: string; amount: number; matched_cards: number }[];
+}
+
+/** Compute ding payload in memory (no DB). */
+export function prepareDingCreditsFromState(
+  state: RoomRuntimeState,
+  drawNumber: number,
+  marksInserted: readonly { ticket_id: string; value: number }[]
+): DingCreditsPayload {
+  const dingPerCard = resolveDingPerCard(
+    state.room.ding_per_number,
+    state.templateDingPerNumber
+  );
+  const matchedByUser = state.countDingMatchedByUser(marksInserted, drawNumber);
+  const computed = computeDingCredits({
+    drawnNumber: drawNumber,
+    dingPerCard,
+    matchedCardsByUser: matchedByUser,
+  });
+  return {
+    dingPerCard,
+    credits: computed.map((c) => ({
+      user_id: c.userId,
+      amount: c.delta,
+      matched_cards: c.matchedCards,
+    })),
+  };
+}
+
 async function persistDingCredits(
   repo: GameRepo,
   roomId: string,
@@ -49,23 +80,22 @@ export async function aggregateDingForDrawFromState(
   drawNumber: number,
   marksInserted: readonly { ticket_id: string; value: number }[]
 ): Promise<number> {
-  const dingPerCard = resolveDingPerCard(
-    state.room.ding_per_number,
-    state.templateDingPerNumber
+  const { dingPerCard, credits } = prepareDingCreditsFromState(
+    state,
+    drawNumber,
+    marksInserted
   );
-  const matchedByUser = state.countDingMatchedByUser(marksInserted, drawNumber);
-  const credits = computeDingCredits({
-    drawnNumber: drawNumber,
-    dingPerCard,
-    matchedCardsByUser: matchedByUser,
-  });
 
   const credited = await persistDingCredits(
     repo,
     state.roomId,
     drawNumber,
     dingPerCard,
-    credits
+    credits.map((c) => ({
+      userId: c.user_id,
+      delta: c.amount,
+      matchedCards: c.matched_cards,
+    }))
   );
 
   if (credited > 0) {

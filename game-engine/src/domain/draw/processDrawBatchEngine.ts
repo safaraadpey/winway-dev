@@ -5,14 +5,14 @@
  * stamp), but marks + win evaluation run in TypeScript (applyMarksAndEvaluate)
  * instead of via DB RPCs.
  *
- * Ding is aggregated in TypeScript (aggregateDingForDrawFromState) after finalize
- * stamps processed_at. The DB trigger trg_aggregate_ding_on_processed_at is disabled.
+ * Ding credits are computed in TypeScript and persisted inside
+ * rpc_finalize_engine_draw_job (single RTT). The DB trigger
+ * trg_aggregate_ding_on_processed_at is disabled.
  */
 
-import type { MarkingEngineMode } from "../../config/env.js";
 import type { GlobalCardRegistry } from "../../core/card-registry/types.js";
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
-import { aggregateDingForDrawFromState } from "../ding/index.js";
+import { prepareDingCreditsFromState } from "../ding/index.js";
 import { settleRoomIfNeeded } from "../../finance/settleRoom.js";
 import type { Logger } from "../../metrics/logger.js";
 import {
@@ -36,10 +36,7 @@ export interface ProcessDrawBatchEngineOptions {
   roomConcurrency: number;
   redis?: GameRedis | null;
   drawRoomLockTtlSec?: number;
-  markingEngine?: MarkingEngineMode;
   cardRegistry?: GlobalCardRegistry | null;
-  markingBitmaskAuthorityAllowed?: boolean;
-  markingParitySummaryEvery?: number;
 }
 
 export async function processDrawBatchEngine(
@@ -118,10 +115,7 @@ export async function processDrawBatchEngine(
           {
             persist: false,
             deferSettlement: true,
-            markingEngine: opts.markingEngine,
             cardRegistry: opts.cardRegistry,
-            markingBitmaskAuthorityAllowed: opts.markingBitmaskAuthorityAllowed,
-            markingParitySummaryEvery: opts.markingParitySummaryEvery,
           }
         );
         const breakdown = { ...evalResult.breakdown };
@@ -136,32 +130,31 @@ export async function processDrawBatchEngine(
           throw new Error("engine draw missing persistence payload");
         }
 
-        const finalizeStep = await timedStep(() =>
-          repo.finalizeEngineDrawJob({
+        const state = roomState;
+        const dingPayload = state
+          ? prepareDingCreditsFromState(state, job.draw_number, persistence.marks)
+          : { dingPerCard: 0, credits: [] as { user_id: string; amount: number; matched_cards: number }[] };
+
+        const finalizeStep = await timedStep(async () => {
+          const credited = await repo.finalizeEngineDrawJob({
             jobId: job.id,
             roomId: job.room_id,
             drawNumber: job.draw_number,
             marks: persistence.marks,
             results: persistence.results,
             setFirstLineDrawNumber: persistence.setFirstLineDrawNumber,
-          })
-        );
+            dingPerCard: dingPayload.dingPerCard,
+            dingCredits: dingPayload.credits,
+          });
+          if (credited > 0) {
+            log.info("ding aggregated (engine)", {
+              roomId: job.room_id,
+              drawNumber: job.draw_number,
+              users: credited,
+            });
+          }
+        });
         breakdown.rpc_finalize_engine_draw_job = finalizeStep.timing;
-
-        const state = roomState;
-        if (state) {
-          const dingStep = await timedStep(() =>
-            aggregateDingForDrawFromState(
-              supabase,
-              repo,
-              log,
-              state,
-              job.draw_number,
-              persistence.marks
-            )
-          );
-          breakdown.aggregateDingForDraw = dingStep.timing;
-        }
 
         let settled = evalResult.settled;
         // Hot-path settle only when this draw produced a full winner, or a full

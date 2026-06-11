@@ -248,19 +248,17 @@ export class GameRepo {
     return (data ?? []).map((d: { number: number }) => d.number);
   }
 
-  /** True when a lower draw_number still lacks processed_at (ordering gate). */
+  /** True when a draw inserted earlier (by timestamp) still lacks processed_at. */
   async hasEarlierUnprocessedDraws(
     roomId: string,
     drawNumber: number
   ): Promise<boolean> {
-    const { count, error } = await this.db
-      .from("draws")
-      .select("id", { count: "exact", head: true })
-      .eq("room_id", roomId)
-      .is("processed_at", null)
-      .lt("number", drawNumber);
-    if (error) fail("hasEarlierUnprocessedDraws", error.message);
-    return (count ?? 0) > 0;
+    const { data, error } = await this.db.rpc("rpc_has_earlier_unprocessed_draw", {
+      p_room_id: roomId,
+      p_draw_number: drawNumber,
+    });
+    if (error) fail("rpc_has_earlier_unprocessed_draw", error.message);
+    return data === true;
   }
 
   async insertDraw(roomId: string, number: number, nowIso: string): Promise<void> {
@@ -482,7 +480,7 @@ export class GameRepo {
     if (error) fail("stampDrawProcessed", error.message);
   }
 
-  /** Single RPC: marks + results + job done + processed_at stamp. */
+  /** Single RPC: marks + results + job done + processed_at + ding. */
   async finalizeEngineDrawJob(args: {
     jobId: number;
     roomId: string;
@@ -496,15 +494,20 @@ export class GameRepo {
       draw_number: number;
     }[];
     setFirstLineDrawNumber: boolean;
-  }): Promise<void> {
-    const { error } = await this.db.rpc("rpc_finalize_engine_draw_job", {
+    dingPerCard?: number;
+    dingCredits?: { user_id: string; amount: number; matched_cards: number }[];
+  }): Promise<number> {
+    const { data, error } = await this.db.rpc("rpc_finalize_engine_draw_job", {
       p_job_id: args.jobId,
       p_room_id: args.roomId,
       p_draw_number: args.drawNumber,
       p_marks: args.marks,
       p_results: args.results,
       p_set_first_line_draw_number: args.setFirstLineDrawNumber,
+      p_ding_per_card: args.dingPerCard ?? 0,
+      p_credits: args.dingCredits ?? [],
     });
     if (error) fail("rpc_finalize_engine_draw_job", error.message);
+    return typeof data === "number" ? data : Number(data ?? 0);
   }
 }
