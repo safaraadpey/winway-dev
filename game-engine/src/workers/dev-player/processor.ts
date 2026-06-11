@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import { processScheduleBatch } from "../../domain/dev-players/index.js";
 import { DEFAULT_PROCESSING_STUCK_TIMEOUT_SECONDS } from "../../domain/dev-players/requeueStuckProcessingSchedules.js";
 import { DevPlayerRepo } from "../../repositories/devPlayerRepo.js";
+import { acquireLeaderLock, releaseLeaderLock } from "../../redis/leaderLock.js";
 import { redisKeys } from "../../redis/keys.js";
-import { releaseLock, tryAcquireLock } from "../../redis/locks.js";
 import type { WorkerContext } from "../context.js";
 
 const MIN_TICK_SECONDS = 5;
@@ -18,6 +18,8 @@ export function startDevPlayerProcessor(ctx: WorkerContext): () => void {
   const repo = new DevPlayerRepo(ctx.supabase);
   const lockToken = randomUUID();
   const lockKey = redisKeys.devPlayerProcessorLeader();
+  const worker = "dev-player-processor";
+  const redisLockDegraded = { value: false };
 
   let stopped = false;
   let inFlight = false;
@@ -48,18 +50,20 @@ export function startDevPlayerProcessor(ctx: WorkerContext): () => void {
   const tick = async (): Promise<void> => {
     if (stopped || inFlight) return;
     inFlight = true;
-    let haveLock = false;
+    let lockHeld = false;
 
     try {
-      if (redis) {
-        haveLock = await tryAcquireLock(
-          redis,
-          lockKey,
-          config.devPlayerProcessorLockTtlSec,
-          lockToken
-        );
-        if (!haveLock) return;
-      }
+      const lock = await acquireLeaderLock({
+        redis,
+        lockKey,
+        ttlSec: config.devPlayerProcessorLockTtlSec,
+        token: lockToken,
+        worker,
+        log,
+        degraded: redisLockDegraded,
+      });
+      if (!lock.proceed) return;
+      lockHeld = lock.lockHeld;
 
       await processScheduleBatch(
         repo,
@@ -68,13 +72,18 @@ export function startDevPlayerProcessor(ctx: WorkerContext): () => void {
         stuckTimeoutSeconds
       );
     } catch (err) {
-      log.error("dev-player-processor tick error", {
+      log.error(`${worker} tick error`, {
         error: err instanceof Error ? err.message : String(err),
       });
     } finally {
-      if (redis && haveLock) {
-        await releaseLock(redis, lockKey, lockToken).catch(() => undefined);
-      }
+      await releaseLeaderLock({
+        redis,
+        lockKey,
+        token: lockToken,
+        lockHeld,
+        worker,
+        log,
+      });
       inFlight = false;
     }
   };
@@ -93,4 +102,4 @@ export function startDevPlayerProcessor(ctx: WorkerContext): () => void {
     stopped = true;
     if (timeoutId) clearTimeout(timeoutId);
   };
-};
+}

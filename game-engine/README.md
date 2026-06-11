@@ -28,7 +28,9 @@ game-engine/
 REDIS_URL=rediss://default:...@....upstash.io:6379
 ```
 
-بدون `REDIS_URL` هم engine بالا می‌آید (تک‌replica).  
+بدون `REDIS_URL` / `UPSTASH_REDIS_REST_*` هم engine بالا می‌آید (تک‌replica / local dev).  
+اگر Redis configure شده ولی ping یا lock fail شود، engine **degrade** می‌کند و بدون lock ادامه می‌دهد (همه workerها از جمله dev-player).
+
 `GET /health` → `{ ok, redis: "up" | "down" | "disabled" }`
 
 

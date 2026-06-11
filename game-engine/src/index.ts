@@ -34,7 +34,12 @@ async function main(): Promise<void> {
   let redisHandle: RedisHandle | null = createRedisConnection(config, log);
   let redis = redisHandle?.redis ?? null;
   if (redisHandle) {
-    await connectRedis(redisHandle, log);
+    const redisReady = await connectRedis(redisHandle, log);
+    if (!redisReady) {
+      await redisHandle.redis.close().catch(() => undefined);
+      redisHandle = null;
+      redis = null;
+    }
   }
 
   log.info("game-engine starting", {

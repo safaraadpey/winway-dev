@@ -6,7 +6,7 @@ import {
 import { repairUnsettledFinishedRooms } from "../../domain/room/janitorRepair.js";
 import { GameRepo } from "../../repositories/index.js";
 import { redisKeys } from "../../redis/keys.js";
-import { releaseLock, tryAcquireLock } from "../../redis/locks.js";
+import { acquireLeaderLock, releaseLeaderLock } from "../../redis/leaderLock.js";
 import { executesBusinessLogic, isIdle } from "../../runtime.js";
 import type { WorkerContext } from "../context.js";
 
@@ -30,8 +30,9 @@ export function startRoomScheduler(ctx: WorkerContext): () => void {
   let stopped = false;
   let inFlight = false;
   let idleLogged = false;
-  let redisLockDegraded = false;
+  let redisLockDegraded = { value: false };
   let lastJanitorMs = 0;
+  const worker = "room-scheduler";
 
   const maybeRunJanitor = async (): Promise<void> => {
     if (!executesBusinessLogic(config.runtime)) return;
@@ -65,25 +66,17 @@ export function startRoomScheduler(ctx: WorkerContext): () => void {
 
     let lockHeld = false;
     try {
-      if (redis) {
-        try {
-          const haveLock = await tryAcquireLock(
-            redis,
-            lockKey,
-            config.drawProcessorLockTtlSec,
-            lockToken
-          );
-          lockHeld = haveLock;
-          if (!haveLock) return;
-        } catch (lockErr) {
-          if (!redisLockDegraded) {
-            redisLockDegraded = true;
-            log.warn("room-scheduler redis lock failed; continuing single-instance mode", {
-              error: errMessage(lockErr),
-            });
-          }
-        }
-      }
+      const lock = await acquireLeaderLock({
+        redis,
+        lockKey,
+        ttlSec: config.drawProcessorLockTtlSec,
+        token: lockToken,
+        worker,
+        log,
+        degraded: redisLockDegraded,
+      });
+      if (!lock.proceed) return;
+      lockHeld = lock.lockHeld;
 
       if (executesBusinessLogic(config.runtime)) {
         await manageWaitingRooms(repo, log, 50, ctx.roomState);
@@ -97,13 +90,14 @@ export function startRoomScheduler(ctx: WorkerContext): () => void {
         error: err instanceof Error ? err.message : String(err),
       });
     } finally {
-      if (redis && lockHeld) {
-        await releaseLock(redis, lockKey, lockToken).catch((err: unknown) =>
-          log.error("room-scheduler lock release failed", {
-            error: errMessage(err),
-          })
-        );
-      }
+      await releaseLeaderLock({
+        redis,
+        lockKey,
+        token: lockToken,
+        lockHeld,
+        worker,
+        log,
+      });
       inFlight = false;
     }
   };

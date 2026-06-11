@@ -118,14 +118,19 @@ export function createRedisConnection(
   return null;
 }
 
+/** Returns false when ping fails — caller should run without Redis (single-instance). */
 export async function connectRedis(
   handle: RedisHandle,
   log: Logger
-): Promise<void> {
+): Promise<boolean> {
   await handle.connect();
   const ok = await handle.redis.ping();
   if (!ok) {
-    throw new Error("Redis ping failed");
+    log.warn(
+      "redis ping failed; continuing without redis (single-instance mode)"
+    );
+    return false;
   }
   log.info("redis ready", { backend: handle.redis.backend });
+  return true;
 }
