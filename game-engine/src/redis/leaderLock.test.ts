@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Logger } from "../metrics/logger.js";
 import type { GameRedis } from "./types.js";
-import { acquireLeaderLock, releaseLeaderLock } from "./leaderLock.js";
+import {
+  acquireLeaderLock,
+  acquireLeaderLockWithTimeout,
+  releaseLeaderLock,
+} from "./leaderLock.js";
 
 const noopLog: Logger = {
   info: () => {},
@@ -79,6 +83,36 @@ describe("acquireLeaderLock", () => {
     assert.equal(degraded.value, true);
     assert.equal(warnings.length, 1);
     assert.match(warnings[0]!, /single-instance mode/);
+  });
+});
+
+describe("acquireLeaderLockWithTimeout", () => {
+  it("returns timedOut when redis is slower than the budget", async () => {
+    const redis: GameRedis = {
+      backend: "upstash-rest",
+      ping: async () => true,
+      tryAcquireLock: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 80));
+        return true;
+      },
+      releaseLock: async () => {},
+      close: async () => {},
+    };
+
+    const result = await acquireLeaderLockWithTimeout({
+      redis,
+      lockKey: "k",
+      ttlSec: 30,
+      token: "t",
+      worker: "test-worker",
+      log: noopLog,
+      degraded: { value: false },
+      timeoutMs: 20,
+    });
+
+    assert.equal(result.proceed, false);
+    assert.equal(result.lockHeld, false);
+    assert.equal(result.timedOut, true);
   });
 });
 

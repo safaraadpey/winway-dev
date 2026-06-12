@@ -22,19 +22,25 @@ import {
 } from "../../runtime/draw-processor-wake.js";
 import { executesBusinessLogic } from "../../runtime.js";
 import type { WorkerContext } from "../context.js";
+import { startPerRoomActorProcessor } from "./startPerRoomActorProcessor.js";
 import { startDrawJobWakeListener } from "./wakeListener.js";
 
 const MICRO_WAKE_REASONS = new Set<DrawProcessorWakeReason>(["enqueue", "realtime"]);
 
-/**
- * Consumes draw_jobs: marks -> evaluate -> settle (via DB RPCs).
- *
- * Queue-wait optimization (engine mode):
- *  - Wake on draw_jobs enqueue (in-process + Realtime) instead of poll-only.
- *  - Micro-pick: parallel pick+process while main drain is inFlight.
- *  - Chain drains when idle; pendingDrain on leader lock miss.
- */
 export function startDrawProcessor(ctx: WorkerContext): () => void {
+  if (
+    ctx.config.drawProcessorPerRoomActor &&
+    executesBusinessLogic(ctx.config.runtime)
+  ) {
+    return startPerRoomActorProcessor(ctx);
+  }
+  return startLegacyDrainProcessor(ctx);
+}
+
+/**
+ * Legacy batch drain (phase 1). Used when DRAW_PROCESSOR_PER_ROOM_ACTOR=false.
+ */
+function startLegacyDrainProcessor(ctx: WorkerContext): () => void {
   const { supabase, config, log, redis } = ctx;
   const lockToken = randomUUID();
   const lockKey = redisKeys.drawProcessorLeader();

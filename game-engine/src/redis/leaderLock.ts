@@ -6,6 +6,12 @@ export interface LeaderLockAcquireResult {
   /** When false, another replica holds the lock — skip this tick. */
   proceed: boolean;
   lockHeld: boolean;
+  /** True when the acquire raced past {@link acquireLeaderLockWithTimeout}. */
+  timedOut?: boolean;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function errMessage(err: unknown): string {
@@ -51,6 +57,53 @@ export async function acquireLeaderLock(args: {
     }
     return { proceed: true, lockHeld: false };
   }
+}
+
+/**
+ * Bounded leader lock acquire for hot paths.
+ * Never waits longer than timeoutMs; late acquires are released immediately.
+ */
+export async function acquireLeaderLockWithTimeout(
+  args: {
+    redis: GameRedis | null;
+    lockKey: string;
+    ttlSec: number;
+    token: string;
+    worker: string;
+    log: Logger;
+    degraded: { value: boolean };
+    timeoutMs: number;
+  }
+): Promise<LeaderLockAcquireResult> {
+  if (!args.redis) {
+    return { proceed: true, lockHeld: false };
+  }
+
+  let timedOut = false;
+
+  const acquireTask = acquireLeaderLock(args).then((result) => {
+    if (timedOut) {
+      if (result.lockHeld) {
+        void releaseLeaderLock({
+          redis: args.redis,
+          lockKey: args.lockKey,
+          token: args.token,
+          lockHeld: true,
+          worker: args.worker,
+          log: args.log,
+        });
+      }
+      return { proceed: false, lockHeld: false, timedOut: true };
+    }
+    return result;
+  });
+
+  const timeoutTask = sleep(args.timeoutMs).then(() => {
+    timedOut = true;
+    return { proceed: false, lockHeld: false, timedOut: true };
+  });
+
+  return Promise.race([acquireTask, timeoutTask]);
 }
 
 export async function releaseLeaderLock(args: {

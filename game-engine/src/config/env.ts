@@ -33,6 +33,8 @@ export interface EngineConfig {
   drawProcessorMicroPickBatchSize: number;
   /** Cap concurrent micro-picks (room locks serialize same-room work). */
   drawProcessorMaxMicroPicksInFlight: number;
+  /** Per-room actor pipeline: pick decoupled from serial room processing. */
+  drawProcessorPerRoomActor: boolean;
   /** Wake draw-processor immediately when a draw_jobs row is enqueued. */
   drawProcessorWakeOnEnqueue: boolean;
   /** Requeue a failing job until attempts hits this, then park as 'failed'. */
@@ -127,6 +129,8 @@ export function loadConfig(): EngineConfig {
     drawProcessorMaxMicroPicksInFlight: Number(
       process.env.DRAW_PROCESSOR_MAX_MICRO_PICKS_IN_FLIGHT ?? "3"
     ),
+    drawProcessorPerRoomActor:
+      process.env.DRAW_PROCESSOR_PER_ROOM_ACTOR !== "false",
     drawProcessorWakeOnEnqueue:
       process.env.DRAW_PROCESSOR_WAKE_ON_ENQUEUE !== "false",
     drawProcessorMaxAttempts: Number(
