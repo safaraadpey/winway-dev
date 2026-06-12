@@ -57,12 +57,14 @@ See [docs/migration/local-game-engine-rollout.md](../docs/migration/local-game-e
 
 ## Draw processor — کاهش queue_wait
 
-پیش‌فرض: wake بلافاصله بعد از enqueue (`DRAW_PROCESSOR_WAKE_ON_ENQUEUE=true`) + drain کوتاه روی wake (`DRAW_PROCESSOR_MAX_BATCHES_PER_WAKE=1`). Poll هر ۵۰۰ms فقط fallback است.
+پیش‌فرض: wake بعد از enqueue + **micro-pick** موازی حین drain + drain عمیق‌تر روی wake (`MAX_BATCHES_PER_WAKE=4`). Poll هر ۵۰۰ms فقط fallback است.
 
 | Env | پیش‌فرض | نقش |
 |-----|---------|-----|
 | `DRAW_PROCESSOR_WAKE_ON_ENQUEUE` | `true` | scheduler → wake in-process؛ Realtime روی `draw_jobs` INSERT |
-| `DRAW_PROCESSOR_MAX_BATCHES_PER_WAKE` | `1` | drain کوتاه؛ کمتر block کردن tick بعدی |
+| `DRAW_PROCESSOR_MICRO_PICK_ON_ENQUEUE` | `true` | pick فوری (batch=1) وقتی drain اصلی inFlight است |
+| `DRAW_PROCESSOR_MAX_MICRO_PICKS_IN_FLIGHT` | `3` | سقف micro-pick همزمان (room lock همان room را سریال می‌کند) |
+| `DRAW_PROCESSOR_MAX_BATCHES_PER_WAKE` | `4` | عمق drain روی enqueue/realtime |
 | `DRAW_PROCESSOR_MAX_BATCHES_PER_TICK` | `2` | عمق drain روی poll |
 | `DRAW_PROCESSOR_INTERVAL_MS` | `500` | safety poll |
 

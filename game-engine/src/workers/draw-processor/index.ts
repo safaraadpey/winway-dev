@@ -9,6 +9,7 @@ import {
   snapshotDrawAggregateMetrics,
 } from "../../metrics/drawPerformance.js";
 import { createDrainMonitorContext } from "../../domain/draw/drainMonitor.js";
+import type { PickDebugContext } from "../../domain/draw/pickDebugSnapshot.js";
 import { reapStaleDrawJobs } from "../../domain/draw/reapStaleJobs.js";
 import { GameRepo } from "../../repositories/index.js";
 import { redisKeys } from "../../redis/keys.js";
@@ -23,13 +24,15 @@ import { executesBusinessLogic } from "../../runtime.js";
 import type { WorkerContext } from "../context.js";
 import { startDrawJobWakeListener } from "./wakeListener.js";
 
+const MICRO_WAKE_REASONS = new Set<DrawProcessorWakeReason>(["enqueue", "realtime"]);
+
 /**
  * Consumes draw_jobs: marks -> evaluate -> settle (via DB RPCs).
  *
  * Queue-wait optimization (engine mode):
  *  - Wake on draw_jobs enqueue (in-process + Realtime) instead of poll-only.
- *  - Coalesce wakes while a drain is in-flight; chain another drain when idle.
- *  - Short wake drains (default 1 batch) so inFlight blocks the next pick less.
+ *  - Micro-pick: parallel pick+process while main drain is inFlight.
+ *  - Chain drains when idle; pendingDrain on leader lock miss.
  */
 export function startDrawProcessor(ctx: WorkerContext): () => void {
   const { supabase, config, log, redis } = ctx;
@@ -39,6 +42,7 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
   let stopped = false;
   let inFlight = false;
   let pendingDrain = false;
+  let microPicksInFlight = 0;
   let wakeReason: DrawProcessorWakeReason = "poll";
   let idleLogged = false;
   let redisLockDegraded = { value: false };
@@ -68,12 +72,60 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
     });
   };
 
+  const isMicroWake = (reason: DrawProcessorWakeReason): boolean =>
+    MICRO_WAKE_REASONS.has(reason);
+
+  const runMicroPick = async (reason: DrawProcessorWakeReason): Promise<void> => {
+    if (
+      stopped ||
+      !config.drawProcessorMicroPickOnEnqueue ||
+      !isMicroWake(reason) ||
+      !executesBusinessLogic(config.runtime)
+    ) {
+      return;
+    }
+    if (microPicksInFlight >= config.drawProcessorMaxMicroPicksInFlight) {
+      return;
+    }
+
+    microPicksInFlight += 1;
+    try {
+      const pickDebug: PickDebugContext = {
+        workerId: `${lockToken}:micro`,
+        getWakeReason: () => reason,
+        getFlags: () => ({
+          inFlight,
+          pendingDrain,
+          lockState: "proceed",
+        }),
+      };
+
+      const totals = await executeDrain({
+        maxBatches: 1,
+        batchSize: config.drawProcessorMicroPickBatchSize,
+        pickDebug,
+        microPick: true,
+        activeWakeReason: reason,
+      });
+
+      if (totals.requeued > 0) {
+        pendingDrain = true;
+        wakeReason = "backlog";
+      }
+    } catch (err) {
+      log.error("draw-processor micro-pick error", { error: errMessage(err) });
+    } finally {
+      microPicksInFlight -= 1;
+    }
+  };
+
   const requestDrain = (reason: DrawProcessorWakeReason): void => {
     if (stopped) return;
     if (inFlight) {
       pendingDrain = true;
-      if (reason === "enqueue" || reason === "realtime") {
+      if (isMicroWake(reason)) {
         wakeReason = reason;
+        void runMicroPick(reason);
       }
       return;
     }
@@ -98,6 +150,7 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
 
     inFlight = true;
     let lockHeld = false;
+    const cycleWakeReason = wakeReason;
     try {
       await maybeReapStaleJobs();
       const lock = await acquireLeaderLock({
@@ -109,15 +162,36 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
         log,
         degraded: redisLockDegraded,
       });
-      if (!lock.proceed) return;
+      if (!lock.proceed) {
+        pendingDrain = true;
+        if (isMicroWake(cycleWakeReason)) {
+          wakeReason = cycleWakeReason;
+        }
+        return;
+      }
       lockHeld = lock.lockHeld;
 
-      const maxBatches =
-        wakeReason === "poll"
+      const maxBatches = isMicroWake(cycleWakeReason)
+        ? config.drawProcessorMaxBatchesPerWake
+        : cycleWakeReason === "poll"
           ? config.drawProcessorMaxBatchesPerTick
           : config.drawProcessorMaxBatchesPerWake;
 
-      const totals = await drain(maxBatches);
+      const pickDebug: PickDebugContext = {
+        workerId: lockToken,
+        getWakeReason: () => cycleWakeReason,
+        getFlags: () => ({
+          inFlight,
+          pendingDrain,
+          lockState: "proceed",
+        }),
+      };
+
+      const totals = await executeDrain({
+        maxBatches,
+        pickDebug,
+        activeWakeReason: cycleWakeReason,
+      });
 
       if (totals.requeued > 0) {
         pendingDrain = true;
@@ -146,7 +220,13 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
     }
   };
 
-  const drain = async (maxBatches: number): Promise<DrawBatchResult> => {
+  const executeDrain = async (opts: {
+    maxBatches: number;
+    batchSize?: number;
+    pickDebug?: PickDebugContext;
+    microPick?: boolean;
+    activeWakeReason: DrawProcessorWakeReason;
+  }): Promise<DrawBatchResult> => {
     const drainMonitor = createDrainMonitorContext();
     const totals: DrawBatchResult = {
       picked: 0,
@@ -157,19 +237,20 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
 
     const batchOpts = {
       maxAttempts: config.drawProcessorMaxAttempts,
-      batchSize: config.drawProcessorBatchSize,
+      batchSize: opts.batchSize ?? config.drawProcessorBatchSize,
       roomConcurrency: config.drawProcessorRoomConcurrency,
       redis,
       drawRoomLockTtlSec: config.drawRoomLockTtlSec,
       cardRegistry: await ensureCardRegistry(),
       drainMonitor,
+      pickDebug: opts.pickDebug,
     };
 
     const runBatch = executesBusinessLogic(config.runtime)
       ? () => processDrawBatchEngine(supabase, log, batchOpts, ctx.roomState)
       : () => processDrawBatch(supabase, log, batchOpts);
 
-    const batchLimit = Math.max(1, maxBatches);
+    const batchLimit = Math.max(1, opts.maxBatches);
     for (let batch = 0; !stopped && batch < batchLimit; batch++) {
       const res = await runBatch();
       totals.picked += res.picked;
@@ -199,18 +280,23 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
     }
 
     if (totals.picked > 0 || totals.done > 0) {
-      log.info("draw-drain-cycle", {
-        wakeReason,
+      log.info(opts.microPick ? "draw-micro-pick" : "draw-drain-cycle", {
+        wakeReason: opts.activeWakeReason,
+        microPick: opts.microPick ?? false,
         drainStartedAt: drainMonitor.drainStartedAt,
         drainEndedAt,
         drainDurationMs,
         maxBatches: batchLimit,
+        batchSize: batchOpts.batchSize,
         ...totals,
       });
     }
 
-    if (totals.picked > 0) {
-      log.info("draw-processor batch", { wakeReason, ...totals });
+    if (totals.picked > 0 && !opts.microPick) {
+      log.info("draw-processor batch", {
+        wakeReason: opts.activeWakeReason,
+        ...totals,
+      });
     }
 
     if (executesBusinessLogic(config.runtime)) {

@@ -25,8 +25,14 @@ export interface EngineConfig {
   drawProcessorBatchSize: number;
   /** Max pick→process loops per poll tick (drain depth). */
   drawProcessorMaxBatchesPerTick: number;
-  /** Max batches per enqueue/realtime wake (keep low to shorten inFlight). */
+  /** Max batches per enqueue/realtime wake. */
   drawProcessorMaxBatchesPerWake: number;
+  /** Parallel pick+process while main drain is inFlight (enqueue/realtime only). */
+  drawProcessorMicroPickOnEnqueue: boolean;
+  /** Jobs claimed per micro-pick (keep at 1 for lowest queue wait). */
+  drawProcessorMicroPickBatchSize: number;
+  /** Cap concurrent micro-picks (room locks serialize same-room work). */
+  drawProcessorMaxMicroPicksInFlight: number;
   /** Wake draw-processor immediately when a draw_jobs row is enqueued. */
   drawProcessorWakeOnEnqueue: boolean;
   /** Requeue a failing job until attempts hits this, then park as 'failed'. */
@@ -111,7 +117,15 @@ export function loadConfig(): EngineConfig {
       process.env.DRAW_PROCESSOR_MAX_BATCHES_PER_TICK ?? "2"
     ),
     drawProcessorMaxBatchesPerWake: Number(
-      process.env.DRAW_PROCESSOR_MAX_BATCHES_PER_WAKE ?? "1"
+      process.env.DRAW_PROCESSOR_MAX_BATCHES_PER_WAKE ?? "4"
+    ),
+    drawProcessorMicroPickOnEnqueue:
+      process.env.DRAW_PROCESSOR_MICRO_PICK_ON_ENQUEUE !== "false",
+    drawProcessorMicroPickBatchSize: Number(
+      process.env.DRAW_PROCESSOR_MICRO_PICK_BATCH_SIZE ?? "1"
+    ),
+    drawProcessorMaxMicroPicksInFlight: Number(
+      process.env.DRAW_PROCESSOR_MAX_MICRO_PICKS_IN_FLIGHT ?? "3"
     ),
     drawProcessorWakeOnEnqueue:
       process.env.DRAW_PROCESSOR_WAKE_ON_ENQUEUE !== "false",

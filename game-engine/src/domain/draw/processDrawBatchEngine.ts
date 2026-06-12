@@ -26,6 +26,10 @@ import { GameRepo } from "../../repositories/index.js";
 import type { RoomStateManager } from "../../state/room-state.manager.js";
 import { deferDrawJobToQueue, shouldDeferDrawJob } from "./drawJobOrdering.js";
 import { applyMarksAndEvaluateWithState } from "./evaluateDraw.js";
+import {
+  emitPickDebugSnapshot,
+  type PickDebugContext,
+} from "./pickDebugSnapshot.js";
 import { pickDrawJobs } from "./pickDrawJobs.js";
 import { processJobsByRoom } from "./processJobsByRoom.js";
 import type { DrainMonitorContext } from "./drainMonitor.js";
@@ -39,6 +43,7 @@ export interface ProcessDrawBatchEngineOptions {
   drawRoomLockTtlSec?: number;
   cardRegistry?: GlobalCardRegistry | null;
   drainMonitor?: DrainMonitorContext;
+  pickDebug?: PickDebugContext;
 }
 
 export async function processDrawBatchEngine(
@@ -49,6 +54,9 @@ export async function processDrawBatchEngine(
 ): Promise<DrawBatchResult> {
   const repo = new GameRepo(supabase);
 
+  if (opts.pickDebug) {
+    await emitPickDebugSnapshot(log, repo, opts.pickDebug, opts.batchSize);
+  }
   const pickStep = await timedStep(() => pickDrawJobs(supabase, opts.batchSize));
   const jobs = pickStep.result;
   if (jobs.length === 0) return { ...EMPTY_BATCH };

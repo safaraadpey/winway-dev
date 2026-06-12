@@ -521,6 +521,79 @@ export class GameRepo {
     return typeof data === "number" ? data : Number(data ?? 0);
   }
 
+  /** Live draw_jobs + rooms snapshot for pick-path diagnostics. */
+  async fetchPickDebugQueueState(): Promise<{
+    queuedJobsCount: number;
+    processingJobsCount: number;
+    oldestQueuedAgeMs: number;
+    oldestProcessingAgeMs: number;
+    activeRoomsCount: number;
+  }> {
+    const activeRoomStatuses = ["playing", "live", "settling"] as const;
+    const now = Date.now();
+    const ageMs = (iso: string | null | undefined): number =>
+      iso == null ? 0 : Math.max(0, now - Date.parse(iso));
+
+    const [queued, processing, oldestQueued, oldestProcessing, activeRooms] =
+      await Promise.all([
+        this.db
+          .from("draw_jobs")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "queued"),
+        this.db
+          .from("draw_jobs")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "processing"),
+        this.db
+          .from("draw_jobs")
+          .select("created_at")
+          .eq("status", "queued")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle(),
+        this.db
+          .from("draw_jobs")
+          .select("updated_at")
+          .eq("status", "processing")
+          .order("updated_at", { ascending: true })
+          .limit(1)
+          .maybeSingle(),
+        this.db
+          .from("rooms")
+          .select("id", { count: "exact", head: true })
+          .in("status", [...activeRoomStatuses]),
+      ]);
+
+    if (queued.error) fail("fetchPickDebugQueueState:queued", queued.error.message);
+    if (processing.error) {
+      fail("fetchPickDebugQueueState:processing", processing.error.message);
+    }
+    if (oldestQueued.error) {
+      fail("fetchPickDebugQueueState:oldestQueued", oldestQueued.error.message);
+    }
+    if (oldestProcessing.error) {
+      fail(
+        "fetchPickDebugQueueState:oldestProcessing",
+        oldestProcessing.error.message
+      );
+    }
+    if (activeRooms.error) {
+      fail("fetchPickDebugQueueState:activeRooms", activeRooms.error.message);
+    }
+
+    return {
+      queuedJobsCount: queued.count ?? 0,
+      processingJobsCount: processing.count ?? 0,
+      oldestQueuedAgeMs: ageMs(
+        (oldestQueued.data as { created_at: string } | null)?.created_at
+      ),
+      oldestProcessingAgeMs: ageMs(
+        (oldestProcessing.data as { updated_at: string } | null)?.updated_at
+      ),
+      activeRoomsCount: activeRooms.count ?? 0,
+    };
+  }
+
   /** Stamp drain_ended_at + drain_duration_ms for draws finalized in one drain tick. */
   async patchDrainCycleTiming(
     drainStartedAt: string,
