@@ -54,3 +54,16 @@ See [docs/migration/local-game-engine-rollout.md](../docs/migration/local-game-e
 | `tournament-orchestrator` | tick تورنومنت، seat players |
 
 در production می‌توان چند replica با roleهای مختلف اجرا کرد.
+
+## Draw processor — کاهش queue_wait
+
+پیش‌فرض: wake بلافاصله بعد از enqueue (`DRAW_PROCESSOR_WAKE_ON_ENQUEUE=true`) + drain کوتاه روی wake (`DRAW_PROCESSOR_MAX_BATCHES_PER_WAKE=1`). Poll هر ۵۰۰ms فقط fallback است.
+
+| Env | پیش‌فرض | نقش |
+|-----|---------|-----|
+| `DRAW_PROCESSOR_WAKE_ON_ENQUEUE` | `true` | scheduler → wake in-process؛ Realtime روی `draw_jobs` INSERT |
+| `DRAW_PROCESSOR_MAX_BATCHES_PER_WAKE` | `1` | drain کوتاه؛ کمتر block کردن tick بعدی |
+| `DRAW_PROCESSOR_MAX_BATCHES_PER_TICK` | `2` | عمق drain روی poll |
+| `DRAW_PROCESSOR_INTERVAL_MS` | `500` | safety poll |
+
+متریک‌ها روی `draws`: `queue_wait_ms`, `first_picked_at`, `handler_started_at`, `drain_*`.

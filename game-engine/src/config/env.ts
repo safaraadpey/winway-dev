@@ -23,8 +23,12 @@ export interface EngineConfig {
   logLevel: string;
   drawProcessorIntervalMs: number;
   drawProcessorBatchSize: number;
-  /** Max pick→process loops per tick (drain depth). */
+  /** Max pick→process loops per poll tick (drain depth). */
   drawProcessorMaxBatchesPerTick: number;
+  /** Max batches per enqueue/realtime wake (keep low to shorten inFlight). */
+  drawProcessorMaxBatchesPerWake: number;
+  /** Wake draw-processor immediately when a draw_jobs row is enqueued. */
+  drawProcessorWakeOnEnqueue: boolean;
   /** Requeue a failing job until attempts hits this, then park as 'failed'. */
   drawProcessorMaxAttempts: number;
   /** TTL (seconds) for the draw-processor Redis leader lock. */
@@ -104,8 +108,13 @@ export function loadConfig(): EngineConfig {
       process.env.DRAW_PROCESSOR_BATCH_SIZE ?? "100"
     ),
     drawProcessorMaxBatchesPerTick: Number(
-      process.env.DRAW_PROCESSOR_MAX_BATCHES_PER_TICK ?? "5"
+      process.env.DRAW_PROCESSOR_MAX_BATCHES_PER_TICK ?? "2"
     ),
+    drawProcessorMaxBatchesPerWake: Number(
+      process.env.DRAW_PROCESSOR_MAX_BATCHES_PER_WAKE ?? "1"
+    ),
+    drawProcessorWakeOnEnqueue:
+      process.env.DRAW_PROCESSOR_WAKE_ON_ENQUEUE !== "false",
     drawProcessorMaxAttempts: Number(
       process.env.DRAW_PROCESSOR_MAX_ATTEMPTS ?? "10"
     ),

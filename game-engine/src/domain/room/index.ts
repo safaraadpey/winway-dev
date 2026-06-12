@@ -12,6 +12,7 @@
  */
 
 import { pickNextNumber } from "../../core/index.js";
+import { wakeDrawProcessor } from "../../runtime/draw-processor-wake.js";
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import type { Logger } from "../../metrics/logger.js";
 import { GameRepo, parseBytea } from "../../repositories/index.js";
@@ -172,6 +173,7 @@ export async function manageRoomLiveActions(
           state = await stateManager.ensureLoaded(room.id);
         }
         state?.recordDrawInserted(next);
+        wakeDrawProcessor("enqueue");
         drew += 1;
         continue;
       }

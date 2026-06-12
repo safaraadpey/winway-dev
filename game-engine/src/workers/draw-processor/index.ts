@@ -15,19 +15,21 @@ import { redisKeys } from "../../redis/keys.js";
 import { acquireLeaderLock, releaseLeaderLock } from "../../redis/leaderLock.js";
 import { getGlobalCardRegistry } from "../../core/card-registry/index.js";
 import type { GlobalCardRegistry } from "../../core/card-registry/types.js";
+import {
+  registerDrawProcessorWake,
+  type DrawProcessorWakeReason,
+} from "../../runtime/draw-processor-wake.js";
 import { executesBusinessLogic } from "../../runtime.js";
 import type { WorkerContext } from "../context.js";
+import { startDrawJobWakeListener } from "./wakeListener.js";
 
 /**
  * Consumes draw_jobs: marks -> evaluate -> settle (via DB RPCs).
- * Replaces the pg_cron / Edge draw-worker trigger; the heavy lifting stays in
- * Postgres for now (Phase 1 hybrid). See docs/roadmap/GAME_ENGINE_MIGRATION.md (P0).
  *
- * Safety:
- *  - GAME_RUNTIME=legacy_db -> idle (cron still owns draws; no double processing).
- *  - Redis leader lock -> only one engine replica drains at a time (until sharded, B11).
- *  - Reentrancy guard -> overlapping timers never run concurrent batches in-process.
- *  - Per-room parallelism -> different rooms drain concurrently; one room stays serial.
+ * Queue-wait optimization (engine mode):
+ *  - Wake on draw_jobs enqueue (in-process + Realtime) instead of poll-only.
+ *  - Coalesce wakes while a drain is in-flight; chain another drain when idle.
+ *  - Short wake drains (default 1 batch) so inFlight blocks the next pick less.
  */
 export function startDrawProcessor(ctx: WorkerContext): () => void {
   const { supabase, config, log, redis } = ctx;
@@ -36,6 +38,8 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
 
   let stopped = false;
   let inFlight = false;
+  let pendingDrain = false;
+  let wakeReason: DrawProcessorWakeReason = "poll";
   let idleLogged = false;
   let redisLockDegraded = { value: false };
   let lastReapMs = 0;
@@ -64,8 +68,24 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
     });
   };
 
-  const tick = async (): Promise<void> => {
-    if (stopped || inFlight) return;
+  const requestDrain = (reason: DrawProcessorWakeReason): void => {
+    if (stopped) return;
+    if (inFlight) {
+      pendingDrain = true;
+      if (reason === "enqueue" || reason === "realtime") {
+        wakeReason = reason;
+      }
+      return;
+    }
+    wakeReason = reason;
+    void runDrainCycle();
+  };
+
+  const runDrainCycle = async (): Promise<void> => {
+    if (stopped || inFlight) {
+      if (!stopped) pendingDrain = true;
+      return;
+    }
 
     if (config.runtime === "legacy_db") {
       if (!idleLogged) {
@@ -92,9 +112,19 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
       if (!lock.proceed) return;
       lockHeld = lock.lockHeld;
 
-      await drain();
+      const maxBatches =
+        wakeReason === "poll"
+          ? config.drawProcessorMaxBatchesPerTick
+          : config.drawProcessorMaxBatchesPerWake;
+
+      const totals = await drain(maxBatches);
+
+      if (totals.requeued > 0) {
+        pendingDrain = true;
+        wakeReason = "backlog";
+      }
     } catch (err) {
-      log.error("draw-processor tick error", { error: errMessage(err) });
+      log.error("draw-processor drain error", { error: errMessage(err) });
     } finally {
       await releaseLeaderLock({
         redis,
@@ -105,10 +135,18 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
         log,
       });
       inFlight = false;
+
+      if (pendingDrain && !stopped) {
+        pendingDrain = false;
+        if (wakeReason === "poll") {
+          wakeReason = "backlog";
+        }
+        void runDrainCycle();
+      }
     }
   };
 
-  const drain = async (): Promise<void> => {
+  const drain = async (maxBatches: number): Promise<DrawBatchResult> => {
     const drainMonitor = createDrainMonitorContext();
     const totals: DrawBatchResult = {
       picked: 0,
@@ -131,7 +169,8 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
       ? () => processDrawBatchEngine(supabase, log, batchOpts, ctx.roomState)
       : () => processDrawBatch(supabase, log, batchOpts);
 
-    for (let batch = 0; !stopped && batch < config.drawProcessorMaxBatchesPerTick; batch++) {
+    const batchLimit = Math.max(1, maxBatches);
+    for (let batch = 0; !stopped && batch < batchLimit; batch++) {
       const res = await runBatch();
       totals.picked += res.picked;
       totals.done += res.done;
@@ -161,20 +200,24 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
 
     if (totals.picked > 0 || totals.done > 0) {
       log.info("draw-drain-cycle", {
+        wakeReason,
         drainStartedAt: drainMonitor.drainStartedAt,
         drainEndedAt,
         drainDurationMs,
+        maxBatches: batchLimit,
         ...totals,
       });
     }
 
     if (totals.picked > 0) {
-      log.info("draw-processor batch", { ...totals });
+      log.info("draw-processor batch", { wakeReason, ...totals });
     }
 
     if (executesBusinessLogic(config.runtime)) {
       await logDrawPerformanceMetrics(supabase, log, totals.done > 0);
     }
+
+    return totals;
   };
 
   const logDrawPerformanceMetrics = async (
@@ -216,12 +259,27 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
     }
   };
 
-  void tick();
-  const timer = setInterval(() => void tick(), config.drawProcessorIntervalMs);
+  const unregisterWake = registerDrawProcessorWake((reason) => {
+    if (!config.drawProcessorWakeOnEnqueue) return;
+    requestDrain(reason);
+  });
+
+  const stopWakeListener =
+    config.drawProcessorWakeOnEnqueue && executesBusinessLogic(config.runtime)
+      ? startDrawJobWakeListener(supabase, log)
+      : () => undefined;
+
+  void runDrainCycle();
+  const timer = setInterval(
+    () => requestDrain("poll"),
+    config.drawProcessorIntervalMs
+  );
 
   return () => {
     stopped = true;
     clearInterval(timer);
+    unregisterWake();
+    stopWakeListener();
   };
 }
 
