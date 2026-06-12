@@ -933,6 +933,10 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       calledNumbers.includes(w.drawNumber)
   );
 
+  const winningFullDrawNumber =
+    fullWinners.find((w) => w.drawNumber != null && w.drawNumber > 0)
+      ?.drawNumber ?? null;
+
   return (
     <div className="h-full bg-black/40 text-white overflow-hidden">
       <div className="max-w-3xl mx-auto h-full flex flex-col">
@@ -965,6 +969,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
               history={previousNumbers}
               totalDraws={calledNumbers.length}
               countdownSeconds={latestNumber == null ? firstDrawCountdownSec : null}
+              winningFullDrawNumber={winningFullDrawNumber}
             />
           </div>
 
@@ -977,7 +982,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
 
         {/* Cards List Section - Scrollable */}
         <div
-          className="flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-[9px] space-y-2 pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+          className="flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-[9px] space-y-2 pr-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
           style={{ paddingBottom: "300px" }}
         >
           {orderedCards.map((card) => (

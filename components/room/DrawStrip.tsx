@@ -11,6 +11,8 @@ interface DrawStripProps {
   totalDraws?: number;
   /** اگر currentNumber هنوز نداریم، می‌توانیم شمارش‌معکوس تا اولین draw را اینجا نمایش دهیم */
   countdownSeconds?: number | null;
+  /** عدد قرعه‌ای که برندهٔ پر روی آن مشخص شده (از fullWinners.drawNumber) */
+  winningFullDrawNumber?: number | null;
 }
 
 export default function DrawStrip({
@@ -21,6 +23,7 @@ export default function DrawStrip({
   history,
   totalDraws,
   countdownSeconds,
+  winningFullDrawNumber = null,
 }: DrawStripProps) {
   const [copyToast, setCopyToast] = useState<null | "success" | "error">(null);
   const copyToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -80,7 +83,7 @@ export default function DrawStrip({
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // هر بار مقدار نمایش‌داده‌شده عوض شد (شمارش‌معکوس یا عدد قرعه)، افکت flash اجرا شود
+    // هر بار مقدار نمایش‌داده‌شده عوض شد (شمارش‌معکوس یا عدد قرعه)، پالس بزرگ‌شدن اجرا شود
     setIsFlashing(true);
 
     if (flashTimerRef.current) {
@@ -109,6 +112,16 @@ export default function DrawStrip({
       }
     };
   }, []);
+
+  const showWaitingRing =
+    currentNumber != null ||
+    (countdownSeconds != null && countdownSeconds >= 0);
+
+  const isWinningFullDraw =
+    currentNumber != null &&
+    winningFullDrawNumber != null &&
+    winningFullDrawNumber > 0 &&
+    currentNumber === winningFullDrawNumber;
 
   return (
     <div className={styles.container}>
@@ -155,9 +168,26 @@ export default function DrawStrip({
         )}
       </div>
       <div
-        className={`${styles.current} ${isFlashing ? styles.flash : ""} latin-number`}
+        className={`${styles.currentWrapper} ${isFlashing ? styles.revealPulse : ""}`}
       >
-        {display}
+        {showWaitingRing && (
+          <div className={styles.currentRing} aria-hidden="true">
+            <span className={`${styles.currentRingLine} ${styles.currentRingLine1}`}>
+              <span className={styles.currentRingLineInner} />
+            </span>
+            <span className={`${styles.currentRingLine} ${styles.currentRingLine2}`}>
+              <span className={styles.currentRingLineInner} />
+            </span>
+            <span className={`${styles.currentRingLine} ${styles.currentRingLine3}`}>
+              <span className={styles.currentRingLineInner} />
+            </span>
+          </div>
+        )}
+        <div
+          className={`${styles.current} ${isWinningFullDraw ? styles.currentWinning : ""} latin-number`}
+        >
+          {display}
+        </div>
       </div>
       <div className={styles.historyWrapper}>
         <div className={styles.history}>

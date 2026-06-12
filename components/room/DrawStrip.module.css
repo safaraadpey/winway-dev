@@ -63,7 +63,74 @@
   font-weight: 400;
 }
 
+.currentWrapper {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  flex: none;
+  transform-origin: center center;
+}
+
+.revealPulse {
+  animation: currentRevealPulse 320ms ease-out;
+  will-change: transform;
+}
+
+.currentRing {
+  position: absolute;
+  inset: -2px;
+  z-index: 2;
+  pointer-events: none;
+  animation: currentRingSpin 2.3s linear infinite;
+}
+
+.currentRingLine {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  transform-origin: center center;
+}
+
+.currentRingLine1 {
+  transform: rotate(0deg) translateY(-32px);
+}
+
+.currentRingLine2 {
+  transform: rotate(120deg) translateY(-32px);
+}
+
+.currentRingLine3 {
+  transform: rotate(240deg) translateY(-32px);
+}
+
+.currentRingLineInner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 14px;
+  height: 3px;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(
+    90deg,
+    rgba(39, 151, 185, 0.39) 0%,
+    rgba(39, 151, 185, 0.7) 50%,
+    rgba(39, 151, 185, 0.39) 100%
+  );
+  box-shadow: 0 0 5px 0.7px rgba(39, 151, 185, 0.63);
+}
+
+@keyframes currentRingSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .current {
+  position: relative;
+  z-index: 1;
   width: 64px;
   height: 64px;
   border-radius: 999px;
@@ -76,33 +143,24 @@
   font-size: 32px;
   font-weight: 800;
   color: #ffffff;
-  flex: none;
   line-height: 1;
 }
 
-@keyframes currentFlash {
+.currentWinning {
+  color: #fbbf24;
+  text-shadow: 0 0 12px rgba(251, 191, 36, 0.55);
+}
+
+@keyframes currentRevealPulse {
   0% {
     transform: scale(1);
-    filter: brightness(1);
-    box-shadow: 0 0 24px rgba(40, 224, 142, 0.4);
   }
   40% {
-    transform: scale(1.06);
-    filter: brightness(1.2);
-    box-shadow:
-      0 0 0 6px rgba(40, 224, 142, 0.18),
-      0 0 34px rgba(40, 224, 142, 0.65);
+    transform: scale(1.15);
   }
   100% {
     transform: scale(1);
-    filter: brightness(1);
-    box-shadow: 0 0 24px rgba(40, 224, 142, 0.4);
   }
-}
-
-.flash {
-  animation: currentFlash 320ms ease-out;
-  will-change: transform, filter, box-shadow;
 }
 
 .historyWrapper {

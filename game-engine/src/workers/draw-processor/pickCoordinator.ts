@@ -29,8 +29,10 @@ import type { RoomDrawActorPool } from "./roomDrawActorPool.js";
 const FAST_WAKE = new Set<DrawProcessorWakeReason>(["enqueue", "realtime"]);
 const PICK_LOOP_HEARTBEAT_MS = 1000;
 const QUEUE_CACHE_REFRESH_MS = 500;
-const LOCK_TIMEOUT_MS = 150;
+/** Upstash REST often exceeds 150ms; too low causes zero picks under contention. */
+const LOCK_TIMEOUT_MS = 2000;
 const IDLE_RETRY_MS = 150;
+const LOCK_SKIP_LOG_EVERY = 20;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -80,6 +82,7 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
   let lastPickAt: string | null = null;
   let heartbeatInFlight = false;
   let redisLockDegraded = { value: false };
+  let consecutiveLockSkips = 0;
 
   const queueCache = createPickQueueStateCache({
     repo: opts.repo,
@@ -210,12 +213,26 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
 
     if (!lock.proceed) {
       pendingPick = true;
+      consecutiveLockSkips += 1;
       if (FAST_WAKE.has(activeWakeReason)) {
         wakeReason = activeWakeReason;
+      }
+      if (
+        consecutiveLockSkips === 1 ||
+        consecutiveLockSkips % LOCK_SKIP_LOG_EVERY === 0
+      ) {
+        opts.log.warn("pick-lock-deferred", {
+          consecutiveLockSkips,
+          timedOut: lock.timedOut === true,
+          wakeReason: activeWakeReason,
+          hint:
+            "Another engine replica may hold the Redis draw-processor lock — run only one engine per DB.",
+        });
       }
       return 0;
     }
 
+    consecutiveLockSkips = 0;
     const lockHeld = lock.lockHeld;
     let pickStep: { result: DrawJob[]; timing: StepTiming } | null = null;
 
@@ -226,20 +243,14 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
     } finally {
       pickInFlight = false;
       if (lockHeld) {
-        deferAsync(
-          async () => {
-            await releaseLeaderLock({
-              redis: opts.redis,
-              lockKey,
-              token: lockToken,
-              lockHeld: true,
-              worker,
-              log: opts.log,
-            });
-          },
-          opts.log,
-          "draw-processor lock release"
-        );
+        await releaseLeaderLock({
+          redis: opts.redis,
+          lockKey,
+          token: lockToken,
+          lockHeld: true,
+          worker,
+          log: opts.log,
+        });
       }
     }
 
