@@ -20,22 +20,18 @@ export default function PlayerLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="player-layout-root">
-      <div
-        className="player-layout-bg"
-        style={{ backgroundImage: "url(/backgrounds/layout_BG.webp)" }}
-        aria-hidden
-      />
-      <div className="relative z-10 flex h-full min-h-0 flex-col overflow-hidden">
-        <HeaderVisibilityProvider>
-          <ActiveGamesOrchestratorProvider>
-            <ActiveGamesProvider>
-              <PlayerLayoutClient>{children}</PlayerLayoutClient>
-              <EntryBannerModal visibleOnPaths={["/player/home"]} />
-            </ActiveGamesProvider>
-          </ActiveGamesOrchestratorProvider>
-        </HeaderVisibilityProvider>
-      </div>
+    <div
+      className="h-dvh min-h-dvh overflow-hidden bg-[#0E0E0F] bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: "url(/backgrounds/layout_BG.webp)" }}
+    >
+      <HeaderVisibilityProvider>
+        <ActiveGamesOrchestratorProvider>
+          <ActiveGamesProvider>
+            <PlayerLayoutClient>{children}</PlayerLayoutClient>
+            <EntryBannerModal visibleOnPaths={["/player/home"]} />
+          </ActiveGamesProvider>
+        </ActiveGamesOrchestratorProvider>
+      </HeaderVisibilityProvider>
     </div>
   );
 }

@@ -2,7 +2,7 @@
   width: 100%;
   max-width: 390px;
   margin: 0 auto;
-  padding-top: calc(0.25rem + var(--safe-area-top));
+  padding-top: calc(0.25rem + env(safe-area-inset-top, 0px));
   padding-right: 6px;
   padding-bottom: 11px;
   padding-left: 5px;

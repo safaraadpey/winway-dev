@@ -4,7 +4,6 @@ import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import GlobalUserStateClient from "./GlobalUserStateClient";
 import PWARegistration from "@/components/PWARegistration";
-import PwaSafeArea from "@/components/PwaSafeArea";
 
 const siteOrigin =
   process.env.NEXT_PUBLIC_MAIN_ORIGIN || "https://dingmoney.org";
@@ -21,9 +20,6 @@ export const metadata: Metadata = {
   },
   formatDetection: {
     telephone: false,
-  },
-  other: {
-    "mobile-web-app-capable": "yes",
   },
   openGraph: {
     type: "website",
@@ -57,8 +53,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  colorScheme: "dark",
-  themeColor: "#0E0E0F",
+  themeColor: "#111827",
 };
 
 export default function RootLayout({
@@ -92,8 +87,7 @@ export default function RootLayout({
       </head>
       <body className="bg-[#0E0E0F]">
         <PWARegistration />
-        <PwaSafeArea />
-        <div className="app-shell">
+        <div className="relative mx-auto min-h-dvh w-full max-w-[390px] overflow-x-hidden bg-[#0E0E0F]">
           <GlobalUserStateClient>{children}</GlobalUserStateClient>
         </div>
         <Toaster

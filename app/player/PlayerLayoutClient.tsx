@@ -85,10 +85,7 @@ export default function PlayerLayoutClient({
   }, [dingBalance, tomanBalance, lockedTomanBalance, availableTomanBalance, isAnimating]);
 
   return (
-    <div
-      className="flex h-full min-h-0 flex-col overflow-hidden"
-      style={{ paddingBottom: "var(--safe-area-bottom)" }}
-    >
+    <div className="flex flex-col h-dvh min-h-dvh overflow-hidden pb-[env(safe-area-inset-bottom,0px)]">
       <div className="flex-shrink-0 sticky top-0 z-50">
         {showHeader && (
           <MergedPlayerHeader
