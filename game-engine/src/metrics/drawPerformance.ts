@@ -95,6 +95,11 @@ export interface DrawPerformanceReport {
   marksInserted: number;
   marksReadCount: number;
   queueWaitMs: number;
+  processingMs: number;
+  finalizeMs: number;
+  drainStartedAt: string | null;
+  firstPickedAt: string | null;
+  handlerStartedAt: string | null;
   totalDurationMs: number;
   settled: boolean;
   breakdown: DrawStepBreakdown;
@@ -110,12 +115,16 @@ export function buildDrawPerformanceReport(args: {
   marksInserted: number;
   marksReadCount: number;
   queueWaitMs: number;
+  processingMs: number;
+  finalizeMs: number;
+  drainStartedAt?: string | null;
+  firstPickedAt?: string | null;
+  handlerStartedAt?: string | null;
   settled: boolean;
   breakdown: DrawStepBreakdown;
 }): DrawPerformanceReport {
-  const keys = Object.keys(args.breakdown) as DrawStepKey[];
   const totalDurationMs = roundMs(
-    keys.reduce((sum, k) => sum + args.breakdown[k].durationMs, 0) + args.queueWaitMs
+    args.queueWaitMs + args.processingMs + args.finalizeMs
   );
   return {
     roomId: args.roomId,
@@ -127,6 +136,11 @@ export function buildDrawPerformanceReport(args: {
     marksInserted: args.marksInserted,
     marksReadCount: args.marksReadCount,
     queueWaitMs: roundMs(args.queueWaitMs),
+    processingMs: roundMs(args.processingMs),
+    finalizeMs: roundMs(args.finalizeMs),
+    drainStartedAt: args.drainStartedAt ?? null,
+    firstPickedAt: args.firstPickedAt ?? null,
+    handlerStartedAt: args.handlerStartedAt ?? null,
     totalDurationMs,
     settled: args.settled,
     breakdown: args.breakdown,

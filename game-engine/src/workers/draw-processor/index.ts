@@ -8,6 +8,7 @@ import {
   fetchDrawQueueMetrics,
   snapshotDrawAggregateMetrics,
 } from "../../metrics/drawPerformance.js";
+import { createDrainMonitorContext } from "../../domain/draw/drainMonitor.js";
 import { reapStaleDrawJobs } from "../../domain/draw/reapStaleJobs.js";
 import { GameRepo } from "../../repositories/index.js";
 import { redisKeys } from "../../redis/keys.js";
@@ -108,6 +109,7 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
   };
 
   const drain = async (): Promise<void> => {
+    const drainMonitor = createDrainMonitorContext();
     const totals: DrawBatchResult = {
       picked: 0,
       done: 0,
@@ -122,6 +124,7 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
       redis,
       drawRoomLockTtlSec: config.drawRoomLockTtlSec,
       cardRegistry: await ensureCardRegistry(),
+      drainMonitor,
     };
 
     const runBatch = executesBusinessLogic(config.runtime)
@@ -135,6 +138,34 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
       totals.requeued += res.requeued;
       totals.deadLettered += res.deadLettered;
       if (res.picked === 0) break;
+    }
+
+    const drainEndedMs = Date.now();
+    const drainDurationMs = drainEndedMs - drainMonitor.drainStartedMs;
+    const drainEndedAt = new Date(drainEndedMs).toISOString();
+
+    if (totals.done > 0) {
+      try {
+        await repo.patchDrainCycleTiming(
+          drainMonitor.drainStartedAt,
+          drainEndedAt,
+          drainDurationMs
+        );
+      } catch (err) {
+        log.warn("patchDrainCycleTiming failed", {
+          drainStartedAt: drainMonitor.drainStartedAt,
+          error: errMessage(err),
+        });
+      }
+    }
+
+    if (totals.picked > 0 || totals.done > 0) {
+      log.info("draw-drain-cycle", {
+        drainStartedAt: drainMonitor.drainStartedAt,
+        drainEndedAt,
+        drainDurationMs,
+        ...totals,
+      });
     }
 
     if (totals.picked > 0) {

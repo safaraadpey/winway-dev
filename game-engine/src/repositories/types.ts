@@ -31,6 +31,14 @@ export interface DrawRow {
   number: number;
   processed_at: string | null;
   ding_aggregated_at: string | null;
+  queue_wait_ms: number | null;
+  processing_ms: number | null;
+  finalize_ms: number | null;
+  drain_started_at: string | null;
+  drain_ended_at: string | null;
+  drain_duration_ms: number | null;
+  first_picked_at: string | null;
+  handler_started_at: string | null;
 }
 
 export interface TicketRow {

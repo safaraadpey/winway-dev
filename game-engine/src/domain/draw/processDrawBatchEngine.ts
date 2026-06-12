@@ -28,6 +28,7 @@ import { deferDrawJobToQueue, shouldDeferDrawJob } from "./drawJobOrdering.js";
 import { applyMarksAndEvaluateWithState } from "./evaluateDraw.js";
 import { pickDrawJobs } from "./pickDrawJobs.js";
 import { processJobsByRoom } from "./processJobsByRoom.js";
+import type { DrainMonitorContext } from "./drainMonitor.js";
 import { type DrawBatchResult, type DrawJob, EMPTY_BATCH } from "./types.js";
 
 export interface ProcessDrawBatchEngineOptions {
@@ -37,6 +38,7 @@ export interface ProcessDrawBatchEngineOptions {
   redis?: GameRedis | null;
   drawRoomLockTtlSec?: number;
   cardRegistry?: GlobalCardRegistry | null;
+  drainMonitor?: DrainMonitorContext;
 }
 
 export async function processDrawBatchEngine(
@@ -50,6 +52,9 @@ export async function processDrawBatchEngine(
   const pickStep = await timedStep(() => pickDrawJobs(supabase, opts.batchSize));
   const jobs = pickStep.result;
   if (jobs.length === 0) return { ...EMPTY_BATCH };
+
+  const firstPickedAt = pickStep.timing.endTime;
+  const drainStartedAt = opts.drainMonitor?.drainStartedAt ?? null;
 
   const pickPerJobMs =
     jobs.length > 0 ? pickStep.timing.durationMs / jobs.length : 0;
@@ -87,10 +92,15 @@ export async function processDrawBatchEngine(
     jobs,
     opts.roomConcurrency,
     async (job) => {
-      const processingStartedMs = Date.now();
-      const queueWaitMs = Math.max(0, processingStartedMs - Date.parse(job.created_at));
+      const handlerStartedMs = Date.now();
+      const handlerStartedAt = new Date(handlerStartedMs).toISOString();
+      const queueWaitMs = Math.max(
+        0,
+        handlerStartedMs - Date.parse(job.created_at)
+      );
 
       try {
+        const processingStartMs = Date.now();
         const roomState = await stateManager.ensureLoaded(job.room_id);
 
         if (
@@ -135,6 +145,8 @@ export async function processDrawBatchEngine(
           ? prepareDingCreditsFromState(state, job.draw_number, persistence.marks)
           : { dingPerCard: 0, credits: [] as { user_id: string; amount: number; matched_cards: number }[] };
 
+        const processingMs = Date.now() - processingStartMs;
+
         const finalizeStep = await timedStep(async () => {
           const credited = await repo.finalizeEngineDrawJob({
             jobId: job.id,
@@ -145,6 +157,11 @@ export async function processDrawBatchEngine(
             setFirstLineDrawNumber: persistence.setFirstLineDrawNumber,
             dingPerCard: dingPayload.dingPerCard,
             dingCredits: dingPayload.credits,
+            queueWaitMs,
+            processingMs,
+            drainStartedAt,
+            firstPickedAt,
+            handlerStartedAt,
           });
           if (credited > 0) {
             log.info("ding aggregated (engine)", {
@@ -203,6 +220,11 @@ export async function processDrawBatchEngine(
           marksInserted: evalResult.marksInserted,
           marksReadCount: evalResult.marksReadCount,
           queueWaitMs,
+          processingMs,
+          finalizeMs: finalizeStep.timing.durationMs,
+          drainStartedAt,
+          firstPickedAt,
+          handlerStartedAt,
           settled,
           breakdown,
         });

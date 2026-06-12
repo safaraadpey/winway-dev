@@ -496,6 +496,11 @@ export class GameRepo {
     setFirstLineDrawNumber: boolean;
     dingPerCard?: number;
     dingCredits?: { user_id: string; amount: number; matched_cards: number }[];
+    queueWaitMs?: number;
+    processingMs?: number;
+    drainStartedAt?: string | null;
+    firstPickedAt?: string | null;
+    handlerStartedAt?: string | null;
   }): Promise<number> {
     const { data, error } = await this.db.rpc("rpc_finalize_engine_draw_job", {
       p_job_id: args.jobId,
@@ -506,8 +511,29 @@ export class GameRepo {
       p_set_first_line_draw_number: args.setFirstLineDrawNumber,
       p_ding_per_card: args.dingPerCard ?? 0,
       p_credits: args.dingCredits ?? [],
+      p_queue_wait_ms: args.queueWaitMs ?? null,
+      p_processing_ms: args.processingMs ?? null,
+      p_drain_started_at: args.drainStartedAt ?? null,
+      p_first_picked_at: args.firstPickedAt ?? null,
+      p_handler_started_at: args.handlerStartedAt ?? null,
     });
     if (error) fail("rpc_finalize_engine_draw_job", error.message);
     return typeof data === "number" ? data : Number(data ?? 0);
+  }
+
+  /** Stamp drain_ended_at + drain_duration_ms for draws finalized in one drain tick. */
+  async patchDrainCycleTiming(
+    drainStartedAt: string,
+    drainEndedAt: string,
+    drainDurationMs: number
+  ): Promise<void> {
+    const { error } = await this.db
+      .from("draws")
+      .update({
+        drain_ended_at: drainEndedAt,
+        drain_duration_ms: drainDurationMs,
+      })
+      .eq("drain_started_at", drainStartedAt);
+    if (error) fail("patchDrainCycleTiming", error.message);
   }
 }
