@@ -85,8 +85,8 @@ export default function PlayerLayoutClient({
   }, [dingBalance, tomanBalance, lockedTomanBalance, availableTomanBalance, isAnimating]);
 
   return (
-    <div className="flex flex-col h-dvh overflow-hidden">
-      <div className="flex-shrink-0 sticky top-0 z-50 bg-[#0E0E0F]">
+    <div className="flex flex-col h-dvh min-h-dvh overflow-hidden pb-[env(safe-area-inset-bottom,0px)]">
+      <div className="flex-shrink-0 sticky top-0 z-50">
         {showHeader && (
           <MergedPlayerHeader
             dingBalance={dingBalance || 0}

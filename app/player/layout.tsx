@@ -21,7 +21,7 @@ export default function PlayerLayout({
 }) {
   return (
     <div
-      className="h-dvh min-h-screen overflow-hidden bg-[#0E0E0F] bg-cover bg-center bg-no-repeat"
+      className="h-dvh min-h-dvh overflow-hidden bg-[#0E0E0F] bg-cover bg-center bg-no-repeat"
       style={{ backgroundImage: "url(/backgrounds/layout_BG.webp)" }}
     >
       <HeaderVisibilityProvider>
