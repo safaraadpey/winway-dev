@@ -1,7 +1,7 @@
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import type { DrawJob } from "./types.js";
 
-/** Claim queued draw_jobs (queued → processing) via PostgREST RPC. */
+/** Claim queued draw_jobs (queued → processing) via fair per-room rpc_pick_draw_jobs. */
 export async function pickDrawJobs(
   supabase: SupabaseAdmin,
   limit: number

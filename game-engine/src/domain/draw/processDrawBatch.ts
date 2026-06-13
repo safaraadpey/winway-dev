@@ -20,7 +20,7 @@ export interface ProcessDrawBatchOptions {
  * Phase 1 (hybrid): orchestration only. Mirrors public.fn_process_draw_jobs_batch_worker
  * but driven from the engine instead of pg_cron. All game/finance logic stays in DB RPCs:
  *
- *   1. rpc_pick_draw_jobs()            atomic FOR UPDATE SKIP LOCKED claim (queued -> processing)
+ *   1. rpc_pick_draw_jobs()            fair per-room pick + FOR UPDATE SKIP LOCKED claim
  *   2. rpc_apply_marks_for_draw(...)   inserts marks (idempotent) + evaluates line/full
  *   3. fn_evaluate_room_after_draw(..) re-evaluates; settles+pays via fn_finish_room_and_settle
  *                                      (idempotent) when a full house is found
