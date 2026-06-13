@@ -16,6 +16,8 @@ import type {
   CardNumberIndexRow,
   CardNumberRow,
   DrawRow,
+  OwnerInsertOutcome,
+  OwnerInsertResult,
   ResultRow,
   RoomRow,
   TicketRow,
@@ -183,6 +185,70 @@ export class GameRepo {
     if (error) fail("setNextDrawAt", error.message);
   }
 
+  // ---- room-loop lease (Phase 3+) ----------------------------------------
+
+  /** Claim/extend the engine loop lease for a playing room (single owner). */
+  async claimRoom(
+    roomId: string,
+    ownerId: string,
+    leaseSeconds: number
+  ): Promise<boolean> {
+    const { data, error } = await this.db.rpc("rpc_claim_game_room", {
+      p_room_id: roomId,
+      p_owner_id: ownerId,
+      p_lease_seconds: leaseSeconds,
+    });
+    if (error) fail("rpc_claim_game_room", error.message);
+    return data === true;
+  }
+
+  /** Renew an owned lease (heartbeat). Returns false if ownership was lost. */
+  async renewLease(
+    roomId: string,
+    ownerId: string,
+    leaseSeconds: number
+  ): Promise<boolean> {
+    const { data, error } = await this.db.rpc("rpc_renew_game_room_lease", {
+      p_room_id: roomId,
+      p_owner_id: ownerId,
+      p_lease_seconds: leaseSeconds,
+    });
+    if (error) fail("rpc_renew_game_room_lease", error.message);
+    return data === true;
+  }
+
+  /** Release an owned lease (graceful handoff). */
+  async releaseRoom(roomId: string, ownerId: string): Promise<boolean> {
+    const { data, error } = await this.db.rpc("rpc_release_game_room", {
+      p_room_id: roomId,
+      p_owner_id: ownerId,
+    });
+    if (error) fail("rpc_release_game_room", error.message);
+    return data === true;
+  }
+
+  /** Playing rooms with a free/expired lease, ordered by due time. */
+  async findClaimableRooms(limit = 100): Promise<
+    {
+      room_id: string;
+      next_draw_at: string | null;
+      engine_owner_id: string | null;
+      engine_lease_until: string | null;
+    }[]
+  > {
+    const { data, error } = await this.db.rpc(
+      "rpc_find_claimable_playing_rooms",
+      { p_limit: limit }
+    );
+    if (error) fail("rpc_find_claimable_playing_rooms", error.message);
+    return (data ?? []) as {
+      room_id: string;
+      next_draw_at: string | null;
+      engine_owner_id: string | null;
+      engine_lease_until: string | null;
+    }[];
+  }
+
   async setFirstLineDrawNumber(roomId: string, drawNumber: number): Promise<void> {
     const { error } = await this.db
       .from("rooms")
@@ -295,6 +361,101 @@ export class GameRepo {
       return outcome;
     }
     fail("rpc_insert_draw_if_ready", `unexpected outcome: ${outcome}`);
+  }
+
+  /**
+   * Owner-guarded insert for the room-actor loop: only the lease owner may
+   * insert, and actor_* timing + next_draw_at are stamped atomically.
+   */
+  async insertDrawIfReadyForOwner(args: {
+    roomId: string;
+    number: number;
+    nowIso: string;
+    ownerId: string;
+    drawIntervalSec: number;
+    actorDueAtIso?: string | null;
+  }): Promise<OwnerInsertResult> {
+    const { data, error } = await this.db.rpc(
+      "rpc_insert_draw_if_ready_owner_guard",
+      {
+        p_room_id: args.roomId,
+        p_number: args.number,
+        p_now: args.nowIso,
+        p_owner_id: args.ownerId,
+        p_draw_interval_sec: args.drawIntervalSec,
+        p_actor_due_at: args.actorDueAtIso ?? null,
+      }
+    );
+    if (error) fail("rpc_insert_draw_if_ready_owner_guard", error.message);
+
+    const payload =
+      typeof data === "string"
+        ? (JSON.parse(data) as Record<string, unknown>)
+        : (data as Record<string, unknown> | null);
+
+    const outcome = String(payload?.outcome ?? "");
+    const validOutcomes = [
+      "inserted",
+      "backpressure",
+      "duplicate",
+      "not_owner",
+      "not_playing",
+      "exhausted",
+    ] as const;
+    if (!validOutcomes.includes(outcome as (typeof validOutcomes)[number])) {
+      fail(
+        "rpc_insert_draw_if_ready_owner_guard",
+        `unexpected outcome: ${outcome}`
+      );
+    }
+
+    const rawJobId = payload?.job_id;
+    const jobId =
+      rawJobId == null
+        ? null
+        : typeof rawJobId === "number"
+          ? rawJobId
+          : Number(rawJobId);
+
+    const nextDrawAtIso =
+      typeof payload?.next_draw_at === "string" ? payload.next_draw_at : null;
+
+    return {
+      outcome: outcome as OwnerInsertOutcome,
+      jobId: Number.isFinite(jobId) ? jobId : null,
+      nextDrawAtIso,
+    };
+  }
+
+  /** Oldest unprocessed draw for a room (recovery: process in insert order). */
+  async getOldestUnprocessedDraw(
+    roomId: string
+  ): Promise<{ number: number; created_at: string } | null> {
+    const { data, error } = await this.db
+      .from("draws")
+      .select("number,created_at")
+      .eq("room_id", roomId)
+      .is("processed_at", null)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (error) fail("getOldestUnprocessedDraw", error.message);
+    const row = data as { number: number; created_at: string } | null;
+    return row ?? null;
+  }
+
+  /** draw_jobs row id for a (room, draw_number), if the trigger created one. */
+  async getDrawJobId(roomId: string, drawNumber: number): Promise<number | null> {
+    const { data, error } = await this.db
+      .from("draw_jobs")
+      .select("id")
+      .eq("room_id", roomId)
+      .eq("draw_number", drawNumber)
+      .order("id", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (error) fail("getDrawJobId", error.message);
+    return (data as { id: number } | null)?.id ?? null;
   }
 
   async getDraw(roomId: string, number: number): Promise<DrawRow | null> {
@@ -433,6 +594,47 @@ export class GameRepo {
 
   // ---- draw_jobs recovery ------------------------------------------------
 
+  /** Draw numbers in this room that already have processed_at set. */
+  async getProcessedDrawNumbers(
+    roomId: string,
+    numbers: number[]
+  ): Promise<Set<number>> {
+    if (numbers.length === 0) return new Set();
+    const { data, error } = await this.db
+      .from("draws")
+      .select("number")
+      .eq("room_id", roomId)
+      .in("number", numbers)
+      .not("processed_at", "is", null);
+    if (error) fail("getProcessedDrawNumbers", error.message);
+    return new Set(
+      ((data ?? []) as { number: number }[]).map((row) => row.number)
+    );
+  }
+
+  /** Mark draw_jobs done without re-running evaluate/finalize. */
+  async completeDrawJobs(jobIds: number[]): Promise<void> {
+    if (jobIds.length === 0) return;
+    const nowIso = new Date().toISOString();
+    const { error } = await this.db
+      .from("draw_jobs")
+      .update({ status: "done", updated_at: nowIso })
+      .in("id", jobIds);
+    if (error) fail("completeDrawJobs", error.message);
+  }
+
+  /** Return actor-deferred jobs to the queue (status must be processing). */
+  async requeueDrawJobsById(jobIds: number[]): Promise<void> {
+    if (jobIds.length === 0) return;
+    const nowIso = new Date().toISOString();
+    const { error } = await this.db
+      .from("draw_jobs")
+      .update({ status: "queued", updated_at: nowIso })
+      .in("id", jobIds)
+      .eq("status", "processing");
+    if (error) fail("requeueDrawJobsById", error.message);
+  }
+
   /** Requeue jobs stuck in `processing` (crash/OOM recovery). */
   async requeueStaleProcessingJobs(
     staleSec: number
@@ -501,6 +703,8 @@ export class GameRepo {
     drainStartedAt?: string | null;
     firstPickedAt?: string | null;
     handlerStartedAt?: string | null;
+    actorEvaluateStartedAt?: string | null;
+    actorFinalizeStartedAt?: string | null;
   }): Promise<number> {
     const { data, error } = await this.db.rpc("rpc_finalize_engine_draw_job", {
       p_job_id: args.jobId,
@@ -516,6 +720,8 @@ export class GameRepo {
       p_drain_started_at: args.drainStartedAt ?? null,
       p_first_picked_at: args.firstPickedAt ?? null,
       p_handler_started_at: args.handlerStartedAt ?? null,
+      p_actor_evaluate_started_at: args.actorEvaluateStartedAt ?? null,
+      p_actor_finalize_started_at: args.actorFinalizeStartedAt ?? null,
     });
     if (error) fail("rpc_finalize_engine_draw_job", error.message);
     return typeof data === "number" ? data : Number(data ?? 0);

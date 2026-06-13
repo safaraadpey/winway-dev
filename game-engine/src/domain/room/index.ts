@@ -12,15 +12,18 @@
  */
 
 import { pickNextNumber } from "../../core/index.js";
+import type { RoomLoopMode } from "../../config/env.js";
 import { wakeDrawProcessor } from "../../runtime/draw-processor-wake.js";
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import type { Logger } from "../../metrics/logger.js";
 import { GameRepo, parseBytea } from "../../repositories/index.js";
 import type { RoomStateManager } from "../../state/room-state.manager.js";
+import { isActorRoom } from "../room-loop/loopMode.js";
+import { addSecondsWithJitter } from "./drawScheduleJitter.js";
 import { finishExhaustedRoom } from "./reconcileWinners.js";
 
-const FIRST_DRAW_DELAY_SEC = 25; // fn_manage_waiting_rooms: first draw 25s after start
-const DEFAULT_DRAW_INTERVAL_SEC = 3;
+const FIRST_DRAW_DELAY_SEC = 7; // fn_manage_waiting_rooms: first draw after start
+const DEFAULT_DRAW_INTERVAL_SEC = 1;
 const DEFAULT_COUNTDOWN_SEC = 120;
 
 export interface ManageWaitingResult {
@@ -63,7 +66,7 @@ export async function manageWaitingRooms(
     if (players >= minPlayers) {
       const ok = await repo.setRoomPlaying(
         room.id,
-        addSeconds(now, FIRST_DRAW_DELAY_SEC),
+        addSecondsWithJitter(now, FIRST_DRAW_DELAY_SEC, room.id),
         nowIso
       );
       if (ok) {
@@ -102,7 +105,8 @@ export async function manageRoomLiveActions(
   repo: GameRepo,
   log: Logger,
   limit = 200,
-  stateManager?: RoomStateManager
+  stateManager?: RoomStateManager,
+  roomLoopMode: RoomLoopMode = "scheduler_queue"
 ): Promise<ManageLiveResult> {
   const now = new Date();
   const nowIso = now.toISOString();
@@ -115,6 +119,9 @@ export async function manageRoomLiveActions(
     try {
       const liveRoom = await repo.getRoom(room.id);
       if (!liveRoom || liveRoom.status !== "playing") continue;
+      // Actor-mode rooms are driven by the room-loop owner; the scheduler must
+      // not insert draws for them (would double-drive the clock).
+      if (isActorRoom(liveRoom, roomLoopMode)) continue;
       if (await repo.hasUnpaidFullWinner(room.id)) {
         stateManager?.evict(room.id);
         continue;
@@ -192,7 +199,7 @@ export async function manageRoomLiveActions(
       }
       await repo.setNextDrawAt(
         room.id,
-        addSeconds(now, intervalSec),
+        addSecondsWithJitter(now, intervalSec, room.id),
         nowIso
       );
     } catch (err) {

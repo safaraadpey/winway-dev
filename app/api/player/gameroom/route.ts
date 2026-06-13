@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServiceClient, getUserFromRequest } from "@/lib/supabaseServer";
 
+export const dynamic = "force-dynamic";
+
 type GameMode = "preview" | "waiting" | "running" | "finished";
 
 const CANCEL_WINDOW_SECONDS = 15;
@@ -44,14 +46,19 @@ type GameRoomView = {
 function mapRoomStatusToMode(status: string | null): GameMode {
   if (!status) return "preview";
 
-  switch (status) {
+  switch (status.toLowerCase()) {
     case "waiting":
       return "waiting";
     case "playing":
     case "running":
+    case "live":
+      return "running";
+    case "settling":
       return "running";
     case "finished":
     case "cancelled":
+    case "canceled":
+      return "finished";
     default:
       return "finished";
   }
@@ -113,19 +120,7 @@ export async function GET(request: Request) {
         globalRegistrationLockState
       );
       if (!view) {
-        const templateId = await getTemplateIdForRoom(supabase, roomId);
-        if (templateId) {
-          const fallbackView = await buildViewFromTemplateId(
-            supabase,
-            templateId,
-            serverNow,
-            user.id,
-            globalRegistrationLockState
-          );
-          if (fallbackView) {
-            return NextResponse.json(fallbackView);
-          }
-        }
+        // Never substitute another waiting room — client holds tickets on roomId.
         return NextResponse.json(
           { error: "room_not_found", message: "Room not found." },
           { status: 404 }
@@ -377,23 +372,6 @@ async function buildViewFromTemplateId(
   };
 
   return view;
-}
-
-async function getTemplateIdForRoom(
-  supabase: ReturnType<typeof createServiceClient>,
-  roomId: string
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("rooms")
-    .select("room_template_id")
-    .eq("id", roomId)
-    .maybeSingle();
-
-  if (error || !data) {
-    return null;
-  }
-
-  return data.room_template_id || null;
 }
 
 async function getRoomTemplateType(

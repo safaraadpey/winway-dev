@@ -35,6 +35,17 @@ interface GameRoomScreenProps {
   templateId?: string;
 }
 
+const LIVE_ROOM_STATUSES = [
+  "running",
+  "playing",
+  "live",
+  "finished",
+  "settling",
+] as const;
+
+const LOBBY_POLL_MS = 3000;
+const TRANSITION_POLL_MS = 1000;
+
 function applyTicketEventToActiveCards(
   prev: ActiveCardStatus[],
   payload: any
@@ -120,6 +131,9 @@ export default function GameRoomScreen({ roomId, templateId }: GameRoomScreenPro
 
   // State برای اطلاعات روم
   const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
+  const [gameMode, setGameMode] = useState<GameRoomView["mode"]>("preview");
+  const fetchRoomDataRef = useRef<(isInitial?: boolean) => Promise<void>>(async () => {});
+  const pollIntervalMsRef = useRef(LOBBY_POLL_MS);
   const [loading, setLoading] = useState(true);
   const [globalRegistrationLocked, setGlobalRegistrationLocked] = useState(false);
   const [globalRegistrationLockReason, setGlobalRegistrationLockReason] = useState<string | null>(null);
@@ -185,6 +199,15 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           roomId,
           templateId,
         });
+
+        if (roomId && view.room.id && view.room.id !== roomId) {
+          console.warn("[GAME_ROOM][ROOM_ID_MISMATCH]", {
+            requestedRoomId: roomId,
+            returnedRoomId: view.room.id,
+            mode: view.mode,
+          });
+          return;
+        }
 
         // اگر با templateId وارد شده‌ایم و سرور روم واقعی برگردانده، redirect به roomId
         if (!roomId && templateId && view.mode !== "preview" && view.room.id) {
@@ -266,6 +289,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
         }
 
         setRoomInfo(mappedRoom);
+        setGameMode(view.mode);
 
         // محاسبه server offset و deadline برای countdown
         const serverNow = new Date(view.server_now).getTime();
@@ -327,18 +351,54 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
       }
     }
 
+    fetchRoomDataRef.current = fetchRoomData;
+
     // بارگذاری اولیه با spinner
     fetchRoomData(true);
 
-    // Polling فقط وقتی roomId داریم (اگر undefined باشد، interval ساخته نمی‌شود)
     if (!roomId) {
       return;
     }
 
-    // به‌روزرسانی هر 20 ثانیه بدون نمایش spinner تمام‌صفحه
-    const interval = setInterval(() => fetchRoomData(false), 20000);
-    return () => clearInterval(interval);
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const tick = async () => {
+      if (cancelled) return;
+      await fetchRoomData(false);
+      if (cancelled) return;
+      timeoutId = setTimeout(tick, pollIntervalMsRef.current);
+    };
+
+    timeoutId = setTimeout(tick, pollIntervalMsRef.current);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
   }, [roomId, templateId, router]);
+
+  // نزدیک شروع بازی: poll سریع‌تر تا status=playing زودتر دیده شود
+  useEffect(() => {
+    if (!roomId || gameMode === "preview") {
+      pollIntervalMsRef.current = LOBBY_POLL_MS;
+      return;
+    }
+
+    const pastStartsAt = Boolean(
+      roomInfo?.startsAt &&
+        Date.now() + serverOffset >= Date.parse(roomInfo.startsAt)
+    );
+    const urgent =
+      countdownSeconds <= 10 || (countdownSeconds === 0 && pastStartsAt);
+
+    pollIntervalMsRef.current = urgent ? TRANSITION_POLL_MS : LOBBY_POLL_MS;
+  }, [
+    roomId,
+    gameMode,
+    countdownSeconds,
+    roomInfo?.startsAt,
+    serverOffset,
+  ]);
 
   // Realtime: وقتی هنوز در حالت template هستیم، به INSERT روی rooms (برای این templateId) گوش می‌دهیم
   useEffect(() => {
@@ -453,6 +513,15 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
 
     return () => clearInterval(id);
   }, [countdownDeadline, serverOffset]);
+
+  // countdown به ۰ رسید → فوراً status را از سرور بگیر (انتقال به LiveRoom)
+  const prevCountdownRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (prevCountdownRef.current !== 0 && countdownSeconds === 0) {
+      void fetchRoomDataRef.current(false);
+    }
+    prevCountdownRef.current = countdownSeconds;
+  }, [countdownSeconds]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -612,9 +681,16 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
         if (!prev) return prev;
         if (prev.id !== newRoom.id) return prev;
 
+        const nextStatus = newRoom.status ?? prev.status;
+        if (nextStatus === "playing" || nextStatus === "running" || nextStatus === "live") {
+          setGameMode("running");
+        } else if (nextStatus === "finished" || nextStatus === "settling") {
+          setGameMode("finished");
+        }
+
         return {
           ...prev,
-          status: newRoom.status ?? prev.status,
+          status: nextStatus,
           startsAt: newRoom.starts_at ?? prev.startsAt,
           endsAt: newRoom.ends_at ?? prev.endsAt,
         };
@@ -786,11 +862,14 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
   }
 
   const normalizedStatus = (roomInfo.status || "").toLowerCase();
+  const lobbyCountdownEnded =
+    gameMode !== "preview" && countdownSeconds === 0;
   const isLiveRoom =
     roomId &&
-    ["running", "playing", "live", "finished", "settling"].some((status) =>
-      normalizedStatus.includes(status)
-    );
+    (gameMode === "running" ||
+      gameMode === "finished" ||
+      LIVE_ROOM_STATUSES.some((status) => normalizedStatus.includes(status)) ||
+      lobbyCountdownEnded);
 
   if (isLiveRoom) {
     return <LiveRoomScreen roomId={roomId!} />;
@@ -831,6 +910,11 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
             {globalRegistrationLockReason
               ? globalRegistrationLockReason
               : "ثبت نام در همه بازی‌ها موقتاً توسط ادمین قفل شده است."}
+          </div>
+        )}
+        {roomInfo.status === "waiting" && countdownSeconds === 0 && (
+          <div className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100 text-right">
+            شمارش تمام شد — در انتظار شروع بازی از سمت سرور...
           </div>
         )}
         {!isTournamentRoom && (

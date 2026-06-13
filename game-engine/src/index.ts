@@ -22,6 +22,7 @@ import { getGlobalCardRegistry } from "./core/card-registry/index.js";
 import { GameRepo } from "./repositories/index.js";
 import { RoomStateManager } from "./state/index.js";
 import { startDrawProcessor } from "./workers/draw-processor/index.js";
+import { startRoomLoop } from "./workers/room-loop/index.js";
 import { startRoomScheduler } from "./workers/room-scheduler/index.js";
 import { startTournamentOrchestrator } from "./workers/tournament-orchestrator/index.js";
 import { startDevPlayerProcessor } from "./workers/dev-player/processor.js";
@@ -80,6 +81,9 @@ async function main(): Promise<void> {
   }
   if (config.roles.has("draw-processor")) {
     stops.push(startDrawProcessor(workerCtx));
+  }
+  if (config.roles.has("room-loop")) {
+    stops.push(startRoomLoop(workerCtx));
   }
   if (config.roles.has("tournament-orchestrator")) {
     stops.push(startTournamentOrchestrator(workerCtx));

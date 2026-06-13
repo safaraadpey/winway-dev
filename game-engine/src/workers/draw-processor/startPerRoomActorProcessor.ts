@@ -53,6 +53,7 @@ export function startPerRoomActorProcessor(ctx: WorkerContext): () => void {
     redis,
     pool,
     repo,
+    roomLoopMode: config.roomLoopMode,
     lockTtlSec: config.drawProcessorLockTtlSec,
     batchSize: config.drawProcessorBatchSize,
     maxRoundsPerPoll: config.drawProcessorMaxBatchesPerTick,

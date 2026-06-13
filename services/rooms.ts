@@ -615,6 +615,7 @@ export async function fetchGameRoomView(params: {
 
   const res = await fetch(`/api/player/gameroom?${search.toString()}`, {
     method: "GET",
+    cache: "no-store",
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
 

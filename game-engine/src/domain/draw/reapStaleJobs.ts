@@ -18,14 +18,25 @@ export async function reapStaleDrawJobs(args: {
   staleSec: number;
   roomState?: RoomStateManager;
 }): Promise<ReapStaleJobsResult> {
-  const { requeued, roomIds } = await args.repo.requeueStaleProcessingJobs(
-    args.staleSec
-  );
-  if (requeued > 0) {
-    for (const roomId of roomIds) {
-      args.roomState?.evict(roomId);
+  try {
+    const { requeued, roomIds } = await args.repo.requeueStaleProcessingJobs(
+      args.staleSec
+    );
+    if (requeued > 0) {
+      for (const roomId of roomIds) {
+        args.roomState?.evict(roomId);
+      }
+      args.log.warn("requeued stale draw_jobs", {
+        requeued,
+        roomIds,
+        staleSec: args.staleSec,
+      });
     }
-    args.log.warn("requeued stale draw_jobs", { requeued, roomIds, staleSec: args.staleSec });
+    return { requeued, roomIds };
+  } catch (err) {
+    args.log.warn("reapStaleDrawJobs skipped", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return { requeued: 0, roomIds: [] };
   }
-  return { requeued, roomIds };
 }

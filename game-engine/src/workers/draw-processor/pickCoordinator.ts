@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
+import type { RoomLoopMode } from "../../config/env.js";
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import { createDrainMonitorContext } from "../../domain/draw/drainMonitor.js";
+import { filterActorOwnedDrawJobs } from "../../domain/draw/filterActorOwnedDrawJobs.js";
 import type { DrawJobPickContext } from "../../domain/draw/drawJobPickContext.js";
 import {
   emitPickDebugSnapshot,
@@ -56,6 +58,7 @@ export interface PickCoordinatorOptions {
   redis: GameRedis | null;
   pool: RoomDrawActorPool;
   repo: GameRepo;
+  roomLoopMode: RoomLoopMode;
   lockTtlSec: number;
   batchSize: number;
   maxRoundsPerPoll: number;
@@ -264,12 +267,26 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
       return 0;
     }
 
-    const jobs = pickStep.result;
-    const pickPerJobMs = pickStep.timing.durationMs / jobs.length;
+    const picked = pickStep.result;
+    const filtered = await filterActorOwnedDrawJobs(
+      opts.repo,
+      opts.log,
+      picked,
+      opts.roomLoopMode
+    );
+    const jobs = filtered.toProcess;
+    if (jobs.length === 0) {
+      return picked.length;
+    }
+
+    const pickPerJobMs = pickStep.timing.durationMs / picked.length;
 
     opts.log.info("draw-pick-dispatch", {
       wakeReason: activeWakeReason,
-      jobsPicked: jobs.length,
+      jobsPicked: picked.length,
+      jobsDispatched: jobs.length,
+      actorSkippedDone: filtered.skippedDone,
+      actorSkippedRequeued: filtered.skippedRequeued,
       rpc_pick_draw_jobs: pickStep.timing,
       pickMsPerJob: Math.round(pickPerJobMs * 100) / 100,
     });
@@ -285,7 +302,7 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
       opts.pool.dispatch(job, pickContext);
     }
 
-    return jobs.length;
+    return picked.length;
   };
 
   return {

@@ -142,7 +142,8 @@ export async function GET(request: NextRequest) {
       .from("draws")
       .select("number")
       .eq("room_id", roomId)
-      .order("created_at", { ascending: true });
+      .not("processed_at", "is", null)
+      .order("processed_at", { ascending: true });
     if (drawsError) {
       console.error("room-results draws fetch error:", drawsError);
     }

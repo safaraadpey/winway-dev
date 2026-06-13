@@ -128,7 +128,7 @@ export async function GET(request: Request) {
     const drawIntervalSec = Math.max(
       Number.isFinite(Number(rawDrawInterval))
         ? Math.trunc(Number(rawDrawInterval))
-        : 3,
+        : 1,
       1
     );
     const resolvedDingPerNumber = Number(

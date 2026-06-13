@@ -3,9 +3,13 @@ export type GameRuntime = "legacy_db" | "hybrid" | "engine";
 export type EngineRole =
   | "scheduler"
   | "draw-processor"
+  | "room-loop"
   | "tournament-orchestrator"
   | "dev-player-scheduler"
   | "dev-player-processor";
+
+/** How the engine drives per-room draw cadence. */
+export type RoomLoopMode = "scheduler_queue" | "actor";
 
 export interface EngineConfig {
   supabaseUrl: string;
@@ -63,12 +67,22 @@ export interface EngineConfig {
   devPlayerProcessorBatchLimit: number;
   devPlayerSchedulerLockTtlSec: number;
   devPlayerProcessorLockTtlSec: number;
+  // ---- room-actor game loop (Phase 3+) ----
+  /** scheduler_queue = legacy pick/queue path; actor = room owns its clock. */
+  roomLoopMode: RoomLoopMode;
+  /** How often the room-loop manager discovers + claims claimable rooms (ms). */
+  roomLoopDiscoveryMs: number;
+  /** Lease duration the actor holds (and renews) per room (seconds). */
+  roomLoopLeaseSec: number;
+  /** Max rooms a single replica drives concurrently (0 = unlimited). */
+  roomLoopMaxActiveRooms: number;
 }
 
 function parseRoles(raw: string | undefined): Set<EngineRole> {
   const allowed: EngineRole[] = [
     "scheduler",
     "draw-processor",
+    "room-loop",
     "tournament-orchestrator",
     "dev-player-scheduler",
     "dev-player-processor",
@@ -90,6 +104,10 @@ function requireEnv(name: string): string {
 function parseRuntime(raw: string | undefined): GameRuntime {
   if (raw === "hybrid" || raw === "engine" || raw === "legacy_db") return raw;
   return "legacy_db";
+}
+
+function parseRoomLoopMode(raw: string | undefined): RoomLoopMode {
+  return raw === "actor" ? "actor" : "scheduler_queue";
 }
 
 function optionalEnv(name: string): string | null {
@@ -177,6 +195,12 @@ export function loadConfig(): EngineConfig {
     ),
     devPlayerProcessorLockTtlSec: Number(
       process.env.DEV_PLAYER_PROCESSOR_LOCK_TTL_SEC ?? "55"
+    ),
+    roomLoopMode: parseRoomLoopMode(process.env.ROOM_LOOP_MODE),
+    roomLoopDiscoveryMs: Number(process.env.ROOM_LOOP_DISCOVERY_MS ?? "1000"),
+    roomLoopLeaseSec: Number(process.env.ROOM_LOOP_LEASE_SEC ?? "30"),
+    roomLoopMaxActiveRooms: Number(
+      process.env.ROOM_LOOP_MAX_ACTIVE_ROOMS ?? "50"
     ),
   };
 }

@@ -7,6 +7,10 @@ import { repairUnsettledFinishedRooms } from "../../domain/room/janitorRepair.js
 import { GameRepo } from "../../repositories/index.js";
 import { redisKeys } from "../../redis/keys.js";
 import { acquireLeaderLock, releaseLeaderLock } from "../../redis/leaderLock.js";
+import {
+  registerRoomSchedulerWake,
+  type RoomSchedulerWakeReason,
+} from "../../runtime/room-scheduler-wake.js";
 import { executesBusinessLogic, isIdle } from "../../runtime.js";
 import type { WorkerContext } from "../context.js";
 
@@ -80,7 +84,14 @@ export function startRoomScheduler(ctx: WorkerContext): () => void {
 
       if (executesBusinessLogic(config.runtime)) {
         await manageWaitingRooms(repo, log, 50, ctx.roomState);
-        await manageRoomLiveActions(supabase, repo, log, 200, ctx.roomState);
+        await manageRoomLiveActions(
+          supabase,
+          repo,
+          log,
+          200,
+          ctx.roomState,
+          config.roomLoopMode
+        );
         await maybeRunJanitor();
       } else {
         await callDbScheduler(ctx);
@@ -102,12 +113,28 @@ export function startRoomScheduler(ctx: WorkerContext): () => void {
     }
   };
 
+  // Event-driven wake: when a draw finalizes, backpressure clears — run the
+  // scheduler immediately instead of waiting for the next poll. Debounced via
+  // the inFlight guard inside tick(); coalesced wakes are harmless (idempotent).
+  let wakeScheduled = false;
+  const onWake = (reason: RoomSchedulerWakeReason): void => {
+    if (stopped || reason === "poll") return;
+    if (wakeScheduled) return;
+    wakeScheduled = true;
+    queueMicrotask(() => {
+      wakeScheduled = false;
+      void tick();
+    });
+  };
+  const unregisterWake = registerRoomSchedulerWake(onWake);
+
   void tick();
   const timer = setInterval(() => void tick(), config.roomSchedulerIntervalMs);
 
   return () => {
     stopped = true;
     clearInterval(timer);
+    unregisterWake();
   };
 }
 

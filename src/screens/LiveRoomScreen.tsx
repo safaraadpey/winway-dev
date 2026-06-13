@@ -27,9 +27,9 @@ import { playLiveRoomMusic, stopLiveRoomMusic } from "@/lib/audio/music";
 import { isMusicEnabled } from "@/lib/audio-settings";
 import {
   mergeDrawLists,
+  sortDraws,
   type ProcessedDraw,
 } from "@/lib/draw-order";
-import { useDrawRevealQueue } from "@/lib/hooks/useDrawRevealQueue";
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 
 type CardWinner = {
@@ -47,7 +47,8 @@ interface LiveRoomScreenProps {
 
 /** اگر این مدت هیچ draw sync نشد (ریل‌تایم + poll)، یک بار draw poll می‌زنیم. */
 const DRAW_SYNC_BUFFER_MS = 1500;
-const DEFAULT_DRAW_INTERVAL_SEC = 3;
+/** Must match engine default when rooms.meta.draw_interval_sec is unset. */
+const DEFAULT_DRAW_INTERVAL_SEC = 1;
 /** fallback کامل snapshot (status/winners) */
 const REALTIME_STALE_MS = 12_000;
 const REALTIME_WATCHDOG_TICK_MS = 2_000;
@@ -115,15 +116,12 @@ function isFullWinRevealedInUi(
   });
 }
 
-/** پاپ‌آپ نتایج بعد از خواندن همه اعداد صف و رسیدن به عدد برنده پر. */
+/** پاپ‌آپ نتایج وقتی اتاق تمام شده و توپ برنده full در UI دیده شده. */
 function canOpenResultsDialog(
   fullWinners: FullWinner[],
   calledNumbers: number[],
-  serverDrawCount: number,
   status: string
 ): boolean {
-  if (serverDrawCount > calledNumbers.length) return false;
-
   const terminal = isRoomTerminalStatus(status);
   if (!terminal && fullWinners.length === 0) return false;
   if (!isFullWinRevealedInUi(fullWinners, calledNumbers)) return false;
@@ -161,6 +159,9 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
 
   const fullWinnersRef = useRef<FullWinner[]>([]);
   const calledNumbersRef = useRef<number[]>([]);
+  /** After first snapshot, fire audio/ding only for draws that arrive live. */
+  const drawsHydratedRef = useRef(false);
+  const liveDrawCountRef = useRef(0);
 
   const tryOpenResultsDialog = useCallback(async () => {
     if (resultsRequestedRef.current || openingResultsRef.current) return;
@@ -177,7 +178,6 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       !canOpenResultsDialog(
         fullWinnersRef.current,
         calledNumbersRef.current,
-        dataRef.current?.draws?.length ?? 0,
         status
       )
     ) {
@@ -289,12 +289,12 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     [roomId, countMatchedMyCards, creditDingOnReveal]
   );
 
-  const revealIntervalMs = Math.max(
-    (data?.room?.draw_interval_sec ?? DEFAULT_DRAW_INTERVAL_SEC) * 1000,
-    1000
+  const calledNumbers = useMemo(
+    () => sortDraws(data?.draws ?? []).map((d) => d.number),
+    [data?.draws]
   );
 
-  const handleDrawReveal = useCallback(
+  const handleNewDraw = useCallback(
     (number: number) => {
       void playNumber(number);
       creditDingForRevealedNumber(number, dataRef.current);
@@ -302,9 +302,6 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     },
     [creditDingForRevealedNumber]
   );
-
-  const { calledNumbers, syncFromServer, reset: resetDrawReveal } =
-    useDrawRevealQueue(revealIntervalMs, handleDrawReveal);
 
   useEffect(() => {
     fullWinnersRef.current = fullWinners;
@@ -315,16 +312,32 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   }, [calledNumbers]);
 
   useEffect(() => {
+    const sorted = sortDraws(data?.draws ?? []);
+    const count = sorted.length;
+
+    if (loading) return;
+
+    if (!drawsHydratedRef.current) {
+      drawsHydratedRef.current = true;
+      liveDrawCountRef.current = count;
+      return;
+    }
+
+    if (count <= liveDrawCountRef.current) {
+      liveDrawCountRef.current = count;
+      return;
+    }
+
+    for (let i = liveDrawCountRef.current; i < count; i++) {
+      handleNewDraw(sorted[i]!.number);
+    }
+    liveDrawCountRef.current = count;
+  }, [data?.draws, handleNewDraw, loading]);
+
+  useEffect(() => {
     if (resultsRequestedRef.current) return;
     const status = (data?.room?.status || "").trim().toLowerCase();
-    if (
-      !canOpenResultsDialog(
-        fullWinners,
-        calledNumbers,
-        data?.draws?.length ?? 0,
-        status
-      )
-    ) {
+    if (!canOpenResultsDialog(fullWinners, calledNumbers, status)) {
       return;
     }
     void tryOpenResultsDialog();
@@ -341,11 +354,6 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       data?.room?.draw_interval_sec ?? DEFAULT_DRAW_INTERVAL_SEC;
   }, [data?.room?.draw_interval_sec]);
 
-  const syncFromServerRef = useRef(syncFromServer);
-  useEffect(() => {
-    syncFromServerRef.current = syncFromServer;
-  }, [syncFromServer]);
-
   const markRealtimeActivity = useCallback(() => {
     lastRealtimeActivityRef.current = Date.now();
   }, []);
@@ -356,13 +364,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     lastRealtimeActivityRef.current = now;
   }, []);
 
-  const applyDrawsFromSnapshot = useCallback(
-    (draws: LiveRoomSnapshot["draws"]) => {
-      syncFromServer(draws);
-      markDrawSync();
-    },
-    [syncFromServer, markDrawSync]
-  );
+  const markDrawSynced = markDrawSync;
 
   const runDrawSyncPoll = useCallback(async () => {
     if (!roomId || pollInFlightRef.current) return;
@@ -390,7 +392,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
             }
           : snapshot
       );
-      applyDrawsFromSnapshot(snapshot.draws);
+      markDrawSynced();
       await syncWinnersFromApi(snapshot);
       console.log("[LiveRoom] draw sync poll (realtime draw stale)");
     } catch (err) {
@@ -398,12 +400,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     } finally {
       pollInFlightRef.current = false;
     }
-  }, [roomId, applyDrawsFromSnapshot, syncWinnersFromApi]);
-
-  const applyDrawsFromSnapshotRef = useRef(applyDrawsFromSnapshot);
-  useEffect(() => {
-    applyDrawsFromSnapshotRef.current = applyDrawsFromSnapshot;
-  }, [applyDrawsFromSnapshot]);
+  }, [roomId, markDrawSynced, syncWinnersFromApi]);
 
   const runDrawSyncPollRef = useRef(runDrawSyncPoll);
   useEffect(() => {
@@ -422,7 +419,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       const nextStatus = (snapshot.room.status || "").trim().toLowerCase();
       roomStatusRef.current = nextStatus;
       setData(snapshot);
-      applyDrawsFromSnapshot(snapshot.draws);
+      markDrawSynced();
 
       const isTerminal = ["settling", "finished", "cancelled"].includes(
         nextStatus
@@ -439,7 +436,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     }
   }, [
     roomId,
-    applyDrawsFromSnapshot,
+    markDrawSynced,
     syncWinnersFromApi,
     tryOpenResultsDialog,
     markRealtimeActivity,
@@ -455,9 +452,10 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     markRealtimeActivityRef.current = markRealtimeActivity;
   }, [markRealtimeActivity]);
 
-  // state پاپ‌آپ و صف نمایش اعداد با عوض شدن room ریست شود
+  // state پاپ‌آپ و sync اعداد با عوض شدن room ریست شود
   useEffect(() => {
-    resetDrawReveal();
+    drawsHydratedRef.current = false;
+    liveDrawCountRef.current = 0;
     setResultsRequested(false);
     setShowResultsDialog(false);
     setResults(null);
@@ -467,10 +465,18 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     lastDrawSyncAtRef.current = Date.now();
     roomStatusRef.current = "";
     setFirstDrawCountdownSec(null);
-  }, [roomId, resetDrawReveal]);
+  }, [roomId]);
 
   useEffect(() => {
     if (calledNumbers.length > 0) {
+      setFirstDrawCountdownSec(null);
+      return;
+    }
+
+    const status = (data?.room?.status || roomStatusRef.current || "")
+      .trim()
+      .toLowerCase();
+    if (PLAYING_ROOM_STATUSES.has(status)) {
       setFirstDrawCountdownSec(null);
       return;
     }
@@ -486,7 +492,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     }, 1000);
 
     return () => clearInterval(id);
-  }, [calledNumbers.length, roomId]);
+  }, [calledNumbers.length, roomId, data?.room?.status]);
 
   // مخفی کردن استاتوس‌بار
   useEffect(() => {
@@ -536,13 +542,23 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
           .trim()
           .toLowerCase();
         setData(snapshot);
-        applyDrawsFromSnapshot(snapshot.draws);
+        markDrawSynced();
         setError(null);
 
         console.log(
           "[LiveRoom] snapshot loaded, draws:",
           snapshot.draws.map((d) => d.number)
         );
+
+        if (
+          isMounted &&
+          PLAYING_ROOM_STATUSES.has(
+            (snapshot.room.status || "").trim().toLowerCase()
+          ) &&
+          snapshot.draws.length === 0
+        ) {
+          void runDrawSyncPollRef.current();
+        }
 
         if (isMounted) {
           markRealtimeActivity();
@@ -563,7 +579,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     return () => {
       isMounted = false;
     };
-  }, [roomId, applyDrawsFromSnapshot, syncWinnersFromApi, markRealtimeActivity]);
+  }, [roomId, markDrawSynced, syncWinnersFromApi, markRealtimeActivity]);
 
   useEffect(() => {
     roomStatusRef.current = (data?.room?.status || "").trim().toLowerCase();
@@ -673,7 +689,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       const nextSnapshot = { ...prev, draws };
       dataRef.current = nextSnapshot;
       setData(nextSnapshot);
-      applyDrawsFromSnapshotRef.current(draws);
+      markDrawSync();
       void syncWinnersFromApiRef.current(nextSnapshot);
     };
 
@@ -788,7 +804,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
               return next;
             });
 
-            console.log("[LiveRoom] full win detected (wait for UI reveal)");
+            console.log("[LiveRoom] full win detected");
           }
         }
       );

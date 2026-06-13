@@ -8,6 +8,7 @@ import {
   timedStep,
 } from "../../metrics/drawPerformance.js";
 import { GameRepo } from "../../repositories/index.js";
+import { wakeRoomScheduler } from "../../runtime/room-scheduler-wake.js";
 import type { RoomStateManager } from "../../state/room-state.manager.js";
 import { prepareDingCreditsFromState } from "../ding/index.js";
 import type { DrawJobPickContext } from "./drawJobPickContext.js";
@@ -21,6 +22,10 @@ export interface ProcessEngineDrawJobOptions {
   maxAttempts: number;
   cardRegistry?: GlobalCardRegistry | null;
   pickContext: DrawJobPickContext;
+  /** Skip getDraw when the caller just inserted this draw (actor hot path). */
+  skipExistingCheck?: boolean;
+  /** Stamp actor_evaluate/finalize columns on finalize RPC. */
+  actorTiming?: boolean;
 }
 
 export async function processEngineDrawJob(
@@ -37,7 +42,18 @@ export async function processEngineDrawJob(
   const { pickContext } = opts;
 
   try {
+    if (!opts.skipExistingCheck) {
+      const existingDraw = await repo.getDraw(job.room_id, job.draw_number);
+      if (existingDraw?.processed_at) {
+        await repo.completeDrawJobs([job.id]);
+        return "done";
+      }
+    }
+
     const processingStartMs = Date.now();
+    const actorEvaluateStartedAt = opts.actorTiming
+      ? new Date(processingStartMs).toISOString()
+      : null;
     const roomState = await stateManager.ensureLoaded(job.room_id);
 
     if (
@@ -85,6 +101,9 @@ export async function processEngineDrawJob(
         };
 
     const processingMs = Date.now() - processingStartMs;
+    const actorFinalizeStartedAt = opts.actorTiming
+      ? new Date().toISOString()
+      : null;
 
     const finalizeStep = await timedStep(async () => {
       const credited = await repo.finalizeEngineDrawJob({
@@ -101,6 +120,8 @@ export async function processEngineDrawJob(
         drainStartedAt: pickContext.drainStartedAt,
         firstPickedAt: pickContext.firstPickedAt,
         handlerStartedAt,
+        actorEvaluateStartedAt,
+        actorFinalizeStartedAt,
       });
       if (credited > 0) {
         log.info("ding aggregated (engine)", {
@@ -111,6 +132,10 @@ export async function processEngineDrawJob(
       }
     });
     breakdown.rpc_finalize_engine_draw_job = finalizeStep.timing;
+
+    // Draw is processed → backpressure for this room cleared. Wake the scheduler
+    // so the next due draw inserts without waiting for the next poll interval.
+    wakeRoomScheduler("finalize");
 
     let settled = evalResult.settled;
     const hasUnsettledFull =

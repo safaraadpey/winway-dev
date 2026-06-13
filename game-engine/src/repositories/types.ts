@@ -25,6 +25,20 @@ export interface RoomRow {
   meta: Record<string, unknown> | null;
 }
 
+export type OwnerInsertOutcome =
+  | "inserted"
+  | "backpressure"
+  | "duplicate"
+  | "not_owner"
+  | "not_playing"
+  | "exhausted";
+
+export interface OwnerInsertResult {
+  outcome: OwnerInsertOutcome;
+  jobId: number | null;
+  nextDrawAtIso: string | null;
+}
+
 export interface DrawRow {
   id: string;
   room_id: string;
