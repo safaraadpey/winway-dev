@@ -233,6 +233,39 @@ export function unlockAndPreloadOnUserGesture(target: Document | Window = window
   };
 }
 
+export async function playDingTone() {
+  if (!isBrowser()) return;
+  if (!isAudioPlaybackAllowedNow()) return;
+
+  const { ctx, gain } = getOrCreateAudioGraph();
+  try {
+    if (ctx.state !== "running") {
+      await ctx.resume();
+    }
+  } catch {
+    return;
+  }
+  if (ctx.state !== "running") return;
+
+  try {
+    const oscillator = ctx.createOscillator();
+    const dingGain = ctx.createGain();
+    oscillator.connect(dingGain);
+    dingGain.connect(gain);
+
+    oscillator.frequency.value = 800;
+    oscillator.type = "sine";
+
+    dingGain.gain.setValueAtTime(0.3, ctx.currentTime);
+    dingGain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + 0.3);
+  } catch (e) {
+    console.warn("[number-audio] playDingTone failed:", e);
+  }
+}
+
 /**
  * Plays a number (1..90). If the buffer wasn't preloaded yet, it will load on-demand.
  */

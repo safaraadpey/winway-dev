@@ -662,10 +662,14 @@ export interface LiveRoomSnapshot {
 }
 
 export async function fetchLiveRoomSnapshot(
-  roomId: string
+  roomId: string,
+  options?: { scope?: "full" | "draws" }
 ): Promise<LiveRoomSnapshot> {
   const search = new URLSearchParams();
   search.set("roomId", roomId);
+  if (options?.scope === "draws") {
+    search.set("scope", "draws");
+  }
 
   const {
     data: { session },
@@ -674,6 +678,7 @@ export async function fetchLiveRoomSnapshot(
 
   const res = await fetch(`/api/player/live-room?${search.toString()}`, {
     method: "GET",
+    cache: "no-store",
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
 

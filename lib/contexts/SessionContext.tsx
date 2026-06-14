@@ -34,6 +34,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         const { data } = await supabase.auth.getSession();
         if (!mounted) return;
         const session = data?.session ?? null;
+        if (session?.access_token) {
+          await supabase.realtime.setAuth(session.access_token);
+        } else {
+          await supabase.realtime.setAuth(null);
+        }
         tokenVersionRef.current += 1;
         const next: SessionSnapshot = {
           userId: session?.user?.id ?? null,
@@ -59,8 +64,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     hydrate();
 
-    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
+      if (session?.access_token) {
+        await supabase.realtime.setAuth(session.access_token);
+      } else {
+        await supabase.realtime.setAuth(null);
+      }
       tokenVersionRef.current += 1;
       const next: SessionSnapshot = {
         userId: session?.user?.id ?? null,

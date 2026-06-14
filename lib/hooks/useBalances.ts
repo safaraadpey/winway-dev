@@ -4,68 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { getMyDingBalance } from '../features/ding/ding';
 import { isDingEnabled } from "@/lib/audio-settings";
-import { isAudioPlaybackAllowedNow } from "@/lib/audio/foreground";
-
-/**
- * تابع پخش صدای دینگ (منتقل شده از BingoCard)
- * این صدا هنگام افزایش موجودی Ding پخش می‌شود
- * 
- * @param audioContextRef - ref به AudioContext که از قبل آماده شده است
- */
-function playDingSound(audioContextRef: React.MutableRefObject<AudioContext | null>) {
-  console.log('[playDingSound] Attempting to play ding sound...');
-  if (!isAudioPlaybackAllowedNow()) {
-    console.log('[playDingSound] Skipped: app is not foreground/visible');
-    return;
-  }
-  
-  if (!audioContextRef.current) {
-    console.warn('[playDingSound] AudioContext not available');
-    return;
-  }
-
-  const audioContext = audioContextRef.current;
-
-  // اگر AudioContext suspended است، resume کن
-  if (audioContext.state === 'suspended') {
-    console.log('[playDingSound] AudioContext suspended, attempting to resume...');
-    audioContext.resume().then(() => {
-      console.log('[playDingSound] ✅ AudioContext resumed successfully');
-      playSound(audioContext);
-    }).catch((error) => {
-      console.error('[playDingSound] ❌ Failed to resume AudioContext:', error);
-    });
-  } else {
-    playSound(audioContext);
-  }
-
-  function playSound(ctx: AudioContext) {
-    try {
-      const oscillator = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      
-      oscillator.frequency.value = 800;
-      oscillator.type = 'sine';
-      
-      gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-      
-      oscillator.start(ctx.currentTime);
-      oscillator.stop(ctx.currentTime + 0.3);
-      
-      console.log('[playDingSound] ✅ Sound playing started (frequency: 800Hz, duration: 0.3s)');
-      
-      oscillator.onended = () => {
-        console.log('[playDingSound] ✅ Sound finished playing');
-      };
-    } catch (error) {
-      console.error('[playDingSound] ❌ Failed to play sound:', error);
-    }
-  }
-}
+import { playDingTone } from "@/lib/number-audio";
 
 export interface Balances {
   dingBalance: number;
@@ -115,7 +54,6 @@ export function useBalances(): Balances {
   const hasHydratedRef = useRef<boolean>(false);
   const walletChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
   const balanceUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const currentBalanceRef = useRef<number>(0);
 
@@ -188,45 +126,11 @@ export function useBalances(): Balances {
     };
   }
 
-  // مدیریت mount/unmount و آماده‌سازی AudioContext
+  // مدیریت mount/unmount
   useEffect(() => {
     isMountedRef.current = true;
     console.log('[useBalances] Component mounted, isMountedRef.current = true');
-    
-    // آماده‌سازی AudioContext از قبل (برای رفع مشکل autoplay policy)
-    if (typeof window !== 'undefined') {
-      try {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioContextClass) {
-          audioContextRef.current = new AudioContextClass();
-          console.log('[useBalances] AudioContext created, state:', audioContextRef.current.state);
-          
-          // اگر suspended است، سعی کن resume کن (بعد از user interaction)
-          if (audioContextRef.current.state === 'suspended') {
-            // یک event listener برای اولین user interaction اضافه کن
-            const resumeAudio = async () => {
-              if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-                try {
-                  await audioContextRef.current.resume();
-                  console.log('[useBalances] ✅ AudioContext resumed after user interaction');
-                } catch (error) {
-                  console.warn('[useBalances] Failed to resume AudioContext:', error);
-                }
-              }
-            };
-            
-            // چند event مختلف را امتحان کن
-            const events = ['click', 'touchstart', 'keydown'];
-            events.forEach(event => {
-              document.addEventListener(event, resumeAudio, { once: true });
-            });
-          }
-        }
-      } catch (error) {
-        console.warn('[useBalances] Failed to create AudioContext:', error);
-      }
-    }
-    
+
     return () => {
       isMountedRef.current = false;
       console.log('[useBalances] Component unmounted, isMountedRef.current = false');
@@ -239,11 +143,6 @@ export function useBalances(): Balances {
       if (balanceUpdateTimeoutRef.current) {
         clearTimeout(balanceUpdateTimeoutRef.current);
         balanceUpdateTimeoutRef.current = null;
-      }
-      // Cleanup AudioContext
-      if (audioContextRef.current) {
-        audioContextRef.current.close().catch(console.error);
-        audioContextRef.current = null;
       }
     };
   }, []);
@@ -452,7 +351,8 @@ export function useBalances(): Balances {
     creditedRevealKeysRef.current.add(revealKey);
 
     const prevBalance = currentBalanceRef.current;
-    const nextBalance = prevBalance + delta;
+    currentBalanceRef.current = prevBalance + delta;
+    const nextBalance = currentBalanceRef.current;
 
     console.log("[dingReveal] credit", { revealKey, delta, prevBalance, nextBalance });
 
@@ -462,11 +362,11 @@ export function useBalances(): Balances {
     }
     balanceUpdateTimeoutRef.current = setTimeout(() => {
       if (!isMountedRef.current) return;
-      setDingBalance(nextBalance);
-      currentBalanceRef.current = nextBalance;
+      const latestBalance = currentBalanceRef.current;
+      setDingBalance(latestBalance);
 
       if (isDingEnabled()) {
-        playDingSound(audioContextRef);
+        void playDingTone();
       }
 
       if (animationTimeoutRef.current) clearTimeout(animationTimeoutRef.current);

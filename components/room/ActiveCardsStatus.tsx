@@ -13,6 +13,7 @@ export interface ActiveCardStatus {
 interface ActiveCardsStatusProps {
   cards: ActiveCardStatus[];
   secondsRemaining?: number;
+  minPlayers?: number;
   waitingListMessage?: string;
   useLongCountdown?: boolean; // روز:ساعت:دقیقه:ثانیه
 }
@@ -20,6 +21,7 @@ interface ActiveCardsStatusProps {
 export default function ActiveCardsStatus({
   cards,
   secondsRemaining,
+  minPlayers,
   waitingListMessage = "شما اولین نفر لیست انتظار خواهید بود",
   useLongCountdown = false,
 }: ActiveCardsStatusProps) {
@@ -81,9 +83,16 @@ export default function ActiveCardsStatus({
           </svg>
         </div>
 
-        <span className="text-white text-sm font-medium">
-          مجموع کارتها {totalCount}
-        </span>
+        <div className="flex items-center gap-3">
+          {minPlayers != null && minPlayers > 0 && (
+            <span className="text-white text-sm font-medium">
+              شروع با {minPlayers} نفر
+            </span>
+          )}
+          <span className="text-white text-sm font-medium">
+            مجموع کارتها {totalCount}
+          </span>
+        </div>
       </div>
 
       <div

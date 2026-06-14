@@ -23,7 +23,7 @@ import { addSecondsWithJitter } from "./drawScheduleJitter.js";
 import { finishExhaustedRoom } from "./reconcileWinners.js";
 
 const FIRST_DRAW_DELAY_SEC = 7; // fn_manage_waiting_rooms: first draw after start
-const DEFAULT_DRAW_INTERVAL_SEC = 1;
+const DEFAULT_DRAW_INTERVAL_SEC = 3;
 const DEFAULT_COUNTDOWN_SEC = 120;
 
 export interface ManageWaitingResult {

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServiceClient, getUserFromRequest } from "@/lib/supabaseServer";
 
+export const dynamic = "force-dynamic";
+
 type LiveRoomResponse = {
   room: {
     id: string;
@@ -45,6 +47,8 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const roomId = url.searchParams.get("roomId");
+    const scope = url.searchParams.get("scope");
+    const drawsOnly = scope === "draws";
 
     if (!roomId) {
       return NextResponse.json(
@@ -128,7 +132,7 @@ export async function GET(request: Request) {
     const drawIntervalSec = Math.max(
       Number.isFinite(Number(rawDrawInterval))
         ? Math.trunc(Number(rawDrawInterval))
-        : 1,
+        : 3,
       1
     );
     const resolvedDingPerNumber = Number(
@@ -173,6 +177,25 @@ export async function GET(request: Request) {
 
     if (drawsError) {
       console.error("live-room fetch draws error:", drawsError);
+    }
+
+    if (drawsOnly) {
+      return NextResponse.json({
+        room: {
+          id: room.id,
+          status: room.status,
+          room_code: room.room_code,
+          next_draw_at: room.next_draw_at ?? null,
+          draw_interval_sec: drawIntervalSec,
+        },
+        server_now: new Date().toISOString(),
+        draws: (draws || []).map((d: any) => ({
+          id: d.id,
+          number: d.number,
+          created_at: d.created_at,
+          processed_at: d.processed_at,
+        })),
+      });
     }
 
     const { data: tickets, error: ticketsError } = await supabase

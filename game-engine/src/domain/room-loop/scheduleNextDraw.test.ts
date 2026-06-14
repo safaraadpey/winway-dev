@@ -34,11 +34,11 @@ describe("scheduleNextDraw", () => {
     assert.equal(FIRST_DRAW_DELAY_SEC, 7);
   });
 
-  it("drawIntervalSec reads meta, defaults to 1, floors at 1", () => {
+  it("drawIntervalSec reads meta, defaults to 3, floors at 1", () => {
     assert.equal(drawIntervalSec({ draw_interval_sec: 3 }), 3);
     assert.equal(drawIntervalSec({ draw_interval_sec: "5" }), 5);
-    assert.equal(drawIntervalSec({}), 1);
-    assert.equal(drawIntervalSec(null), 1);
+    assert.equal(drawIntervalSec({}), 3);
+    assert.equal(drawIntervalSec(null), 3);
     assert.equal(drawIntervalSec({ draw_interval_sec: 0 }), 1);
     assert.equal(drawIntervalSec({ draw_interval_sec: -4 }), 1);
   });

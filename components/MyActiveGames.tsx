@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import styles from "./MyActiveGames.module.css";
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
@@ -14,7 +14,16 @@ import hourglassPng from "../src/assets/logo/hourglass.png";
  */
 export default function MyActiveGames() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { rooms, loading, error, invalidate } = useActiveGamesContext();
+
+  const isOnGameScreen =
+    pathname.startsWith("/player/gameroom") ||
+    /^\/player\/tournaments\/[^/]+/.test(pathname);
+  const currentRoomId = isOnGameScreen
+    ? searchParams.get("roomId")
+    : null;
 
   // اگر هیچ میز فعالی وجود ندارد، کامپوننت را اصلاً رندر نکن
   // (مطابق UX: در نبود بازی فعال، چیپ‌ها نمایش داده نشوند)
@@ -96,12 +105,18 @@ export default function MyActiveGames() {
             </button>
           </div>
         ) : (
-          rooms.map((room) => (
+          rooms.map((room) => {
+            const isCurrentRoom = Boolean(
+              currentRoomId && room.roomId === currentRoomId
+            );
+
+            return (
             <button
               key={room.roomId}
-              className={styles.chip}
+              className={`${styles.chip}${isCurrentRoom ? ` ${styles.chipActive}` : ""}`}
               onClick={() => handleRoomClick(room.roomId)}
               aria-label={`رفتن به روم ${getDisplayText(room)}`}
+              aria-current={isCurrentRoom ? "true" : undefined}
             >
               {isTournament(room) && (
                 <svg
@@ -116,7 +131,8 @@ export default function MyActiveGames() {
               <span className={styles.chipText}>{getDisplayText(room)}</span>
               {getStatusIcon(room.status)}
             </button>
-          ))
+            );
+          })
         )}
       </div>
     </div>

@@ -22,7 +22,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
-import { playNumber, unlockAndPreloadOnUserGesture } from "@/lib/number-audio";
+import { playNumber } from "@/lib/number-audio";
 import { playLiveRoomMusic, stopLiveRoomMusic } from "@/lib/audio/music";
 import { isMusicEnabled } from "@/lib/audio-settings";
 import {
@@ -31,6 +31,7 @@ import {
   type ProcessedDraw,
 } from "@/lib/draw-order";
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
+import { useSession } from "@/lib/contexts/SessionContext";
 
 type CardWinner = {
   ticketId: string;
@@ -48,7 +49,7 @@ interface LiveRoomScreenProps {
 /** اگر این مدت هیچ draw sync نشد (ریل‌تایم + poll)، یک بار draw poll می‌زنیم. */
 const DRAW_SYNC_BUFFER_MS = 1500;
 /** Must match engine default when rooms.meta.draw_interval_sec is unset. */
-const DEFAULT_DRAW_INTERVAL_SEC = 1;
+const DEFAULT_DRAW_INTERVAL_SEC = 3;
 /** fallback کامل snapshot (status/winners) */
 const REALTIME_STALE_MS = 12_000;
 const REALTIME_WATCHDOG_TICK_MS = 2_000;
@@ -130,6 +131,7 @@ function canOpenResultsDialog(
 
 export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   const router = useRouter();
+  const session = useSession();
   const { setShowStatusBar, setBalanceRefreshDisabled } = useHeaderVisibility();
   const { creditDingOnReveal, scheduleWalletBalanceSync, refreshAllBalances } =
     useBalancesContext();
@@ -162,6 +164,9 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   /** After first snapshot, fire audio/ding only for draws that arrive live. */
   const drawsHydratedRef = useRef(false);
   const liveDrawCountRef = useRef(0);
+  const winnersSyncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
 
   const tryOpenResultsDialog = useCallback(async () => {
     if (resultsRequestedRef.current || openingResultsRef.current) return;
@@ -298,7 +303,12 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     (number: number) => {
       void playNumber(number);
       creditDingForRevealedNumber(number, dataRef.current);
-      void syncWinnersFromApiRef.current(dataRef.current);
+      if (winnersSyncDebounceRef.current) {
+        clearTimeout(winnersSyncDebounceRef.current);
+      }
+      winnersSyncDebounceRef.current = setTimeout(() => {
+        void syncWinnersFromApiRef.current(dataRef.current);
+      }, 800);
     },
     [creditDingForRevealedNumber]
   );
@@ -374,7 +384,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
 
     pollInFlightRef.current = true;
     try {
-      const snapshot = await fetchLiveRoomSnapshot(roomId);
+      const snapshot = await fetchLiveRoomSnapshot(roomId, { scope: "draws" });
       roomStatusRef.current = (snapshot.room.status || "").trim().toLowerCase();
       setData((prev) =>
         prev
@@ -383,24 +393,24 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
               draws: snapshot.draws,
               room: {
                 ...prev.room,
-                status: snapshot.room.status,
-                next_draw_at: snapshot.room.next_draw_at ?? null,
-                draw_interval_sec: snapshot.room.draw_interval_sec,
-                ding_per_number: snapshot.room.ding_per_number,
+                status: snapshot.room.status ?? prev.room.status,
+                next_draw_at:
+                  snapshot.room.next_draw_at ?? prev.room.next_draw_at ?? null,
+                draw_interval_sec:
+                  snapshot.room.draw_interval_sec ?? prev.room.draw_interval_sec,
               },
-              server_now: snapshot.server_now,
+              server_now: snapshot.server_now ?? prev.server_now,
             }
-          : snapshot
+          : prev
       );
       markDrawSynced();
-      await syncWinnersFromApi(snapshot);
       console.log("[LiveRoom] draw sync poll (realtime draw stale)");
     } catch (err) {
       console.warn("[LiveRoom] draw sync poll error:", err);
     } finally {
       pollInFlightRef.current = false;
     }
-  }, [roomId, markDrawSynced, syncWinnersFromApi]);
+  }, [roomId, markDrawSynced]);
 
   const runDrawSyncPollRef = useRef(runDrawSyncPoll);
   useEffect(() => {
@@ -509,10 +519,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   }, [data?.room?.status, setBalanceRefreshDisabled]);
 
   // One-time user gesture to unlock WebAudio + start preloading number sounds
-  useEffect(() => {
-    const cleanup = unlockAndPreloadOnUserGesture(window);
-    return cleanup;
-  }, []);
+  // (PlayerLayoutClient also installs this globally for the player shell.)
 
   // Start background music when entering LiveRoom, stop when leaving
   useEffect(() => {
@@ -561,8 +568,8 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
         }
 
         if (isMounted) {
-          markRealtimeActivity();
-          await syncWinnersFromApi(snapshot);
+          markRealtimeActivityRef.current();
+          await syncWinnersFromApiRef.current(snapshot);
         }
       } catch (err: any) {
         console.error("[LiveRoom] snapshot load error:", err);
@@ -579,7 +586,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     return () => {
       isMounted = false;
     };
-  }, [roomId, markDrawSynced, syncWinnersFromApi, markRealtimeActivity]);
+  }, [roomId]);
 
   useEffect(() => {
     roomStatusRef.current = (data?.room?.status || "").trim().toLowerCase();
@@ -629,36 +636,37 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     };
   }, [roomId]);
 
-  // ریل‌تایم: draws + rooms + results
+  // ریل‌تایم: draws + rooms + results (بعد از setAuth)
   useEffect(() => {
-    if (!roomId) return;
+    if (!roomId || !session.authReady) return;
 
     console.log("[LiveRoom] realtime useEffect mount for room", roomId);
 
+    let cancelled = false;
     let hadSubscribed = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    const handleDrawUpdate = (payload: {
-      old: Record<string, unknown>;
+    const applyProcessedDraw = (payload: {
+      old?: Record<string, unknown>;
       new: Record<string, unknown>;
     }) => {
-      const rowRoomId = payload.new?.room_id as string | undefined;
-      if (rowRoomId !== roomId) return;
-
-      const oldProcessed = payload.old?.processed_at ?? null;
       const newProcessed = payload.new?.processed_at ?? null;
+      const oldProcessed = payload.old?.processed_at ?? null;
       const number = payload.new?.number as number | undefined;
       const drawId = payload.new?.id as string | undefined;
 
-      console.log("[LiveRoom] RT draw payload", {
-        number,
-        oldProcessed,
-        newProcessed,
-        drawId,
-      });
+      if (number == null || !newProcessed) return;
+      // Only react when processed_at is newly set (ignore actor timing column updates).
+      if (oldProcessed != null) return;
 
-      if (oldProcessed !== null && oldProcessed !== undefined) return;
-      if (!newProcessed) return;
-      if (number == null) return;
+      const prev = dataRef.current;
+      if (prev?.draws?.some((d) => d.id === drawId || d.number === number)) {
+        markDrawSync();
+        markRealtimeActivityRef.current();
+        return;
+      }
+
+      console.log("[LiveRoom] RT draw processed", { number, drawId });
 
       const processedAt =
         typeof newProcessed === "string" ? newProcessed : null;
@@ -679,7 +687,6 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
         processed_at: processedAt,
       };
 
-      const prev = dataRef.current;
       if (!prev) {
         void runDrawSyncPollRef.current();
         return;
@@ -690,146 +697,190 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       dataRef.current = nextSnapshot;
       setData(nextSnapshot);
       markDrawSync();
-      void syncWinnersFromApiRef.current(nextSnapshot);
+      markRealtimeActivityRef.current();
     };
 
-    const channel = supabase
-      .channel(`live-room-${roomId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "draws",
-        },
-        (payload) => {
-          handleDrawUpdate(payload as { old: Record<string, unknown>; new: Record<string, unknown> });
+    async function subscribeRealtime() {
+      try {
+        if (session.accessToken) {
+          await supabase.realtime.setAuth(session.accessToken);
+        } else {
+          await supabase.realtime.setAuth(null);
         }
-      )
-      // تغییر status در rooms (waiting/playing/settling/finished)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "rooms",
-          filter: `id=eq.${roomId}`,
-        },
-        (payload) => {
-          const oldStatus = (payload.old as any)?.status;
-          const newStatus = (payload.new as any)?.status;
-          if (!newStatus || oldStatus === newStatus) return;
-
-          markRealtimeActivityRef.current();
-
-          console.log(
-            "[LiveRoom] rooms realtime status update",
-            oldStatus,
-            "→",
-            newStatus
-          );
-
-          // اگر بازی جدید شروع شد (از finished به waiting/running)، lineWinners را reset کن
-          const isNewGame = 
-            (oldStatus === "finished" || oldStatus === "settled") && 
-            (newStatus === "waiting" || newStatus === "running" || newStatus === "playing");
-          
-          if (isNewGame) {
-            console.log("[LiveRoom] New game started, resetting winners");
-            setLineWinners([]);
-            setFullWinners([]);
-          }
-
-          setData((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  room: { ...prev.room, status: newStatus },
-                }
-              : prev
-          );
-        }
-      )
-      // برنده‌ها (line / full)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "results",
-          filter: `room_id=eq.${roomId}`,
-        },
-        (payload) => {
-          console.log("[LiveRoom] results realtime payload", payload);
-          const newRow = payload.new as any;
-          if (!newRow) return;
-
-          markRealtimeActivityRef.current();
-
-          if (newRow.win_type === "line") {
-            const rawDraw = newRow.draw_number ?? newRow.draw;
-            const entry: LineWinner = {
-              ticketId: newRow.ticket_id,
-              userId: newRow.user_id,
-              drawNumber:
-                rawDraw === null || rawDraw === undefined
-                  ? 0
-                  : Number(rawDraw),
-            };
-
-            setLineWinners((prev) => {
-              if (prev.some((w) => w.ticketId === entry.ticketId)) return prev;
-              const next = [...prev, entry];
-              console.log("[LiveRoom] lineWinners updated →", next);
-              return next;
-            });
-            return;
-          }
-
-          if (newRow.win_type === "full") {
-            const rawDraw = newRow.draw_number ?? newRow.draw;
-            const fullEntry: FullWinner = {
-              ticketId: newRow.ticket_id,
-              userId: newRow.user_id,
-              drawNumber:
-                rawDraw === null || rawDraw === undefined
-                  ? 0
-                  : Number(rawDraw),
-            };
-
-            setFullWinners((prev) => {
-              if (prev.some((w) => w.ticketId === fullEntry.ticketId)) return prev;
-              const next = [...prev, fullEntry];
-              console.log("[LiveRoom] fullWinners updated →", next);
-              return next;
-            });
-
-            console.log("[LiveRoom] full win detected");
-          }
-        }
-      );
-
-    const subscription = channel.subscribe((status) => {
-      console.log("[LiveRoom] channel status:", status);
-      if (status === "SUBSCRIBED") {
-        if (hadSubscribed) {
-          console.log("[LiveRoom] channel reconnected → catch-up poll");
-          void runFallbackPollRef.current();
-        }
-        hadSubscribed = true;
+      } catch (err) {
+        console.warn("[LiveRoom] realtime setAuth failed:", err);
       }
-    });
+      if (cancelled) return;
+
+      channel = supabase
+        .channel(`live-room-${roomId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "draws",
+            filter: `room_id=eq.${roomId}`,
+          },
+          (payload) => {
+            applyProcessedDraw(
+              payload as {
+                old?: Record<string, unknown>;
+                new: Record<string, unknown>;
+              }
+            );
+          }
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "draws",
+            filter: `room_id=eq.${roomId}`,
+          },
+          (payload) => {
+            applyProcessedDraw({ new: payload.new as Record<string, unknown> });
+          }
+        )
+        // تغییر status در rooms (waiting/playing/settling/finished)
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "rooms",
+            filter: `id=eq.${roomId}`,
+          },
+          (payload) => {
+            const oldStatus = (payload.old as any)?.status;
+            const newStatus = (payload.new as any)?.status;
+            if (!newStatus || oldStatus === newStatus) return;
+
+            markRealtimeActivityRef.current();
+
+            console.log(
+              "[LiveRoom] rooms realtime status update",
+              oldStatus,
+              "→",
+              newStatus
+            );
+
+            // اگر بازی جدید شروع شد (از finished به waiting/running)، lineWinners را reset کن
+            const isNewGame =
+              (oldStatus === "finished" || oldStatus === "settled") &&
+              (newStatus === "waiting" ||
+                newStatus === "running" ||
+                newStatus === "playing");
+
+            if (isNewGame) {
+              console.log("[LiveRoom] New game started, resetting winners");
+              setLineWinners([]);
+              setFullWinners([]);
+            }
+
+            setData((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    room: { ...prev.room, status: newStatus },
+                  }
+                : prev
+            );
+          }
+        )
+        // برنده‌ها (line / full)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "results",
+            filter: `room_id=eq.${roomId}`,
+          },
+          (payload) => {
+            console.log("[LiveRoom] results realtime payload", payload);
+            const newRow = payload.new as any;
+            if (!newRow) return;
+
+            markRealtimeActivityRef.current();
+
+            if (newRow.win_type === "line") {
+              const rawDraw = newRow.draw_number ?? newRow.draw;
+              const entry: LineWinner = {
+                ticketId: newRow.ticket_id,
+                userId: newRow.user_id,
+                drawNumber:
+                  rawDraw === null || rawDraw === undefined
+                    ? 0
+                    : Number(rawDraw),
+              };
+
+              setLineWinners((prev) => {
+                if (prev.some((w) => w.ticketId === entry.ticketId)) return prev;
+                const next = [...prev, entry];
+                console.log("[LiveRoom] lineWinners updated →", next);
+                return next;
+              });
+              return;
+            }
+
+            if (newRow.win_type === "full") {
+              const rawDraw = newRow.draw_number ?? newRow.draw;
+              const fullEntry: FullWinner = {
+                ticketId: newRow.ticket_id,
+                userId: newRow.user_id,
+                drawNumber:
+                  rawDraw === null || rawDraw === undefined
+                    ? 0
+                    : Number(rawDraw),
+              };
+
+              setFullWinners((prev) => {
+                if (prev.some((w) => w.ticketId === fullEntry.ticketId))
+                  return prev;
+                const next = [...prev, fullEntry];
+                console.log("[LiveRoom] fullWinners updated →", next);
+                return next;
+              });
+
+              console.log("[LiveRoom] full win detected");
+            }
+          }
+        );
+
+      channel.subscribe((status) => {
+        if (cancelled) return;
+        console.log("[LiveRoom] channel status:", status);
+        if (status === "SUBSCRIBED") {
+          if (hadSubscribed) {
+            console.log("[LiveRoom] channel reconnected → catch-up poll");
+            void runFallbackPollRef.current();
+          }
+          hadSubscribed = true;
+        } else if (status === "TIMED_OUT" || status === "CHANNEL_ERROR") {
+          console.warn("[LiveRoom] channel error, scheduling fallback poll");
+          void runDrawSyncPollRef.current();
+        }
+      });
+    }
+
+    void subscribeRealtime();
 
     return () => {
+      cancelled = true;
       console.log("[LiveRoom] cleanup realtime for room", roomId);
-      try {
-        subscription.unsubscribe?.();
-      } catch {
-        // ignore
+      if (channel) {
+        try {
+          channel.unsubscribe();
+        } catch {
+          // ignore
+        }
+        supabase.removeChannel(channel);
+        channel = null;
       }
-      supabase.removeChannel(channel);
     };
-  }, [roomId, tryOpenResultsDialog]);
+  }, [roomId, session.authReady, session.tokenVersion, session.accessToken]);
 
   // userId فعلی
   const currentUserId = useMemo(() => {

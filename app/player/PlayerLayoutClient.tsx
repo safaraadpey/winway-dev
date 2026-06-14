@@ -8,6 +8,7 @@ import {
 import { usePathname } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
+import { unlockAndPreloadOnUserGesture } from "@/lib/number-audio";
 import MergedPlayerHeader from "@/components/MergedPlayerHeader";
 import MyActiveGames from "@/components/MyActiveGames";
 
@@ -38,6 +39,11 @@ export default function PlayerLayoutClient({
   // نکته: در بک‌اند، هنگام hold برای join، هم balance کم می‌شود و هم locked_amount زیاد.
   // بنابراین `wallets.balance` خودش موجودی قابل استفاده است و نباید دوباره locked_amount از آن کم شود.
   const availableTomanBalance = Math.max(0, tomanBalance || 0);
+
+  // Unlock shared WebAudio (number + ding) on first user gesture in player shell.
+  useEffect(() => {
+    return unlockAndPreloadOnUserGesture(window);
+  }, []);
 
   // دیباگ: لاگ وضعیت subscription و balance
   useEffect(() => {

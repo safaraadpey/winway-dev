@@ -9,7 +9,7 @@ import { addSecondsWithJitter } from "../room/drawScheduleJitter.js";
 import type { RoomRow } from "../../repositories/types.js";
 
 export const FIRST_DRAW_DELAY_SEC = 7;
-const DEFAULT_DRAW_INTERVAL_SEC = 1;
+const DEFAULT_DRAW_INTERVAL_SEC = 3;
 
 export function drawIntervalSec(meta: Record<string, unknown> | null): number {
   const raw = meta?.["draw_interval_sec"];

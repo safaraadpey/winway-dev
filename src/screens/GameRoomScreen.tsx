@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 import useScreenWakeLock from "@/lib/hooks/useScreenWakeLock";
@@ -23,7 +22,6 @@ import {
   cancelWaitingRoom,
 } from "@/services/rooms";
 import toast from "react-hot-toast";
-import LiveRoomScreen from "@/src/screens/LiveRoomScreen";
 import {
   playLiveRoomMusic,
   stopLiveRoomMusic,
@@ -33,15 +31,24 @@ import { isMusicEnabled as readMusicEnabled, setMusicEnabled } from "@/lib/audio
 interface GameRoomScreenProps {
   roomId?: string;
   templateId?: string;
+  onEnterLive?: (roomId: string) => void;
 }
 
-const LIVE_ROOM_STATUSES = [
-  "running",
+const LIVE_ENTER_STATUSES = new Set([
   "playing",
+  "running",
   "live",
-  "finished",
   "settling",
-] as const;
+]);
+
+function shouldEnterLiveRoom(
+  mode: GameRoomView["mode"],
+  status: string | null | undefined
+): boolean {
+  if (mode === "running") return true;
+  const normalized = (status || "").trim().toLowerCase();
+  return LIVE_ENTER_STATUSES.has(normalized);
+}
 
 const LOBBY_POLL_MS = 3000;
 const TRANSITION_POLL_MS = 1000;
@@ -122,9 +129,12 @@ function applyTicketEventToActiveCards(
  * صفحه اصلی Game Room
  * شامل تمام کامپوننت‌های مربوط به انتخاب کارت و مشاهده میزهای فعال
  */
-export default function GameRoomScreen({ roomId, templateId }: GameRoomScreenProps) {
+export default function GameRoomScreen({
+  roomId,
+  templateId,
+  onEnterLive,
+}: GameRoomScreenProps) {
   const router = useRouter();
-  const { setShowBackButton } = useHeaderVisibility();
   const { refreshWalletBalances } = useBalancesContext();
   const { invalidate: invalidateActiveGames } = useActiveGamesContext();
   useScreenWakeLock(Boolean(roomId));
@@ -132,6 +142,7 @@ export default function GameRoomScreen({ roomId, templateId }: GameRoomScreenPro
   // State برای اطلاعات روم
   const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
   const [gameMode, setGameMode] = useState<GameRoomView["mode"]>("preview");
+  const enteredLiveRef = useRef(false);
   const fetchRoomDataRef = useRef<(isInitial?: boolean) => Promise<void>>(async () => {});
   const pollIntervalMsRef = useRef(LOBBY_POLL_MS);
   const [loading, setLoading] = useState(true);
@@ -176,6 +187,12 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     realtimeActiveCards: ActiveCardStatus[];
     cardsToRender: ActiveCardStatus[];
   } | null>(null);
+
+  const enterLive = () => {
+    if (!roomId || enteredLiveRef.current) return;
+    enteredLiveRef.current = true;
+    onEnterLive?.(roomId);
+  };
 
   // بارگذاری اطلاعات روم یا تمپلیت
   useEffect(() => {
@@ -290,6 +307,9 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
 
         setRoomInfo(mappedRoom);
         setGameMode(view.mode);
+        if (view.mode === "running") {
+          enterLive();
+        }
 
         // محاسبه server offset و deadline برای countdown
         const serverNow = new Date(view.server_now).getTime();
@@ -297,14 +317,21 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
         const offset = serverNow - clientNow;
         setServerOffset(offset);
 
-        // محاسبه deadline: از starts_at استفاده کن اگر موجود باشد، وگرنه از countdown_seconds
-        let deadline: number;
-        if (view.room.starts_at) {
-          deadline = new Date(view.room.starts_at).getTime();
+        // sync countdown from server (includes timer extension when min_players not met)
+        if (view.mode === "waiting") {
+          if (view.room.starts_at) {
+            setCountdownDeadline(new Date(view.room.starts_at).getTime());
+          } else if ((view.countdown_seconds ?? 0) > 0) {
+            setCountdownDeadline(serverNow + view.countdown_seconds * 1000);
+          }
+        } else if (view.room.starts_at) {
+          setCountdownDeadline(new Date(view.room.starts_at).getTime());
+        } else if ((view.countdown_seconds ?? 0) > 0) {
+          setCountdownDeadline(serverNow + view.countdown_seconds * 1000);
         } else {
-          deadline = serverNow + (view.countdown_seconds || 0) * 1000;
+          setCountdownDeadline(null);
+          setCountdownSeconds(0);
         }
-        setCountdownDeadline(deadline);
 
         // نگاشت کارت‌های فعال
         const activeCardsList: ActiveCardStatus[] = view.active_cards.map(
@@ -376,6 +403,46 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
       clearTimeout(timeoutId);
     };
   }, [roomId, templateId, router]);
+
+  // Enter live only when the room actually started (not when lobby countdown hits 0).
+  useEffect(() => {
+    if (!roomId || enteredLiveRef.current) return;
+
+    if (shouldEnterLiveRoom(gameMode, roomInfo?.status)) {
+      enterLive();
+    }
+  }, [roomId, gameMode, roomInfo?.status]);
+
+  useEffect(() => {
+    if (!roomId || enteredLiveRef.current) return;
+
+    const onDrawRow = (payload: { new: Record<string, unknown> }) => {
+      if (!payload.new?.processed_at) return;
+      setGameMode("running");
+      setRoomInfo((prev) =>
+        prev ? { ...prev, status: "playing" } : prev
+      );
+      enterLive();
+    };
+
+    const channel = supabase
+      .channel(`gameroom_live_probe_${roomId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "draws",
+          filter: `room_id=eq.${roomId}`,
+        },
+        (payload) => onDrawRow(payload as { new: Record<string, unknown> })
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [roomId, supabase]);
 
   // نزدیک شروع بازی: poll سریع‌تر تا status=playing زودتر دیده شود
   useEffect(() => {
@@ -463,14 +530,6 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     }
     getCurrentUser();
   }, []);
-
-  // فعال کردن دکمه back در header
-  useEffect(() => {
-    setShowBackButton(true);
-    return () => {
-      setShowBackButton(false);
-    };
-  }, [setShowBackButton]);
 
   // در حالت roomId، وضعیت ترجیح کاربر را از تنظیم یکپارچه می‌خوانیم
   useEffect(() => {
@@ -684,6 +743,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
         const nextStatus = newRoom.status ?? prev.status;
         if (nextStatus === "playing" || nextStatus === "running" || nextStatus === "live") {
           setGameMode("running");
+          enterLive();
         } else if (nextStatus === "finished" || nextStatus === "settling") {
           setGameMode("finished");
         }
@@ -742,7 +802,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [roomId, supabase]);
+  }, [roomId, supabase, router, roomInfo?.templateId]);
 
   // محاسبه cardsToRender برای استفاده در محاسبه canCancel
   const cardsToRenderForCancel =
@@ -861,20 +921,6 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     return <PageLoading />;
   }
 
-  const normalizedStatus = (roomInfo.status || "").toLowerCase();
-  const lobbyCountdownEnded =
-    gameMode !== "preview" && countdownSeconds === 0;
-  const isLiveRoom =
-    roomId &&
-    (gameMode === "running" ||
-      gameMode === "finished" ||
-      LIVE_ROOM_STATUSES.some((status) => normalizedStatus.includes(status)) ||
-      lobbyCountdownEnded);
-
-  if (isLiveRoom) {
-    return <LiveRoomScreen roomId={roomId!} />;
-  }
-
   const purchaseLockedByAdmin = globalRegistrationLocked && !canCancel;
   const isTournamentRoom = (roomInfo.roomType || "").toLowerCase() === "tournament";
 
@@ -912,11 +958,6 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
               : "ثبت نام در همه بازی‌ها موقتاً توسط ادمین قفل شده است."}
           </div>
         )}
-        {roomInfo.status === "waiting" && countdownSeconds === 0 && (
-          <div className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100 text-right">
-            شمارش تمام شد — در انتظار شروع بازی از سمت سرور...
-          </div>
-        )}
         {!isTournamentRoom && (
           <BuyCardsPanel
             price={roomInfo.cardPrice}
@@ -944,7 +985,11 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           />
         )}
 
-        <ActiveCardsStatus cards={cardsToRender} secondsRemaining={countdownSeconds} />
+        <ActiveCardsStatus
+          cards={cardsToRender}
+          secondsRemaining={countdownSeconds}
+          minPlayers={roomInfo.minPlayers}
+        />
 
         {!isTournamentRoom && (
           <ActiveTablesSection tables={activeTables} onTableClick={handleTableClick} />
