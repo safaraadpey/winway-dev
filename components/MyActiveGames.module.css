@@ -3,8 +3,7 @@
 .container {
   width: 100%;
   padding: 0 1rem;
-  /* Let the shared /player layout background show through */
-  background-color: rgba(14, 14, 15, 0.55);
+  background-color: transparent;
   overflow-x: auto;
   overflow-y: hidden;
 }
