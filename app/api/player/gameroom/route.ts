@@ -214,12 +214,14 @@ async function buildViewFromRoomId(
   // کارت‌های فعال (بر اساس tickets)
   const activeCards = await loadActiveCardsForRoom(supabase, room.id as string);
 
-  // میزهای فعال دیگر با همین قیمت/ارز
-  const activeTables = await loadActiveTablesForRoom(
+  // میزهای playing همین تمپلیت (باکس «میزهای فعال»)
+  const activeTables = await loadPlayingTablesForTemplate(
     supabase,
-    Number(room.card_price || 0),
-    room.currency || "IRR",
-    undefined
+    (room.room_template_id as string | null) ?? null,
+    {
+      cardPrice: Number(room.card_price || 0),
+      currency: room.currency || "IRR",
+    }
   );
 
   const countdownSeconds =
@@ -386,11 +388,13 @@ async function buildViewFromTemplateId(
     return null;
   }
 
-  const activeTables = await loadActiveTablesForRoom(
+  const activeTables = await loadPlayingTablesForTemplate(
     supabase,
-    Number(template.price || 0),
-    template.currency || "IRR",
-    undefined
+    templateId,
+    {
+      cardPrice: Number(template.price || 0),
+      currency: template.currency || "IRR",
+    }
   );
 
   const view: GameRoomView = {
@@ -578,11 +582,10 @@ async function loadGlobalRegistrationLockState(
   };
 }
 
-async function loadActiveTablesForRoom(
+async function loadPlayingTablesForTemplate(
   supabase: ReturnType<typeof createServiceClient>,
-  cardPrice: number,
-  currency: string,
-  excludeRoomId?: string
+  templateId: string | null,
+  fallback?: { cardPrice: number; currency: string }
 ): Promise<
   Array<{
     room_id: string;
@@ -592,21 +595,25 @@ async function loadActiveTablesForRoom(
     prize: number;
   }>
 > {
-  const query = supabase
+  let query = supabase
     .from("rooms")
-    .select("id, room_code, card_price, currency")
-    .eq("card_price", cardPrice)
-    .eq("currency", currency)
+    .select("id, room_code, card_price, currency, room_template_id")
     .in("status", ["playing"]);
 
-  if (excludeRoomId) {
-    query.neq("id", excludeRoomId);
+  if (templateId) {
+    query = query.eq("room_template_id", templateId);
+  } else if (fallback) {
+    query = query
+      .eq("card_price", fallback.cardPrice)
+      .eq("currency", fallback.currency);
+  } else {
+    return [];
   }
 
   const { data: rooms, error } = await query;
 
   if (error) {
-    console.error("loadActiveTablesForRoom: rooms error", error);
+    console.error("loadPlayingTablesForTemplate: rooms error", error);
     return [];
   }
 
@@ -623,7 +630,7 @@ async function loadActiveTablesForRoom(
     .in("reservation_status", ["reserved", "confirmed", "consumed"]);
 
   if (ticketsError) {
-    console.error("loadActiveTablesForRoom: tickets error", ticketsError);
+    console.error("loadPlayingTablesForTemplate: tickets error", ticketsError);
   }
 
   const stats: Record<string, { players: Set<string>; cards: number }> = {};

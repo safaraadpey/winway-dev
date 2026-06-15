@@ -383,10 +383,6 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     // بارگذاری اولیه با spinner
     fetchRoomData(true);
 
-    if (!roomId) {
-      return;
-    }
-
     let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout>;
 
