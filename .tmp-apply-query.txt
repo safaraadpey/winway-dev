@@ -461,7 +461,7 @@ BEGIN
         INTO v_room_seed, v_room_seed_hash
       FROM game_core.fn_generate_room_seed();
 
-      INSERT INTO public.rooms AS ins(
+      INSERT INTO public.rooms(
         id, room_template_id, status,
         card_price, currency, pool_id,
         starts_at, created_by, meta,
@@ -492,7 +492,7 @@ BEGIN
         v_now,
         v_now, v_now
       )
-      RETURNING ins.id, ins.starts_at INTO v_room, v_starts_at;
+      RETURNING id, starts_at INTO v_room, v_starts_at;
 
     EXCEPTION
       WHEN unique_violation THEN
@@ -549,9 +549,9 @@ BEGIN
             AND t.room_id = v_room
             AND t.reservation_status IN ('reserved', 'confirmed', 'consumed')
        )
-     ORDER BY extensions.digest(
-       (encode(v_room_seed, 'hex') || ':' || c.id::text)::bytea,
-       'sha256'::text
+     ORDER BY digest(
+       encode(v_room_seed, 'hex') || ':' || c.id::text,
+       'sha256'
      )
      LIMIT p_card_count
      FOR UPDATE SKIP LOCKED
@@ -710,7 +710,7 @@ BEGIN
         INTO v_room_seed, v_room_seed_hash
       FROM game_core.fn_generate_room_seed();
 
-      INSERT INTO public.rooms AS ins(
+      INSERT INTO public.rooms(
         id, room_template_id, status,
         card_price, currency, pool_id,
         starts_at, created_by, meta,
@@ -740,7 +740,7 @@ BEGIN
         v_now,
         v_now, v_now
       )
-      RETURNING ins.id, ins.starts_at INTO v_room, v_starts_at;
+      RETURNING id, starts_at INTO v_room, v_starts_at;
 
     EXCEPTION
       WHEN unique_violation THEN

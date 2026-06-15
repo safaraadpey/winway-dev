@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, ChangeEvent, FormEvent } from "react";
+import { useState, ChangeEvent, FormEvent, useEffect } from "react";
 import type {
   RoomTemplatePayload,
   RoomType,
@@ -29,6 +29,19 @@ type FieldProps = {
   children: React.ReactNode;
 };
 
+const DEFAULT_WAITING_TIMEOUT_SECONDS = 120;
+
+function normalizeTemplateForForm(
+  template: RoomTemplatePayload,
+): RoomTemplatePayload {
+  const waiting =
+    template.waitingTimeoutSeconds != null &&
+    template.waitingTimeoutSeconds >= 10
+      ? template.waitingTimeoutSeconds
+      : DEFAULT_WAITING_TIMEOUT_SECONDS;
+  return { ...template, waitingTimeoutSeconds: waiting };
+}
+
 function FieldRow({ label, suffix, children }: FieldProps) {
   return (
     <div className="flex items-center justify-between bg-neutral-800 text-neutral-100 rounded-md px-3 py-2 text-sm mb-2">
@@ -53,12 +66,24 @@ export default function RoomTemplatePanel({
   onDelete,
 }: RoomTemplatePanelProps) {
   const [currentMode, setCurrentMode] = useState<RoomTemplatePanelMode>(mode);
-  const [form, setForm] = useState<RoomTemplatePayload>(initialTemplate);
+  const [form, setForm] = useState<RoomTemplatePayload>(() =>
+    normalizeTemplateForForm(initialTemplate),
+  );
   // Track کردن inputهای در حال ویرایش (برای نمایش خالی به جای 0)
   const [focusedFields, setFocusedFields] = useState<Set<string>>(new Set());
 
+  useEffect(() => {
+    setCurrentMode(mode);
+  }, [mode]);
+
   const isCollapsed = currentMode === "collapsed";
   const isCreate = currentMode === "create";
+
+  const openEdit = () => {
+    setForm(normalizeTemplateForForm(initialTemplate));
+    setFocusedFields(new Set());
+    setCurrentMode("edit");
+  };
 
   const handleNumberFocus = (
     key:
@@ -70,6 +95,7 @@ export default function RoomTemplatePanel({
       | "fullRewardPercent"
       | "drawIntervalSec"
       | "countdownSec"
+      | "waitingTimeoutSeconds"
       | "dingPerNumber",
   ) => () => {
     // اگر مقدار 0 است، آن را در state موقت خالی نگه دار
@@ -88,6 +114,7 @@ export default function RoomTemplatePanel({
       | "fullRewardPercent"
       | "drawIntervalSec"
       | "countdownSec"
+      | "waitingTimeoutSeconds"
       | "dingPerNumber",
   ) => () => {
     // وقتی focus از دست رفت، اگر مقدار خالی است به 0 تبدیل کن
@@ -96,9 +123,19 @@ export default function RoomTemplatePanel({
       newSet.delete(key);
       return newSet;
     });
-    // اگر مقدار فعلی خالی یا undefined است، به 0 تبدیل کن
-    if (form[key] === undefined || form[key] === null || (typeof form[key] === 'number' && isNaN(form[key]))) {
-      setForm((prev) => ({ ...prev, [key]: 0 }));
+    // اگر مقدار فعلی خالی یا undefined است، به 0 (یا پیش‌فرض مهلت لابی) تبدیل کن
+    if (
+      form[key] === undefined ||
+      form[key] === null ||
+      (typeof form[key] === "number" && isNaN(form[key]))
+    ) {
+      setForm((prev) => ({
+        ...prev,
+        [key]:
+          key === "waitingTimeoutSeconds"
+            ? DEFAULT_WAITING_TIMEOUT_SECONDS
+            : 0,
+      }));
     }
   };
 
@@ -112,6 +149,7 @@ export default function RoomTemplatePanel({
       | "fullRewardPercent"
       | "drawIntervalSec"
       | "countdownSec"
+      | "waitingTimeoutSeconds"
       | "dingPerNumber",
   ) => (e: ChangeEvent<HTMLInputElement>) => {
     const inputValue = e.target.value;
@@ -142,8 +180,20 @@ export default function RoomTemplatePanel({
       | "fullRewardPercent"
       | "drawIntervalSec"
       | "countdownSec"
+      | "waitingTimeoutSeconds"
       | "dingPerNumber",
   ): string => {
+    if (key === "waitingTimeoutSeconds") {
+      const value =
+        form.waitingTimeoutSeconds != null &&
+        form.waitingTimeoutSeconds >= 10
+          ? form.waitingTimeoutSeconds
+          : DEFAULT_WAITING_TIMEOUT_SECONDS;
+      if (focusedFields.has(key) && form.waitingTimeoutSeconds === 0) {
+        return "";
+      }
+      return value.toString();
+    }
     if (focusedFields.has(key) && form[key] === 0) {
       return "";
     }
@@ -231,9 +281,19 @@ export default function RoomTemplatePanel({
       return;
     }
 
+    const waitingTimeoutSeconds =
+      form.waitingTimeoutSeconds >= 10
+        ? form.waitingTimeoutSeconds
+        : DEFAULT_WAITING_TIMEOUT_SECONDS;
+
+    if (waitingTimeoutSeconds < 10) {
+      toast.error("تایم اوت-کمبود بازیکن باید حداقل ۱۰ ثانیه باشد.");
+      return;
+    }
+
     setIsSaving(true);
     try {
-      await onSave(form);
+      await onSave({ ...form, waitingTimeoutSeconds });
       // بعد از ذخیره موفق، اگر create بود به collapsed تبدیل می‌شود
       if (isCreate) {
         setCurrentMode("collapsed");
@@ -318,7 +378,7 @@ export default function RoomTemplatePanel({
         </div>
         <button
           type="button"
-          onClick={() => setCurrentMode("edit")}
+          onClick={openEdit}
           className="text-xs px-3 py-1 rounded-md bg-teal-500 hover:bg-teal-400 text-black font-medium"
         >
           ویرایش
@@ -491,7 +551,23 @@ export default function RoomTemplatePanel({
         </FieldRow>
 
         <FieldRow
-          label="فاصله بین قرعه ها(ثانیه)"
+          label="تایم اوت-کمبود بازیکن"
+          suffix="ثانیه"
+        >
+          <input
+            type="number"
+            min={10}
+            className="w-24 bg-neutral-700 border border-neutral-600 rounded px-2 py-1 text-xs text-left [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            value={getNumberDisplayValue("waitingTimeoutSeconds")}
+            onChange={handleNumberChange("waitingTimeoutSeconds")}
+            onFocus={handleNumberFocus("waitingTimeoutSeconds")}
+            onBlur={handleNumberBlur("waitingTimeoutSeconds")}
+            title="حداکثر زمانی که روم waiting با کمتر از حداقل بازیکن می‌ماند؛ پس از آن janitor روم را کنسل می‌کند."
+          />
+        </FieldRow>
+
+        <FieldRow
+          label="فاصله بین قرعه ها"
           suffix="ثانیه"
         >
           <input

@@ -71,6 +71,12 @@ export type RoomTemplatePayload = {
   /** شمارش معکوس لابی بر حسب ثانیه (room_templates.countdown_sec) */
   countdownSec: number;
 
+  /**
+   * حداکثر ثانیه‌ای که روم waiting زیر min_players می‌ماند قبل از کنسل janitor
+   * (room_templates.waiting_timeout_seconds)
+   */
+  waitingTimeoutSeconds: number;
+
   /** فاصله بین قرعه‌ها بر حسب ثانیه (room_templates.draw_interval_sec) */
   drawIntervalSec: number;
 
@@ -104,6 +110,7 @@ export type RoomTemplateDbRow = {
   currency: string | null;
   min_players: number | null;
   countdown_sec: number | null;
+  waiting_timeout_seconds: number | null;
   draw_interval_sec: number | null;
   line_reward_percentage: number | null;
   full_reward_percentage: number | null;
@@ -137,6 +144,7 @@ export function mapRoomTemplateFromDb(row: RoomTemplateDbRow): RoomTemplatePaylo
     status: row.status ?? "active",
     isVip: Boolean(row.vip),
     countdownSec: row.countdown_sec ?? 120,
+    waitingTimeoutSeconds: row.waiting_timeout_seconds ?? 120,
     drawIntervalSec: row.draw_interval_sec ?? 3,
     dingPerNumber: Number(row.ding_per_number ?? 1),
     password: row.password,
@@ -163,6 +171,7 @@ export function mapRoomTemplateToDbUpdate(
     currency: payload.currency,
     min_players: payload.minPlayers,
     countdown_sec: payload.countdownSec,
+    waiting_timeout_seconds: payload.waitingTimeoutSeconds,
     draw_interval_sec: payload.drawIntervalSec,
     // تبدیل از درصد (0-100) به decimal (0-1)
     line_reward_percentage: payload.lineRewardPercent / 100,
@@ -204,6 +213,7 @@ export function createEmptyRoomTemplate(): RoomTemplatePayload {
     status: "active",
     isVip: false,
     countdownSec: 60,
+    waitingTimeoutSeconds: 120,
     drawIntervalSec: 3,
     dingPerNumber: 1,
     password: null,
