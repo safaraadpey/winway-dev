@@ -156,45 +156,6 @@ export default function DrawFairnessPage() {
           بررسی مستقل در مرورگر
         </button>
 
-        <section
-          dir="rtl"
-          className="rounded-2xl border border-[#1f2837] bg-black/40 p-4 space-y-3 text-right text-[13px] leading-relaxed text-white/85"
-        >
-          <h2 className="text-sm font-bold text-[#FEEEB4]">روش محاسبه</h2>
-          <ol className="list-decimal list-outside mr-4 space-y-2 text-white/80">
-            <li>
-              قبل از بازی <span className="text-white/90">serverSeedHash</span>{" "}
-              (کد commit) در میز نمایش داده و قابل کپی است.
-            </li>
-            <li>
-              پس از بازی <span className="text-white/90">serverSeed</span>{" "}
-              منتشر می‌شود. تأیید commit:
-              <code dir="ltr" className="mx-1 block mt-1 rounded-lg bg-black/50 px-2 py-1 text-left text-[11px] latin-number text-emerald-200/90">
-                sha256(bytes_from_hex(serverSeed)) = serverSeedHash
-              </code>
-            </li>
-            <li>
-              برای هر قرعه، بین اعداد ۱ تا ۹۰ که هنوز نیامده‌اند، کلید
-              <code dir="ltr" className="mx-1 block mt-1 rounded-lg bg-black/50 px-2 py-1 text-left text-[11px] latin-number text-sky-200/90">
-                sha256(utf8(hex(seed)+&apos;:&apos;+n))
-              </code>
-              محاسبه می‌شود و عددی که <strong>کمینه</strong> کلید را دارد
-              انتخاب می‌شود.
-            </li>
-            <li>
-              ترتیب بازتولید‌شده با{" "}
-              <span className="text-white/90">drawnNumbers</span> مقایسه می‌شود.
-            </li>
-          </ol>
-          <p className="text-[12px] text-amber-200/80 border-t border-white/10 pt-2">
-            توجه: هش commit روی بایت‌های seed است، نه روی متن hex (
-            <span dir="ltr" className="latin-number">
-              sha256(utf8(serverSeed))
-            </span>{" "}
-            استفاده نمی‌شود).
-          </p>
-        </section>
-
         {parseError && (
           <div
             role="alert"
@@ -264,6 +225,45 @@ export default function DrawFairnessPage() {
             )}
           </section>
         )}
+
+        <section
+          dir="rtl"
+          className="rounded-2xl border border-[#1f2837] bg-black/40 p-4 space-y-3 text-right text-[13px] leading-relaxed text-white/85"
+        >
+          <h2 className="text-sm font-bold text-[#FEEEB4]">روش محاسبه</h2>
+          <ol className="list-decimal list-outside mr-4 space-y-2 text-white/80">
+            <li>
+              قبل از بازی <span className="text-white/90">serverSeedHash</span>{" "}
+              (کد commit) در میز نمایش داده و قابل کپی است.
+            </li>
+            <li>
+              پس از بازی <span className="text-white/90">serverSeed</span>{" "}
+              منتشر می‌شود. تأیید commit:
+              <code dir="ltr" className="mx-1 block mt-1 rounded-lg bg-black/50 px-2 py-1 text-left text-[11px] latin-number text-emerald-200/90">
+                sha256(bytes_from_hex(serverSeed)) = serverSeedHash
+              </code>
+            </li>
+            <li>
+              برای هر قرعه، بین اعداد ۱ تا ۹۰ که هنوز نیامده‌اند، کلید
+              <code dir="ltr" className="mx-1 block mt-1 rounded-lg bg-black/50 px-2 py-1 text-left text-[11px] latin-number text-sky-200/90">
+                sha256(utf8(hex(seed)+&apos;:&apos;+n))
+              </code>
+              محاسبه می‌شود و عددی که <strong>کمینه</strong> کلید را دارد
+              انتخاب می‌شود.
+            </li>
+            <li>
+              ترتیب بازتولید‌شده با{" "}
+              <span className="text-white/90">drawnNumbers</span> مقایسه می‌شود.
+            </li>
+          </ol>
+          <p className="text-[12px] text-amber-200/80 border-t border-white/10 pt-2">
+            توجه: هش commit روی بایت‌های seed است، نه روی متن hex (
+            <span dir="ltr" className="latin-number">
+              sha256(utf8(serverSeed))
+            </span>{" "}
+            استفاده نمی‌شود).
+          </p>
+        </section>
       </div>
     </div>
   );
