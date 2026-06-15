@@ -163,7 +163,13 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   const calledNumbersRef = useRef<number[]>([]);
   /** After first snapshot, fire audio/ding only for draws that arrive live. */
   const drawsHydratedRef = useRef(false);
-  const liveDrawCountRef = useRef(0);
+  /** How many authoritative draws have been revealed in the UI (paced queue). */
+  const revealedDrawCountRef = useRef(0);
+  const [revealedDrawCount, setRevealedDrawCount] = useState(0);
+  const lastRevealAtRef = useRef(0);
+  const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** RT draws received while a draw poll is in-flight (merged when poll completes). */
+  const pendingRtDrawsRef = useRef<ProcessedDraw[]>([]);
   const winnersSyncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
@@ -294,9 +300,14 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     [roomId, countMatchedMyCards, creditDingOnReveal]
   );
 
-  const calledNumbers = useMemo(
+  const authoritativeCalledNumbers = useMemo(
     () => sortDraws(data?.draws ?? []).map((d) => d.number),
     [data?.draws]
+  );
+
+  const displayedCalledNumbers = useMemo(
+    () => authoritativeCalledNumbers.slice(0, revealedDrawCount),
+    [authoritativeCalledNumbers, revealedDrawCount]
   );
 
   const handleNewDraw = useCallback(
@@ -313,41 +324,73 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     [creditDingForRevealedNumber]
   );
 
+  const scheduleNextDrawReveal = useCallback(() => {
+    if (revealTimerRef.current) return;
+
+    const sorted = sortDraws(dataRef.current?.draws ?? []);
+    if (revealedDrawCountRef.current >= sorted.length) return;
+
+    const intervalMs = Math.max(drawIntervalSecRef.current * 1000, 500);
+    const elapsed = Date.now() - lastRevealAtRef.current;
+    const delay = elapsed >= intervalMs ? 0 : intervalMs - elapsed;
+
+    revealTimerRef.current = setTimeout(() => {
+      revealTimerRef.current = null;
+      const latestSorted = sortDraws(dataRef.current?.draws ?? []);
+      const nextIdx = revealedDrawCountRef.current;
+      if (nextIdx >= latestSorted.length) return;
+
+      handleNewDraw(latestSorted[nextIdx]!.number);
+      revealedDrawCountRef.current = nextIdx + 1;
+      setRevealedDrawCount(nextIdx + 1);
+      lastRevealAtRef.current = Date.now();
+
+      if (revealedDrawCountRef.current < latestSorted.length) {
+        scheduleNextDrawRevealRef.current();
+      }
+    }, delay);
+  }, [handleNewDraw]);
+
+  const scheduleNextDrawRevealRef = useRef(scheduleNextDrawReveal);
+  useEffect(() => {
+    scheduleNextDrawRevealRef.current = scheduleNextDrawReveal;
+  }, [scheduleNextDrawReveal]);
+
   useEffect(() => {
     fullWinnersRef.current = fullWinners;
   }, [fullWinners]);
 
   useEffect(() => {
-    calledNumbersRef.current = calledNumbers;
-  }, [calledNumbers]);
+    calledNumbersRef.current = displayedCalledNumbers;
+  }, [displayedCalledNumbers]);
 
   useEffect(() => {
-    const sorted = sortDraws(data?.draws ?? []);
-    const count = sorted.length;
+    const authCount = sortDraws(data?.draws ?? []).length;
 
     if (loading) return;
 
     if (!drawsHydratedRef.current) {
       drawsHydratedRef.current = true;
-      liveDrawCountRef.current = count;
+      revealedDrawCountRef.current = authCount;
+      setRevealedDrawCount(authCount);
+      lastRevealAtRef.current = Date.now();
       return;
     }
 
-    if (count <= liveDrawCountRef.current) {
-      liveDrawCountRef.current = count;
-      return;
+    if (authCount < revealedDrawCountRef.current) {
+      revealedDrawCountRef.current = authCount;
+      setRevealedDrawCount(authCount);
     }
 
-    for (let i = liveDrawCountRef.current; i < count; i++) {
-      handleNewDraw(sorted[i]!.number);
+    if (authCount > revealedDrawCountRef.current) {
+      scheduleNextDrawRevealRef.current();
     }
-    liveDrawCountRef.current = count;
-  }, [data?.draws, handleNewDraw, loading]);
+  }, [data?.draws, loading]);
 
   useEffect(() => {
     if (resultsRequestedRef.current) return;
     const status = (data?.room?.status || "").trim().toLowerCase();
-    if (!canOpenResultsDialog(fullWinners, calledNumbers, status)) {
+    if (!canOpenResultsDialog(fullWinners, displayedCalledNumbers, status)) {
       return;
     }
     void tryOpenResultsDialog();
@@ -355,7 +398,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     data?.room?.status,
     data?.draws?.length,
     fullWinners,
-    calledNumbers,
+    displayedCalledNumbers,
     tryOpenResultsDialog,
   ]);
 
@@ -386,11 +429,14 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     try {
       const snapshot = await fetchLiveRoomSnapshot(roomId, { scope: "draws" });
       roomStatusRef.current = (snapshot.room.status || "").trim().toLowerCase();
+      const pending = pendingRtDrawsRef.current;
+      pendingRtDrawsRef.current = [];
+      const mergedDraws = mergeDrawLists(snapshot.draws, pending);
       setData((prev) =>
         prev
           ? {
               ...prev,
-              draws: snapshot.draws,
+              draws: mergedDraws,
               room: {
                 ...prev.room,
                 status: snapshot.room.status ?? prev.room.status,
@@ -404,7 +450,11 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
           : prev
       );
       markDrawSynced();
-      console.log("[LiveRoom] draw sync poll (realtime draw stale)");
+      console.log("[LiveRoom] draw sync poll (realtime draw stale)", {
+        serverDraws: snapshot.draws.length,
+        pendingRt: pending.length,
+        mergedDraws: mergedDraws.length,
+      });
     } catch (err) {
       console.warn("[LiveRoom] draw sync poll error:", err);
     } finally {
@@ -428,7 +478,10 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       const snapshot = await fetchLiveRoomSnapshot(roomId);
       const nextStatus = (snapshot.room.status || "").trim().toLowerCase();
       roomStatusRef.current = nextStatus;
-      setData(snapshot);
+      const pending = pendingRtDrawsRef.current;
+      pendingRtDrawsRef.current = [];
+      const mergedDraws = mergeDrawLists(snapshot.draws, pending);
+      setData({ ...snapshot, draws: mergedDraws });
       markDrawSynced();
 
       const isTerminal = ["settling", "finished", "cancelled"].includes(
@@ -464,8 +517,15 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
 
   // state پاپ‌آپ و sync اعداد با عوض شدن room ریست شود
   useEffect(() => {
+    if (revealTimerRef.current) {
+      clearTimeout(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
+    pendingRtDrawsRef.current = [];
     drawsHydratedRef.current = false;
-    liveDrawCountRef.current = 0;
+    revealedDrawCountRef.current = 0;
+    setRevealedDrawCount(0);
+    lastRevealAtRef.current = 0;
     setResultsRequested(false);
     setShowResultsDialog(false);
     setResults(null);
@@ -478,7 +538,16 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   }, [roomId]);
 
   useEffect(() => {
-    if (calledNumbers.length > 0) {
+    return () => {
+      if (revealTimerRef.current) {
+        clearTimeout(revealTimerRef.current);
+        revealTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (displayedCalledNumbers.length > 0) {
       setFirstDrawCountdownSec(null);
       return;
     }
@@ -502,7 +571,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     }, 1000);
 
     return () => clearInterval(id);
-  }, [calledNumbers.length, roomId, data?.room?.status]);
+  }, [displayedCalledNumbers.length, roomId, data?.room?.status]);
 
   // مخفی کردن استاتوس‌بار
   useEffect(() => {
@@ -655,12 +724,22 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       const number = payload.new?.number as number | undefined;
       const drawId = payload.new?.id as string | undefined;
 
-      if (number == null || !newProcessed) return;
+      if (number == null) return;
+      if (!newProcessed) {
+        markRealtimeActivityRef.current();
+        return;
+      }
       // Only react when processed_at is newly set (ignore actor timing column updates).
       if (oldProcessed != null) return;
 
       const prev = dataRef.current;
-      if (prev?.draws?.some((d) => d.id === drawId || d.number === number)) {
+      const alreadyPending = pendingRtDrawsRef.current.some(
+        (d) => d.id === drawId || d.number === number
+      );
+      if (
+        prev?.draws?.some((d) => d.id === drawId || d.number === number) ||
+        alreadyPending
+      ) {
         markDrawSync();
         markRealtimeActivityRef.current();
         return;
@@ -689,6 +768,22 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
 
       if (!prev) {
         void runDrawSyncPollRef.current();
+        return;
+      }
+
+      if (pollInFlightRef.current) {
+        pendingRtDrawsRef.current = mergeDrawLists(pendingRtDrawsRef.current, [
+          incomingDraw,
+        ]);
+        const mergedDraws = mergeDrawLists(prev.draws, [incomingDraw]);
+        const nextSnapshot = { ...prev, draws: mergedDraws };
+        dataRef.current = nextSnapshot;
+        markDrawSync();
+        markRealtimeActivityRef.current();
+        console.log("[LiveRoom] RT draw deferred (poll in-flight)", {
+          number,
+          drawId,
+        });
         return;
       }
 
@@ -930,10 +1025,10 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
 
   if (!data) return null;
 
-  const latestNumber = calledNumbers.length
-    ? calledNumbers[calledNumbers.length - 1]
+  const latestNumber = displayedCalledNumbers.length
+    ? displayedCalledNumbers[displayedCalledNumbers.length - 1]
     : null;
-  const previousNumbers = calledNumbers.slice(0, -1).reverse();
+  const previousNumbers = displayedCalledNumbers.slice(0, -1).reverse();
 
   const normalizeCommissionRate = (value: number | null | undefined) => {
     if (!value || Number.isNaN(value)) return 0;
@@ -990,14 +1085,14 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   const hasRevealedLineWinner =
     !data.tournament?.id &&
     lineWinners.some(
-      (w) => w.drawNumber == null || calledNumbers.includes(w.drawNumber)
+      (w) => w.drawNumber == null || displayedCalledNumbers.includes(w.drawNumber)
     );
 
   const hasRevealedFullWinner = fullWinners.some(
     (w) =>
       w.drawNumber == null ||
       w.drawNumber === 0 ||
-      calledNumbers.includes(w.drawNumber)
+      displayedCalledNumbers.includes(w.drawNumber)
   );
 
   const winningFullDrawNumber =
@@ -1034,7 +1129,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
               commitHash={roomCommitHash}
               currentNumber={latestNumber ?? null}
               history={previousNumbers}
-              totalDraws={calledNumbers.length}
+              totalDraws={authoritativeCalledNumbers.length}
               countdownSeconds={latestNumber == null ? firstDrawCountdownSec : null}
               winningFullDrawNumber={winningFullDrawNumber}
             />
@@ -1056,7 +1151,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
             <div key={card.ticket_id} className="bg-transparent rounded-3xl">
               <BingoCardDemo
                 ticketId={card.ticket_id}
-                calledNumbers={calledNumbers}
+                calledNumbers={displayedCalledNumbers}
                 playerName={card.is_my_card ? "کارت های من" : card.player_name}
                 cardNumber={card.card_number ?? undefined}
                 size="large"
