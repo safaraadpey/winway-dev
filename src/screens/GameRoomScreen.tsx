@@ -68,7 +68,7 @@ function applyTicketEventToActiveCards(
 
   if (!playerId) return prev;
 
-  const activeStatuses = ["reserved"];
+  const activeStatuses = ["reserved", "confirmed", "consumed"];
 
   let delta = 0;
 
@@ -627,7 +627,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
         const eventType = payload.eventType as "INSERT" | "UPDATE" | "DELETE";
         const newRow = payload.new as any;
         const oldRow = payload.old as any;
-        const activeStatuses = ["reserved"];
+        const activeStatuses = ["reserved", "confirmed", "consumed"];
 
         const playerId =
           (newRow?.player_user_id as string | undefined) ??

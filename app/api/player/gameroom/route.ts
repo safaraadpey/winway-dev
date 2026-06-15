@@ -268,8 +268,10 @@ async function buildViewFromTemplateId(
   currentUserId: string,
   globalRegistrationLockState: GlobalRegistrationLockState
 ): Promise<GameRoomView | null> {
-  // ۱) چک کن آیا روم waiting برای این template هست یا نه
-  const { data: waitingRoom, error: waitingError } = await supabase
+  const activeStatuses = ["waiting", "playing", "live", "running", "settling"];
+
+  // ۱) همه روم‌های فعال این template را بگیر
+  const { data: activeRooms, error: activeRoomsError } = await supabase
     .from("rooms")
     .select(
       `
@@ -284,31 +286,84 @@ async function buildViewFromTemplateId(
         max_players,
         max_cards_per_player,
         starts_at,
-        ends_at
+        ends_at,
+        created_at
       `
     )
     .eq("room_template_id", templateId)
-    .eq("status", "waiting")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .in("status", activeStatuses);
 
-  if (waitingError) {
-    console.error("buildViewFromTemplateId: rooms waiting error", waitingError);
+  if (activeRoomsError) {
+    console.error("buildViewFromTemplateId: rooms active error", activeRoomsError);
   }
 
-  if (waitingRoom) {
-    // اگر روم waiting موجود است، مثل حالت roomId رفتار کن
-    return buildViewFromRoomId(
-      supabase,
-      waitingRoom.id as string,
-      serverNow,
-      currentUserId,
-      globalRegistrationLockState
-    );
+  const roomRows = (activeRooms || []) as Array<{
+    id: string;
+    status: string | null;
+    starts_at: string | null;
+    created_at: string | null;
+  }>;
+
+  if (roomRows.length > 0) {
+    const roomIds = roomRows.map((r) => r.id);
+
+    // ۲) اگر کاربر قبلاً در یکی از این روم‌ها کارت فعال دارد، همان روم انتخاب شود
+    const { data: myTickets, error: myTicketsError } = await supabase
+      .from("tickets")
+      .select("room_id")
+      .eq("player_user_id", currentUserId)
+      .in("room_id", roomIds)
+      .in("reservation_status", ["reserved", "confirmed", "consumed"]);
+
+    if (myTicketsError) {
+      console.error("buildViewFromTemplateId: myTickets error", myTicketsError);
+    }
+
+    const rankByStatus = (status: string | null): number => {
+      const normalized = (status || "").toLowerCase();
+      if (normalized === "playing" || normalized === "live" || normalized === "running") return 1;
+      if (normalized === "settling") return 2;
+      if (normalized === "waiting") return 3;
+      return 9;
+    };
+
+    const sortByPriority = (a: { status: string | null; starts_at: string | null; created_at: string | null }, b: { status: string | null; starts_at: string | null; created_at: string | null }) => {
+      const rankDiff = rankByStatus(a.status) - rankByStatus(b.status);
+      if (rankDiff !== 0) return rankDiff;
+
+      // جدیدتر اولویت دارد تا کاربر به آخرین روم فعال خودش برگردد.
+      const aStart = a.starts_at ? Date.parse(a.starts_at) : 0;
+      const bStart = b.starts_at ? Date.parse(b.starts_at) : 0;
+      if (aStart !== bStart) return bStart - aStart;
+
+      const aCreated = a.created_at ? Date.parse(a.created_at) : 0;
+      const bCreated = b.created_at ? Date.parse(b.created_at) : 0;
+      return bCreated - aCreated;
+    };
+
+    const myRoomIds = new Set(((myTickets || []) as Array<{ room_id: string | null }>).map((t) => t.room_id).filter((id): id is string => Boolean(id)));
+    const myActiveRooms = roomRows.filter((room) => myRoomIds.has(room.id)).sort(sortByPriority);
+
+    const selectedRoom =
+      myActiveRooms[0] ??
+      roomRows
+        .slice()
+        .sort(sortByPriority)
+        .find((room) => (room.status || "").toLowerCase() === "waiting") ??
+      roomRows.slice().sort(sortByPriority)[0];
+
+    if (selectedRoom?.id) {
+      return buildViewFromRoomId(
+        supabase,
+        selectedRoom.id,
+        serverNow,
+        currentUserId,
+        globalRegistrationLockState
+      );
+    }
   }
 
-  // ۲) حالت preview – فقط از room_templates می‌خوانیم
+  // ۳) اگر هیچ روم فعالی نبود، حالت preview از template برگردانده می‌شود.
   const { data: template, error: templateError } = await supabase
     .from("room_templates")
     .select(
