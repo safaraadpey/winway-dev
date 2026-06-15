@@ -3,6 +3,7 @@ import { createServiceClient, getUserFromRequest } from "@/lib/supabaseServer";
 
 type LobbyRoomGroup = {
   templateId: string | null;
+  entryRoomId: string | null;
   price: number;
   currency: string;
   waitingRooms: number;
@@ -69,7 +70,7 @@ export async function GET(request: Request) {
     // 2) Active rooms (waiting/playing/live)
     const { data: rooms, error: roomsError } = await supabase
       .from("rooms")
-      .select("id, status, room_template_id, card_price, currency")
+      .select("id, status, room_template_id, card_price, currency, created_at")
       .in("status", ["waiting", "playing", "live"]);
 
     if (roomsError) {
@@ -86,6 +87,7 @@ export async function GET(request: Request) {
       room_template_id: string | null;
       card_price: any;
       currency: string | null;
+      created_at: string | null;
     }>;
 
     // Drop tournament rooms (only keep rooms whose template is normal or has no template)
@@ -123,6 +125,7 @@ export async function GET(request: Request) {
       const key = `tpl_${t.id}`;
       groups.set(key, {
         templateId: t.id,
+        entryRoomId: null,
         price: Number(t.price || 0),
         currency: (t.currency || "IRR") as string,
         waitingRooms: 0,
@@ -149,6 +152,7 @@ export async function GET(request: Request) {
       if (!groups.has(key)) {
         groups.set(key, {
           templateId: templateId ?? null,
+          entryRoomId: null,
           price,
           currency,
           waitingRooms: 0,
@@ -168,6 +172,29 @@ export async function GET(request: Request) {
 
       if (r.status === "waiting") g.waitingRooms += 1;
       if (r.status === "playing" || r.status === "live") g.playingRooms += 1;
+
+      const statusRank = (status: string | null): number => {
+        const normalized = (status || "").toLowerCase();
+        if (normalized === "waiting") return 1;
+        if (normalized === "playing" || normalized === "live" || normalized === "running") return 2;
+        if (normalized === "settling") return 3;
+        return 9;
+      };
+
+      const currentEntry = g.entryRoomId
+        ? filteredRoomRows.find((room) => room.id === g.entryRoomId) ?? null
+        : null;
+
+      const shouldReplaceEntry =
+        !currentEntry ||
+        statusRank(r.status) < statusRank(currentEntry.status) ||
+        (statusRank(r.status) === statusRank(currentEntry.status) &&
+          Date.parse(r.created_at || "1970-01-01T00:00:00.000Z") >
+            Date.parse(currentEntry.created_at || "1970-01-01T00:00:00.000Z"));
+
+      if (shouldReplaceEntry) {
+        g.entryRoomId = r.id;
+      }
     }
 
     // Tickets contribute to distinct player counts per group (distinct across all rooms in that group)

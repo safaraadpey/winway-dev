@@ -24,8 +24,9 @@ export interface LobbyRoomCardProps {
   waitingPlayers?: number;
   playingPlayers?: number;
   templateId?: string;
+  entryRoomId?: string | null;
   variant?: LobbyRoomCardVariant; // حالت نمایش: minimal (فقط عکس) یا expanded (همه اطلاعات)
-  onClick?: (price: number, templateId?: string) => void;
+  onClick?: (price: number, templateId?: string, entryRoomId?: string | null) => void;
 }
 
 /**
@@ -44,6 +45,7 @@ export default function LobbyRoomCard({
   waitingPlayers,
   playingPlayers,
   templateId,
+  entryRoomId,
   variant = 'minimal', // حالت پیش‌فرض: minimal
   onClick
 }: LobbyRoomCardProps) {
@@ -67,7 +69,7 @@ export default function LobbyRoomCard({
 
   const handleClick = () => {
     if (onClick) {
-      onClick(price, templateId);
+      onClick(price, templateId, entryRoomId);
     }
   };
 

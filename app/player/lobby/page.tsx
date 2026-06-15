@@ -21,6 +21,7 @@ interface RoomPriceGroup {
   waitingPlayers: number;
   playingPlayers: number;
   templateId?: string;
+  entryRoomId?: string | null;
 }
 
 /**
@@ -243,18 +244,27 @@ export default function LobbyPage() {
   }, [sessionSnap.accessToken]);
 
   // تابع برای کلیک روی روم
-  const handleRoomClick = async (price: number, templateId?: string) => {
+  const handleRoomClick = async (
+    price: number,
+    templateId?: string,
+    entryRoomId?: string | null
+  ) => {
+    if (entryRoomId) {
+      router.push(`/player/gameroom?roomId=${entryRoomId}`);
+      return;
+    }
+
     if (!templateId) {
-      console.error('Template ID is required');
+      console.error("Template ID is required");
       return;
     }
 
     try {
-      // فقط به صفحه گیم‌روم بر اساس تمپلیت هدایت می‌کنیم
+      // Fallback: اگر روم waiting پیدا نشود، resolver در API مسیر درست را انتخاب می‌کند
       router.push(`/player/gameroom?templateId=${templateId}`);
     } catch (error: any) {
-      console.error('Error in handleRoomClick:', error);
-      toast.error(error.message || 'خطا در ورود به اتاق');
+      console.error("Error in handleRoomClick:", error);
+      toast.error(error.message || "خطا در ورود به اتاق");
     }
   };
 
@@ -303,6 +313,7 @@ export default function LobbyPage() {
               waitingPlayers={group.waitingPlayers}
               playingPlayers={group.playingPlayers}
               templateId={group.templateId}
+              entryRoomId={group.entryRoomId}
               variant="minimal" // TODO: از تنظیمات ادمین بگیرید
               onClick={handleRoomClick}
             />
