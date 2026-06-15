@@ -143,7 +143,7 @@ export default function GameRoomScreen({
   const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
   const [gameMode, setGameMode] = useState<GameRoomView["mode"]>("preview");
   const enteredLiveRef = useRef(false);
-  const fetchRoomDataRef = useRef<(isInitial?: boolean) => Promise<void>>(async () => {});
+  const fetchRoomDataRef = useRef<(isInitial: boolean) => Promise<void>>(async () => {});
   const pollIntervalMsRef = useRef(LOBBY_POLL_MS);
   const [loading, setLoading] = useState(true);
   const [globalRegistrationLocked, setGlobalRegistrationLocked] = useState(false);
