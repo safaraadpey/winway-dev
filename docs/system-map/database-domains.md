@@ -195,7 +195,7 @@ Views: `vw_player_commission` (player → agent/super + rates).
 ### 3.7 Ding (`public`)
 - `update_ding_balance(user, amount)` — upsert `ding_balances`.
 - `distribute_ding_on_draw()` (trigger fn) — legacy per-ticket ding on draw insert.
-- `fn_aggregate_ding_for_processed_draw()` (trigger fn) — active aggregation when a draw's `processed_at` is set (see `Ding-system.md`).
+- `fn_aggregate_ding_for_processed_draw()` (trigger fn) — legacy DB path; **disabled** in engine mode; see `Ding-system.md` and `sql/migrations/20250610130000_disable_ding_trigger_for_engine.sql`. Authoritative credit: game-engine → `rpc_apply_ding_credits_for_draw`.
 - `fn_ding_aggregate_dryrun_on_draw_processed()` — dry-run variant.
 
 ### 3.8 Card pool (`game_pool` / `game_core`)

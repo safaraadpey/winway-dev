@@ -1,251 +1,142 @@
 # راهنمای سیستم Ding
 
-سیستم Ding یک نوع امتیاز/ارز جدا از wallet است که به بازیکنان به ازای هر عدد قرعه‌کشی شده که روی کارت‌هایشان باشد، داده می‌شود.
+> **سند فنی کامل (انگلیسی، به‌روز با کد):** [`docs/system-map/Ding-system.md`](docs/system-map/Ding-system.md)
 
-## نحوه کار
+Ding یک **امتیاز/ارز جدا از کیف پول تومان** است. در بازی زنده، وقتی عدد قرعه روی
+کارت(های) بازیکن بیفتد، به موجودی `ding_balances` اضافه می‌شود.
 
-### منطق توزیع Ding
+---
 
-1. **وقتی یک عدد در قرعه‌کشی می‌آید:**
-   - سیستم به صورت خودکار تمام کارت‌های فعال در Room را بررسی می‌کند
-   - برای هر کارتی که آن عدد رویش است، **1 Ding** به بازیکن آن کارت داده می‌شود
-   - اگر یک بازیکن چند کارت داشته باشد و عدد روی همه آنها باشد، به ازای هر کارت Ding می‌گیرد
+## خلاصه منطق
+
+### فرمول (سرور — منبع حقیقت)
+
+```
+delta = (تعداد کارت‌های match‌شده) × ding_per_number
+```
+
+- **کارت match‌شده:** بلیت `reserved`، لغو نشده، عدد روی کارت باشد.
+- **ding_per_number:** `room.ding_per_number` → وگرنه `template` → وگرنه `1`.
 
 ### مثال
 
-فرض کنید:
-- بازیکن A دارای 3 کارت است
-- عدد 12 در قرعه‌کشی می‌آید
-- عدد 12 روی 2 کارت از بازیکن A است
-- ضریب Ding در Room: **2** (هر عدد 2 Ding می‌دهد)
+- بازیکن ۳ کارت `reserved` دارد.
+- عدد ۱۲ می‌آید و روی ۲ کارتش است.
+- `ding_per_number = 2`
 
-**نتیجه:** بازیکن A، **4 Ding** دریافت می‌کند (2 کارت × 2 Ding = 4 Ding)
+→ سرور **۴ ding** credit می‌کند (۲ × ۲).
 
-### مثال با ضریب متفاوت
+---
 
-- بازیکن B دارای 5 کارت است
-- عدد 25 در قرعه‌کشی می‌آید
-- عدد 25 روی 3 کارت از بازیکن B است
-- ضریب Ding در Room: **1.5**
+## مسیر اعمال در سیستم
 
-**نتیجه:** بازیکن B، **4.5 Ding** دریافت می‌کند (3 کارت × 1.5 Ding = 4.5 Ding)
+### ۱. سرور (Game Engine)
 
-## ساختار دیتابیس
+1. قرعه در `draws` + job در `draw_jobs`
+2. Engine: mark، ارزیابی برنده، محاسبه ding در حافظه
+3. یک RPC (`rpc_finalize_engine_draw_job`): marks، results، `processed_at`،
+   credit در `ding_balances` + `ding_transactions`
+4. Trigger قدیمی DB (`trg_aggregate_ding_on_processed_at`) **غیرفعال** است تا
+   دوبار credit نشود.
 
-### جدول `ding_balances`
-ذخیره موجودی Ding هر کاربر:
-```sql
-user_id      UUID PRIMARY KEY
-balance      NUMERIC (موجودی)
-updated_at   TIMESTAMP
-created_at   TIMESTAMP
-```
+جزئیات: [`docs/system-map/Ding-system.md`](docs/system-map/Ding-system.md)
 
-### جدول `ding_transactions`
-لاگ تمام تراکنش‌های Ding:
-```sql
-id            UUID PRIMARY KEY
-user_id       UUID (کاربر دریافت‌کننده)
-room_id       UUID (اتاق بازی)
-ticket_id     UUID (کارت مربوطه)
-draw_id       UUID (قرعه‌کشی مربوطه)
-drawn_number  INTEGER (عدد قرعه‌کشی شده)
-amount        NUMERIC (مقدار Ding)
-description   TEXT
-created_at    TIMESTAMP
-```
+### ۲. کلاینت (نمایش در UI)
 
-## استفاده در Frontend
+| مرحله | رفتار |
+| --- | --- |
+| ورود / لاگین | `GET /api/me/ding-balance` |
+| حین Live Room | جمع **محلی** به ازای هر عدد reveal‌شده + صدای دینگ |
+| پایان بازی | `refreshAllBalances()` از API |
+| refresh صفحه | دوباره API |
 
-### دریافت موجودی Ding
+**فایل‌های کلیدی:**
 
-```typescript
-import { getMyDingBalance } from '@/lib/ding';
+- `lib/hooks/useBalances.ts` — `creditDingOnReveal`, `refreshAllBalances`
+- `src/screens/LiveRoomScreen.tsx` — شمارش کارت و trigger بعد از reveal
+- `app/player/PlayerLayoutClient.tsx` + `MergedPlayerHeader` — نمایش
 
-const balance = await getMyDingBalance();
-console.log(`موجودی Ding شما: ${balance}`);
-```
+**نکته:** realtime روی `ding_balances` در پلیر فعال **نیست**؛ موجودی حین بازی
+optimistic است.
 
-### دریافت تراکنش‌های Ding
+---
 
-```typescript
-import { getMyDingTransactions } from '@/lib/ding';
+## تفاوت UI و سرور (مهم)
 
-const transactions = await getMyDingTransactions(20);
-transactions.forEach(t => {
-  console.log(`عدد ${t.drawn_number} - ${t.amount} Ding`);
-});
-```
+| | سرور | UI حین بازی |
+| --- | --- | --- |
+| بلیت‌های eligible | فقط `reserved` | همه `is_my_card` |
+| زمان credit | finalize شدن draw | reveal در صف UI |
+| عدد نهایی | `ding_balances` | بعد از refresh با API هم‌تراز می‌شود |
 
-### Subscribe به تغییرات Realtime
+در **تورنومنت** بلیت‌ها اغلب `confirmed` هستند → سرور ممکن است ding ندهد ولی UI
+هنوز optimistic زیاد نشان دهد.
+
+---
+
+## جداول اصلی
+
+- **`ding_balances`** — موجودی فعلی (`balance`, `locked_amount`)
+- **`ding_transactions`** — لاگ credit (در engine: یک ردیف تجمیعی per user per draw)
+- **`rooms.ding_per_number` / `room_templates.ding_per_number`** — ضریب
+
+---
+
+## API و helperهای فرانت
 
 ```typescript
-import { subscribeToDingBalance } from '@/lib/ding';
+// موجودی (ترجیحاً در shell از useBalancesContext)
+import { getMyDingBalance } from "@/lib/features/ding/ding";
 
-const unsubscribe = await subscribeToDingBalance((newBalance) => {
-  console.log(`موجودی جدید: ${newBalance} Ding`);
-  // به‌روزرسانی UI
-});
-
-// برای unsubscribe
-unsubscribe();
+// یا
+fetch("/api/me/ding-balance", { headers: { Authorization: `Bearer ${token}` } });
 ```
-
-### دریافت آمار
 
 ```typescript
-import { getMyDingStats } from '@/lib/ding';
-
-const stats = await getMyDingStats();
-console.log(`کل دریافتی: ${stats.total_received}`);
-console.log(`تعداد تراکنش‌ها: ${stats.transaction_count}`);
+// در Live Room — از context
+const { creditDingOnReveal } = useBalancesContext();
+// LiveRoomScreen internally: creditDingOnReveal(`${roomId}:${number}`, delta)
 ```
 
-## مثال کامل: نمایش Ding در UI
+تراکنش‌ها و آمار: `getMyDingTransactions`, `getMyDingStats` در
+`lib/features/ding/ding.ts`.
 
-```typescript
-'use client';
+---
 
-import { useState, useEffect } from 'react';
-import { getMyDingBalance, subscribeToDingBalance } from '@/lib/ding';
-
-export default function DingDisplay() {
-  const [balance, setBalance] = useState(0);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // دریافت موجودی اولیه
-    async function fetchBalance() {
-      const b = await getMyDingBalance();
-      setBalance(b);
-      setLoading(false);
-    }
-    fetchBalance();
-
-    // Subscribe به تغییرات
-    let unsubscribe: (() => void) | null = null;
-    subscribeToDingBalance((newBalance) => {
-      setBalance(newBalance);
-    }).then((unsub) => {
-      unsubscribe = unsub;
-    });
-
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
-  }, []);
-
-  if (loading) {
-    return <div>در حال بارگذاری...</div>;
-  }
-
-  return (
-    <div className="ding-display">
-      <h3>موجودی Ding</h3>
-      <div className="balance">{balance.toLocaleString()}</div>
-    </div>
-  );
-}
-```
-
-## تنظیمات
-
-### تنظیم ضریب Ding در Room Template
-
-مقدار پیش‌فرض: **1 Ding** به ازای هر کارت
-
-برای تغییر ضریب Ding در یک Room Template:
+## تنظیم ضریب
 
 ```sql
--- تغییر ضریب در template
-UPDATE room_templates 
-SET ding_per_number = 2  -- هر عدد 2 Ding می‌دهد
-WHERE id = 'template_id';
+-- template
+UPDATE room_templates SET ding_per_number = 2 WHERE id = '…';
+
+-- override اتاق
+UPDATE rooms SET ding_per_number = 3 WHERE id = '…';
+-- NULL روی room → از template استفاده می‌شود
 ```
 
-یا هنگام ایجاد template جدید:
-
-```sql
-INSERT INTO room_templates (
-  price,
-  currency,
-  min_players,
-  countdown_sec,
-  ding_per_number  -- مثلاً 2 یا 3
-) VALUES (
-  1000,
-  'IRR',
-  2,
-  120,
-  2  -- هر عدد 2 Ding می‌دهد
-);
-```
-
-### Override ضریب در Room خاص
-
-می‌توانید برای یک Room خاص ضریب متفاوتی تنظیم کنید:
-
-```sql
--- تنظیم ضریب خاص برای یک Room
-UPDATE rooms 
-SET ding_per_number = 3  -- این Room هر عدد 3 Ding می‌دهد
-WHERE id = 'room_id';
-```
-
-**نکته:** اگر `ding_per_number` در Room `NULL` باشد، از مقدار template استفاده می‌شود.
-
-### منطق انتخاب ضریب
-
-سیستم به ترتیب زیر ضریب را انتخاب می‌کند:
-1. اگر Room خودش `ding_per_number` داشته باشد → از آن استفاده می‌شود
-2. اگر Room `ding_per_number` نداشته باشد → از template استفاده می‌شود
-3. اگر template هم نداشته باشد → مقدار پیش‌فرض **1** استفاده می‌شود
-
-### شرط‌های دریافت Ding
-
-Ding فقط در شرایط زیر داده می‌شود:
-- Room باید در وضعیت `live` یا `playing` باشد
-- کارت باید در وضعیت `confirmed` یا `consumed` باشد
-- عدد قرعه‌کشی شده باید روی کارت باشد
-
-## نکات مهم
-
-1. **توزیع خودکار:** Ding به صورت خودکار بعد از هر `INSERT` در جدول `draws` توزیع می‌شود
-2. **Idempotent:** اگر یک Draw دوباره ثبت شود، Ding دوباره داده نمی‌شود (چون trigger فقط روی INSERT است)
-3. **Performance:** Index های مناسب برای بهبود عملکرد ایجاد شده‌اند
-4. **RLS:** کاربران فقط می‌توانند موجودی و تراکنش‌های خودشان را ببینند
+---
 
 ## عیب‌یابی
 
-### Ding داده نمی‌شود
+**سرور ding نداده:**
 
-1. بررسی کنید Room در وضعیت `live` یا `playing` است:
-   ```sql
-   SELECT status FROM rooms WHERE id = 'room_id';
-   ```
-
-2. بررسی کنید کارت‌ها در وضعیت صحیح هستند:
-   ```sql
-   SELECT reservation_status FROM tickets WHERE room_id = 'room_id';
-   ```
-
-3. بررسی کنید عدد روی کارت است:
-   ```sql
-   SELECT cn.value 
-   FROM card_numbers cn
-   JOIN card_pool_cards cpc ON cpc.id = cn.pool_card_id
-   JOIN tickets t ON t.pool_card_id = cpc.id
-   WHERE t.id = 'ticket_id' AND cn.value = 12;
-   ```
-
-### موجودی اشتباه است
-
-بررسی تراکنش‌ها:
 ```sql
-SELECT * FROM ding_transactions 
-WHERE user_id = 'user_id' 
-ORDER BY created_at DESC;
+SELECT processed_at, ding_aggregated_at FROM draws
+WHERE room_id = '…' AND number = 12;
+
+SELECT reservation_status, cancelled_at FROM tickets WHERE room_id = '…';
+
+SELECT * FROM ding_transactions
+WHERE room_id = '…' AND drawn_number = 12;
 ```
 
+**UI با refresh فرق دارد:** تراکنش‌های بالا را با تعداد کارت‌های match‌شده در UI
+مقایسه کن؛ معمولاً به خاطر `reserved` vs `confirmed` یا جمع optimistic است.
+
+---
+
+## مستندات مرتبط
+
+- [`docs/system-map/Ding-system.md`](docs/system-map/Ding-system.md) — reality map کامل
+- [`docs/system-map/event-flows.md`](docs/system-map/event-flows.md)
+- [`docs/backend/supabese/tournament_dingmoney_architecture.md`](docs/backend/supabese/tournament_dingmoney_architecture.md)
