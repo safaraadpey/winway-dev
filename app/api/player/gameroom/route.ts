@@ -219,7 +219,7 @@ async function buildViewFromRoomId(
     supabase,
     Number(room.card_price || 0),
     room.currency || "IRR",
-    room.id as string
+    undefined
   );
 
   const countdownSeconds =
@@ -597,7 +597,7 @@ async function loadActiveTablesForRoom(
     .select("id, room_code, card_price, currency")
     .eq("card_price", cardPrice)
     .eq("currency", currency)
-    .in("status", ["waiting", "playing"]);
+    .in("status", ["playing"]);
 
   if (excludeRoomId) {
     query.neq("id", excludeRoomId);

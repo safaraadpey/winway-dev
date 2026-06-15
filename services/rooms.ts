@@ -509,7 +509,7 @@ export async function loadActiveTables(
     .select("id, room_code, card_price, currency")
     .eq("card_price", cardPrice)
     .eq("currency", currency)
-    .in("status", ["waiting", "playing"]);
+    .in("status", ["playing"]);
 
   if (excludeRoomId) {
     query.neq("id", excludeRoomId);
