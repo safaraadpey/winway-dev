@@ -159,7 +159,17 @@ export class RoomGameActor {
       }
 
       this.metrics.noteCycle();
+      const cycleStarted = Date.now();
       const result = await this.cycle(this);
+      const cycleDurationMs = Date.now() - cycleStarted;
+
+      if (result.kind === "drew") {
+        this.log.info("room-loop cycle completed", {
+          roomId: this.roomId,
+          kind: result.kind,
+          cycleDurationMs,
+        });
+      }
 
       switch (result.kind) {
         case "drew":

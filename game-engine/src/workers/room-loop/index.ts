@@ -2,12 +2,11 @@
  * room-loop role bootstrap.
  *
  * Drives the room-actor game loop: a RoomLoopManager claims playing rooms and
- * runs a per-room actor that owns the draw clock. The real per-draw cycle
- * (owner-guarded insert → evaluate → finalize) is provided as `actorCycle`;
- * rooms not gated into actor mode run a shadow (observe-only) cycle.
+ * runs a per-room actor that owns the live draw clock (insert → evaluate → finalize).
  *
  *   - legacy_db : idle (cron owns the loop).
- *   - hybrid/engine : the manager runs; per-room gating decides shadow vs actor.
+ *   - hybrid    : manager runs; shadow only if ENABLE_SHADOW_PARITY=true.
+ *   - engine    : runOneDrawCycle owns all playing rooms.
  */
 import { getGlobalCardRegistry } from "../../core/card-registry/index.js";
 import type { GlobalCardRegistry } from "../../core/card-registry/types.js";
@@ -45,8 +44,6 @@ export function startRoomLoop(ctx: WorkerContext): () => void {
     redis,
     stateManager: ctx.roomState,
     getCardRegistry: () => cardRegistry,
-    // The actor (write) cycle only runs in `engine` runtime; in `hybrid` the
-    // manager shadows. Per-room meta.loop_mode='actor' still gates each room.
     actorCycle: executesBusinessLogic(config.runtime) ? runOneDrawCycle : undefined,
   });
 

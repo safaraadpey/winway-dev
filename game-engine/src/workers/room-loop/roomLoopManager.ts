@@ -3,10 +3,8 @@
  * spawns one RoomGameActor per claimed room. It is the only component that
  * acquires/releases leases; actors renew their own.
  *
- * Mode selection is per-room: a room tagged meta.loop_mode='actor' (or the
- * global ROOM_LOOP_MODE=actor) gets the real actor cycle when one is provided;
- * everything else runs the shadow cycle (observe-only). This is the rollout
- * gate — until an actorCycle is wired (Phase 4) the manager only shadows.
+ * In engine runtime the actor cycle owns live draws. Shadow parity (observe-only)
+ * is available when ENABLE_SHADOW_PARITY=true and no actor cycle is wired.
  */
 import { randomUUID } from "node:crypto";
 import type { EngineConfig } from "../../config/env.js";
@@ -16,12 +14,12 @@ import type { Logger } from "../../metrics/logger.js";
 import type { GameRedis } from "../../redis/types.js";
 import { GameRepo } from "../../repositories/index.js";
 import type { RoomStateManager } from "../../state/room-state.manager.js";
-import { isActorRoom } from "../../domain/room-loop/loopMode.js";
 import { runShadowCycle } from "../../domain/room-loop/shadowCycle.js";
 import {
   RoomGameActor,
   type RoomActorCycle,
   type RoomActorDeps,
+  type RoomActorMode,
 } from "./roomGameActor.js";
 import { claimRoomLease, releaseRoomLease } from "./roomLease.js";
 import { RoomLoopMetrics } from "./roomLoopMetrics.js";
@@ -34,7 +32,7 @@ export interface RoomLoopManagerOptions {
   redis: GameRedis | null;
   stateManager: RoomStateManager;
   getCardRegistry: () => GlobalCardRegistry | null;
-  /** Real per-draw cycle (Phase 4). When omitted, all rooms run shadow. */
+  /** Per-draw cycle (engine runtime). When omitted, shadow only if enabled. */
   actorCycle?: RoomActorCycle;
 }
 
@@ -58,7 +56,7 @@ export class RoomLoopManager {
   start(): void {
     this.opts.log.info("room-loop manager starting", {
       ownerId: this.ownerId,
-      mode: this.opts.config.roomLoopMode,
+      enableShadowParity: this.opts.config.enableShadowParity,
       hasActorCycle: Boolean(this.opts.actorCycle),
       discoveryMs: this.opts.config.roomLoopDiscoveryMs,
     });
@@ -122,7 +120,20 @@ export class RoomLoopManager {
     }
   }
 
+  private resolveCycle(): { cycle: RoomActorCycle; mode: RoomActorMode } | null {
+    if (this.opts.actorCycle != null) {
+      return { cycle: this.opts.actorCycle, mode: "actor" };
+    }
+    if (this.opts.config.enableShadowParity) {
+      return { cycle: runShadowCycle, mode: "shadow" };
+    }
+    return null;
+  }
+
   private async tryClaimAndSpawn(roomId: string): Promise<void> {
+    const resolved = this.resolveCycle();
+    if (!resolved) return;
+
     const claimed = await claimRoomLease(this.opts.repo, roomId, {
       ownerId: this.ownerId,
       leaseSeconds: this.opts.config.roomLoopLeaseSec,
@@ -143,13 +154,6 @@ export class RoomLoopManager {
 
     this.metrics.noteClaimed();
 
-    const useActor =
-      this.opts.actorCycle != null &&
-      isActorRoom(room, this.opts.config.roomLoopMode);
-    const cycle: RoomActorCycle = useActor
-      ? this.opts.actorCycle!
-      : runShadowCycle;
-
     const deps: RoomActorDeps = {
       supabase: this.opts.supabase,
       repo: this.opts.repo,
@@ -166,9 +170,9 @@ export class RoomLoopManager {
 
     const actor = new RoomGameActor(
       room,
-      useActor ? "actor" : "shadow",
+      resolved.mode,
       deps,
-      cycle
+      resolved.cycle
     );
     actor.noteLeaseRenewed();
     this.actors.set(roomId, actor);
@@ -179,7 +183,6 @@ export class RoomLoopManager {
     this.actors.delete(roomId);
     this.metrics.noteReleased();
     this.opts.log.info("room-loop actor exit", { roomId, reason });
-    // Only release if we still believe we own it; lease-lost means someone else has it.
     if (reason !== "lease-lost" && reason !== "not-owner") {
       await releaseRoomLease(this.opts.repo, roomId, {
         ownerId: this.ownerId,

@@ -8,7 +8,6 @@ import {
   timedStep,
 } from "../../metrics/drawPerformance.js";
 import { GameRepo } from "../../repositories/index.js";
-import { wakeRoomScheduler } from "../../runtime/room-scheduler-wake.js";
 import type { RoomStateManager } from "../../state/room-state.manager.js";
 import { prepareDingCreditsFromState } from "../ding/index.js";
 import type { DrawJobPickContext } from "./drawJobPickContext.js";
@@ -132,10 +131,6 @@ export async function processEngineDrawJob(
       }
     });
     breakdown.rpc_finalize_engine_draw_job = finalizeStep.timing;
-
-    // Draw is processed → backpressure for this room cleared. Wake the scheduler
-    // so the next due draw inserts without waiting for the next poll interval.
-    wakeRoomScheduler("finalize");
 
     let settled = evalResult.settled;
     const hasUnsettledFull =

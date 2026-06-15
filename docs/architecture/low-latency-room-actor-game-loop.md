@@ -1,5 +1,8 @@
 # Low-Latency Room-Actor Game Loop Architecture
 
+> **Status (2026-06):** Rollout complete. Production uses **actor-only** live draws
+> in `GAME_RUNTIME=engine`. See [ADR 0001](../adr/0001-actor-only-live-draw-loop.md).
+
 > هدف: رساندن latency هر قرعه به کمتر از 3 ثانیه، با حفظ ترتیب قرعه‌ها،
 > idempotency، recovery، provably-fair بودن قرعه، و atomic بودن مسیر مالی.
 >

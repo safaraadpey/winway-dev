@@ -1,29 +1,21 @@
 import { randomUUID } from "node:crypto";
-import {
-  manageRoomLiveActions,
-  manageWaitingRooms,
-} from "../../domain/room/index.js";
+import { manageWaitingRooms } from "../../domain/room/index.js";
 import { repairUnsettledFinishedRooms } from "../../domain/room/janitorRepair.js";
 import { GameRepo } from "../../repositories/index.js";
 import { redisKeys } from "../../redis/keys.js";
 import { acquireLeaderLock, releaseLeaderLock } from "../../redis/leaderLock.js";
-import {
-  registerRoomSchedulerWake,
-  type RoomSchedulerWakeReason,
-} from "../../runtime/room-scheduler-wake.js";
 import { executesBusinessLogic, isIdle } from "../../runtime.js";
 import type { WorkerContext } from "../context.js";
 
 /**
- * Room lifecycle: waiting→playing promotion + live draw scheduling. Replaces
- * pg_cron job 9 (public.fn_heartbeat_tick).
+ * Room lifecycle (engine runtime): waiting→playing promotion + janitor only.
+ * Live draw timing is owned by the room-loop actor — not this scheduler.
  *
  *   - legacy_db : idle (cron owns the loop; no double-draw).
- *   - hybrid    : engine drives the cadence but calls the DB RPCs
- *                 (fn_manage_waiting_rooms + fn_manage_room_live_actions).
- *   - engine    : engine runs the TS port (domain/room) end to end.
+ *   - hybrid    : engine drives cadence via DB RPCs (fn_heartbeat_tick).
+ *   - engine    : manageWaitingRooms in TS; live draws via room-loop role.
  *
- * Redis leader lock prevents multiple replicas from inserting draws concurrently.
+ * Redis leader lock prevents multiple replicas from promoting rooms concurrently.
  */
 export function startRoomScheduler(ctx: WorkerContext): () => void {
   const { supabase, config, log, redis } = ctx;
@@ -84,14 +76,6 @@ export function startRoomScheduler(ctx: WorkerContext): () => void {
 
       if (executesBusinessLogic(config.runtime)) {
         await manageWaitingRooms(repo, log, 50, ctx.roomState);
-        await manageRoomLiveActions(
-          supabase,
-          repo,
-          log,
-          200,
-          ctx.roomState,
-          config.roomLoopMode
-        );
         await maybeRunJanitor();
       } else {
         await callDbScheduler(ctx);
@@ -113,28 +97,12 @@ export function startRoomScheduler(ctx: WorkerContext): () => void {
     }
   };
 
-  // Event-driven wake: when a draw finalizes, backpressure clears — run the
-  // scheduler immediately instead of waiting for the next poll. Debounced via
-  // the inFlight guard inside tick(); coalesced wakes are harmless (idempotent).
-  let wakeScheduled = false;
-  const onWake = (reason: RoomSchedulerWakeReason): void => {
-    if (stopped || reason === "poll") return;
-    if (wakeScheduled) return;
-    wakeScheduled = true;
-    queueMicrotask(() => {
-      wakeScheduled = false;
-      void tick();
-    });
-  };
-  const unregisterWake = registerRoomSchedulerWake(onWake);
-
   void tick();
   const timer = setInterval(() => void tick(), config.roomSchedulerIntervalMs);
 
   return () => {
     stopped = true;
     clearInterval(timer);
-    unregisterWake();
   };
 }
 

@@ -245,7 +245,6 @@ function startLegacyDrainProcessor(ctx: WorkerContext): () => void {
       maxAttempts: config.drawProcessorMaxAttempts,
       batchSize: opts.batchSize ?? config.drawProcessorBatchSize,
       roomConcurrency: config.drawProcessorRoomConcurrency,
-      roomLoopMode: config.roomLoopMode,
       redis,
       drawRoomLockTtlSec: config.drawRoomLockTtlSec,
       cardRegistry: await ensureCardRegistry(),

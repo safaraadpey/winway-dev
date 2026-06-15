@@ -3,11 +3,9 @@
  * inserts and finalizes draws inline. Jobs still enqueue via trg_after_draw_enqueue;
  * this filter clears them without double-processing.
  */
-import type { RoomLoopMode } from "../../config/env.js";
 import type { Logger } from "../../metrics/logger.js";
 import { GameRepo } from "../../repositories/index.js";
 import type { RoomRow } from "../../repositories/types.js";
-import { isActorRoom } from "../room-loop/loopMode.js";
 import type { DrawJob } from "./types.js";
 
 export interface ActorJobFilterResult {
@@ -16,10 +14,16 @@ export interface ActorJobFilterResult {
   skippedRequeued: number;
 }
 
+/** Playing rooms are driven by the room-loop actor in engine runtime. */
+export function isActorOwnedLiveRoom(
+  room: Pick<RoomRow, "status"> | null
+): boolean {
+  return room?.status === "playing";
+}
+
 export function partitionActorOwnedJobs(
   jobs: DrawJob[],
-  roomById: Map<string, Pick<RoomRow, "meta"> | null>,
-  globalMode: RoomLoopMode,
+  roomById: Map<string, Pick<RoomRow, "status"> | null>,
   processedDrawNumbersByRoom: Map<string, Set<number>>
 ): { toProcess: DrawJob[]; markDone: DrawJob[]; requeue: DrawJob[] } {
   const toProcess: DrawJob[] = [];
@@ -28,7 +32,7 @@ export function partitionActorOwnedJobs(
 
   for (const job of jobs) {
     const room = roomById.get(job.room_id);
-    if (!room || !isActorRoom(room, globalMode)) {
+    if (!room || !isActorOwnedLiveRoom(room)) {
       toProcess.push(job);
       continue;
     }
@@ -47,25 +51,25 @@ export function partitionActorOwnedJobs(
 export async function filterActorOwnedDrawJobs(
   repo: GameRepo,
   log: Logger,
-  jobs: DrawJob[],
-  globalMode: RoomLoopMode
+  jobs: DrawJob[]
 ): Promise<ActorJobFilterResult> {
   if (jobs.length === 0) {
     return { toProcess: [], skippedDone: 0, skippedRequeued: 0 };
   }
 
   const roomIds = [...new Set(jobs.map((j) => j.room_id))];
-  const roomById = new Map<string, Pick<RoomRow, "meta"> | null>();
+  const roomById = new Map<string, Pick<RoomRow, "status"> | null>();
   await Promise.all(
     roomIds.map(async (id) => {
-      roomById.set(id, await repo.getRoom(id));
+      const room = await repo.getRoom(id);
+      roomById.set(id, room ? { status: room.status } : null);
     })
   );
 
   const processedDrawNumbersByRoom = new Map<string, Set<number>>();
   for (const roomId of roomIds) {
     const room = roomById.get(roomId);
-    if (!room || !isActorRoom(room, globalMode)) continue;
+    if (!room || !isActorOwnedLiveRoom(room)) continue;
     const numbers = jobs
       .filter((j) => j.room_id === roomId)
       .map((j) => j.draw_number);
@@ -78,7 +82,6 @@ export async function filterActorOwnedDrawJobs(
   const { toProcess, markDone, requeue } = partitionActorOwnedJobs(
     jobs,
     roomById,
-    globalMode,
     processedDrawNumbersByRoom
   );
 

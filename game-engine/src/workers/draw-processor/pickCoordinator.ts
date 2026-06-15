@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import type { RoomLoopMode } from "../../config/env.js";
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import { createDrainMonitorContext } from "../../domain/draw/drainMonitor.js";
 import { filterActorOwnedDrawJobs } from "../../domain/draw/filterActorOwnedDrawJobs.js";
@@ -58,7 +57,6 @@ export interface PickCoordinatorOptions {
   redis: GameRedis | null;
   pool: RoomDrawActorPool;
   repo: GameRepo;
-  roomLoopMode: RoomLoopMode;
   lockTtlSec: number;
   batchSize: number;
   maxRoundsPerPoll: number;
@@ -271,8 +269,7 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
     const filtered = await filterActorOwnedDrawJobs(
       opts.repo,
       opts.log,
-      picked,
-      opts.roomLoopMode
+      picked
     );
     const jobs = filtered.toProcess;
     if (jobs.length === 0) {

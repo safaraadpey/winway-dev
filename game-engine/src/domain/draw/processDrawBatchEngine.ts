@@ -6,7 +6,6 @@
  */
 
 import type { GlobalCardRegistry } from "../../core/card-registry/types.js";
-import type { RoomLoopMode } from "../../config/env.js";
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import type { Logger } from "../../metrics/logger.js";
 import { timedStep } from "../../metrics/drawPerformance.js";
@@ -29,7 +28,6 @@ export interface ProcessDrawBatchEngineOptions {
   maxAttempts: number;
   batchSize: number;
   roomConcurrency: number;
-  roomLoopMode: RoomLoopMode;
   redis?: GameRedis | null;
   drawRoomLockTtlSec?: number;
   cardRegistry?: GlobalCardRegistry | null;
@@ -52,12 +50,7 @@ export async function processDrawBatchEngine(
   const picked = pickStep.result;
   if (picked.length === 0) return { ...EMPTY_BATCH };
 
-  const filtered = await filterActorOwnedDrawJobs(
-    repo,
-    log,
-    picked,
-    opts.roomLoopMode
-  );
+  const filtered = await filterActorOwnedDrawJobs(repo, log, picked);
   const jobs = filtered.toProcess;
 
   const firstPickedAt = pickStep.timing.endTime;

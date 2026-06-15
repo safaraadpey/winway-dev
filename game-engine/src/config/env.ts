@@ -8,9 +8,6 @@ export type EngineRole =
   | "dev-player-scheduler"
   | "dev-player-processor";
 
-/** How the engine drives per-room draw cadence. */
-export type RoomLoopMode = "scheduler_queue" | "actor";
-
 export interface EngineConfig {
   supabaseUrl: string;
   supabaseServiceRoleKey: string;
@@ -67,9 +64,9 @@ export interface EngineConfig {
   devPlayerProcessorBatchLimit: number;
   devPlayerSchedulerLockTtlSec: number;
   devPlayerProcessorLockTtlSec: number;
-  // ---- room-actor game loop (Phase 3+) ----
-  /** scheduler_queue = legacy pick/queue path; actor = room owns its clock. */
-  roomLoopMode: RoomLoopMode;
+  // ---- room-actor game loop ----
+  /** Observe-only shadow parity (rollout debug). Off in production. */
+  enableShadowParity: boolean;
   /** How often the room-loop manager discovers + claims claimable rooms (ms). */
   roomLoopDiscoveryMs: number;
   /** Lease duration the actor holds (and renews) per room (seconds). */
@@ -104,10 +101,6 @@ function requireEnv(name: string): string {
 function parseRuntime(raw: string | undefined): GameRuntime {
   if (raw === "hybrid" || raw === "engine" || raw === "legacy_db") return raw;
   return "legacy_db";
-}
-
-function parseRoomLoopMode(raw: string | undefined): RoomLoopMode {
-  return raw === "actor" ? "actor" : "scheduler_queue";
 }
 
 function optionalEnv(name: string): string | null {
@@ -196,7 +189,7 @@ export function loadConfig(): EngineConfig {
     devPlayerProcessorLockTtlSec: Number(
       process.env.DEV_PLAYER_PROCESSOR_LOCK_TTL_SEC ?? "55"
     ),
-    roomLoopMode: parseRoomLoopMode(process.env.ROOM_LOOP_MODE),
+    enableShadowParity: process.env.ENABLE_SHADOW_PARITY === "true",
     roomLoopDiscoveryMs: Number(process.env.ROOM_LOOP_DISCOVERY_MS ?? "1000"),
     roomLoopLeaseSec: Number(process.env.ROOM_LOOP_LEASE_SEC ?? "30"),
     roomLoopMaxActiveRooms: Number(
