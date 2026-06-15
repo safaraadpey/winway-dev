@@ -55,6 +55,16 @@ See [docs/migration/local-game-engine-rollout.md](../docs/migration/local-game-e
 
 در production می‌توان چند replica با roleهای مختلف اجرا کرد.
 
+## Scheduler gate (`SCHEDULER_ENABLED`)
+
+همه workerهای tick-based (room scheduler، draw processor، room-loop، tournament، dev-player) فقط وقتی `SCHEDULER_ENABLED=true` بالا می‌آیند. پیش‌فرض **خاموش** است تا لوکال با Railway تداخل نکند.
+
+| Env | پیش‌فرض | نقش |
+|-----|---------|-----|
+| `SCHEDULER_ENABLED` | `false` | `true` روی Railway/production؛ `false` برای local/API-only |
+
+API/health (`GAME_ENGINE_API=true`) بدون scheduler هم کار می‌کند.
+
 ## Draw processor — کاهش queue_wait
 
 پیش‌فرض (فاز ۲): **per-room actor** — pick مستقل از پردازش room؛ هر room یک صف سریال. Poll هر ۵۰۰ms فقط fallback است.

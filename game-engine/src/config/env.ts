@@ -73,6 +73,8 @@ export interface EngineConfig {
   roomLoopLeaseSec: number;
   /** Max rooms a single replica drives concurrently (0 = unlimited). */
   roomLoopMaxActiveRooms: number;
+  /** When false, no scheduled/tick workers start (manageWaitingRooms, draw loop, etc.). */
+  schedulerEnabled: boolean;
 }
 
 function parseRoles(raw: string | undefined): Set<EngineRole> {
@@ -195,5 +197,6 @@ export function loadConfig(): EngineConfig {
     roomLoopMaxActiveRooms: Number(
       process.env.ROOM_LOOP_MAX_ACTIVE_ROOMS ?? "50"
     ),
+    schedulerEnabled: process.env.SCHEDULER_ENABLED === "true",
   };
 }

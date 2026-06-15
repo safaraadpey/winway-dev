@@ -6,7 +6,7 @@
 
 import "dotenv/config";
 
-import { loadConfig } from "./config/env.js";
+import { loadConfig, type EngineRole } from "./config/env.js";
 import { createSupabaseAdmin } from "./db/supabase-admin.js";
 import { startHealthServer } from "./health/server.js";
 import { startApiServer } from "./http/server.js";
@@ -28,6 +28,55 @@ import { startTournamentOrchestrator } from "./workers/tournament-orchestrator/i
 import { startDevPlayerProcessor } from "./workers/dev-player/processor.js";
 import { startDevPlayerScheduler } from "./workers/dev-player/scheduler.js";
 
+/** Roles driven by periodic ticks — gated by SCHEDULER_ENABLED. */
+const SCHEDULED_ROLES = new Set<EngineRole>([
+  "scheduler",
+  "draw-processor",
+  "room-loop",
+  "tournament-orchestrator",
+  "dev-player-scheduler",
+  "dev-player-processor",
+]);
+
+function startScheduledWorkers(
+  config: ReturnType<typeof loadConfig>,
+  workerCtx: Parameters<typeof startRoomScheduler>[0],
+  stops: Array<() => void>
+): void {
+  if (!config.schedulerEnabled) {
+    const skipped = [...config.roles].filter((role) => SCHEDULED_ROLES.has(role));
+    console.log("Scheduler disabled");
+    if (skipped.length > 0) {
+      workerCtx.log.info("Scheduler disabled; skipping scheduled roles", {
+        roles: skipped,
+      });
+    }
+    return;
+  }
+
+  console.log("Scheduler started");
+  workerCtx.log.info("Scheduler started");
+
+  if (config.roles.has("scheduler")) {
+    stops.push(startRoomScheduler(workerCtx));
+  }
+  if (config.roles.has("draw-processor")) {
+    stops.push(startDrawProcessor(workerCtx));
+  }
+  if (config.roles.has("room-loop")) {
+    stops.push(startRoomLoop(workerCtx));
+  }
+  if (config.roles.has("tournament-orchestrator")) {
+    stops.push(startTournamentOrchestrator(workerCtx));
+  }
+  if (config.roles.has("dev-player-scheduler")) {
+    stops.push(startDevPlayerScheduler(workerCtx));
+  }
+  if (config.roles.has("dev-player-processor")) {
+    stops.push(startDevPlayerProcessor(workerCtx));
+  }
+}
+
 async function main(): Promise<void> {
   const config = loadConfig();
   const log = createLogger(config.logLevel);
@@ -48,6 +97,7 @@ async function main(): Promise<void> {
     roles: [...config.roles],
     runtime: config.runtime,
     redis: redis ? "enabled" : "disabled",
+    schedulerEnabled: config.schedulerEnabled,
   });
 
   if (config.httpPort > 0) {
@@ -63,10 +113,10 @@ async function main(): Promise<void> {
 
   const repo = new GameRepo(supabase);
   const roomState = new RoomStateManager(repo, log, config.roomStateCheckpointEvery);
-  if (executesBusinessLogic(config.runtime)) {
+  if (config.schedulerEnabled && executesBusinessLogic(config.runtime)) {
     await getGlobalCardRegistry(repo, log);
   }
-  if (executesBusinessLogic(config.runtime)) {
+  if (config.schedulerEnabled && executesBusinessLogic(config.runtime)) {
     await reapStaleDrawJobs({
       repo,
       log,
@@ -76,27 +126,16 @@ async function main(): Promise<void> {
   }
   const workerCtx = { supabase, config, log, redis, roomState };
 
-  if (config.roles.has("scheduler")) {
-    stops.push(startRoomScheduler(workerCtx));
-  }
-  if (config.roles.has("draw-processor")) {
-    stops.push(startDrawProcessor(workerCtx));
-  }
-  if (config.roles.has("room-loop")) {
-    stops.push(startRoomLoop(workerCtx));
-  }
-  if (config.roles.has("tournament-orchestrator")) {
-    stops.push(startTournamentOrchestrator(workerCtx));
-  }
-  if (config.roles.has("dev-player-scheduler")) {
-    stops.push(startDevPlayerScheduler(workerCtx));
-  }
-  if (config.roles.has("dev-player-processor")) {
-    stops.push(startDevPlayerProcessor(workerCtx));
-  }
+  startScheduledWorkers(config, workerCtx, stops);
 
   if (stops.length === 0) {
-    log.warn("no GAME_ENGINE_ROLES enabled; nothing to run");
+    if (config.schedulerEnabled) {
+      log.warn("no GAME_ENGINE_ROLES enabled; nothing to run");
+    } else if ([...config.roles].some((role) => SCHEDULED_ROLES.has(role))) {
+      log.info("game-engine running without scheduled workers (API/health only)");
+    } else {
+      log.warn("no GAME_ENGINE_ROLES enabled; nothing to run");
+    }
   }
 
   const shutdown = (): void => {
