@@ -268,10 +268,11 @@ async function buildViewFromTemplateId(
   currentUserId: string,
   globalRegistrationLockState: GlobalRegistrationLockState
 ): Promise<GameRoomView | null> {
-  const activeStatuses = ["waiting", "playing", "live", "running", "settling"];
+  const waitingStatuses = ["waiting"];
 
-  // ۱) همه روم‌های فعال این template را بگیر
-  const { data: activeRooms, error: activeRoomsError } = await supabase
+  // ۱) فقط روم‌های waiting این template را بگیر
+  // (طبق نیاز محصول، ورود از template نباید مستقیم وارد playing/live شود)
+  const { data: waitingRooms, error: waitingRoomsError } = await supabase
     .from("rooms")
     .select(
       `
@@ -291,13 +292,13 @@ async function buildViewFromTemplateId(
       `
     )
     .eq("room_template_id", templateId)
-    .in("status", activeStatuses);
+    .in("status", waitingStatuses);
 
-  if (activeRoomsError) {
-    console.error("buildViewFromTemplateId: rooms active error", activeRoomsError);
+  if (waitingRoomsError) {
+    console.error("buildViewFromTemplateId: rooms waiting error", waitingRoomsError);
   }
 
-  const roomRows = (activeRooms || []) as Array<{
+  const roomRows = (waitingRooms || []) as Array<{
     id: string;
     status: string | null;
     starts_at: string | null;
@@ -344,13 +345,7 @@ async function buildViewFromTemplateId(
     const myRoomIds = new Set(((myTickets || []) as Array<{ room_id: string | null }>).map((t) => t.room_id).filter((id): id is string => Boolean(id)));
     const myActiveRooms = roomRows.filter((room) => myRoomIds.has(room.id)).sort(sortByPriority);
 
-    const selectedRoom =
-      myActiveRooms[0] ??
-      roomRows
-        .slice()
-        .sort(sortByPriority)
-        .find((room) => (room.status || "").toLowerCase() === "waiting") ??
-      roomRows.slice().sort(sortByPriority)[0];
+    const selectedRoom = myActiveRooms[0] ?? roomRows.slice().sort(sortByPriority)[0];
 
     if (selectedRoom?.id) {
       return buildViewFromRoomId(

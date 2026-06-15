@@ -173,27 +173,21 @@ export async function GET(request: Request) {
       if (r.status === "waiting") g.waitingRooms += 1;
       if (r.status === "playing" || r.status === "live") g.playingRooms += 1;
 
-      const statusRank = (status: string | null): number => {
-        const normalized = (status || "").toLowerCase();
-        if (normalized === "waiting") return 1;
-        if (normalized === "playing" || normalized === "live" || normalized === "running") return 2;
-        if (normalized === "settling") return 3;
-        return 9;
-      };
+      // ورودی مستقیم از لابی فقط باید به روم waiting انجام شود.
+      // اگر waiting وجود نداشت، کلاینت باید با templateId وارد preview/template mode شود.
+      if ((r.status || "").toLowerCase() === "waiting") {
+        const currentEntry = g.entryRoomId
+          ? filteredRoomRows.find((room) => room.id === g.entryRoomId) ?? null
+          : null;
 
-      const currentEntry = g.entryRoomId
-        ? filteredRoomRows.find((room) => room.id === g.entryRoomId) ?? null
-        : null;
-
-      const shouldReplaceEntry =
-        !currentEntry ||
-        statusRank(r.status) < statusRank(currentEntry.status) ||
-        (statusRank(r.status) === statusRank(currentEntry.status) &&
+        const shouldReplaceEntry =
+          !currentEntry ||
           Date.parse(r.created_at || "1970-01-01T00:00:00.000Z") >
-            Date.parse(currentEntry.created_at || "1970-01-01T00:00:00.000Z"));
+            Date.parse(currentEntry.created_at || "1970-01-01T00:00:00.000Z");
 
-      if (shouldReplaceEntry) {
-        g.entryRoomId = r.id;
+        if (shouldReplaceEntry) {
+          g.entryRoomId = r.id;
+        }
       }
     }
 
