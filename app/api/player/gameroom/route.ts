@@ -490,9 +490,25 @@ async function loadActiveCardsForRoom(
 > {
   const { data: tickets, error } = await supabase
     .from("tickets")
-    .select("player_user_id")
+    .select("id, player_user_id, reservation_status, created_at")
     .eq("room_id", roomId)
     .in("reservation_status", ["reserved", "confirmed", "consumed"]);
+
+  const { data: rpcCounts, error: rpcError } = await supabase.rpc(
+    "debug_ticket_counts",
+    { p_room_id: roomId }
+  );
+
+  console.info(
+    "[activeCardsRpcDebug]",
+    JSON.stringify({
+      roomId,
+      supabaseRows: tickets?.length ?? 0,
+      ticketsError: error?.message ?? null,
+      rpcCounts,
+      rpcError: rpcError?.message ?? null,
+    })
+  );
 
   if (error) {
     console.error("loadActiveCardsForRoom: tickets error", error);
