@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { pgPool } from "@/lib/pg";
 import { createServiceClient, getUserFromRequest } from "@/lib/supabaseServer";
 
 export const dynamic = "force-dynamic";
@@ -494,6 +495,38 @@ async function loadActiveCardsForRoom(
     .eq("room_id", roomId)
     .in("reservation_status", ["reserved", "confirmed", "consumed"]);
 
+  let pgCompareRows: Array<{ user_id: string; card_count: number }> | null =
+    null;
+  let pgCompareError: string | null = null;
+
+  if (!pgPool) {
+    pgCompareError = "DATABASE_URL not set";
+  } else {
+    try {
+      const pgResult = await pgPool.query<{
+        user_id: string;
+        card_count: number;
+      }>(
+        `
+        select
+          t.player_user_id::text as user_id,
+          count(*)::int as card_count
+        from public.tickets t
+        where t.room_id = $1::uuid
+          and t.reservation_status in ('reserved','confirmed','consumed')
+        group by t.player_user_id
+        order by t.player_user_id
+        `,
+        [roomId]
+      );
+      pgCompareRows = pgResult.rows;
+    } catch (pgErr) {
+      pgCompareError =
+        pgErr instanceof Error ? pgErr.message : "pg query failed";
+      console.error("loadActiveCardsForRoom: pg compare error", pgErr);
+    }
+  }
+
   const { data: rpcDebug, error: rpcError } = await supabase.rpc(
     "debug_ticket_counts",
     { p_room_id: roomId }
@@ -546,6 +579,22 @@ async function loadActiveCardsForRoom(
     if (!userId) continue;
     counts[userId] = (counts[userId] || 0) + 1;
   }
+
+  console.info(
+    "[activeCardsCompare:pg-vs-supabase]",
+    JSON.stringify({
+      roomId,
+      supabaseRows: tickets?.length ?? null,
+      supabasePlayers: Object.keys(counts || {}),
+      pgRows: pgCompareRows,
+      pgCompareError,
+      pgTotalCards: (pgCompareRows ?? []).reduce(
+        (sum, r) => sum + Number(r.card_count || 0),
+        0
+      ),
+      debugTs: new Date().toISOString(),
+    })
+  );
 
   const userIds = Object.keys(counts);
   if (userIds.length === 0) {
