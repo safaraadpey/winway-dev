@@ -564,28 +564,45 @@ async function loadActiveCardsForRoom(
     })
   );
 
-  if (error) {
-    console.error("loadActiveCardsForRoom: tickets error", error);
-    return [];
-  }
-
-  if (!tickets || tickets.length === 0) {
-    return [];
-  }
-
+  const usePg = pgCompareRows !== null;
   const counts: Record<string, number> = {};
-  for (const t of tickets as any[]) {
-    const userId = t.player_user_id as string | null;
+
+  if (usePg) {
+    for (const row of pgCompareRows ?? []) {
+      if (!row.user_id) continue;
+      counts[row.user_id] = Number(row.card_count) || 0;
+    }
+  } else {
+    if (error) {
+      console.error("loadActiveCardsForRoom: tickets error", error);
+      return [];
+    }
+
+    if (!tickets || tickets.length === 0) {
+      return [];
+    }
+
+    for (const t of tickets as any[]) {
+      const userId = t.player_user_id as string | null;
+      if (!userId) continue;
+      counts[userId] = (counts[userId] || 0) + 1;
+    }
+  }
+
+  const supabaseCounts: Record<string, number> = {};
+  for (const t of tickets || []) {
+    const userId = (t as { player_user_id?: string | null }).player_user_id;
     if (!userId) continue;
-    counts[userId] = (counts[userId] || 0) + 1;
+    supabaseCounts[userId] = (supabaseCounts[userId] || 0) + 1;
   }
 
   console.info(
     "[activeCardsCompare:pg-vs-supabase]",
     JSON.stringify({
       roomId,
+      dataSource: usePg ? "pg" : "supabase",
       supabaseRows: tickets?.length ?? null,
-      supabasePlayers: Object.keys(counts || {}),
+      supabasePlayers: Object.keys(supabaseCounts),
       pgRows: pgCompareRows,
       pgCompareError,
       pgTotalCards: (pgCompareRows ?? []).reduce(
@@ -642,8 +659,14 @@ async function loadActiveCardsForRoom(
     "[loadActiveCardsForRoom]",
     JSON.stringify({
       roomId,
-      ticketRowCount: tickets.length,
-      tickets,
+      dataSource: usePg ? "pg" : "supabase",
+      ticketRowCount: usePg
+        ? (pgCompareRows ?? []).reduce(
+            (sum, r) => sum + Number(r.card_count || 0),
+            0
+          )
+        : tickets?.length ?? 0,
+      tickets: usePg ? null : tickets,
       counts,
       userIds,
       result,
