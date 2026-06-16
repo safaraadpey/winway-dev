@@ -1,6 +1,7 @@
--- Temporary observability: compare PostgREST .from("tickets") vs raw SQL counts per room.
--- Returns jsonb: { room_counts: [...], total_tickets: N }
+-- Extend debug_ticket_counts: room breakdown + global tickets row count.
 BEGIN;
+
+DROP FUNCTION IF EXISTS public.debug_ticket_counts(uuid);
 
 CREATE OR REPLACE FUNCTION public.debug_ticket_counts(p_room_id uuid)
 RETURNS jsonb
