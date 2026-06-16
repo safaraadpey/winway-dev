@@ -341,34 +341,9 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           })
         );
         setActiveCards(activeCardsList);
-        setRealtimeActiveCards((prev) => {
-          const merged = mergeActiveCardStatuses(activeCardsList, prev);
-          // #region agent log
-          fetch("http://127.0.0.1:7791/ingest/5bf0d9f1-cd5b-4713-8c37-aff062c3da58", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Debug-Session-Id": "0c2b3d",
-            },
-            body: JSON.stringify({
-              sessionId: "0c2b3d",
-              runId: "post-fix",
-              hypothesisId: "B",
-              location: "GameRoomScreen.tsx:poll:merge",
-              message: "reconcile api and realtime active cards",
-              data: {
-                roomId,
-                isInitial,
-                apiCount: activeCardsList.length,
-                rtCount: prev.length,
-                mergedCount: merged.length,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
-          return merged;
-        });
+        setRealtimeActiveCards((prev) =>
+          mergeActiveCardStatuses(activeCardsList, prev)
+        );
 
         // نگاشت میزهای فعال
         const tables: ActiveTable[] = view.active_tables.map((table) => ({
