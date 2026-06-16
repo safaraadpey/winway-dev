@@ -552,34 +552,17 @@ async function loadActiveCardsForRoom(
 
   result.sort((a, b) => a.display_name.localeCompare(b.display_name, "fa"));
 
-  // #region agent log
-  if (process.env.NODE_ENV === "development") {
-    fetch("http://127.0.0.1:7791/ingest/5bf0d9f1-cd5b-4713-8c37-aff062c3da58", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "0c2b3d",
-      },
-      body: JSON.stringify({
-        sessionId: "0c2b3d",
-        runId: "post-fix",
-        hypothesisId: "A",
-        location: "gameroom/route.ts:loadActiveCardsForRoom",
-        message: "service client active cards result",
-        data: {
-          roomId,
-          ticketRowCount: tickets.length,
-          playerCount: result.length,
-          players: result.map((r) => ({
-            user_id: r.user_id,
-            card_count: r.card_count,
-          })),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-  }
-  // #endregion
+  console.info(
+    "[loadActiveCardsForRoom]",
+    JSON.stringify({
+      roomId,
+      ticketRowCount: tickets.length,
+      tickets,
+      counts,
+      userIds,
+      result,
+    })
+  );
 
   return result;
 }
