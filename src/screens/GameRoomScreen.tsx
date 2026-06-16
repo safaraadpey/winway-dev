@@ -55,7 +55,7 @@ const TRANSITION_POLL_MS = 1000;
 
 /** Union of players from API + realtime; per-player count = max of both sources. */
 function mergeActiveCardStatuses(
-  ...lists: ActiveCardStatus[]
+  ...lists: ActiveCardStatus[][]
 ): ActiveCardStatus[] {
   const map = new Map<string, ActiveCardStatus>();
   for (const list of lists) {
