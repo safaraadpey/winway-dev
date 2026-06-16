@@ -102,12 +102,29 @@ export async function loadLiveTicketsFromPg(
 export async function loadLiveCardNumbersFromPg(
   poolIds: string[]
 ): Promise<LiveCardNumberRow[] | null> {
-  if (!pgPool || poolIds.length === 0) {
-    return poolIds.length === 0 ? [] : null;
+  if (!pgPool) {
+    return null;
+  }
+
+  if (poolIds.length === 0) {
+    return [];
+  }
+
+  const poolIdBigints = poolIds
+    .map((id) => Number(id))
+    .filter((id) => Number.isFinite(id));
+
+  if (poolIdBigints.length === 0) {
+    return [];
   }
 
   try {
-    const result = await pgPool.query<LiveCardNumberRow>(
+    const result = await pgPool.query<{
+      pool_card_id: string;
+      row_no: number;
+      col_no: number;
+      value: number | null;
+    }>(
       `
       select
         cn.pool_card_id::text as pool_card_id,
@@ -115,9 +132,9 @@ export async function loadLiveCardNumbersFromPg(
         cn.col_no,
         cn.value
       from public.card_numbers cn
-      where cn.pool_card_id = any($1::uuid[])
+      where cn.pool_card_id = any($1::bigint[])
       `,
-      [poolIds]
+      [poolIdBigints]
     );
 
     return result.rows;
@@ -160,10 +177,11 @@ export function buildCardNumberMap(
 ): Map<string, LiveCardNumberRow[]> {
   const cardNumberMap = new Map<string, LiveCardNumberRow[]>();
   for (const cn of cardNumbers) {
-    if (!cardNumberMap.has(cn.pool_card_id)) {
-      cardNumberMap.set(cn.pool_card_id, []);
+    const key = String(cn.pool_card_id);
+    if (!cardNumberMap.has(key)) {
+      cardNumberMap.set(key, []);
     }
-    cardNumberMap.get(cn.pool_card_id)!.push(cn);
+    cardNumberMap.get(key)!.push(cn);
   }
   return cardNumberMap;
 }
@@ -179,7 +197,7 @@ export function buildLiveRoomCards(
       Array(9).fill(null) as Array<number | null>
     );
     const positions = ticket.pool_card_id
-      ? cardNumberMap.get(ticket.pool_card_id) || []
+      ? cardNumberMap.get(String(ticket.pool_card_id)) || []
       : [];
 
     for (const pos of positions) {

@@ -243,7 +243,8 @@ export async function GET(request: Request) {
         : (supabaseTickets || []).map((t: any) => ({
             id: t.id as string,
             player_user_id: (t.player_user_id as string | null) ?? null,
-            pool_card_id: (t.pool_card_id as string | null) ?? null,
+            pool_card_id:
+              t.pool_card_id != null ? String(t.pool_card_id) : null,
             card_no: (t.card_no as number | null) ?? null,
           }));
 
@@ -267,17 +268,31 @@ export async function GET(request: Request) {
     }
 
     const pgCardNumbers = await loadLiveCardNumbersFromPg(poolIds);
-    const cardNumbersSource =
+    let cardNumbersSource =
       pgCardNumbers !== null ? "pg" : "supabase";
-    const cardNumbers =
+    let cardNumbers =
       pgCardNumbers !== null
         ? pgCardNumbers
         : (supabaseCardNumbers || []).map((cn: any) => ({
-            pool_card_id: cn.pool_card_id as string,
+            pool_card_id: String(cn.pool_card_id),
             row_no: cn.row_no as number,
             col_no: cn.col_no as number,
             value: (cn.value as number | null) ?? null,
           }));
+
+    if (
+      poolIds.length > 0 &&
+      cardNumbers.length === 0 &&
+      (supabaseCardNumbers?.length ?? 0) > 0
+    ) {
+      cardNumbersSource = "supabase-fallback";
+      cardNumbers = (supabaseCardNumbers || []).map((cn: any) => ({
+        pool_card_id: String(cn.pool_card_id),
+        row_no: cn.row_no as number,
+        col_no: cn.col_no as number,
+        value: (cn.value as number | null) ?? null,
+      }));
+    }
 
     logLiveRoomPgCompare({
       roomId,
