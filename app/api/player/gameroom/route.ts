@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { createServiceClient, getUserFromRequest } from "@/lib/supabaseServer";
+import {
+  createServiceClient,
+  createUserClientFromAccessToken,
+  getUserFromRequest,
+} from "@/lib/supabaseServer";
 
 export const dynamic = "force-dynamic";
 
@@ -107,6 +111,11 @@ export async function GET(request: Request) {
       );
     }
 
+    const rawAuthHeader =
+      request.headers.get("authorization") ?? request.headers.get("Authorization");
+    const accessToken =
+      rawAuthHeader?.startsWith("Bearer ") ? rawAuthHeader.slice(7) : null;
+
     const supabase = createServiceClient();
     const serverNow = new Date().toISOString();
     const globalRegistrationLockState = await loadGlobalRegistrationLockState(supabase);
@@ -117,7 +126,8 @@ export async function GET(request: Request) {
         roomId,
         serverNow,
         user.id,
-        globalRegistrationLockState
+        globalRegistrationLockState,
+        accessToken
       );
       if (!view) {
         // Never substitute another waiting room — client holds tickets on roomId.
@@ -126,6 +136,33 @@ export async function GET(request: Request) {
           { status: 404 }
         );
       }
+      // #region agent log
+      fetch("http://127.0.0.1:7791/ingest/5bf0d9f1-cd5b-4713-8c37-aff062c3da58", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "0c2b3d",
+        },
+        body: JSON.stringify({
+          sessionId: "0c2b3d",
+          runId: "post-fix",
+          hypothesisId: "D",
+          location: "gameroom/route.ts:GET",
+          message: "gameroom view response",
+          data: {
+            roomId,
+            returnedRoomId: view.room.id,
+            activeCardsCount: view.active_cards.length,
+            activeCards: view.active_cards.map((c) => ({
+              user_id: c.user_id,
+              card_count: c.card_count,
+              display_name: c.display_name,
+            })),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       return NextResponse.json(view);
     }
 
@@ -146,7 +183,8 @@ export async function GET(request: Request) {
       templateId,
       serverNow,
       user.id,
-      globalRegistrationLockState
+      globalRegistrationLockState,
+      accessToken
     );
     if (!view) {
       return NextResponse.json(
@@ -176,7 +214,8 @@ async function buildViewFromRoomId(
   roomId: string,
   serverNow: string,
   currentUserId: string,
-  globalRegistrationLockState: GlobalRegistrationLockState
+  globalRegistrationLockState: GlobalRegistrationLockState,
+  accessToken?: string | null
 ): Promise<GameRoomView | null> {
   // اطلاعات روم
   const { data: room, error: roomError } = await supabase
@@ -212,7 +251,11 @@ async function buildViewFromRoomId(
   );
 
   // کارت‌های فعال (بر اساس tickets)
-  const activeCards = await loadActiveCardsForRoom(supabase, room.id as string);
+  const activeCards = await loadActiveCardsForRoom(
+    supabase,
+    room.id as string,
+    accessToken
+  );
 
   // میزهای playing همین تمپلیت (باکس «میزهای فعال»)
   const activeTables = await loadPlayingTablesForTemplate(
@@ -268,7 +311,8 @@ async function buildViewFromTemplateId(
   templateId: string,
   serverNow: string,
   currentUserId: string,
-  globalRegistrationLockState: GlobalRegistrationLockState
+  globalRegistrationLockState: GlobalRegistrationLockState,
+  accessToken?: string | null
 ): Promise<GameRoomView | null> {
   const waitingStatuses = ["waiting"];
 
@@ -355,7 +399,8 @@ async function buildViewFromTemplateId(
         selectedRoom.id,
         serverNow,
         currentUserId,
-        globalRegistrationLockState
+        globalRegistrationLockState,
+        accessToken
       );
     }
   }
@@ -480,7 +525,8 @@ function computeCanCancel({
 
 async function loadActiveCardsForRoom(
   supabase: ReturnType<typeof createServiceClient>,
-  roomId: string
+  roomId: string,
+  accessToken?: string | null
 ): Promise<
   Array<{
     user_id: string;
@@ -488,7 +534,13 @@ async function loadActiveCardsForRoom(
     card_count: number;
   }>
 > {
-  const { data: tickets, error } = await supabase
+  // Production: service-role ticket reads can return partial rows; user-scoped
+  // client matches RLS policy tickets_public_read_waiting and returns all players.
+  const ticketsSupabase = accessToken
+    ? createUserClientFromAccessToken(accessToken)
+    : supabase;
+
+  const { data: tickets, error } = await ticketsSupabase
     .from("tickets")
     .select("player_user_id")
     .eq("room_id", roomId)
@@ -502,6 +554,30 @@ async function loadActiveCardsForRoom(
   if (!tickets || tickets.length === 0) {
     return [];
   }
+
+  // #region agent log
+  fetch("http://127.0.0.1:7791/ingest/5bf0d9f1-cd5b-4713-8c37-aff062c3da58", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "0c2b3d",
+    },
+    body: JSON.stringify({
+      sessionId: "0c2b3d",
+      runId: "post-fix",
+      hypothesisId: "A",
+      location: "gameroom/route.ts:loadActiveCardsForRoom:tickets",
+      message: "tickets query result",
+      data: {
+        roomId,
+        ticketRowCount: tickets.length,
+        ticketsError: error ? String(error.message) : null,
+        ticketClient: accessToken ? "user" : "service",
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
 
   const counts: Record<string, number> = {};
   for (const t of tickets as any[]) {
@@ -551,6 +627,37 @@ async function loadActiveCardsForRoom(
   }));
 
   result.sort((a, b) => a.display_name.localeCompare(b.display_name, "fa"));
+
+  // #region agent log
+  fetch("http://127.0.0.1:7791/ingest/5bf0d9f1-cd5b-4713-8c37-aff062c3da58", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "0c2b3d",
+    },
+    body: JSON.stringify({
+      sessionId: "0c2b3d",
+      runId: "post-fix",
+      hypothesisId: "C",
+      location: "gameroom/route.ts:loadActiveCardsForRoom:result",
+      message: "active cards aggregated",
+      data: {
+        roomId,
+        distinctPlayerCount: userIds.length,
+        counts,
+        usersRowCount: (users || []).length,
+        resultCount: result.length,
+        result: result.map((r) => ({
+          user_id: r.user_id,
+          card_count: r.card_count,
+          display_name: r.display_name,
+        })),
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+
   return result;
 }
 

@@ -157,6 +157,7 @@ export default function GameRoomScreen({
   // State برای کارت‌های فعال
   const [activeCards, setActiveCards] = useState<ActiveCardStatus[]>([]);
   const [realtimeActiveCards, setRealtimeActiveCards] = useState<ActiveCardStatus[]>([]);
+  const realtimeActiveCardsRef = useRef<ActiveCardStatus[]>([]);
 
   // State برای میزهای فعال
   const [activeTables, setActiveTables] = useState<ActiveTable[]>([]);
@@ -180,6 +181,10 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
       return next;
     });
   };
+
+  useEffect(() => {
+    realtimeActiveCardsRef.current = realtimeActiveCards;
+  }, [realtimeActiveCards]);
 
   // Ref برای نگه‌داری مقادیر قبلی برای مقایسه در render
   const prevRenderValuesRef = useRef<{
@@ -346,8 +351,38 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           length: activeCardsList.length,
           at: new Date().toISOString(),
         });
+        // #region agent log
+        fetch("http://127.0.0.1:7791/ingest/5bf0d9f1-cd5b-4713-8c37-aff062c3da58", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Debug-Session-Id": "0c2b3d",
+          },
+          body: JSON.stringify({
+            sessionId: "0c2b3d",
+            runId: "post-fix",
+            hypothesisId: "B",
+            location: "GameRoomScreen.tsx:fetchRoomData:poll",
+            message: "poll about to overwrite realtime state",
+            data: {
+              roomId,
+              apiPlayerCount: activeCardsList.length,
+              apiCards: activeCardsList.map((c) => ({ id: c.id, count: c.count, title: c.title })),
+              rtPlayerCountBeforeOverwrite: realtimeActiveCardsRef.current.length,
+              rtCardsBeforeOverwrite: realtimeActiveCardsRef.current.map((c) => ({
+                id: c.id,
+                count: c.count,
+                title: c.title,
+              })),
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
         setActiveCards(activeCardsList);
-        setRealtimeActiveCards(activeCardsList);
+        if (isInitial || realtimeActiveCardsRef.current.length === 0) {
+          setRealtimeActiveCards(activeCardsList);
+        }
         console.log("[COMPARE_AFTER_POLL]", {
           apiCount: activeCardsList.length,
           rtCount: realtimeActiveCards.length,
@@ -688,6 +723,33 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           payload,
           updated,
         });
+
+        // #region agent log
+        fetch("http://127.0.0.1:7791/ingest/5bf0d9f1-cd5b-4713-8c37-aff062c3da58", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Debug-Session-Id": "0c2b3d",
+          },
+          body: JSON.stringify({
+            sessionId: "0c2b3d",
+            runId: "post-fix",
+            hypothesisId: "E",
+            location: "GameRoomScreen.tsx:RT:handler",
+            message: "realtime ticket event applied",
+            data: {
+              roomId,
+              eventType: payload.eventType,
+              playerId,
+              delta,
+              prevPlayerCount: prev.length,
+              updatedPlayerCount: updated.length,
+              updated: updated.map((c) => ({ id: c.id, count: c.count, title: c.title })),
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
 
         return updated;
       });

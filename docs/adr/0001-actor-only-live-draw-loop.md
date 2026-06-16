@@ -1,6 +1,6 @@
 # ADR 0001: Actor-Only Live Draw Loop
 
-**Status:** Accepted (pending implementation on `refactor/actor-only-game-loop`)
+**Status:** Accepted and implemented on `refactor/actor-only-game-loop`)
 
 **Date:** 2026-06-14
 
