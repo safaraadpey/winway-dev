@@ -515,41 +515,42 @@ async function loadActiveCardsForRoom(
     return [];
   }
 
-  const { data: users, error: usersError } = await supabase
-    .from("users")
-    .select("id, username, user_profiles(nickname)")
-    .in("id", userIds);
+  const [{ data: users, error: usersError }, { data: profiles, error: profilesError }] =
+    await Promise.all([
+      supabase.from("users").select("id, username").in("id", userIds),
+      supabase.from("user_profiles").select("user_id, nickname").in("user_id", userIds),
+    ]);
 
   if (usersError) {
     console.error("loadActiveCardsForRoom: users error", usersError);
-    // اگر اطلاعات کاربر را نتوانیم بخوانیم، حداقل card_count را نگه می‌داریم
-    return userIds.map((id) => ({
-      user_id: id,
-      display_name: id,
-      card_count: counts[id] || 0,
-    }));
+  }
+  if (profilesError) {
+    console.error("loadActiveCardsForRoom: user_profiles error", profilesError);
   }
 
+  const usernameById = new Map<string, string>();
+  for (const u of (users || []) as Array<{ id: string; username: string | null }>) {
+    if (u.username) usernameById.set(u.id, u.username);
+  }
+
+  const nicknameById = new Map<string, string>();
+  for (const p of (profiles || []) as Array<{ user_id: string; nickname: string | null }>) {
+    if (p.nickname) nicknameById.set(p.user_id, p.nickname);
+  }
+
+  // همیشه از روی ticket counts خروجی بساز — هیچ player_user_id حذف نشود.
   const result: Array<{
     user_id: string;
     display_name: string;
     card_count: number;
-  }> = [];
+  }> = userIds.map((userId) => ({
+    user_id: userId,
+    display_name:
+      nicknameById.get(userId) || usernameById.get(userId) || userId,
+    card_count: counts[userId] || 0,
+  }));
 
-  for (const u of users as any[]) {
-    const profile = Array.isArray(u.user_profiles)
-      ? u.user_profiles[0]
-      : u.user_profiles;
-    const displayName =
-      profile?.nickname || u.username || (u.id as string);
-
-    result.push({
-      user_id: u.id as string,
-      display_name: displayName,
-      card_count: counts[u.id as string] || 0,
-    });
-  }
-
+  result.sort((a, b) => a.display_name.localeCompare(b.display_name, "fa"));
   return result;
 }
 
