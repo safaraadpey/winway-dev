@@ -1,4 +1,15 @@
 import { NextResponse } from "next/server";
+import {
+  buildCardNumberMap,
+  buildLiveRoomCards,
+  loadLiveCardNumbersFromPg,
+  loadLiveDrawsFromPg,
+  loadLiveTicketsFromPg,
+  logLiveRoomPgCompare,
+  mapDrawRows,
+  type LiveDrawRow,
+  type LiveTicketRow,
+} from "@/lib/liveRoomSnapshotPg";
 import { createServiceClient, getUserFromRequest } from "@/lib/supabaseServer";
 
 export const dynamic = "force-dynamic";
@@ -168,7 +179,7 @@ export async function GET(request: Request) {
       resolvedFullPct = 1 - resolvedLinePct;
     }
 
-    const { data: draws, error: drawsError } = await supabase
+    const { data: supabaseDraws, error: drawsError } = await supabase
       .from("draws")
       .select("id, number, created_at, processed_at")
       .eq("room_id", roomId)
@@ -178,6 +189,27 @@ export async function GET(request: Request) {
     if (drawsError) {
       console.error("live-room fetch draws error:", drawsError);
     }
+
+    const pgDraws = await loadLiveDrawsFromPg(roomId);
+    const drawsSource = pgDraws !== null ? "pg" : "supabase";
+    const draws: LiveDrawRow[] =
+      pgDraws !== null
+        ? pgDraws
+        : (supabaseDraws || []).map((d: any) => ({
+            id: d.id as string,
+            number: d.number as number,
+            created_at: d.created_at as string,
+            processed_at: d.processed_at as string,
+          }));
+
+    logLiveRoomPgCompare({
+      roomId,
+      scope: drawsOnly ? "draws" : "full",
+      drawsSource,
+      supabaseDrawCount: supabaseDraws?.length ?? 0,
+      pgDrawCount: pgDraws?.length ?? null,
+      drawsError: drawsError?.message ?? null,
+    });
 
     if (drawsOnly) {
       return NextResponse.json({
@@ -189,16 +221,11 @@ export async function GET(request: Request) {
           draw_interval_sec: drawIntervalSec,
         },
         server_now: new Date().toISOString(),
-        draws: (draws || []).map((d: any) => ({
-          id: d.id,
-          number: d.number,
-          created_at: d.created_at,
-          processed_at: d.processed_at,
-        })),
+        draws: mapDrawRows(draws),
       });
     }
 
-    const { data: tickets, error: ticketsError } = await supabase
+    const { data: supabaseTickets, error: ticketsError } = await supabase
       .from("tickets")
       .select("id, player_user_id, pool_card_id, card_no")
       .eq("room_id", roomId)
@@ -208,9 +235,69 @@ export async function GET(request: Request) {
       console.error("live-room fetch tickets error:", ticketsError);
     }
 
+    const pgTickets = await loadLiveTicketsFromPg(roomId);
+    const ticketsSource = pgTickets !== null ? "pg" : "supabase";
+    const tickets: LiveTicketRow[] =
+      pgTickets !== null
+        ? pgTickets
+        : (supabaseTickets || []).map((t: any) => ({
+            id: t.id as string,
+            player_user_id: (t.player_user_id as string | null) ?? null,
+            pool_card_id: (t.pool_card_id as string | null) ?? null,
+            card_no: (t.card_no as number | null) ?? null,
+          }));
+
+    const poolIds = Array.from(
+      new Set(
+        tickets
+          .map((t) => t.pool_card_id)
+          .filter((id): id is string => !!id)
+      )
+    );
+
+    const { data: supabaseCardNumbers, error: cardNumbersError } = poolIds.length
+      ? await supabase
+          .from("card_numbers")
+          .select("pool_card_id, row_no, col_no, value")
+          .in("pool_card_id", poolIds)
+      : { data: [] as any[], error: null };
+
+    if (cardNumbersError) {
+      console.error("live-room fetch card_numbers error:", cardNumbersError);
+    }
+
+    const pgCardNumbers = await loadLiveCardNumbersFromPg(poolIds);
+    const cardNumbersSource =
+      pgCardNumbers !== null ? "pg" : "supabase";
+    const cardNumbers =
+      pgCardNumbers !== null
+        ? pgCardNumbers
+        : (supabaseCardNumbers || []).map((cn: any) => ({
+            pool_card_id: cn.pool_card_id as string,
+            row_no: cn.row_no as number,
+            col_no: cn.col_no as number,
+            value: (cn.value as number | null) ?? null,
+          }));
+
+    logLiveRoomPgCompare({
+      roomId,
+      scope: "full",
+      drawsSource,
+      ticketsSource,
+      cardNumbersSource,
+      supabaseDrawCount: supabaseDraws?.length ?? 0,
+      pgDrawCount: pgDraws?.length ?? null,
+      supabaseTicketCount: supabaseTickets?.length ?? 0,
+      pgTicketCount: pgTickets?.length ?? null,
+      supabaseCardNumberCount: supabaseCardNumbers?.length ?? 0,
+      pgCardNumberCount: pgCardNumbers?.length ?? null,
+      ticketsError: ticketsError?.message ?? null,
+      cardNumbersError: cardNumbersError?.message ?? null,
+    });
+
     const playerIds = Array.from(
       new Set(
-        (tickets || [])
+        tickets
           .map((t) => t.player_user_id)
           .filter((id): id is string => !!id)
       )
@@ -237,68 +324,8 @@ export async function GET(request: Request) {
       });
     });
 
-    const poolIds = Array.from(
-      new Set(
-        (tickets || [])
-          .map((t) => t.pool_card_id)
-          .filter((id): id is string => !!id)
-      )
-    );
-
-    const { data: cardNumbers } = poolIds.length
-      ? await supabase
-          .from("card_numbers")
-          .select("pool_card_id, row_no, col_no, value")
-          .in("pool_card_id", poolIds)
-      : { data: [] as any[] };
-
-    const cardNumberMap = new Map<
-      string,
-      Array<{ row_no: number; col_no: number; value: number | null }>
-    >();
-    (cardNumbers || []).forEach((cn: any) => {
-      if (!cardNumberMap.has(cn.pool_card_id)) {
-        cardNumberMap.set(cn.pool_card_id, []);
-      }
-      cardNumberMap.get(cn.pool_card_id)!.push({
-        row_no: cn.row_no,
-        col_no: cn.col_no,
-        value: cn.value,
-      });
-    });
-
-    const cards =
-      tickets?.map((ticket: any) => {
-        const grid = Array.from({ length: 3 }, () =>
-          Array(9).fill(null) as Array<number | null>
-        );
-        const positions = cardNumberMap.get(ticket.pool_card_id) || [];
-        positions.forEach((pos) => {
-          const rowIndex = pos.row_no - 1; // 1,2,3 → 0,1,2
-          const colIndex = pos.col_no - 1; // 1..9   → 0..8
-          if (
-            rowIndex >= 0 && rowIndex < 3 &&
-            colIndex >= 0 && colIndex < 9
-          ) {
-            grid[rowIndex][colIndex] = pos.value;
-          }
-        });
-
-        const displayName =
-          userMap.get(ticket.player_user_id || "")?.nickname ||
-          userMap.get(ticket.player_user_id || "")?.username ||
-          ticket.player_user_id ||
-          "player";
-
-        return {
-          ticket_id: ticket.id,
-          player_id: ticket.player_user_id,
-          player_name: displayName,
-          card_number: ticket.card_no,
-          card: grid,
-          is_my_card: ticket.player_user_id === user.id,
-        };
-      }) ?? [];
+    const cardNumberMap = buildCardNumberMap(cardNumbers);
+    const cards = buildLiveRoomCards(tickets, cardNumberMap, userMap, user.id);
 
     let tournament: LiveRoomResponse["tournament"] = null;
     const { data: roundRow } = await supabase
@@ -341,12 +368,7 @@ export async function GET(request: Request) {
       },
       tournament,
       server_now: new Date().toISOString(),
-      draws: (draws || []).map((d: any) => ({
-        id: d.id,
-        number: d.number,
-        created_at: d.created_at,
-        processed_at: d.processed_at,
-      })),
+      draws: mapDrawRows(draws),
       cards,
     };
 
