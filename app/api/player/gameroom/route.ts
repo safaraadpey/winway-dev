@@ -571,7 +571,6 @@ async function loadActiveCardsForRoom(
       data: {
         roomId,
         ticketRowCount: tickets.length,
-        ticketsError: error ? String(error.message) : null,
         ticketClient: accessToken ? "user" : "service",
       },
       timestamp: Date.now(),
