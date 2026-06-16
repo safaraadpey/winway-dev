@@ -52,6 +52,50 @@ function shouldEnterLiveRoom(
 
 const LOBBY_POLL_MS = 3000;
 const TRANSITION_POLL_MS = 1000;
+const COUNTDOWN_ZERO_POLL_MS = 1000;
+
+function syncCountdownFromView(
+  view: GameRoomView,
+  serverNow: number,
+  setCountdownDeadline: (value: number | null) => void,
+  setCountdownSeconds: (value: number) => void
+): void {
+  const startsAtMs = view.room.starts_at
+    ? Date.parse(view.room.starts_at)
+    : NaN;
+  const hasValidStartsAt = Number.isFinite(startsAtMs);
+  const countdownSec = view.countdown_seconds ?? 0;
+
+  if (view.mode === "waiting") {
+    if (hasValidStartsAt && startsAtMs > serverNow) {
+      setCountdownDeadline(startsAtMs);
+      return;
+    }
+
+    if (countdownSec > 0) {
+      setCountdownDeadline(serverNow + countdownSec * 1000);
+      return;
+    }
+
+    if (hasValidStartsAt) {
+      setCountdownDeadline(startsAtMs);
+      return;
+    }
+
+    setCountdownDeadline(null);
+    setCountdownSeconds(0);
+    return;
+  }
+
+  if (hasValidStartsAt) {
+    setCountdownDeadline(startsAtMs);
+  } else if (countdownSec > 0) {
+    setCountdownDeadline(serverNow + countdownSec * 1000);
+  } else {
+    setCountdownDeadline(null);
+    setCountdownSeconds(0);
+  }
+}
 
 /** Union of players from API + realtime; per-player count = max of both sources. */
 function mergeActiveCardStatuses(
@@ -317,20 +361,12 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
         setServerOffset(offset);
 
         // sync countdown from server (includes timer extension when min_players not met)
-        if (view.mode === "waiting") {
-          if (view.room.starts_at) {
-            setCountdownDeadline(new Date(view.room.starts_at).getTime());
-          } else if ((view.countdown_seconds ?? 0) > 0) {
-            setCountdownDeadline(serverNow + view.countdown_seconds * 1000);
-          }
-        } else if (view.room.starts_at) {
-          setCountdownDeadline(new Date(view.room.starts_at).getTime());
-        } else if ((view.countdown_seconds ?? 0) > 0) {
-          setCountdownDeadline(serverNow + view.countdown_seconds * 1000);
-        } else {
-          setCountdownDeadline(null);
-          setCountdownSeconds(0);
-        }
+        syncCountdownFromView(
+          view,
+          serverNow,
+          setCountdownDeadline,
+          setCountdownSeconds
+        );
 
         // نگاشت کارت‌های فعال
         const activeCardsList: ActiveCardStatus[] = view.active_cards.map(
@@ -555,7 +591,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     return () => clearInterval(id);
   }, [countdownDeadline, serverOffset]);
 
-  // countdown به ۰ رسید → فوراً status را از سرور بگیر (انتقال به LiveRoom)
+  // countdown به ۰ رسید → فوراً status را از سرور بگیر (انتقال به LiveRoom یا extend)
   const prevCountdownRef = useRef<number | null>(null);
   useEffect(() => {
     if (prevCountdownRef.current !== 0 && countdownSeconds === 0) {
@@ -563,6 +599,20 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     }
     prevCountdownRef.current = countdownSeconds;
   }, [countdownSeconds]);
+
+  // روی 00:00 گیر نکند: تا extend/start از سرور بیاید poll سریع
+  useEffect(() => {
+    if (!roomId || gameMode !== "waiting" || countdownSeconds > 0) {
+      return;
+    }
+
+    void fetchRoomDataRef.current(false);
+    const id = setInterval(() => {
+      void fetchRoomDataRef.current(false);
+    }, COUNTDOWN_ZERO_POLL_MS);
+
+    return () => clearInterval(id);
+  }, [roomId, gameMode, countdownSeconds]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -742,8 +792,10 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
       // منطق countdown:
       // اگر روم هنوز waiting است و starts_at دارد → deadline را از روی starts_at تنظیم کن
       if (newRoom.status === "waiting" && newRoom.starts_at) {
-        const deadline = new Date(newRoom.starts_at).getTime();
-        setCountdownDeadline(deadline);
+        const deadline = Date.parse(newRoom.starts_at);
+        if (Number.isFinite(deadline)) {
+          setCountdownDeadline(deadline);
+        }
         return;
       }
 
