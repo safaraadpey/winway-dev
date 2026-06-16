@@ -186,13 +186,6 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     realtimeActiveCardsRef.current = realtimeActiveCards;
   }, [realtimeActiveCards]);
 
-  // Ref برای نگه‌داری مقادیر قبلی برای مقایسه در render
-  const prevRenderValuesRef = useRef<{
-    activeCards: ActiveCardStatus[];
-    realtimeActiveCards: ActiveCardStatus[];
-    cardsToRender: ActiveCardStatus[];
-  } | null>(null);
-
   const enterLive = () => {
     if (!roomId || enteredLiveRef.current) return;
     enteredLiveRef.current = true;
@@ -297,19 +290,6 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           return;
         }
 
-        // Poll log فقط زمانی که roomId معتبر داریم (جلوگیری از نویز: roomId undefined)
-        if (roomId) {
-          console.log("[POLL][ROOM]", {
-            roomId,
-            at: new Date().toISOString(),
-            activeCardsCount: view.active_cards?.length,
-            players: view.active_cards?.map((card) => ({
-              playerId: card.user_id,
-              cards: card.card_count,
-            })),
-          });
-        }
-
         setRoomInfo(mappedRoom);
         setGameMode(view.mode);
         if (view.mode === "running") {
@@ -346,53 +326,10 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
             count: card.card_count,
           })
         );
-        console.log("[DEBUG][POLL_DATA]", {
-          activeCardsFromAPI: activeCardsList,
-          length: activeCardsList.length,
-          at: new Date().toISOString(),
-        });
-        // #region agent log
-        fetch("http://127.0.0.1:7791/ingest/5bf0d9f1-cd5b-4713-8c37-aff062c3da58", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Debug-Session-Id": "0c2b3d",
-          },
-          body: JSON.stringify({
-            sessionId: "0c2b3d",
-            runId: "post-fix",
-            hypothesisId: "B",
-            location: "GameRoomScreen.tsx:fetchRoomData:poll",
-            message: "poll about to overwrite realtime state",
-            data: {
-              roomId,
-              apiPlayerCount: activeCardsList.length,
-              apiCards: activeCardsList.map((c) => ({ id: c.id, count: c.count, title: c.title })),
-              rtPlayerCountBeforeOverwrite: realtimeActiveCardsRef.current.length,
-              rtCardsBeforeOverwrite: realtimeActiveCardsRef.current.map((c) => ({
-                id: c.id,
-                count: c.count,
-                title: c.title,
-              })),
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
         setActiveCards(activeCardsList);
         if (isInitial || realtimeActiveCardsRef.current.length === 0) {
           setRealtimeActiveCards(activeCardsList);
         }
-        console.log("[COMPARE_AFTER_POLL]", {
-          apiCount: activeCardsList.length,
-          rtCount: realtimeActiveCards.length,
-          at: new Date().toISOString(),
-        });
-        console.log("[COMPARE][ACTIVE_CARDS]", {
-          at: new Date().toISOString(),
-          poll: activeCardsList,
-          realtime: realtimeActiveCards,
-        });
 
         // نگاشت میزهای فعال
         const tables: ActiveTable[] = view.active_tables.map((table) => ({
@@ -638,13 +575,6 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
         old: payload.old,
         at: new Date().toISOString(),
       });
-      console.log("[DEBUG][RT_PAYLOAD]", {
-        eventType: payload.eventType,
-        new: payload.new,
-        old: payload.old,
-        at: new Date().toISOString(),
-        realtimeActiveCards_before: realtimeActiveCards,
-      });
 
       setRealtimeActiveCards((prev) => {
         // استفاده از Map برای تجمیع کارت‌ها بر اساس player_user_id
@@ -717,39 +647,6 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
 
         // تبدیل Map به آرایه
         const updated = Array.from(cardsMap.values());
-
-        console.log("[DEBUG][RT_APPLY]", {
-          prev,
-          payload,
-          updated,
-        });
-
-        // #region agent log
-        fetch("http://127.0.0.1:7791/ingest/5bf0d9f1-cd5b-4713-8c37-aff062c3da58", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Debug-Session-Id": "0c2b3d",
-          },
-          body: JSON.stringify({
-            sessionId: "0c2b3d",
-            runId: "post-fix",
-            hypothesisId: "E",
-            location: "GameRoomScreen.tsx:RT:handler",
-            message: "realtime ticket event applied",
-            data: {
-              roomId,
-              eventType: payload.eventType,
-              playerId,
-              delta,
-              prevPlayerCount: prev.length,
-              updatedPlayerCount: updated.length,
-              updated: updated.map((c) => ({ id: c.id, count: c.count, title: c.title })),
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
 
         return updated;
       });
@@ -984,27 +881,6 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
 
   // استفاده از cardsToRenderForCancel که قبلاً تعریف شده
   const cardsToRender = cardsToRenderForCancel;
-
-  // لاگ فقط در صورت تغییر واقعی
-  const prev = prevRenderValuesRef.current;
-  const hasChanged =
-    !prev ||
-    JSON.stringify(prev.activeCards) !== JSON.stringify(activeCards) ||
-    JSON.stringify(prev.realtimeActiveCards) !== JSON.stringify(realtimeActiveCards) ||
-    JSON.stringify(prev.cardsToRender) !== JSON.stringify(cardsToRender);
-
-  if (hasChanged) {
-    console.log("[RENDER_CHANGED]", {
-      activeCards,
-      realtimeActiveCards,
-      cardsToRender,
-    });
-    prevRenderValuesRef.current = {
-      activeCards,
-      realtimeActiveCards,
-      cardsToRender,
-    };
-  }
 
   return (
     <div className="overflow-hidden bg-black/40 min-h-screen">

@@ -136,33 +136,6 @@ export async function GET(request: Request) {
           { status: 404 }
         );
       }
-      // #region agent log
-      fetch("http://127.0.0.1:7791/ingest/5bf0d9f1-cd5b-4713-8c37-aff062c3da58", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "0c2b3d",
-        },
-        body: JSON.stringify({
-          sessionId: "0c2b3d",
-          runId: "post-fix",
-          hypothesisId: "D",
-          location: "gameroom/route.ts:GET",
-          message: "gameroom view response",
-          data: {
-            roomId,
-            returnedRoomId: view.room.id,
-            activeCardsCount: view.active_cards.length,
-            activeCards: view.active_cards.map((c) => ({
-              user_id: c.user_id,
-              card_count: c.card_count,
-              display_name: c.display_name,
-            })),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       return NextResponse.json(view);
     }
 
@@ -555,29 +528,6 @@ async function loadActiveCardsForRoom(
     return [];
   }
 
-  // #region agent log
-  fetch("http://127.0.0.1:7791/ingest/5bf0d9f1-cd5b-4713-8c37-aff062c3da58", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "0c2b3d",
-    },
-    body: JSON.stringify({
-      sessionId: "0c2b3d",
-      runId: "post-fix",
-      hypothesisId: "A",
-      location: "gameroom/route.ts:loadActiveCardsForRoom:tickets",
-      message: "tickets query result",
-      data: {
-        roomId,
-        ticketRowCount: tickets.length,
-        ticketClient: accessToken ? "user" : "service",
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-
   const counts: Record<string, number> = {};
   for (const t of tickets as any[]) {
     const userId = t.player_user_id as string | null;
@@ -626,36 +576,6 @@ async function loadActiveCardsForRoom(
   }));
 
   result.sort((a, b) => a.display_name.localeCompare(b.display_name, "fa"));
-
-  // #region agent log
-  fetch("http://127.0.0.1:7791/ingest/5bf0d9f1-cd5b-4713-8c37-aff062c3da58", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "0c2b3d",
-    },
-    body: JSON.stringify({
-      sessionId: "0c2b3d",
-      runId: "post-fix",
-      hypothesisId: "C",
-      location: "gameroom/route.ts:loadActiveCardsForRoom:result",
-      message: "active cards aggregated",
-      data: {
-        roomId,
-        distinctPlayerCount: userIds.length,
-        counts,
-        usersRowCount: (users || []).length,
-        resultCount: result.length,
-        result: result.map((r) => ({
-          user_id: r.user_id,
-          card_count: r.card_count,
-          display_name: r.display_name,
-        })),
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
 
   return result;
 }
