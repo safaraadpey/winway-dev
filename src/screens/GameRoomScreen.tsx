@@ -53,6 +53,25 @@ function shouldEnterLiveRoom(
 const LOBBY_POLL_MS = 3000;
 const TRANSITION_POLL_MS = 1000;
 
+/** Union of players from API + realtime; per-player count = max of both sources. */
+function mergeActiveCardStatuses(
+  ...lists: ActiveCardStatus[]
+): ActiveCardStatus[] {
+  const map = new Map<string, ActiveCardStatus>();
+  for (const list of lists) {
+    for (const card of list) {
+      if (!card.id || card.count <= 0) continue;
+      const existing = map.get(card.id);
+      if (!existing || card.count > existing.count) {
+        map.set(card.id, { ...card });
+      }
+    }
+  }
+  return Array.from(map.values()).sort((a, b) =>
+    a.title.localeCompare(b.title, "fa")
+  );
+}
+
 function applyTicketEventToActiveCards(
   prev: ActiveCardStatus[],
   payload: any
@@ -157,7 +176,6 @@ export default function GameRoomScreen({
   // State برای کارت‌های فعال
   const [activeCards, setActiveCards] = useState<ActiveCardStatus[]>([]);
   const [realtimeActiveCards, setRealtimeActiveCards] = useState<ActiveCardStatus[]>([]);
-  const realtimeActiveCardsRef = useRef<ActiveCardStatus[]>([]);
 
   // State برای میزهای فعال
   const [activeTables, setActiveTables] = useState<ActiveTable[]>([]);
@@ -181,10 +199,6 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
       return next;
     });
   };
-
-  useEffect(() => {
-    realtimeActiveCardsRef.current = realtimeActiveCards;
-  }, [realtimeActiveCards]);
 
   const enterLive = () => {
     if (!roomId || enteredLiveRef.current) return;
@@ -327,9 +341,34 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           })
         );
         setActiveCards(activeCardsList);
-        if (isInitial || realtimeActiveCardsRef.current.length === 0) {
-          setRealtimeActiveCards(activeCardsList);
-        }
+        setRealtimeActiveCards((prev) => {
+          const merged = mergeActiveCardStatuses(activeCardsList, prev);
+          // #region agent log
+          fetch("http://127.0.0.1:7791/ingest/5bf0d9f1-cd5b-4713-8c37-aff062c3da58", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Debug-Session-Id": "0c2b3d",
+            },
+            body: JSON.stringify({
+              sessionId: "0c2b3d",
+              runId: "post-fix",
+              hypothesisId: "B",
+              location: "GameRoomScreen.tsx:poll:merge",
+              message: "reconcile api and realtime active cards",
+              data: {
+                roomId,
+                isInitial,
+                apiCount: activeCardsList.length,
+                rtCount: prev.length,
+                mergedCount: merged.length,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
+          return merged;
+        });
 
         // نگاشت میزهای فعال
         const tables: ActiveTable[] = view.active_tables.map((table) => ({
@@ -760,8 +799,10 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
   }, [roomId, supabase, router, roomInfo?.templateId]);
 
   // محاسبه cardsToRender برای استفاده در محاسبه canCancel
-  const cardsToRenderForCancel =
-    realtimeActiveCards.length > 0 ? realtimeActiveCards : activeCards;
+  const cardsToRenderForCancel = mergeActiveCardStatuses(
+    activeCards,
+    realtimeActiveCards
+  );
 
   // بررسی اینکه آیا کاربر فعلی کارت فعال دارد
   const hasReservedCardsForCurrentUser = Boolean(
