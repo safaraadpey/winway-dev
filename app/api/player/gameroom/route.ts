@@ -504,6 +504,17 @@ async function loadActiveCardsForRoom(
     { p_room_id: roomId }
   );
 
+  const { data: bypassRlsData, error: bypassRlsError } = await supabase.rpc(
+    "test_active_cards_bypass_rls",
+    { p_room_id: roomId }
+  );
+
+  console.info("[test_active_cards_bypass_rls]", {
+    roomId,
+    data: bypassRlsData,
+    error: bypassRlsError,
+  });
+
   console.info(
     "[debug_runtime_context]",
     JSON.stringify({ roomId, ctx, ctxError: ctxError?.message ?? null })
