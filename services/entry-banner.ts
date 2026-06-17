@@ -10,6 +10,9 @@ import type {
   EntryBannerListResult,
 } from "@/src/types/entry-banner";
 
+const BANNER_IMAGES_BUCKET = "banner-images";
+const BANNER_IMAGE_FOLDER = "entry-banners";
+
 function normalizeTargetAudience(value: unknown): BannerTargetAudience[] {
   if (!Array.isArray(value)) return [];
   return value.filter(
@@ -107,11 +110,16 @@ export async function loadEntryBanner(bannerId: string): Promise<EntryBanner | n
 /**
  * آپلود تصویر بنر
  */
-async function uploadBannerImage(file: File): Promise<{ url: string; size: number; width: number; height: number } | null> {
+async function uploadBannerImage(
+  file: File
+): Promise<
+  | { ok: true; url: string; size: number; width: number; height: number }
+  | { ok: false; error: string }
+> {
   try {
     // بررسی سایز فایل (حداکثر 1 مگ)
     if (file.size > 1024 * 1024) {
-      throw new Error("حجم فایل باید کمتر از 1 مگابایت باشد");
+      return { ok: false, error: "حجم فایل باید کمتر از 1 مگابایت باشد" };
     }
 
     // بررسی ابعاد تصویر
@@ -120,24 +128,20 @@ async function uploadBannerImage(file: File): Promise<{ url: string; size: numbe
       img.onload = () => {
         resolve({ width: img.width, height: img.height });
       };
-      img.onerror = reject;
+      img.onerror = () => reject(new Error("فایل انتخاب‌شده تصویر معتبر نیست"));
       img.src = URL.createObjectURL(file);
     });
 
     if (imageDimensions.width > 1000 || imageDimensions.height > 1300) {
-      throw new Error("ابعاد تصویر باید حداکثر 1000x1300 پیکسل باشد");
+      return { ok: false, error: "ابعاد تصویر باید حداکثر 1000x1300 پیکسل باشد" };
     }
 
-    // آپلود به Supabase Storage
-    const fileExt = file.name.split(".").pop();
+    const fileExt = file.name.split(".").pop() || "jpg";
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-    const filePath = `entry-banners/${fileName}`;
+    const filePath = `${BANNER_IMAGE_FOLDER}/${fileName}`;
 
-    // استفاده از bucket مناسب (اگر 'public' وجود ندارد، از 'images' یا bucket دیگری استفاده کنید)
-    const bucketName = "public"; // یا bucket دیگری که در Supabase ایجاد کرده‌اید
-    
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from(bucketName)
+    const { error: uploadError } = await supabase.storage
+      .from(BANNER_IMAGES_BUCKET)
       .upload(filePath, file, {
         cacheControl: "3600",
         upsert: false,
@@ -145,15 +149,25 @@ async function uploadBannerImage(file: File): Promise<{ url: string; size: numbe
 
     if (uploadError) {
       console.error("uploadBannerImage: upload error", uploadError);
-      // اگر bucket وجود ندارد، می‌توانیم از یک URL موقت استفاده کنیم
-      // یا به کاربر بگوییم که bucket را ایجاد کند
-      throw new Error("خطا در آپلود تصویر. لطفاً مطمئن شوید که bucket 'public' در Supabase Storage ایجاد شده است.");
+      if (uploadError.message.includes("Bucket not found")) {
+        return {
+          ok: false,
+          error: "bucket تصاویر بنر در Supabase Storage پیکربندی نشده است (banner-images).",
+        };
+      }
+      if (uploadError.message.toLowerCase().includes("row-level security")) {
+        return {
+          ok: false,
+          error: "دسترسی آپلود تصویر بنر برای این حساب فعال نیست.",
+        };
+      }
+      return { ok: false, error: uploadError.message || "خطا در آپلود تصویر" };
     }
 
-    // گرفتن URL عمومی
-    const { data: urlData } = supabase.storage.from(bucketName).getPublicUrl(filePath);
+    const { data: urlData } = supabase.storage.from(BANNER_IMAGES_BUCKET).getPublicUrl(filePath);
 
     return {
+      ok: true,
       url: urlData.publicUrl,
       size: file.size,
       width: imageDimensions.width,
@@ -161,7 +175,8 @@ async function uploadBannerImage(file: File): Promise<{ url: string; size: numbe
     };
   } catch (err) {
     console.error("uploadBannerImage unexpected error:", err);
-    return null;
+    const message = err instanceof Error ? err.message : "خطا در آپلود تصویر";
+    return { ok: false, error: message };
   }
 }
 
@@ -186,8 +201,8 @@ export async function createEntryBanner(
 
     if (formData.contentType === "image" && formData.imageFile) {
       const uploadResult = await uploadBannerImage(formData.imageFile);
-      if (!uploadResult) {
-        return { success: false, error: "خطا در آپلود تصویر" };
+      if (!uploadResult.ok) {
+        return { success: false, error: uploadResult.error };
       }
       imageUrl = uploadResult.url;
       imageSize = uploadResult.size;
@@ -247,8 +262,8 @@ export async function updateEntryBanner(
 
     if (formData.contentType === "image" && formData.imageFile) {
       const uploadResult = await uploadBannerImage(formData.imageFile);
-      if (!uploadResult) {
-        return { success: false, error: "خطا در آپلود تصویر" };
+      if (!uploadResult.ok) {
+        return { success: false, error: uploadResult.error };
       }
       imageUrl = uploadResult.url;
       imageSize = uploadResult.size;
@@ -408,13 +423,14 @@ export async function deleteEntryBanner(
     // حذف تصویر از storage اگر وجود دارد
     const banner = await loadEntryBanner(bannerId);
     if (banner?.imageUrl) {
-      // استخراج مسیر فایل از URL
-      const urlParts = banner.imageUrl.split("/");
-      const fileName = urlParts[urlParts.length - 1];
-      const filePath = `entry-banners/${fileName}`;
-      const bucketName = "public";
+      const marker = `/storage/v1/object/public/${BANNER_IMAGES_BUCKET}/`;
+      const markerIndex = banner.imageUrl.indexOf(marker);
+      const filePath =
+        markerIndex >= 0
+          ? banner.imageUrl.slice(markerIndex + marker.length)
+          : `${BANNER_IMAGE_FOLDER}/${banner.imageUrl.split("/").pop() || ""}`;
 
-      await supabase.storage.from(bucketName).remove([filePath]);
+      await supabase.storage.from(BANNER_IMAGES_BUCKET).remove([filePath]);
     }
 
     // حذف بنر از دیتابیس
