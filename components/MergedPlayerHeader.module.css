@@ -96,14 +96,17 @@
 .row2 {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: stretch;
   gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
   padding-left: 31px;
   padding-right: 16px;
+  box-sizing: border-box;
 }
 
 .row2NoBackButton {
-  gap: 12px;
+  gap: 8px;
 }
 
 .avatarContainer {
@@ -134,8 +137,8 @@
 }
 
 .balanceCapsule {
-  width: 170px;
-  min-width: 160px;
+  flex: 1 1 0;
+  min-width: 0;
   height: 35px !important;
   min-height: 35px;
   max-height: 35px;
@@ -143,17 +146,14 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 5px;
-  padding: 0px 2px 0px 0.75rem !important;
+  gap: 4px;
+  padding: 0 2px 0 0.5rem !important;
   background-repeat: no-repeat;
   background-position: center;
   background-size: 100% 100%;
   border: none;
   border-radius: 25px;
-  border-top-left-radius: 25px;
-  border-top-right-radius: 25px;
-  border-bottom-right-radius: 25px;
-  border-bottom-left-radius: 25px;
+  overflow: hidden;
 }
 
 .dingBg {
@@ -167,24 +167,29 @@
 }
 
 .balanceAmount {
-  font-size: 1rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: clamp(0.7rem, 3.2vw, 1rem);
   font-weight: 700;
   color: #FEEEB4;
   font-family: inherit;
   direction: ltr;
   text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .coinIcon {
-  width: 32px;
-  height: 32px;
+  width: clamp(24px, 7vw, 32px);
+  height: clamp(24px, 7vw, 32px);
   object-fit: contain;
   flex-shrink: 0;
 }
 
 .refreshIcon {
-  width: 32px;
-  height: 32px;
+  width: clamp(24px, 7vw, 32px);
+  height: clamp(24px, 7vw, 32px);
   object-fit: contain;
   flex-shrink: 0;
 }

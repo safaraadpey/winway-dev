@@ -4,23 +4,26 @@
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
+  width: 100%;
+  min-width: 0;
   padding-top: 8px;
   padding-right: 7px;
   padding-bottom: 0px;
   padding-left: 7px;
   flex-wrap: nowrap;
-  overflow-x: auto;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .muteButton {
-  width: 40px;
-  height: 40px;
+  width: clamp(32px, 9vw, 40px);
+  height: clamp(32px, 9vw, 40px);
   border-radius: 999px;
   background-color: #4a2f14; /* قهوه‌ای تیره */
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: clamp(14px, 4vw, 18px);
   color: #f3f4f6;
   border: 1px solid rgba(255, 255, 255, 0.08);
   flex: 0 0 auto;
@@ -31,19 +34,21 @@
 .prizes {
   display: flex;
   flex-direction: row;
-  gap: 2px;
+  flex: 1 1 0;
+  min-width: 0;
+  gap: 4px;
   align-items: center;
-  justify-content: flex-start;
-  flex: 0 0 auto;
+  justify-content: stretch;
 }
 
 .prizeChip {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  min-width: 145px;
-  padding: 8px 12px;
+  gap: 6px;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 6px 8px;
   border-radius: 999px;
   background-image: url("../../src/assets/logo/lobbyInfo.png");
   background-repeat: no-repeat;
@@ -52,8 +57,7 @@
   background-color: #111c2f;
   border: 1px solid transparent;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-  white-space: nowrap;
-  flex: 0 0 auto;
+  overflow: hidden;
 }
 
 .prizeChipGameBadge {
@@ -72,14 +76,20 @@
 }
 
 .prizeValue {
+  flex: 1 1 auto;
+  min-width: 0;
   color: rgba(63, 146, 180, 1);
   font-weight: 800;
-  font-size: 16px;
+  font-size: clamp(0.7rem, 3.2vw, 1rem);
   line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .prizeLabel {
+  flex-shrink: 0;
   color: #e5e7eb;
-  font-size: 13px;
+  font-size: clamp(0.65rem, 2.8vw, 0.8125rem);
   font-weight: 600;
 }
