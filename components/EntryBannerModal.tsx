@@ -4,6 +4,11 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { loadActiveBannersForUser } from "@/services/entry-banner";
 import type { EntryBanner } from "@/src/types/entry-banner";
+import { useSession } from "@/lib/contexts/SessionContext";
+import {
+  filterEntryBannersForToday,
+  snoozeEntryBannerForToday,
+} from "@/lib/entry-banner-snooze";
 
 type EntryBannerModalProps = {
   visibleOnPaths?: string[];
@@ -11,10 +16,11 @@ type EntryBannerModalProps = {
 
 export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalProps) {
   const pathname = usePathname();
+  const { userId } = useSession();
   const [banners, setBanners] = useState<EntryBanner[]>([]);
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [confirmed, setConfirmed] = useState(false);
-  const [dismissedBanners, setDismissedBanners] = useState<Set<string>>(new Set());
+  const [dontShowAgainToday, setDontShowAgainToday] = useState(false);
   const [loading, setLoading] = useState(true);
   const shouldShowOnThisPath =
     !visibleOnPaths ||
@@ -34,16 +40,16 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
       try {
         setLoading(true);
         const activeBanners = await loadActiveBannersForUser();
-        
+
         if (!isMounted) return;
 
-        // فیلتر کردن بنرهایی که قبلاً dismiss شده‌اند
-        const notDismissed = activeBanners.filter(
-          (banner) => !dismissedBanners.has(banner.id)
-        );
-        setBanners(notDismissed);
-        if (notDismissed.length > 0) {
+        const visibleBanners = filterEntryBannersForToday(userId, activeBanners);
+
+        setBanners(visibleBanners);
+        if (visibleBanners.length > 0) {
           setCurrentBannerIndex(0);
+          setConfirmed(false);
+          setDontShowAgainToday(false);
         }
       } catch (error) {
         console.error("EntryBannerModal: error fetching banners", error);
@@ -54,56 +60,53 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
       }
     }
 
-    // کمی تاخیر برای اطمینان از اینکه صفحه کاملاً لود شده است
     const timeoutId = setTimeout(() => {
-      fetchBanners();
+      void fetchBanners();
     }, 300);
 
     return () => {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [shouldShowOnThisPath]);
+  }, [shouldShowOnThisPath, userId]);
 
   const currentBanner = banners[currentBannerIndex];
 
-  // اگر در حال بارگذاری است یا بنری وجود ندارد، چیزی نمایش نده
   if (!shouldShowOnThisPath || loading || !currentBanner || banners.length === 0) {
     return null;
   }
 
   const handleClose = () => {
-    // اضافه کردن به لیست dismiss شده‌ها
-    setDismissedBanners((prev) => new Set([...prev, currentBanner.id]));
-    
-    // اگر بنر دیگری وجود دارد، به بعدی برو
+    if (dontShowAgainToday && userId) {
+      snoozeEntryBannerForToday(userId, currentBanner.id);
+    }
+
     if (currentBannerIndex < banners.length - 1) {
       setCurrentBannerIndex(currentBannerIndex + 1);
       setConfirmed(false);
+      setDontShowAgainToday(false);
     } else {
-      // همه بنرها نمایش داده شدند
       setBanners([]);
     }
   };
 
   const handleConfirm = () => {
     if (currentBanner.requireConfirmation && !confirmed) {
-      setConfirmed(true);
-    } else {
-      handleClose();
+      return;
     }
+    handleClose();
   };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
       <div className="bg-[#0b1120] rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-        {/* تیتر */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-white">{currentBanner.title}</h2>
           {!currentBanner.requireConfirmation && (
             <button
               onClick={handleClose}
               className="text-gray-400 hover:text-white transition-colors"
+              aria-label="بستن بنر"
             >
               <svg
                 width="24"
@@ -122,7 +125,6 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
           )}
         </div>
 
-        {/* محتوا */}
         <div className="mb-4">
           {currentBanner.contentType === "text" ? (
             <div className="text-gray-300 whitespace-pre-wrap">
@@ -139,7 +141,6 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
           ) : null}
         </div>
 
-        {/* تایید (اگر نیاز باشد) */}
         {currentBanner.requireConfirmation && (
           <div className="mb-4">
             <label className="flex items-center gap-2 cursor-pointer">
@@ -156,7 +157,18 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
           </div>
         )}
 
-        {/* دکمه بستن/تایید */}
+        <div className="mb-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={dontShowAgainToday}
+              onChange={(e) => setDontShowAgainToday(e.target.checked)}
+              className="w-5 h-5 rounded bg-[#1f2933] border-gray-600 text-teal-600 focus:ring-teal-500"
+            />
+            <span className="text-sm text-gray-300">دوباره نشان نده</span>
+          </label>
+        </div>
+
         <button
           onClick={handleConfirm}
           disabled={currentBanner.requireConfirmation && !confirmed}
@@ -169,7 +181,6 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
             : "بستن"}
         </button>
 
-        {/* نمایش تعداد بنرها (اگر بیشتر از یکی باشد) */}
         {banners.length > 1 && (
           <div className="mt-3 text-center text-sm text-gray-400">
             {currentBannerIndex + 1} از {banners.length}
@@ -179,4 +190,3 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
     </div>
   );
 }
-
