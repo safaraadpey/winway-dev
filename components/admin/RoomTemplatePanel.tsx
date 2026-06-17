@@ -3,7 +3,6 @@
 import { useState, ChangeEvent, FormEvent, useEffect } from "react";
 import type {
   RoomTemplatePayload,
-  RoomType,
   RoomTemplateStatus,
 } from "@/src/types/room";
 import toast from "react-hot-toast";
@@ -39,7 +38,11 @@ function normalizeTemplateForForm(
     template.waitingTimeoutSeconds >= 10
       ? template.waitingTimeoutSeconds
       : DEFAULT_WAITING_TIMEOUT_SECONDS;
-  return { ...template, waitingTimeoutSeconds: waiting };
+  return {
+    ...template,
+    waitingTimeoutSeconds: waiting,
+    roomType: "normal",
+  };
 }
 
 function FieldRow({ label, suffix, children }: FieldProps) {
@@ -206,10 +209,6 @@ export default function RoomTemplatePanel({
     setForm((prev) => ({ ...prev, [key]: e.target.value }));
   };
 
-  const handleRoomTypeChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    setForm((prev) => ({ ...prev, roomType: e.target.value as RoomType }));
-  };
-
   const handleStatusChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value as RoomTemplateStatus;
     setForm((prev) => ({ ...prev, status: value }));
@@ -293,7 +292,7 @@ export default function RoomTemplatePanel({
 
     setIsSaving(true);
     try {
-      await onSave({ ...form, waitingTimeoutSeconds });
+      await onSave({ ...form, waitingTimeoutSeconds, roomType: "normal" });
       // بعد از ذخیره موفق، اگر create بود به collapsed تبدیل می‌شود
       if (isCreate) {
         setCurrentMode("collapsed");
@@ -320,6 +319,7 @@ export default function RoomTemplatePanel({
       const archivedForm: RoomTemplatePayload = {
         ...form,
         status: "draining",
+        roomType: "normal",
       };
       // بلافاصله state لوکال را هم به‌روزرسانی می‌کنیم تا badge درست شود
       setForm(archivedForm);
@@ -346,6 +346,7 @@ export default function RoomTemplatePanel({
       const restoredForm: RoomTemplatePayload = {
         ...form,
         status: "active",
+        roomType: "normal",
       };
       setForm(restoredForm);
       await onSave(restoredForm);
@@ -452,17 +453,6 @@ export default function RoomTemplatePanel({
             value={form.name}
             onChange={handleTextChange("name")}
           />
-        </FieldRow>
-
-        <FieldRow label="نوع اتاق">
-          <select
-            className="w-32 bg-neutral-700 border border-neutral-600 rounded px-2 py-1 text-xs text-left"
-            value={form.roomType}
-            onChange={handleRoomTypeChange}
-          >
-            <option value="normal">نرمال</option>
-            <option value="tournament">تورنومنت</option>
-          </select>
         </FieldRow>
 
         <FieldRow label="قیمت کارت" suffix={form.currency === "IRR" ? "تومان" : form.currency}>
@@ -602,46 +592,12 @@ export default function RoomTemplatePanel({
           />
         </FieldRow>
 
-        <FieldRow label="قابل تکرار">
-          <input
-            type="checkbox"
-            checked={form.repeatable}
-            onChange={handleBooleanChange("repeatable")}
-          />
-        </FieldRow>
-
         <FieldRow label="پسورد">
           <input
             type="text"
             className="w-32 bg-neutral-700 border border-neutral-600 rounded px-2 py-1 text-xs text-left"
             value={form.password ?? ""}
             onChange={handleTextChange("password")}
-          />
-        </FieldRow>
-
-        <FieldRow label="تاریخ تورنومنت">
-          <input
-            type="date"
-            className="w-32 bg-neutral-700 border border-neutral-600 rounded px-2 py-1 text-xs text-left"
-            value={form.tournamentDate ?? ""}
-            onChange={handleTextChange("tournamentDate")}
-            style={{ 
-              maxWidth: '100%',
-              touchAction: 'manipulation'
-            }}
-          />
-        </FieldRow>
-
-        <FieldRow label="ساعت تورنومنت">
-          <input
-            type="time"
-            className="w-24 bg-neutral-700 border border-neutral-600 rounded px-2 py-1 text-xs text-left"
-            value={form.tournamentTime ?? ""}
-            onChange={handleTextChange("tournamentTime")}
-            style={{ 
-              maxWidth: '100%',
-              touchAction: 'manipulation'
-            }}
           />
         </FieldRow>
       </div>
