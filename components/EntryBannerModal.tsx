@@ -6,6 +6,7 @@ import { loadActiveBannersForUser } from "@/services/entry-banner";
 import type { EntryBanner } from "@/src/types/entry-banner";
 import { useSession } from "@/lib/contexts/SessionContext";
 import {
+  confirmEntryBanner,
   filterEntryBannersForToday,
   snoozeEntryBannerForToday,
 } from "@/lib/entry-banner-snooze";
@@ -77,8 +78,12 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
   }
 
   const handleClose = () => {
-    if (!currentBanner.requireConfirmation && dontShowAgainToday && userId) {
-      snoozeEntryBannerForToday(userId, currentBanner.id);
+    if (userId) {
+      if (currentBanner.requireConfirmation) {
+        confirmEntryBanner(userId, currentBanner.id, currentBanner.updatedAt);
+      } else if (dontShowAgainToday) {
+        snoozeEntryBannerForToday(userId, currentBanner.id);
+      }
     }
 
     if (currentBannerIndex < banners.length - 1) {

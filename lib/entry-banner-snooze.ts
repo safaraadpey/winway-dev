@@ -1,4 +1,5 @@
 const STORAGE_PREFIX = "entry_banner_snooze_v1";
+const CONFIRMED_PREFIX = "confirmed:";
 
 function storageKey(userId: string): string {
   return `${STORAGE_PREFIX}::${userId}`;
@@ -35,6 +36,21 @@ function writeSnoozeStore(userId: string, store: Record<string, string>): void {
   }
 }
 
+function confirmationMarker(updatedAt: string | null | undefined): string {
+  return `${CONFIRMED_PREFIX}${updatedAt ?? ""}`;
+}
+
+function shouldShowBanner<T extends { id: string; updatedAt?: string | null }>(
+  banner: T,
+  store: Record<string, string>
+): boolean {
+  const value = store[banner.id];
+  if (!value) return true;
+  if (value === getLocalDateKey()) return false;
+  if (value === confirmationMarker(banner.updatedAt)) return false;
+  return true;
+}
+
 export function isEntryBannerSnoozedForToday(userId: string, bannerId: string): boolean {
   const store = readSnoozeStore(userId);
   return store[bannerId] === getLocalDateKey();
@@ -46,12 +62,21 @@ export function snoozeEntryBannerForToday(userId: string, bannerId: string): voi
   writeSnoozeStore(userId, store);
 }
 
-export function filterEntryBannersForToday<T extends { id: string }>(
+export function confirmEntryBanner(
+  userId: string,
+  bannerId: string,
+  updatedAt: string | null | undefined
+): void {
+  const store = readSnoozeStore(userId);
+  store[bannerId] = confirmationMarker(updatedAt);
+  writeSnoozeStore(userId, store);
+}
+
+export function filterEntryBannersForToday<T extends { id: string; updatedAt?: string | null }>(
   userId: string | null | undefined,
   banners: T[]
 ): T[] {
   if (!userId) return banners;
-  const today = getLocalDateKey();
   const store = readSnoozeStore(userId);
-  return banners.filter((banner) => store[banner.id] !== today);
+  return banners.filter((banner) => shouldShowBanner(banner, store));
 }
