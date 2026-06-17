@@ -32,7 +32,6 @@ export default function DevPanelAccountPage() {
         } = await supabase.auth.getUser();
         if (!user) return;
 
-        const roleInfo = await getCurrentUserRoleInfo();
         const { data: dbUser } = await supabase
           .from("users")
           .select("username, last_login_at")
