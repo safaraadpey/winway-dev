@@ -3,8 +3,7 @@
 import React from 'react';
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
+import { hardExit } from "@/lib/auth/hardExit";
 import InstallAppButton from "@/components/InstallAppButton";
 import styles from './MainMenuScreen.module.css';
 
@@ -27,19 +26,12 @@ type MenuName =
   | 'Logout';
 
 const MainMenuScreen: React.FC = () => {
-  const router = useRouter();
-
   const handleMenuClick = (menuName: MenuName): void => {
     console.log(`${menuName} clicked`);
   };
 
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-      router.push("/login");
-    } catch (error) {
-      console.error("Error logging out:", error);
-    }
+  const handleLogout = () => {
+    hardExit();
   };
 
   return (

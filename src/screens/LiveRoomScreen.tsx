@@ -32,6 +32,7 @@ import {
 } from "@/lib/draw-order";
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 import { useSession } from "@/lib/contexts/SessionContext";
+import { isHardExiting } from "@/lib/auth/hardExit";
 
 type CardWinner = {
   ticketId: string;
@@ -420,6 +421,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   const markDrawSynced = markDrawSync;
 
   const runDrawSyncPoll = useCallback(async () => {
+    if (isHardExiting()) return;
     if (!roomId || pollInFlightRef.current) return;
 
     const status = roomStatusRef.current;
@@ -468,6 +470,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   }, [runDrawSyncPoll]);
 
   const runFallbackPoll = useCallback(async () => {
+    if (isHardExiting()) return;
     if (!roomId || pollInFlightRef.current) return;
 
     const status = roomStatusRef.current;
@@ -607,7 +610,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     let isMounted = true;
 
     async function loadSnapshot() {
-      if (!roomId) return;
+      if (!roomId || isHardExiting()) return;
       setLoading(true);
       try {
         console.log("[LiveRoom] loading snapshot for room", roomId);
@@ -667,7 +670,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
 
     let cancelled = false;
     const tick = () => {
-      if (cancelled) return;
+      if (cancelled || isHardExiting()) return;
       const status = roomStatusRef.current;
       if (!PLAYING_ROOM_STATUSES.has(status)) return;
 
@@ -691,7 +694,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
 
     let cancelled = false;
     const tick = () => {
-      if (cancelled) return;
+      if (cancelled || isHardExiting()) return;
       const elapsed = Date.now() - lastRealtimeActivityRef.current;
       if (elapsed >= REALTIME_STALE_MS) {
         void runFallbackPollRef.current();

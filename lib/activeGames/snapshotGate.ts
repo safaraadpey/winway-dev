@@ -26,4 +26,9 @@ export function getLastSnapshotFetchedAt(): number | null {
   return lastSnapshotFetchMs;
 }
 
+export function resetSnapshotGate(): void {
+  lastSnapshotFetchMs = null;
+  lastSource = null;
+}
+
 

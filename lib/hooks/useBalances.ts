@@ -5,6 +5,7 @@ import { supabase } from '../supabaseClient';
 import { getMyDingBalance } from '../features/ding/ding';
 import { isDingEnabled } from "@/lib/audio-settings";
 import { playDingTone } from "@/lib/number-audio";
+import { HARD_EXIT_EVENT, isHardExiting } from "@/lib/auth/hardExit";
 
 export interface Balances {
   dingBalance: number;
@@ -149,6 +150,7 @@ export function useBalances(): Balances {
 
   useEffect(() => {
     async function fetchBalances() {
+      if (isHardExiting()) return;
       try {
         console.log('[useBalances] fetchBalances started');
         setLoading(true);
@@ -275,9 +277,40 @@ export function useBalances(): Balances {
     // Initial fetch (might be unauthenticated on login page; auth listener below will refetch on sign-in)
     fetchBalances();
 
+    const onHardExit = () => {
+      setDingBalance(0);
+      setTomanBalance(0);
+      setLockedTomanBalance(0);
+      setLoading(false);
+      setError(null);
+      hasHydratedRef.current = false;
+      currentBalanceRef.current = 0;
+      if (walletChannelRef.current) {
+        supabase.removeChannel(walletChannelRef.current);
+        walletChannelRef.current = null;
+      }
+      if (walletSyncTimerRef.current) {
+        clearTimeout(walletSyncTimerRef.current);
+        walletSyncTimerRef.current = null;
+      }
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current);
+        animationTimeoutRef.current = null;
+      }
+      if (balanceUpdateTimeoutRef.current) {
+        clearTimeout(balanceUpdateTimeoutRef.current);
+        balanceUpdateTimeoutRef.current = null;
+      }
+      if (tomanAnimationTimeoutRef.current) {
+        clearTimeout(tomanAnimationTimeoutRef.current);
+        tomanAnimationTimeoutRef.current = null;
+      }
+    };
+    window.addEventListener(HARD_EXIT_EVENT, onHardExit);
+
     // Critical: refetch balances when auth state becomes available (first login / first navigation)
     const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (!isMountedRef.current) return;
+      if (!isMountedRef.current || isHardExiting()) return;
 
       if (
         event === "INITIAL_SESSION" ||
@@ -305,6 +338,7 @@ export function useBalances(): Balances {
     });
 
     return () => {
+      window.removeEventListener(HARD_EXIT_EVENT, onHardExit);
       console.log('[useBalances] Cleanup: unsubscribing and removing channels');
       if (walletChannelRef.current) {
         supabase.removeChannel(walletChannelRef.current);

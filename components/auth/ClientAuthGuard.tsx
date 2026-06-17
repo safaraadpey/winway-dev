@@ -3,6 +3,7 @@
 import React, { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/contexts/SessionContext";
+import { isHardExiting } from "@/lib/auth/hardExit";
 
 const REDIRECT_GRACE_MS = 1500;
 
@@ -18,6 +19,7 @@ export default function ClientAuthGuard({
 
   useEffect(() => {
     if (!authReady) return;
+    if (isHardExiting()) return;
 
     if (userId) {
       if (redirectTimerRef.current) {
@@ -51,6 +53,7 @@ export default function ClientAuthGuard({
   }, []);
 
   if (!authReady) {
+    if (isHardExiting()) return null;
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-solid border-gray-300 border-r-transparent" />
@@ -61,6 +64,7 @@ export default function ClientAuthGuard({
   // Preserve UX stability: keep the user in-app when identity exists,
   // even if accessToken is briefly unavailable.
   if (!userId) {
+    if (isHardExiting()) return null;
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-solid border-gray-300 border-r-transparent" />

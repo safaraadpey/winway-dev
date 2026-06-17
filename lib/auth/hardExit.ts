@@ -1,0 +1,157 @@
+import { supabase } from "@/lib/supabaseClient";
+import { teardownActiveGamesForExit } from "@/lib/activeGames/teardownForExit";
+import { clearGameResultsSessionStorage } from "@/lib/gameResultsDedupe";
+import { resetSnapshotGate } from "@/lib/activeGames/snapshotGate";
+import { stopLiveRoomMusic } from "@/lib/audio/music";
+
+export const HARD_EXIT_EVENT = "winway:hard-exit";
+export const HARD_EXIT_REDIRECT_MS = 750;
+
+const HARD_EXIT_FLAG = "__WINWAY_HARD_EXITING__";
+const OVERLAY_ID = "winway-hard-exit-overlay";
+
+export function isHardExiting(): boolean {
+  if (typeof window === "undefined") return false;
+  return (window as unknown as Record<string, boolean>)[HARD_EXIT_FLAG] === true;
+}
+
+function setHardExiting(): void {
+  if (typeof window === "undefined") return;
+  (window as unknown as Record<string, boolean>)[HARD_EXIT_FLAG] = true;
+}
+
+function showExitingOverlay(): void {
+  if (typeof document === "undefined") return;
+  if (document.getElementById(OVERLAY_ID)) return;
+
+  document.body.style.pointerEvents = "none";
+  document.body.style.userSelect = "none";
+  document.body.style.overflow = "hidden";
+
+  const overlay = document.createElement("div");
+  overlay.id = OVERLAY_ID;
+  overlay.setAttribute("aria-live", "polite");
+  overlay.setAttribute("role", "alert");
+  Object.assign(overlay.style, {
+    position: "fixed",
+    inset: "0",
+    zIndex: "2147483647",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(0, 0, 0, 0.78)",
+    color: "#ffffff",
+    fontFamily: "Vazirmatn, sans-serif",
+    fontSize: "18px",
+    fontWeight: "600",
+    letterSpacing: "0.02em",
+    pointerEvents: "auto",
+  });
+  overlay.textContent = "Exiting...";
+  document.body.appendChild(overlay);
+}
+
+function teardownRealtimeSubscriptions(): void {
+  try {
+    const channels = supabase.getChannels();
+    for (const channel of channels) {
+      try {
+        void supabase.removeChannel(channel);
+      } catch {
+        // ignore per-channel teardown errors
+      }
+    }
+    void supabase.removeAllChannels();
+  } catch {
+    // ignore
+  }
+
+  try {
+    void supabase.realtime.setAuth(null);
+  } catch {
+    // ignore
+  }
+}
+
+function clearAuthAndAppStorage(): void {
+  if (typeof window === "undefined") return;
+
+  clearGameResultsSessionStorage();
+  resetSnapshotGate();
+
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (
+        key.startsWith("sb-") ||
+        key.includes("-auth-token") ||
+        key.startsWith("winway_")
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+    for (const key of keysToRemove) {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    const sessionKeysToRemove: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (!key) continue;
+      if (key.startsWith("winway_")) {
+        sessionKeysToRemove.push(key);
+      }
+    }
+    for (const key of sessionKeysToRemove) {
+      sessionStorage.removeItem(key);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function teardownAppState(): void {
+  teardownActiveGamesForExit();
+  teardownRealtimeSubscriptions();
+
+  try {
+    stopLiveRoomMusic();
+  } catch {
+    // ignore
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(HARD_EXIT_EVENT));
+  }
+}
+
+function redirectToLogin(): void {
+  if (typeof window === "undefined") return;
+  window.location.replace("/login");
+}
+
+/**
+ * Hard logout / safe exit.
+ * Does not depend on router navigation, in-flight API calls, or signOut success.
+ */
+export function hardExit(): void {
+  if (typeof window === "undefined") return;
+  if (isHardExiting()) return;
+
+  setHardExiting();
+  showExitingOverlay();
+  teardownAppState();
+  clearAuthAndAppStorage();
+
+  void supabase.auth.signOut().catch(() => {
+    // best-effort only
+  });
+
+  window.setTimeout(redirectToLogin, HARD_EXIT_REDIRECT_MS);
+}

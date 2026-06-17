@@ -27,6 +27,7 @@ import {
   stopLiveRoomMusic,
 } from "@/lib/audio/music";
 import { isMusicEnabled as readMusicEnabled, setMusicEnabled } from "@/lib/audio-settings";
+import { isHardExiting } from "@/lib/auth/hardExit";
 
 interface GameRoomScreenProps {
   roomId?: string;
@@ -253,6 +254,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
   // بارگذاری اطلاعات روم یا تمپلیت
   useEffect(() => {
     async function fetchRoomData(isInitial: boolean) {
+      if (isHardExiting()) return;
       try {
         if (isInitial) {
           setLoading(true);
@@ -409,9 +411,9 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     let timeoutId: ReturnType<typeof setTimeout>;
 
     const tick = async () => {
-      if (cancelled) return;
+      if (cancelled || isHardExiting()) return;
       await fetchRoomData(false);
-      if (cancelled) return;
+      if (cancelled || isHardExiting()) return;
       timeoutId = setTimeout(tick, pollIntervalMsRef.current);
     };
 

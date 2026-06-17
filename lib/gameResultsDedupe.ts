@@ -102,4 +102,23 @@ export function markShownGameResultsOnceForUser(userId: string | null | undefine
   }
 }
 
+export function clearGameResultsSessionStorage(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (!key) continue;
+      if (key === STORAGE_KEY || key.startsWith("winway_game_results_")) {
+        keysToRemove.push(key);
+      }
+    }
+    for (const key of keysToRemove) {
+      sessionStorage.removeItem(key);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 

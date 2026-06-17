@@ -10,6 +10,7 @@ import styles from './lobby.module.css';
 import { supabase } from "@/lib/supabaseClient";
 import { useSession } from "@/lib/contexts/SessionContext";
 import { traceFetch } from "@/lib/debug/netTrace";
+import { isHardExiting } from "@/lib/auth/hardExit";
 
 interface RoomPriceGroup {
   price: number;
@@ -105,7 +106,7 @@ export default function LobbyPage() {
     };
 
     async function tick(reason: string, delayMs: number) {
-      if (stopped) return;
+      if (stopped || isHardExiting()) return;
       if (typeof document !== "undefined" && document.visibilityState === "hidden") {
         clearTimer();
         return;

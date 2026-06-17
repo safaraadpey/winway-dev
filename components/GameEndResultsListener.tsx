@@ -18,6 +18,7 @@ import {
   markSeenGameResults,
   type GameEndStatus,
 } from "@/lib/gameResultsDedupe";
+import { HARD_EXIT_EVENT, isHardExiting } from "@/lib/auth/hardExit";
 
 type ActiveRoomLite = {
   roomId: string;
@@ -93,6 +94,45 @@ export default function GameEndResultsListener() {
       setResults(null);
     }
   }, [shouldSuppressBecauseLiveRoomAlreadyHandlesIt]);
+
+  useEffect(() => {
+    const cleanupListenerResources = () => {
+      setQueue([]);
+      setDialogOpen(false);
+      setDialogRoomName(null);
+      setResults(null);
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+      pollEnabledRef.current = false;
+      if (refreshDebounceRef.current) {
+        clearTimeout(refreshDebounceRef.current);
+        refreshDebounceRef.current = null;
+      }
+      if (ticketsChannelRef.current) {
+        try {
+          supabase.removeChannel(ticketsChannelRef.current);
+        } catch {
+          // ignore
+        }
+        ticketsChannelRef.current = null;
+      }
+      for (const ch of Array.from(roomChannelsRef.current.values())) {
+        try {
+          supabase.removeChannel(ch);
+        } catch {
+          // ignore
+        }
+      }
+      roomChannelsRef.current.clear();
+      activeRoomsRef.current.clear();
+    };
+
+    const onHardExit = () => cleanupListenerResources();
+    window.addEventListener(HARD_EXIT_EVENT, onHardExit);
+    return () => window.removeEventListener(HARD_EXIT_EVENT, onHardExit);
+  }, []);
 
   const enqueueIfNew = (evt: {
     roomId: string;
@@ -224,6 +264,7 @@ export default function GameEndResultsListener() {
   }, [activeRoomsFromContext]);
 
   const fetchActiveRooms = async (): Promise<ActiveRoomLite[]> => {
+    if (isHardExiting()) return [];
     // Orchestrator path: consume shared state, no fetch/poll.
     if (source === "orchestrator") {
       return activeRoomsFromContextLite;
@@ -250,6 +291,7 @@ export default function GameEndResultsListener() {
   };
 
   const scheduleRefreshRooms = (delayMs: number) => {
+    if (isHardExiting()) return;
     // Orchestrator owns snapshot fetching; listener must not fetch.
     if (source === "orchestrator") return;
     if (!enabled) return;
