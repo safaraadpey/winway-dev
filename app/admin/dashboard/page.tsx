@@ -8,7 +8,7 @@ import {
   loadDashboardData,
   loadDashboardRangeSummary,
 } from "@/services/dashboard";
-import { hardExit } from "@/lib/auth/hardExit";
+import { hardExitFromCurrentPanel } from "@/lib/auth/hardExit";
 import ShamsiDateInput from "@/components/common/ShamsiDateInput";
 import { supabase } from "@/lib/supabaseClient";
 import { getCachedAdminPermissions, getCurrentAdminPermissions } from "@/lib/admin-permissions";
@@ -113,7 +113,7 @@ export default function AdminDashboardPage() {
   const canAccessAdmins = isAdminZero && (permissions?.admins ?? true);
 
   const handleLogout = () => {
-    hardExit("admin");
+    hardExitFromCurrentPanel();
   };
 
   const handleLoadRange = async () => {

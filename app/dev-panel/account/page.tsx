@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { supabase } from "@/lib/supabaseClient";
-import { getCurrentUserRoleInfo } from "@/lib/auth-helpers";
+import { hardExitFromCurrentPanel } from "@/lib/auth/hardExit";
 
 export default function DevPanelAccountPage() {
   const router = useRouter();
@@ -57,13 +57,8 @@ export default function DevPanelAccountPage() {
     loadAccount();
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-      router.push("/login");
-    } catch (error) {
-      console.error("Error logging out:", error);
-    }
+  const handleLogout = () => {
+    hardExitFromCurrentPanel();
   };
 
   return (

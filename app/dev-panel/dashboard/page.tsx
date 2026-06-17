@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { supabase } from "@/lib/supabaseClient";
 import { getCurrentUserRoleInfo } from "@/lib/auth-helpers";
+import { hardExitFromCurrentPanel } from "@/lib/auth/hardExit";
 
 const DEV_MENU_ITEMS = [
   { label: "تنظیمات Dev Player", path: "/dev-panel/settings" },
@@ -61,13 +62,8 @@ export default function DevPanelDashboardPage() {
     loadUser();
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-      router.push("/login");
-    } catch (error) {
-      console.error("Error logging out:", error);
-    }
+  const handleLogout = () => {
+    hardExitFromCurrentPanel();
   };
 
   return (

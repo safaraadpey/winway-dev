@@ -8,7 +8,9 @@ import { teardownPanelForExit } from "@/lib/auth/teardownPanelForExit";
 export const HARD_EXIT_EVENT = "winway:hard-exit";
 export const HARD_EXIT_REDIRECT_MS = 750;
 
-export type HardExitRole = "player" | "admin" | "agent";
+export type HardExitRole = "player" | "admin" | "agent" | "dev-panel";
+
+export type PanelHardExitRole = Exclude<HardExitRole, "player">;
 
 const HARD_EXIT_FLAG = "__WINWAY_HARD_EXITING__";
 const OVERLAY_ID = "winway-hard-exit-overlay";
@@ -17,7 +19,25 @@ const REDIRECT_BY_ROLE: Record<HardExitRole, string> = {
   player: "/login",
   admin: "/admin/login",
   agent: "/agent/login",
+  "dev-panel": "/dev-panel/login",
 };
+
+export function resolvePanelHardExitRole(pathname?: string): PanelHardExitRole | null {
+  const path = pathname ?? (typeof window !== "undefined" ? window.location.pathname : "");
+  if (path.startsWith("/dev-panel")) return "dev-panel";
+  if (path.startsWith("/admin")) return "admin";
+  if (path.startsWith("/agent")) return "agent";
+  return null;
+}
+
+/**
+ * Hard exit based on the current panel route.
+ * Covers admin sub-roles on /admin/*, dev_panel on /dev-panel/*, and agent/super on /agent/*.
+ */
+export function hardExitFromCurrentPanel(): void {
+  const role = resolvePanelHardExitRole();
+  hardExit(role ?? "player");
+}
 
 export function isHardExiting(): boolean {
   if (typeof window === "undefined") return false;

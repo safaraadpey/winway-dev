@@ -2,7 +2,7 @@
 
 import React from "react";
 import ActiveTableRow from "@/components/ActiveTableRow";
-import { ActiveTable } from "@/components/ActiveTablesPanel";
+import { ActiveTable, isActiveTableClickable } from "@/components/ActiveTablesPanel";
 import activeCardsBg from "@/src/assets/logo/ActiveCardsBG.png";
 
 interface ActiveTablesSectionProps {
@@ -51,7 +51,11 @@ export default function ActiveTablesSection({
               tableNo={table.tableNo}
               winnerNames={table.winnerNames}
               isFinished={table.isFinished}
-              onClick={onTableClick ? () => onTableClick(table.id) : undefined}
+              onClick={
+                onTableClick && isActiveTableClickable(table)
+                  ? () => onTableClick(table.id)
+                  : undefined
+              }
             />
           ))
         ) : (

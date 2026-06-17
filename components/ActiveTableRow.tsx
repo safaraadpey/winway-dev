@@ -32,6 +32,7 @@ export default function ActiveTableRow({
 
   const hasWinners = Boolean(winnerNames && winnerNames.length > 0);
   const showResult = isFinished || hasWinners;
+  const isClickable = Boolean(onClick) && !showResult;
 
   const leftLabel = (() => {
     if (roundNo != null) {
@@ -49,17 +50,17 @@ export default function ActiveTableRow({
       className={`
         bg-amber-50 rounded-lg px-3 py-1.5
         flex items-center justify-between gap-2
-        ${onClick ? "cursor-pointer hover:bg-amber-100 active:bg-amber-200 transition-colors" : ""}
+        ${isClickable ? "cursor-pointer hover:bg-amber-100 active:bg-amber-200 transition-colors" : "cursor-default"}
       `}
-      onClick={onClick}
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
+      onClick={isClickable ? onClick : undefined}
+      role={isClickable ? "button" : undefined}
+      tabIndex={isClickable ? 0 : undefined}
       onKeyDown={
-        onClick
+        isClickable
           ? (e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                onClick();
+                onClick?.();
               }
             }
           : undefined

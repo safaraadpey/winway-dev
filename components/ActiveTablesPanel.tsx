@@ -12,6 +12,19 @@ export interface ActiveTable {
   tableNo?: number | null;
   winnerNames?: string[];
   isFinished?: boolean;
+  status?: string | null;
+}
+
+const CLICKABLE_TABLE_STATUSES = new Set(["waiting", "playing", "live"]);
+
+export function isActiveTableClickable(table: ActiveTable): boolean {
+  if (table.isFinished) return false;
+  if (table.winnerNames && table.winnerNames.length > 0) return false;
+
+  const status = (table.status || "").trim().toLowerCase();
+  if (!status) return true;
+
+  return CLICKABLE_TABLE_STATUSES.has(status);
 }
 
 interface ActiveTablesPanelProps {
@@ -55,7 +68,11 @@ export default function ActiveTablesPanel({
               tableNo={table.tableNo}
               winnerNames={table.winnerNames}
               isFinished={table.isFinished}
-              onClick={onTableClick ? () => onTableClick(table.id) : undefined}
+              onClick={
+                onTableClick && isActiveTableClickable(table)
+                  ? () => onTableClick(table.id)
+                  : undefined
+              }
             />
           ))
         )}

@@ -6,10 +6,14 @@ import { clearTransactionHistoryCache } from "@/services/transactions";
 import { clearUserAccountDataCache } from "@/services/user-account";
 import { clearManagedUsersCache } from "@/services/users";
 
-export type PanelExitRole = "admin" | "agent";
+export type PanelExitRole = "admin" | "agent" | "dev-panel";
+
+function clearsAdminScopedCaches(role: PanelExitRole): boolean {
+  return role === "admin" || role === "dev-panel";
+}
 
 /**
- * Tear down in-memory admin/agent panel caches and operational state during hard exit.
+ * Tear down in-memory admin/agent/dev-panel caches and operational state during hard exit.
  */
 export function teardownPanelForExit(role: PanelExitRole): void {
   try {
@@ -18,7 +22,7 @@ export function teardownPanelForExit(role: PanelExitRole): void {
     // ignore
   }
 
-  if (role === "admin") {
+  if (clearsAdminScopedCaches(role)) {
     try {
       clearAdminPermissionsCache();
     } catch {

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { loadDashboardData, loadDashboardRangeSummary } from "@/services/dashboard";
-import { hardExit } from "@/lib/auth/hardExit";
+import { hardExitFromCurrentPanel } from "@/lib/auth/hardExit";
 import type { DashboardPeriod, DashboardData } from "@/src/types/dashboard";
 import ShamsiDateInput from "@/components/common/ShamsiDateInput";
 
@@ -69,7 +69,7 @@ export default function AgentDashboardPage() {
       : "کاربر";
 
   const handleLogout = () => {
-    hardExit("agent");
+    hardExitFromCurrentPanel();
   };
 
   const handleLoadRange = async () => {
