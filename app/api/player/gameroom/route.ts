@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  loadPlayingTablesFromPg,
   loadRoomLifecycleBatchFromPg,
   loadRoomLifecycleFromPg,
   resolveRoomLifecycleFields,
@@ -762,26 +763,82 @@ async function loadPlayingTablesForTemplate(
     prize: number;
   }>
 > {
-  let query = supabase
-    .from("rooms")
-    .select("id, room_code, card_price, currency, room_template_id")
-    .in("status", ["playing"]);
+  type ActiveTableResult = {
+    room_id: string;
+    room_code: string;
+    players: number;
+    card_count: number;
+    prize: number;
+  };
 
-  if (templateId) {
-    query = query.eq("room_template_id", templateId);
-  } else if (fallback) {
-    query = query
-      .eq("card_price", fallback.cardPrice)
-      .eq("currency", fallback.currency);
-  } else {
+  if (!templateId && !fallback) {
     return [];
   }
 
-  const { data: rooms, error } = await query;
+  const pgParams = templateId
+    ? { templateId }
+    : {
+        cardPrice: fallback!.cardPrice,
+        currency: fallback!.currency,
+      };
+
+  const [pgTables, supabaseRoomsResult] = await Promise.all([
+    loadPlayingTablesFromPg(pgParams),
+    (() => {
+      let query = supabase
+        .from("rooms")
+        .select("id, room_code, card_price, currency, room_template_id")
+        .in("status", ["playing"]);
+
+      if (templateId) {
+        query = query.eq("room_template_id", templateId);
+      } else if (fallback) {
+        query = query
+          .eq("card_price", fallback.cardPrice)
+          .eq("currency", fallback.currency);
+      }
+
+      return query;
+    })(),
+  ]);
+
+  const { data: rooms, error } = supabaseRoomsResult;
 
   if (error) {
     console.error("loadPlayingTablesForTemplate: rooms error", error);
-    return [];
+  }
+
+  const supabaseRoomIds = ((rooms || []) as Array<{ id: string }>).map(
+    (r) => r.id
+  );
+
+  console.info(
+    "[activeTablesCompare:pg-vs-supabase]",
+    JSON.stringify({
+      templateId,
+      fallback: fallback ?? null,
+      dataSource: pgTables !== null ? "pg" : "supabase",
+      supabaseRoomCount: supabaseRoomIds.length,
+      supabaseRoomIds,
+      pgRoomCount: pgTables?.length ?? null,
+      pgRooms: pgTables?.map((t) => ({
+        room_id: t.room_id,
+        room_code: t.room_code,
+        players: t.players,
+        card_count: t.card_count,
+      })),
+      debugTs: new Date().toISOString(),
+    })
+  );
+
+  if (pgTables !== null) {
+    return pgTables.map((row) => ({
+      room_id: row.room_id,
+      room_code: row.room_code,
+      players: row.players,
+      card_count: row.card_count,
+      prize: row.card_price * row.card_count,
+    }));
   }
 
   if (!rooms || rooms.length === 0) {
@@ -814,13 +871,7 @@ async function loadPlayingTablesForTemplate(
     stats[rId].cards += 1;
   }
 
-  const result: Array<{
-    room_id: string;
-    room_code: string;
-    players: number;
-    card_count: number;
-    prize: number;
-  }> = [];
+  const result: ActiveTableResult[] = [];
 
   for (const r of rooms as any[]) {
     const s = stats[r.id as string] || { players: new Set(), cards: 0 };

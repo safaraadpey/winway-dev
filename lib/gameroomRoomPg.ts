@@ -163,3 +163,88 @@ export function resolveRoomLifecycleFields(
     dataSource: "supabase",
   };
 }
+
+export type PlayingTablePgRow = {
+  room_id: string;
+  room_code: string;
+  card_price: number;
+  players: number;
+  card_count: number;
+};
+
+export async function loadPlayingTablesFromPg(params: {
+  templateId?: string | null;
+  cardPrice?: number;
+  currency?: string;
+}): Promise<PlayingTablePgRow[] | null> {
+  if (!pgPool) return null;
+
+  const { templateId, cardPrice, currency } = params;
+  if (!templateId && (cardPrice == null || !currency)) return null;
+
+  try {
+    const result = templateId
+      ? await pgPool.query<{
+          room_id: string;
+          room_code: string;
+          card_price: string | number;
+          players: number;
+          card_count: number;
+        }>(
+          `
+          select
+            r.id::text as room_id,
+            r.room_code,
+            r.card_price,
+            count(distinct t.player_user_id)::int as players,
+            count(t.id)::int as card_count
+          from public.rooms r
+          left join public.tickets t
+            on t.room_id = r.id
+           and t.reservation_status in ('reserved','confirmed','consumed')
+          where r.status = 'playing'
+            and r.room_template_id = $1::uuid
+          group by r.id, r.room_code, r.card_price
+          order by r.room_code
+          `,
+          [templateId]
+        )
+      : await pgPool.query<{
+          room_id: string;
+          room_code: string;
+          card_price: string | number;
+          players: number;
+          card_count: number;
+        }>(
+          `
+          select
+            r.id::text as room_id,
+            r.room_code,
+            r.card_price,
+            count(distinct t.player_user_id)::int as players,
+            count(t.id)::int as card_count
+          from public.rooms r
+          left join public.tickets t
+            on t.room_id = r.id
+           and t.reservation_status in ('reserved','confirmed','consumed')
+          where r.status = 'playing'
+            and r.card_price = $1
+            and r.currency = $2
+          group by r.id, r.room_code, r.card_price
+          order by r.room_code
+          `,
+          [cardPrice, currency]
+        );
+
+    return result.rows.map((row) => ({
+      room_id: row.room_id,
+      room_code: row.room_code,
+      card_price: Number(row.card_price) || 0,
+      players: Number(row.players) || 0,
+      card_count: Number(row.card_count) || 0,
+    }));
+  } catch (err) {
+    console.error("loadPlayingTablesFromPg error:", err);
+    return null;
+  }
+}
