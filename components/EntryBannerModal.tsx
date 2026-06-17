@@ -77,7 +77,7 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
   }
 
   const handleClose = () => {
-    if (dontShowAgainToday && userId) {
+    if (!currentBanner.requireConfirmation && dontShowAgainToday && userId) {
       snoozeEntryBannerForToday(userId, currentBanner.id);
     }
 
@@ -157,17 +157,19 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
           </div>
         )}
 
-        <div className="mb-4">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={dontShowAgainToday}
-              onChange={(e) => setDontShowAgainToday(e.target.checked)}
-              className="w-5 h-5 rounded bg-[#1f2933] border-gray-600 text-teal-600 focus:ring-teal-500"
-            />
-            <span className="text-sm text-gray-300">دوباره نشان نده</span>
-          </label>
-        </div>
+        {!currentBanner.requireConfirmation && (
+          <div className="mb-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={dontShowAgainToday}
+                onChange={(e) => setDontShowAgainToday(e.target.checked)}
+                className="w-5 h-5 rounded bg-[#1f2933] border-gray-600 text-teal-600 focus:ring-teal-500"
+              />
+              <span className="text-sm text-gray-300">دوباره نشان نده</span>
+            </label>
+          </div>
+        )}
 
         <button
           onClick={handleConfirm}
