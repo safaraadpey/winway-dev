@@ -16,6 +16,7 @@ export interface RoomRow {
   room_template_id: string | null;
   next_draw_at: string | null;
   starts_at: string | null;
+  waiting_started_at: string | null;
   min_players: number | null;
   countdown_sec: number | null;
   first_line_draw_number: number | null;

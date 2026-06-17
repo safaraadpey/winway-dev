@@ -22,6 +22,28 @@ function addSeconds(base: Date, seconds: number): string {
   return new Date(base.getTime() + seconds * 1000).toISOString();
 }
 
+function logWaitingRoomScheduler(
+  log: Logger,
+  room: {
+    id: string;
+    starts_at: string | null;
+    waiting_started_at: string | null;
+  },
+  activePlayers: number,
+  minPlayers: number,
+  action: "promote" | "extend" | "skip"
+): void {
+  // TEMP diagnostics: remove after waiting-room lifecycle investigation.
+  log.info("[waitingRoomScheduler]", {
+    roomId: room.id,
+    starts_at: room.starts_at,
+    waiting_started_at: room.waiting_started_at,
+    active_players: activePlayers,
+    min_players: minPlayers,
+    action,
+  });
+}
+
 /**
  * Promote due waiting rooms that reached min_players to `playing` and schedule
  * their first draw; rooms that did not reach min_players have their countdown
@@ -52,15 +74,23 @@ export async function manageWaitingRooms(
       );
       if (ok) {
         promoted += 1;
+        logWaitingRoomScheduler(log, room, players, minPlayers, "promote");
         stateManager?.preload(room.id);
+      } else {
+        logWaitingRoomScheduler(log, room, players, minPlayers, "skip");
       }
     } else {
-      await repo.extendRoomCountdown(
+      const ok = await repo.extendRoomCountdown(
         room.id,
         addSeconds(now, room.countdown_sec ?? DEFAULT_COUNTDOWN_SEC),
         nowIso
       );
-      extended += 1;
+      if (ok) {
+        extended += 1;
+        logWaitingRoomScheduler(log, room, players, minPlayers, "extend");
+      } else {
+        logWaitingRoomScheduler(log, room, players, minPlayers, "skip");
+      }
     }
   }
 

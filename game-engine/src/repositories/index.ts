@@ -70,7 +70,7 @@ export class GameRepo {
     const { data, error } = await this.db
       .from("rooms")
       .select(
-        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,min_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,meta"
+        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,waiting_started_at,min_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,meta"
       )
       .eq("status", "waiting")
       .not("starts_at", "is", null)
@@ -85,7 +85,7 @@ export class GameRepo {
     const { data, error } = await this.db
       .from("rooms")
       .select(
-        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,min_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,meta"
+        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,waiting_started_at,min_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,meta"
       )
       .eq("status", "playing")
       .not("next_draw_at", "is", null)
@@ -109,7 +109,7 @@ export class GameRepo {
     const { data, error } = await this.db
       .from("rooms")
       .select(
-        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,min_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,meta"
+        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,waiting_started_at,min_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,meta"
       )
       .eq("id", roomId)
       .maybeSingle();
@@ -128,13 +128,15 @@ export class GameRepo {
     return (data?.length ?? 0) > 0;
   }
 
-  async extendRoomCountdown(roomId: string, startsAtIso: string, nowIso: string): Promise<void> {
-    const { error } = await this.db
+  async extendRoomCountdown(roomId: string, startsAtIso: string, nowIso: string): Promise<boolean> {
+    const { data, error } = await this.db
       .from("rooms")
       .update({ starts_at: startsAtIso, updated_at: nowIso })
       .eq("id", roomId)
-      .eq("status", "waiting");
+      .eq("status", "waiting")
+      .select("id");
     if (error) fail("extendRoomCountdown", error.message);
+    return (data?.length ?? 0) > 0;
   }
 
   async setRoomFinished(roomId: string, nowIso: string): Promise<void> {
