@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import {
+  loadRoomLifecycleBatchFromPg,
+  loadRoomLifecycleFromPg,
+  resolveRoomLifecycleFields,
+} from "@/lib/gameroomRoomPg";
 import { pgPool } from "@/lib/pg";
 import { createServiceClient, getUserFromRequest } from "@/lib/supabaseServer";
 
@@ -179,11 +184,11 @@ async function buildViewFromRoomId(
   currentUserId: string,
   globalRegistrationLockState: GlobalRegistrationLockState
 ): Promise<GameRoomView | null> {
-  // اطلاعات روم
-  const { data: room, error: roomError } = await supabase
-    .from("rooms")
-    .select(
-      `
+  const [{ data: room, error: roomError }, pgLifecycle] = await Promise.all([
+    supabase
+      .from("rooms")
+      .select(
+        `
         id,
         room_template_id,
         room_code,
@@ -195,18 +200,29 @@ async function buildViewFromRoomId(
         max_players,
         max_cards_per_player,
         starts_at,
-        ends_at
+        ends_at,
+        waiting_started_at,
+        updated_at
       `
-    )
-    .eq("id", roomId)
-    .single();
+      )
+      .eq("id", roomId)
+      .single(),
+    loadRoomLifecycleFromPg(roomId),
+  ]);
 
   if (roomError || !room) {
     console.error("buildViewFromRoomId: rooms error", roomError);
     return null;
   }
 
-  const mode = mapRoomStatusToMode(room.status || null);
+  const lifecycle = resolveRoomLifecycleFields(
+    roomId,
+    room,
+    pgLifecycle,
+    "buildViewFromRoomId"
+  );
+
+  const mode = mapRoomStatusToMode(lifecycle.status);
   const roomType = await getRoomTemplateType(
     supabase,
     (room.room_template_id as string | null) ?? null
@@ -226,10 +242,12 @@ async function buildViewFromRoomId(
   );
 
   const countdownSeconds =
-    mode === "waiting" ? computeCountdownSeconds(room.starts_at || null, serverNow) : 0;
+    mode === "waiting"
+      ? computeCountdownSeconds(lifecycle.starts_at, serverNow)
+      : 0;
 
   const canCancel = computeCanCancel({
-    roomStatus: room.status || null,
+    roomStatus: lifecycle.status,
     countdownSeconds,
     activeCards,
     currentUserId,
@@ -243,14 +261,14 @@ async function buildViewFromRoomId(
       room_type: roomType,
       room_code: room.room_code,
       title: room.title,
-      status: room.status,
+      status: lifecycle.status,
       ticket_price: Number(room.card_price || 0),
       currency: room.currency || "IRR",
       min_players: room.min_players ?? null,
       max_players: room.max_players ?? null,
       max_cards_per_player: room.max_cards_per_player ?? null,
-      starts_at: room.starts_at,
-      ends_at: room.ends_at,
+      starts_at: lifecycle.starts_at,
+      ends_at: lifecycle.ends_at,
     },
     server_now: serverNow,
     countdown_seconds: countdownSeconds,
@@ -291,6 +309,8 @@ async function buildViewFromTemplateId(
         max_cards_per_player,
         starts_at,
         ends_at,
+        waiting_started_at,
+        updated_at,
         created_at
       `
     )
@@ -301,12 +321,36 @@ async function buildViewFromTemplateId(
     console.error("buildViewFromTemplateId: rooms waiting error", waitingRoomsError);
   }
 
-  const roomRows = (waitingRooms || []) as Array<{
+  const rawRoomRows = (waitingRooms || []) as Array<{
     id: string;
     status: string | null;
     starts_at: string | null;
+    ends_at: string | null;
+    waiting_started_at: string | null;
+    updated_at: string | null;
     created_at: string | null;
   }>;
+
+  const pgLifecycleByRoomId = await loadRoomLifecycleBatchFromPg(
+    rawRoomRows.map((r) => r.id)
+  );
+
+  const roomRows = rawRoomRows.map((room) => {
+    const lifecycle = resolveRoomLifecycleFields(
+      room.id,
+      room,
+      pgLifecycleByRoomId?.get(room.id),
+      "buildViewFromTemplateId"
+    );
+    return {
+      ...room,
+      status: lifecycle.status,
+      starts_at: lifecycle.starts_at,
+      ends_at: lifecycle.ends_at,
+      waiting_started_at: lifecycle.waiting_started_at,
+      updated_at: lifecycle.updated_at,
+    };
+  });
 
   if (roomRows.length > 0) {
     const roomIds = roomRows.map((r) => r.id);
