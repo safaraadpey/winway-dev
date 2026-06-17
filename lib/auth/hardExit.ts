@@ -3,12 +3,21 @@ import { teardownActiveGamesForExit } from "@/lib/activeGames/teardownForExit";
 import { clearGameResultsSessionStorage } from "@/lib/gameResultsDedupe";
 import { resetSnapshotGate } from "@/lib/activeGames/snapshotGate";
 import { stopLiveRoomMusic } from "@/lib/audio/music";
+import { teardownPanelForExit } from "@/lib/auth/teardownPanelForExit";
 
 export const HARD_EXIT_EVENT = "winway:hard-exit";
 export const HARD_EXIT_REDIRECT_MS = 750;
 
+export type HardExitRole = "player" | "admin" | "agent";
+
 const HARD_EXIT_FLAG = "__WINWAY_HARD_EXITING__";
 const OVERLAY_ID = "winway-hard-exit-overlay";
+
+const REDIRECT_BY_ROLE: Record<HardExitRole, string> = {
+  player: "/login",
+  admin: "/admin/login",
+  agent: "/agent/login",
+};
 
 export function isHardExiting(): boolean {
   if (typeof window === "undefined") return false;
@@ -76,9 +85,6 @@ function teardownRealtimeSubscriptions(): void {
 function clearAuthAndAppStorage(): void {
   if (typeof window === "undefined") return;
 
-  clearGameResultsSessionStorage();
-  resetSnapshotGate();
-
   try {
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
@@ -116,42 +122,59 @@ function clearAuthAndAppStorage(): void {
   }
 }
 
-function teardownAppState(): void {
-  teardownActiveGamesForExit();
-  teardownRealtimeSubscriptions();
+function teardownAppState(role: HardExitRole): void {
+  if (role === "player") {
+    teardownActiveGamesForExit();
 
-  try {
-    stopLiveRoomMusic();
-  } catch {
-    // ignore
+    try {
+      clearGameResultsSessionStorage();
+    } catch {
+      // ignore
+    }
+
+    try {
+      resetSnapshotGate();
+    } catch {
+      // ignore
+    }
+
+    try {
+      stopLiveRoomMusic();
+    } catch {
+      // ignore
+    }
+  } else {
+    teardownPanelForExit(role);
   }
+
+  teardownRealtimeSubscriptions();
 
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(HARD_EXIT_EVENT));
   }
 }
 
-function redirectToLogin(): void {
+function redirectToLogin(role: HardExitRole): void {
   if (typeof window === "undefined") return;
-  window.location.replace("/login");
+  window.location.replace(REDIRECT_BY_ROLE[role]);
 }
 
 /**
  * Hard logout / safe exit.
  * Does not depend on router navigation, in-flight API calls, or signOut success.
  */
-export function hardExit(): void {
+export function hardExit(role: HardExitRole = "player"): void {
   if (typeof window === "undefined") return;
   if (isHardExiting()) return;
 
   setHardExiting();
   showExitingOverlay();
-  teardownAppState();
+  teardownAppState(role);
   clearAuthAndAppStorage();
 
   void supabase.auth.signOut().catch(() => {
     // best-effort only
   });
 
-  window.setTimeout(redirectToLogin, HARD_EXIT_REDIRECT_MS);
+  window.setTimeout(() => redirectToLogin(role), HARD_EXIT_REDIRECT_MS);
 }

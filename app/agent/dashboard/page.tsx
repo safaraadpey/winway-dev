@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { loadDashboardData, loadDashboardRangeSummary } from "@/services/dashboard";
-import { supabase } from "@/lib/supabaseClient";
+import { hardExit } from "@/lib/auth/hardExit";
 import type { DashboardPeriod, DashboardData } from "@/src/types/dashboard";
 import ShamsiDateInput from "@/components/common/ShamsiDateInput";
 
@@ -68,13 +68,8 @@ export default function AgentDashboardPage() {
       ? "ادمین"
       : "کاربر";
 
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-      router.push("/login");
-    } catch (error) {
-      console.error("Error logging out:", error);
-    }
+  const handleLogout = () => {
+    hardExit("agent");
   };
 
   const handleLoadRange = async () => {

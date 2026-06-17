@@ -6,12 +6,12 @@ import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import {
   getCachedDashboardData,
   loadDashboardData,
-  clearDashboardCache,
   loadDashboardRangeSummary,
 } from "@/services/dashboard";
+import { hardExit } from "@/lib/auth/hardExit";
 import ShamsiDateInput from "@/components/common/ShamsiDateInput";
 import { supabase } from "@/lib/supabaseClient";
-import { getCachedAdminPermissions, getCurrentAdminPermissions, clearAdminPermissionsCache } from "@/lib/admin-permissions";
+import { getCachedAdminPermissions, getCurrentAdminPermissions } from "@/lib/admin-permissions";
 import type { DashboardPeriod, DashboardData } from "@/src/types/dashboard";
 import type { AdminPermissions } from "@/src/types/admins";
 import InstallAppButton from "@/components/InstallAppButton";
@@ -112,15 +112,8 @@ export default function AdminDashboardPage() {
   // Only adminzero can see "Admins" and "Card pool" menus.
   const canAccessAdmins = isAdminZero && (permissions?.admins ?? true);
 
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-      clearDashboardCache();
-      clearAdminPermissionsCache();
-      router.push("/login");
-    } catch (error) {
-      console.error("Error logging out:", error);
-    }
+  const handleLogout = () => {
+    hardExit("admin");
   };
 
   const handleLoadRange = async () => {

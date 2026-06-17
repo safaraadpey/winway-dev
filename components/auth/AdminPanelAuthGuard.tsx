@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { canAccessAdminPanel, getCurrentUserRoleInfo } from "@/lib/auth-helpers";
+import { isHardExiting } from "@/lib/auth/hardExit";
 
 export default function AdminPanelAuthGuard({
   children,
@@ -19,9 +20,11 @@ export default function AdminPanelAuthGuard({
 
     async function verifyAccess() {
       try {
+        if (isHardExiting()) return;
+
         const roleInfo = await getCurrentUserRoleInfo();
 
-        if (cancelled || redirectingRef.current) return;
+        if (cancelled || redirectingRef.current || isHardExiting()) return;
 
         if (!roleInfo) {
           redirectingRef.current = true;
@@ -60,6 +63,7 @@ export default function AdminPanelAuthGuard({
   }, [router]);
 
   if (checking || !allowed) {
+    if (isHardExiting()) return null;
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0E0E0F]">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-solid border-gray-300 border-r-transparent" />

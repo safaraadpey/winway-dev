@@ -221,6 +221,10 @@ type TransactionHistoryCacheEntry = {
 
 let transactionHistoryCache: TransactionHistoryCacheEntry | null = null;
 
+export function clearTransactionHistoryCache() {
+  transactionHistoryCache = null;
+}
+
 function makeHistoryCacheKey(params: { dateFilter: DateFilter; search: string; userId: string }): string {
   // normalize search to avoid missing cache hits for trivial whitespace differences
   const q = (params.search || "").trim().toLowerCase();
