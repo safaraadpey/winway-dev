@@ -70,7 +70,7 @@ export class GameRepo {
     const { data, error } = await this.db
       .from("rooms")
       .select(
-        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,waiting_started_at,min_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,meta"
+        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,waiting_started_at,min_players,max_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,meta"
       )
       .eq("status", "waiting")
       .not("starts_at", "is", null)
@@ -81,11 +81,25 @@ export class GameRepo {
     return (data ?? []) as RoomRow[];
   }
 
+  async getWaitingRoomsAtMaxCapacity(limit: number): Promise<RoomRow[]> {
+    const { data, error } = await this.db
+      .from("rooms")
+      .select(
+        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,waiting_started_at,min_players,max_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,meta"
+      )
+      .eq("status", "waiting")
+      .not("max_players", "is", null)
+      .order("created_at", { ascending: true })
+      .limit(limit);
+    if (error) fail("getWaitingRoomsAtMaxCapacity", error.message);
+    return (data ?? []) as RoomRow[];
+  }
+
   async getPlayingRoomsDue(limit: number, nowIso: string): Promise<RoomRow[]> {
     const { data, error } = await this.db
       .from("rooms")
       .select(
-        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,waiting_started_at,min_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,meta"
+        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,waiting_started_at,min_players,max_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,meta"
       )
       .eq("status", "playing")
       .not("next_draw_at", "is", null)
@@ -109,7 +123,7 @@ export class GameRepo {
     const { data, error } = await this.db
       .from("rooms")
       .select(
-        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,waiting_started_at,min_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,meta"
+        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,waiting_started_at,min_players,max_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,meta"
       )
       .eq("id", roomId)
       .maybeSingle();

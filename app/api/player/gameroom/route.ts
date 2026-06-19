@@ -418,6 +418,7 @@ async function buildViewFromTemplateId(
         currency,
         min_players,
         max_cards_per_player,
+        max_players,
         status
       `
     )
@@ -455,9 +456,7 @@ async function buildViewFromTemplateId(
       ticket_price: Number(template.price || 0),
       currency: template.currency || "IRR",
       min_players: template.min_players ?? null,
-      // در اسکیمای فعلی room_templates ستون مستقیمی برای max_players نداریم
-      // در صورت نیاز در آینده می‌توان این مقدار را از ستون متناظر نگاشت کرد
-      max_players: null,
+      max_players: template.max_players ?? null,
       max_cards_per_player: template.max_cards_per_player ?? null,
       starts_at: null,
       ends_at: null,

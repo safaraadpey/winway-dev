@@ -69,6 +69,7 @@ function buildSyntheticRoom(ticketCount: number): RoomRuntimeState {
       starts_at: null,
       waiting_started_at: null,
       min_players: 1,
+      max_players: null,
       countdown_sec: 120,
       first_line_draw_number: null,
       line_reward_percentage: 0.5,

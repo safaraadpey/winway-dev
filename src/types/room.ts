@@ -47,6 +47,12 @@ export type RoomTemplatePayload = {
   /** حداقل بازیکن برای شروع (room_templates.min_players) */
   minPlayers: number;
 
+  /**
+   * حداکثر بازیکن تمپلیت (room_templates.max_players).
+   * null = بدون سقف؛ فقط تایمر و min_players برای شروع.
+   */
+  maxPlayers: number | null;
+
   /** حداکثر کارت مجاز برای هر بازیکن (room_templates.max_cards_per_player) */
   maxCardsPerPlayer: number;
 
@@ -109,6 +115,7 @@ export type RoomTemplateDbRow = {
   price: number | null;
   currency: string | null;
   min_players: number | null;
+  max_players: number | null;
   countdown_sec: number | null;
   waiting_timeout_seconds: number | null;
   draw_interval_sec: number | null;
@@ -135,6 +142,7 @@ export function mapRoomTemplateFromDb(row: RoomTemplateDbRow): RoomTemplatePaylo
     cardPrice: Number(row.price ?? 0),
     currency: (row.currency as RoomCurrency) ?? "IRR",
     minPlayers: row.min_players ?? 1,
+    maxPlayers: row.max_players ?? null,
     maxCardsPerPlayer: row.max_cards_per_player ?? 999999,
     commissionPercent: Number(row.commission_rate ?? 0),
     // تبدیل از decimal (0-1) به درصد (0-100)
@@ -170,6 +178,7 @@ export function mapRoomTemplateToDbUpdate(
     price: payload.cardPrice,
     currency: payload.currency,
     min_players: payload.minPlayers,
+    max_players: payload.maxPlayers ?? null,
     countdown_sec: payload.countdownSec,
     waiting_timeout_seconds: payload.waitingTimeoutSeconds,
     draw_interval_sec: payload.drawIntervalSec,
@@ -205,6 +214,7 @@ export function createEmptyRoomTemplate(): RoomTemplatePayload {
     cardPrice: 0,
     currency: "IRR",
     minPlayers: 1,
+    maxPlayers: null,
     maxCardsPerPlayer: 1,
     commissionPercent: 0,
     lineRewardPercent: 0,

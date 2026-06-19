@@ -20,6 +20,7 @@ function room(meta: Record<string, unknown> | null): RoomRow {
     next_draw_at: null,
     starts_at: null,
     min_players: 1,
+    max_players: null,
     countdown_sec: 120,
     first_line_draw_number: null,
     line_reward_percentage: null,

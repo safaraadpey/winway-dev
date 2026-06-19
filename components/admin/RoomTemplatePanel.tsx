@@ -93,6 +93,7 @@ export default function RoomTemplatePanel({
       | "cardPrice"
       | "commissionPercent"
       | "minPlayers"
+      | "maxPlayers"
       | "maxCardsPerPlayer"
       | "lineRewardPercent"
       | "fullRewardPercent"
@@ -101,6 +102,12 @@ export default function RoomTemplatePanel({
       | "waitingTimeoutSeconds"
       | "dingPerNumber",
   ) => () => {
+    if (key === "maxPlayers") {
+      if (form.maxPlayers == null || form.maxPlayers === 0) {
+        setFocusedFields((prev) => new Set(prev).add(key));
+      }
+      return;
+    }
     // اگر مقدار 0 است، آن را در state موقت خالی نگه دار
     if (form[key] === 0) {
       setFocusedFields((prev) => new Set(prev).add(key));
@@ -112,6 +119,7 @@ export default function RoomTemplatePanel({
       | "cardPrice"
       | "commissionPercent"
       | "minPlayers"
+      | "maxPlayers"
       | "maxCardsPerPlayer"
       | "lineRewardPercent"
       | "fullRewardPercent"
@@ -127,6 +135,16 @@ export default function RoomTemplatePanel({
       return newSet;
     });
     // اگر مقدار فعلی خالی یا undefined است، به 0 (یا پیش‌فرض مهلت لابی) تبدیل کن
+    if (key === "maxPlayers") {
+      if (
+        form.maxPlayers === undefined ||
+        form.maxPlayers === null ||
+        form.maxPlayers === 0
+      ) {
+        setForm((prev) => ({ ...prev, maxPlayers: null }));
+      }
+      return;
+    }
     if (
       form[key] === undefined ||
       form[key] === null ||
@@ -147,6 +165,7 @@ export default function RoomTemplatePanel({
       | "cardPrice"
       | "commissionPercent"
       | "minPlayers"
+      | "maxPlayers"
       | "maxCardsPerPlayer"
       | "lineRewardPercent"
       | "fullRewardPercent"
@@ -159,7 +178,10 @@ export default function RoomTemplatePanel({
     // اگر خالی است، در state موقت نگه دار (برای نمایش خالی)
     if (inputValue === "" || inputValue === null) {
       setFocusedFields((prev) => new Set(prev).add(key));
-      setForm((prev) => ({ ...prev, [key]: 0 }));
+      setForm((prev) => ({
+        ...prev,
+        [key]: key === "maxPlayers" ? null : 0,
+      }));
       return;
     }
     // اگر مقدار معتبر است، state موقت را پاک کن و مقدار را به‌روزرسانی کن
@@ -178,6 +200,7 @@ export default function RoomTemplatePanel({
       | "cardPrice"
       | "commissionPercent"
       | "minPlayers"
+      | "maxPlayers"
       | "maxCardsPerPlayer"
       | "lineRewardPercent"
       | "fullRewardPercent"
@@ -196,6 +219,15 @@ export default function RoomTemplatePanel({
         return "";
       }
       return value.toString();
+    }
+    if (key === "maxPlayers") {
+      if (
+        form.maxPlayers == null ||
+        (focusedFields.has(key) && form.maxPlayers === 0)
+      ) {
+        return "";
+      }
+      return form.maxPlayers.toString();
     }
     if (focusedFields.has(key) && form[key] === 0) {
       return "";
@@ -290,9 +322,23 @@ export default function RoomTemplatePanel({
       return;
     }
 
+    const maxPlayers =
+      form.maxPlayers != null && form.maxPlayers > 0 ? form.maxPlayers : null;
+    if (maxPlayers != null && maxPlayers < form.minPlayers) {
+      toast.error(
+        `حداکثر بازیکن (${maxPlayers}) نمی‌تواند کمتر از حداقل بازیکن (${form.minPlayers}) باشد.`,
+      );
+      return;
+    }
+
     setIsSaving(true);
     try {
-      await onSave({ ...form, waitingTimeoutSeconds, roomType: "normal" });
+      await onSave({
+        ...form,
+        maxPlayers,
+        waitingTimeoutSeconds,
+        roomType: "normal",
+      });
       // بعد از ذخیره موفق، اگر create بود به collapsed تبدیل می‌شود
       if (isCreate) {
         setCurrentMode("collapsed");
@@ -482,6 +528,19 @@ export default function RoomTemplatePanel({
             onChange={handleNumberChange("minPlayers")}
             onFocus={handleNumberFocus("minPlayers")}
             onBlur={handleNumberBlur("minPlayers")}
+          />
+        </FieldRow>
+
+        <FieldRow label="حداکثر بازیکن" suffix="نفر">
+          <input
+            type="number"
+            min={1}
+            className="w-24 bg-neutral-700 border border-neutral-600 rounded px-2 py-1 text-xs text-left [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            value={getNumberDisplayValue("maxPlayers")}
+            onChange={handleNumberChange("maxPlayers")}
+            onFocus={handleNumberFocus("maxPlayers")}
+            onBlur={handleNumberBlur("maxPlayers")}
+            title="خالی = بدون سقف؛ فقط تایمر و حداقل بازیکن برای شروع"
           />
         </FieldRow>
 
