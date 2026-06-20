@@ -12,7 +12,7 @@ export function themeAssetPath(
 
 export function themeLayoutBgImage(themeId: ThemeId): string {
   if (themeId === "light") return "none";
-  return `url(${themeAssetPath("dark", "backgrounds", "layout_BG.webp")})`;
+  return `url(${themeAssetPath(themeId, "backgrounds", "layout_BG.webp")})`;
 }
 
 /** Header frame art per theme (`public/themes/{id}/assets/headerframe.png`). */

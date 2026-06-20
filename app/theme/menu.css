@@ -3,6 +3,7 @@
 }
 
 .theme-menu-item {
+  position: relative;
   background-color: var(--menu-item-bg);
   background-image: var(--menu-item-bg-gradient, none), var(--menu-item-bg-image, none);
   background-size: cover;
@@ -57,4 +58,53 @@
   display: block;
   border-radius: var(--menu-item-radius);
   object-fit: contain;
+}
+
+.theme-menu-item__liveBadge {
+  position: absolute;
+  left: 34%;
+  top: 38%;
+  transform: translate(calc(-50% + 50px), calc(-50% + 7px));
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.theme-menu-item__liveBadgeIcon {
+  flex-shrink: 0;
+  color: #ffffff;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.65));
+}
+
+.theme-menu-item__liveBadgeCount {
+  color: #e5e7eb;
+  font-size: 2.25rem;
+  font-weight: 600;
+  line-height: 1;
+  direction: ltr;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+html[data-theme="dark"] .theme-menu-item__liveBadge {
+  transform: translate(calc(-50% + 50px), calc(-50% + 3px));
+}
+
+html[data-theme="light"] .theme-menu-item__liveBadge {
+  transform: translate(calc(-50% + 70px), calc(-50% + 1px));
+}
+
+html[data-theme="light"] .theme-menu-item__liveBadgeCount {
+  color: #4f2dc7;
+}
+
+html[data-theme="light"] .theme-menu-item__liveBadgeIcon {
+  color: #4f2dc7;
+  filter: none;
+}
+
+.theme-menu-item[data-menu-item="tournaments"] .theme-menu-item__liveBadge {
+  top: calc(38% - 12px);
 }

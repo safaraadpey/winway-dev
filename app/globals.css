@@ -48,8 +48,33 @@ html[data-theme="light"] {
   --player-header-bg: #ffffff;
   --player-header-frame-image: url(/themes/light/assets/headerframe.png);
   --player-header-frame-blend-mode: normal;
-  --player-header-frame-filter: invert(1);
+  --player-header-frame-filter: none;
   --menu-screen-overlay: #ffffff;
+  --menu-item-bg: transparent;
+  --menu-item-bg-image: none;
+  --menu-item-bg-gradient: none;
+  --menu-item-border: none;
+  --menu-item-overlay: transparent;
+  --menu-item-text: #ffffff;
+  --menu-item-radius: 12px;
+}
+
+html[data-theme="newStyle"] {
+  --player-text-primary: #ffffff;
+  --player-text-muted: #9ca3af;
+  --player-page-overlay: rgba(14, 14, 15, 0.55);
+  --player-surface: rgba(26, 26, 26, 0.75);
+  --player-surface-elevated: #2d2d2d;
+  --player-border: rgba(64, 64, 64, 0.5);
+  --player-accent: #00d4aa;
+  --player-accent-muted: rgba(0, 212, 170, 0.12);
+  --player-layout-bg: #0e0e0f;
+  --player-layout-bg-image: url(/themes/newStyle/backgrounds/layout_BG.webp);
+  --player-header-bg: rgba(14, 14, 15, 0.55);
+  --player-header-frame-image: url(/themes/newStyle/assets/headerframe.png);
+  --player-header-frame-blend-mode: lighten;
+  --player-header-frame-filter: none;
+  --menu-screen-overlay: rgba(14, 14, 15, 0.55);
   --menu-item-bg: transparent;
   --menu-item-bg-image: none;
   --menu-item-bg-gradient: none;

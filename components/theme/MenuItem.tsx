@@ -5,38 +5,46 @@ import Image from "next/image";
 import Link from "next/link";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import { getMenuImagePath } from "@/lib/theme/menuImageFiles";
-import type { MenuItemPresentation } from "@/lib/theme/types";
+import type { MenuItemId, MenuItemPresentation } from "@/lib/theme/types";
+import MenuLiveBadge from "@/components/theme/MenuLiveBadge";
 
 type MenuItemProps = {
   presentation: MenuItemPresentation;
+  menuItemId?: MenuItemId;
   href?: string;
   onClick?: () => void;
   onNavigate?: () => void;
   className?: string;
   wrapperClassName?: string;
   priority?: boolean;
+  liveCount?: number;
 };
 
 function MenuItemContent({
   presentation,
   themeId,
   priority = false,
+  liveCount,
 }: {
   presentation: MenuItemPresentation;
   themeId: ReturnType<typeof useTheme>["themeId"];
   priority?: boolean;
+  liveCount?: number;
 }) {
   if (presentation.kind === "image") {
     return (
-      <Image
-        src={getMenuImagePath(themeId, presentation.imageKey)}
-        alt={presentation.alt}
-        className="theme-menu-item__image"
-        width={320}
-        height={120}
-        style={{ width: "100%", height: "auto" }}
-        priority={priority}
-      />
+      <>
+        <Image
+          src={getMenuImagePath(themeId, presentation.imageKey)}
+          alt={presentation.alt}
+          className="theme-menu-item__image"
+          width={320}
+          height={120}
+          style={{ width: "100%", height: "auto" }}
+          priority={priority}
+        />
+        {liveCount != null ? <MenuLiveBadge count={liveCount} /> : null}
+      </>
     );
   }
 
@@ -57,21 +65,26 @@ function MenuItemContent({
 
 export default function MenuItem({
   presentation,
+  menuItemId,
   href,
   onClick,
   onNavigate,
   className = "",
   wrapperClassName = "",
   priority = false,
+  liveCount,
 }: MenuItemProps) {
   const { themeId } = useTheme();
   const itemClassName = ["theme-menu-item", className].filter(Boolean).join(" ");
+
+  const itemProps = menuItemId ? { "data-menu-item": menuItemId } : undefined;
 
   const content = (
     <MenuItemContent
       presentation={presentation}
       themeId={themeId}
       priority={priority}
+      liveCount={liveCount}
     />
   );
 
@@ -82,7 +95,7 @@ export default function MenuItem({
         className={wrapperClassName || undefined}
         onClick={() => onNavigate?.()}
       >
-        <div className={itemClassName}>{content}</div>
+        <div className={itemClassName} {...itemProps}>{content}</div>
       </Link>
     );
   }
@@ -91,6 +104,7 @@ export default function MenuItem({
     <div className={wrapperClassName || undefined}>
       <div
         className={itemClassName}
+        {...itemProps}
         onClick={() => {
           onNavigate?.();
           onClick?.();

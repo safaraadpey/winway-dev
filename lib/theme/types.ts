@@ -1,4 +1,4 @@
-export type ThemeId = "dark" | "light";
+export type ThemeId = "dark" | "light" | "newStyle";
 
 /** @deprecated Use ThemeId */
 export type AppTheme = ThemeId;

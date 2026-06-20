@@ -24,7 +24,7 @@ export const lightTheme: ThemeDefinition = {
       headerBg: "#ffffff",
       headerFrameImage: themeHeaderFrameImage("light"),
       headerFrameBlendMode: "normal",
-      headerFrameFilter: "invert(1)",
+      headerFrameFilter: "none",
     },
     menu: {
       ...SHARED_IMAGE_MENU_TOKENS,

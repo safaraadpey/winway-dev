@@ -1,11 +1,13 @@
 import { darkTheme } from "@/lib/theme/definitions/dark";
 import { lightTheme } from "@/lib/theme/definitions/light";
+import { newStyleTheme } from "@/lib/theme/definitions/newStyle";
 import type { ThemeDefinition, ThemeId, ThemeOption } from "@/lib/theme/types";
 import { DEFAULT_THEME } from "@/lib/theme/types";
 
 const THEME_REGISTRY: Record<ThemeId, ThemeDefinition> = {
   dark: darkTheme,
   light: lightTheme,
+  newStyle: newStyleTheme,
 };
 
 export const THEME_IDS = Object.keys(THEME_REGISTRY) as ThemeId[];
