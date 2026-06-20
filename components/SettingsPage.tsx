@@ -3,29 +3,13 @@
 import React, { useEffect } from "react";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useTheme } from "@/lib/contexts/ThemeContext";
-import type { AppTheme } from "@/lib/theme/types";
+import { getThemeOptions } from "@/lib/theme/registry";
 import styles from "./SettingsPage.module.css";
-
-const THEME_OPTIONS: Array<{
-  value: AppTheme;
-  title: string;
-  hint: string;
-}> = [
-  {
-    value: "dark",
-    title: "تم تیره",
-    hint: "پس‌زمینه تیره و متن روشن (پیش‌فرض)",
-  },
-  {
-    value: "light",
-    title: "تم روشن",
-    hint: "پس‌زمینه روشن‌تر برای محیط‌های پرنور",
-  },
-];
 
 export default function SettingsPage() {
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
-  const { theme, setTheme } = useTheme();
+  const { themeId, setThemeId } = useTheme();
+  const themeOptions = getThemeOptions();
 
   useEffect(() => {
     setShowBackButton(true);
@@ -53,18 +37,18 @@ export default function SettingsPage() {
             می‌شود.
           </p>
           <div className={styles.themeOptions} role="radiogroup" aria-label="انتخاب تم">
-            {THEME_OPTIONS.map((option) => {
-              const selected = theme === option.value;
+            {themeOptions.map((option) => {
+              const selected = themeId === option.id;
               return (
                 <button
-                  key={option.value}
+                  key={option.id}
                   type="button"
                   role="radio"
                   aria-checked={selected}
                   className={`${styles.themeOption} ${
                     selected ? styles.themeOptionSelected : ""
                   }`}
-                  onClick={() => setTheme(option.value)}
+                  onClick={() => setThemeId(option.id)}
                 >
                   <span className={styles.themeOptionText}>
                     <span className={styles.themeOptionTitle}>{option.title}</span>

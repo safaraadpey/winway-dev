@@ -1,248 +1,60 @@
 "use client";
 
-import React from 'react';
-import Image from "next/image";
-import Link from "next/link";
+import React from "react";
 import { hardExit } from "@/lib/auth/hardExit";
+import { useTheme } from "@/lib/contexts/ThemeContext";
+import { MENU_ENTRIES } from "@/lib/theme/menuEntries";
 import InstallAppButton from "@/components/InstallAppButton";
-import styles from './MainMenuScreen.module.css';
-
-// Import menu banner images
-import gameRoomImage from '../assets/menu/menu-game-room.png';
-import tournamentImage from '../assets/menu/tournament.png';
-import leaderboardImage from '../assets/menu/menu-leaderboard.png';
-import myProfileImage from '../assets/menu/menu-my-profile.png';
-import settingsImage from '../assets/menu/settings.png';
-import reportsImage from '../assets/menu/menu-reports.png';
-import supportImage from '../assets/menu/support.png';
-import logoutImage from '../assets/menu/menu-logout.png';
-
-type MenuName =
-  | 'Game Room'
-  | 'Tournaments'
-  | 'Leaderboard'
-  | 'My Profile'
-  | 'Settings'
-  | 'Financial Reports'
-  | 'Support'
-  | 'Logout';
+import MenuItem from "@/components/theme/MenuItem";
+import styles from "./MainMenuScreen.module.css";
 
 const MainMenuScreen: React.FC = () => {
-  const handleMenuClick = (menuName: MenuName): void => {
-    console.log(`${menuName} clicked`);
+  const { themeDefinition } = useTheme();
+
+  const handleMenuClick = (label: string): void => {
+    console.log(`${label} clicked`);
   };
 
-  const handleLogout = () => {
-    hardExit();
-  };
+  const fullWidthEntries = MENU_ENTRIES.filter((entry) => !entry.halfWidth);
+  const halfWidthEntries = MENU_ENTRIES.filter((entry) => entry.halfWidth);
 
   return (
-    <div className={styles.mainMenu}>
+    <div className={`theme-menu-screen ${styles.mainMenu}`}>
       <div className={styles.mainMenuInner}>
         <div className={styles.installSection}>
           <InstallAppButton />
         </div>
-        {/* Menu List */}
         <div className={styles.menuList}>
-          <Link href="/player/lobby">
-            <div 
-              className={styles.menuItem}
-              onClick={() => handleMenuClick('Game Room')}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleMenuClick('Game Room');
-                }
-              }}
-            >
-              <Image 
-                src={gameRoomImage} 
-                alt="Game Room" 
-                className={styles.menuImage}
-                width={320}
-                height={120}
-                style={{ width: '100%', height: 'auto' }}
+          {fullWidthEntries.map((entry) => {
+            const presentation = themeDefinition.menuItems[entry.id];
+            return (
+              <MenuItem
+                key={entry.id}
+                presentation={presentation}
+                href={entry.href}
+                onNavigate={() => handleMenuClick(entry.label)}
+                className={styles.menuItemInteractive}
                 priority
               />
-            </div>
-          </Link>
+            );
+          })}
 
-          <Link href="/player/tournaments">
-            <div 
-              className={styles.menuItem}
-              onClick={() => handleMenuClick('Tournaments')}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleMenuClick('Tournaments');
-                }
-              }}
-            >
-              <Image 
-                src={tournamentImage} 
-                alt="Tournaments" 
-                className={styles.menuImage}
-                width={320}
-                height={120}
-                style={{ width: '100%', height: 'auto' }}
-                priority
-              />
-            </div>
-          </Link>
-
-          <Link href="/player/leaderboard">
-            <div 
-              className={styles.menuItem}
-              onClick={() => handleMenuClick('Leaderboard')}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleMenuClick('Leaderboard');
-                }
-              }}
-            >
-              <Image 
-                src={leaderboardImage} 
-                alt="Leaderboard" 
-                className={styles.menuImage}
-                width={320}
-                height={120}
-                style={{ width: '100%', height: 'auto' }}
-                priority
-              />
-            </div>
-          </Link>
-
-          <Link href="/player/myprofile">
-            <div 
-              className={styles.menuItem}
-              onClick={() => handleMenuClick('My Profile')}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleMenuClick('My Profile');
-                }
-              }}
-            >
-              <Image 
-                src={myProfileImage} 
-                alt="My Profile" 
-                className={styles.menuImage}
-                width={320}
-                height={120}
-                style={{ width: '100%', height: 'auto' }}
-                priority
-              />
-            </div>
-          </Link>
-
-          <Link href="/player/settings">
-            <div
-              className={styles.menuItem}
-              onClick={() => handleMenuClick('Settings')}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleMenuClick('Settings');
-                }
-              }}
-            >
-              <Image
-                src={settingsImage}
-                alt="Settings"
-                className={styles.menuImage}
-                width={320}
-                height={120}
-                style={{ width: '100%', height: 'auto' }}
-                priority
-              />
-            </div>
-          </Link>
-
-          <Link href="/player/reports">
-            <div 
-              className={styles.menuItem}
-              onClick={() => handleMenuClick('Financial Reports')}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleMenuClick('Financial Reports');
-                }
-              }}
-            >
-              <Image 
-                src={reportsImage} 
-                alt="Financial Reports" 
-                className={styles.menuImage}
-                width={320}
-                height={120}
-                style={{ width: '100%', height: 'auto' }}
-                priority
-              />
-            </div>
-          </Link>
-
-          {/* Support and Logout buttons side by side */}
           <div className={styles.menuItemRow}>
-            <div 
-              className={`${styles.menuItemHalf} ${styles.menuItem}`}
-              onClick={handleLogout}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleLogout();
-                }
-              }}
-            >
-              <Image 
-                src={logoutImage} 
-                alt="Logout" 
-                className={styles.menuImage}
-                width={320}
-                height={120}
-                style={{ width: '100%', height: 'auto' }}
-                priority
-              />
-            </div>
-
-            <Link href="/player/support" className={styles.menuItemHalf}>
-              <div 
-                className={styles.menuItem}
-                onClick={() => handleMenuClick('Support')}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleMenuClick('Support');
-                  }
-                }}
-              >
-                <Image 
-                  src={supportImage} 
-                  alt="Support" 
-                  className={styles.menuImage}
-                  width={320}
-                  height={120}
-                  style={{ width: '100%', height: 'auto' }}
+            {halfWidthEntries.map((entry) => {
+              const presentation = themeDefinition.menuItems[entry.id];
+              return (
+                <MenuItem
+                  key={entry.id}
+                  presentation={presentation}
+                  href={entry.href}
+                  onClick={entry.action === "logout" ? hardExit : undefined}
+                  onNavigate={() => handleMenuClick(entry.label)}
+                  className={styles.menuItemInteractive}
+                  wrapperClassName={styles.menuItemHalf}
                   priority
                 />
-              </div>
-            </Link>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -251,4 +63,3 @@ const MainMenuScreen: React.FC = () => {
 };
 
 export default MainMenuScreen;
-

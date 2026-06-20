@@ -8,46 +8,55 @@ import React, {
   useState,
   type ReactNode,
 } from "react";
-import {
-  AppTheme,
-  DEFAULT_THEME,
-  THEME_STORAGE_KEY,
-} from "@/lib/theme/types";
+import { applyThemeTokens } from "@/lib/theme/applyTheme";
+import { getThemeDefinition, resolveThemeId } from "@/lib/theme/registry";
+import type { ThemeDefinition, ThemeId } from "@/lib/theme/types";
+import { DEFAULT_THEME, THEME_STORAGE_KEY } from "@/lib/theme/types";
 
 interface ThemeContextType {
-  theme: AppTheme;
-  setTheme: (theme: AppTheme) => void;
+  themeId: ThemeId;
+  /** Alias for themeId (backward compatible) */
+  theme: ThemeId;
+  setThemeId: (themeId: ThemeId) => void;
+  /** Alias for setThemeId (backward compatible) */
+  setTheme: (themeId: ThemeId) => void;
+  themeDefinition: ThemeDefinition;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-function readStoredTheme(): AppTheme {
+function readStoredThemeId(): ThemeId {
   if (typeof window === "undefined") return DEFAULT_THEME;
-  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-  return stored === "light" ? "light" : DEFAULT_THEME;
-}
-
-function applyThemeToDocument(theme: AppTheme): void {
-  document.documentElement.dataset.theme = theme;
+  return resolveThemeId(window.localStorage.getItem(THEME_STORAGE_KEY));
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<AppTheme>(DEFAULT_THEME);
+  const [themeId, setThemeIdState] = useState<ThemeId>(DEFAULT_THEME);
 
   useEffect(() => {
-    const stored = readStoredTheme();
-    setThemeState(stored);
-    applyThemeToDocument(stored);
+    const stored = readStoredThemeId();
+    setThemeIdState(stored);
+    applyThemeTokens(stored);
   }, []);
 
-  const setTheme = useCallback((next: AppTheme) => {
-    setThemeState(next);
+  const setThemeId = useCallback((next: ThemeId) => {
+    setThemeIdState(next);
     window.localStorage.setItem(THEME_STORAGE_KEY, next);
-    applyThemeToDocument(next);
+    applyThemeTokens(next);
   }, []);
+
+  const themeDefinition = getThemeDefinition(themeId);
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme }}>
+    <ThemeContext.Provider
+      value={{
+        themeId,
+        theme: themeId,
+        setThemeId,
+        setTheme: setThemeId,
+        themeDefinition,
+      }}
+    >
       {children}
     </ThemeContext.Provider>
   );
