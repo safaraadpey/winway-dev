@@ -1,9 +1,8 @@
 "use client";
 
-import loginBg from "@/src/assets/logo/login_BG.png";
-import bg002 from "@/src/assets/logo/BG002.png";
-import buyCardButtonBg from "@/src/assets/logo/BuyCardBotton.png";
-import ingameLogo from "@/src/assets/logo/ingamelogo.png";
+import { useThemeId } from "@/lib/contexts/ThemeContext";
+import { getLogoImagePath } from "@/lib/theme/logoImageFiles";
+import { getResultsDialogAssetPath } from "@/lib/theme/resultsDialogAssets";
 import Image from "next/image";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -156,6 +155,8 @@ function WinnersSection({
   flyPrizeRef,
   flyPrizeKind,
 }: WinnersSectionProps) {
+  const themeId = useThemeId();
+  const winnersSectionBg = getResultsDialogAssetPath(themeId, "winnersSectionBg");
   const title =
     kind === "line"
       ? winners.length === 1
@@ -169,7 +170,7 @@ function WinnersSection({
     <div
       className="rounded-none px-4 py-4 space-y-3"
       style={{
-        backgroundImage: `url(${bg002.src})`,
+        backgroundImage: `url(${winnersSectionBg})`,
         backgroundRepeat: "no-repeat",
         backgroundPosition: "center center",
         backgroundSize: "100% 100%",
@@ -290,6 +291,10 @@ export default function GameResultsDialog({
   primaryActionLabel,
   onPrimaryAction,
 }: GameResultsDialogProps) {
+  const themeId = useThemeId();
+  const ingameLogoSrc = getLogoImagePath(themeId, "ingameLogo");
+  const dialogBg = getResultsDialogAssetPath(themeId, "dialogBg");
+  const primaryButtonBg = getResultsDialogAssetPath(themeId, "primaryButtonBg");
   const [copyToast, setCopyToast] = useState<null | "success" | "error">(null);
   const copyToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flyPrizeRef = useRef<HTMLDivElement>(null);
@@ -528,7 +533,7 @@ export default function GameResultsDialog({
               : "border border-[#1f2837]"
           }`}
           style={{
-            backgroundImage: `url(${loginBg.src})`,
+            backgroundImage: `url(${dialogBg})`,
             backgroundRepeat: "no-repeat",
             backgroundPosition: "center center",
             backgroundSize: "100% 100%",
@@ -537,7 +542,7 @@ export default function GameResultsDialog({
         >
           <div className="flex flex-col items-center text-center space-y-2">
             <Image
-              src={ingameLogo}
+              src={ingameLogoSrc}
               alt="ingame logo"
               width={220}
               height={100}
@@ -623,7 +628,7 @@ export default function GameResultsDialog({
             onClick={onPrimaryAction ?? onClose}
             className="mt-2 w-full rounded-2xl py-3 text-center text-white font-bold shadow-lg active:opacity-90 transition"
             style={{
-              backgroundImage: `url(${buyCardButtonBg.src})`,
+              backgroundImage: `url(${primaryButtonBg})`,
               backgroundRepeat: "no-repeat",
               backgroundPosition: "center center",
               backgroundSize: "100% 100%",

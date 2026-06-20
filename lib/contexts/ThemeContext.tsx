@@ -69,3 +69,8 @@ export function useTheme(): ThemeContextType {
   }
   return context;
 }
+
+export function useThemeId(): ThemeId {
+  const context = useContext(ThemeContext);
+  return context?.themeId ?? DEFAULT_THEME;
+}

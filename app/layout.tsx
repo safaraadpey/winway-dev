@@ -4,6 +4,10 @@ import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import GlobalUserStateClient from "./GlobalUserStateClient";
 import PWARegistration from "@/components/PWARegistration";
+import { getLogoImagePath } from "@/lib/theme/logoImageFiles";
+import { DEFAULT_THEME } from "@/lib/theme/types";
+
+const ogPreviewImage = getLogoImagePath(DEFAULT_THEME, "ogPreview");
 
 const siteOrigin =
   process.env.NEXT_PUBLIC_MAIN_ORIGIN || "https://dingmoney.org";
@@ -31,7 +35,7 @@ export const metadata: Metadata = {
       "اولین اپلیکیشن دبرنا دارای تورنومنت و تکنیک هش جهت جلوگیری از تقلب",
     images: [
       {
-        url: "/ding_money_preview.jpg",
+        url: ogPreviewImage,
         width: 1200,
         height: 630,
         alt: "Dingmoney - بازی آنلاین و تورنومنت دبرنا",
@@ -43,7 +47,7 @@ export const metadata: Metadata = {
     title: "Dingmoney - بازی آنلاین و تورنومنت دبرنا",
     description:
       "اولین اپلیکیشن دبرنا دارای تورنومنت و تکنیک هش جهت جلوگیری از تقلب",
-    images: ["/ding_money_preview.jpg"],
+    images: [ogPreviewImage],
   },
 };
 

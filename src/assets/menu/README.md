@@ -1,13 +1,16 @@
 # Menu Banner Images
 
-Please place the following images in this directory:
+Theme menu banners live under `public/themes/<theme-id>/menu/`.
 
-1. `menu-game-room.png` - Game Room banner (اتاق بازی / GAME ROOM)
-2. `menu-leaderboard.png` - Leaderboard banner (بردها و رتبه ها / LEADERBOARD)
-3. `menu-my-profile.png` - My Profile banner (پروفایل من / MY PROFILE)
-4. `menu-laws.png` - Laws and Regulations banner (قوانین و مقررات / LAWS AND REGULATIONS)
-5. `menu-reports.png` - Financial Reports banner (گزارشات / FINANCIAL REPORTS)
-6. `menu-logout.png` - Logout banner (خروج / LOG OUT)
+Current files (dark and light):
 
-All images should be optimized for mobile display and maintain their aspect ratio.
+1. `menu-game-room.png` - Game Room banner
+2. `tournament.png` - Tournaments banner
+3. `menu-leaderboard.png` - Leaderboard banner
+4. `menu-my-profile.png` - My Profile banner
+5. `settings.png` - Settings banner
+6. `menu-reports.png` - Financial Reports banner
+7. `support.png` - Support banner
+8. `menu-logout.png` - Logout banner
 
+Resolved at runtime via `getMenuImagePath(themeId, imageKey)` in `lib/theme/menuImageFiles.ts`.

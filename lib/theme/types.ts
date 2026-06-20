@@ -1,5 +1,3 @@
-import type { StaticImageData } from "next/image";
-
 export type ThemeId = "dark" | "light";
 
 /** @deprecated Use ThemeId */
@@ -29,6 +27,8 @@ export type MenuImageKey =
   | "logout"
   | "support";
 
+export type LogoImageKey = "logo" | "ingameLogo" | "ogPreview" | "brand";
+
 export type MenuItemPresentation =
   | { kind: "image"; imageKey: MenuImageKey; alt: string }
   | { kind: "styled"; titleFa: string; titleEn?: string };
@@ -55,6 +55,10 @@ export interface PlayerTokens {
   accentMuted: string;
   layoutBg: string;
   layoutBgImage: string;
+  headerBg: string;
+  headerFrameImage: string;
+  headerFrameBlendMode: string;
+  headerFrameFilter: string;
 }
 
 export interface ThemeTokens {
@@ -83,5 +87,3 @@ export interface ThemeOption {
   title: string;
   hint: string;
 }
-
-export type MenuImageMap = Record<MenuImageKey, StaticImageData>;

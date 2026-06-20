@@ -1,7 +1,6 @@
 .lobbyContainer {
   min-height: 100vh;
-  /* Let the shared /player layout background show through */
-  background-color: rgba(14, 14, 15, 0.55);
+  background-color: var(--menu-screen-overlay, rgba(14, 14, 15, 0.55));
   padding: 0 21px 0 25px;
   padding-top: 0px;
   padding-bottom: 0px;
@@ -22,7 +21,7 @@
 .emptyState {
   text-align: center;
   padding: 3rem 1rem;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--player-text-muted, rgba(255, 255, 255, 0.6));
 }
 
 .emptyText {
@@ -64,7 +63,7 @@
 }
 
 .loadingText {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--player-text-muted, rgba(255, 255, 255, 0.6));
   font-size: 1rem;
 }
 

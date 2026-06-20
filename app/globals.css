@@ -19,7 +19,11 @@
   --player-accent: #00d4aa;
   --player-accent-muted: rgba(0, 212, 170, 0.12);
   --player-layout-bg: #0e0e0f;
-  --player-layout-bg-image: url(/backgrounds/layout_BG.webp);
+  --player-layout-bg-image: url(/themes/dark/backgrounds/layout_BG.webp);
+  --player-header-bg: rgba(14, 14, 15, 0.55);
+  --player-header-frame-image: url(/themes/dark/assets/headerframe.png);
+  --player-header-frame-blend-mode: lighten;
+  --player-header-frame-filter: none;
   --menu-screen-overlay: rgba(14, 14, 15, 0.55);
   --menu-item-bg: transparent;
   --menu-item-bg-image: none;
@@ -41,7 +45,11 @@ html[data-theme="light"] {
   --player-accent-muted: rgba(5, 150, 105, 0.1);
   --player-layout-bg: #f3f4f6;
   --player-layout-bg-image: none;
-  --menu-screen-overlay: rgba(14, 14, 15, 0.55);
+  --player-header-bg: #ffffff;
+  --player-header-frame-image: url(/themes/light/assets/headerframe.png);
+  --player-header-frame-blend-mode: normal;
+  --player-header-frame-filter: invert(1);
+  --menu-screen-overlay: #ffffff;
   --menu-item-bg: transparent;
   --menu-item-bg-image: none;
   --menu-item-bg-gradient: none;

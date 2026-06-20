@@ -1,4 +1,5 @@
 import type { ThemeDefinition } from "@/lib/theme/types";
+import { themeHeaderFrameImage } from "@/lib/theme/assetPaths";
 import {
   IMAGE_MENU_PRESENTATIONS,
   SHARED_IMAGE_MENU_TOKENS,
@@ -20,8 +21,15 @@ export const lightTheme: ThemeDefinition = {
       accentMuted: "rgba(5, 150, 105, 0.1)",
       layoutBg: "#f3f4f6",
       layoutBgImage: "none",
+      headerBg: "#ffffff",
+      headerFrameImage: themeHeaderFrameImage("light"),
+      headerFrameBlendMode: "normal",
+      headerFrameFilter: "invert(1)",
     },
-    menu: SHARED_IMAGE_MENU_TOKENS,
+    menu: {
+      ...SHARED_IMAGE_MENU_TOKENS,
+      screenOverlay: "#ffffff",
+    },
   },
   menuItems: IMAGE_MENU_PRESENTATIONS,
 };

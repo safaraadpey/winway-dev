@@ -7,8 +7,10 @@ import { supabase } from "@/lib/supabaseClient";
 import { usernameToEmail, validateUsername } from "@/lib/auth-helpers";
 import toast from "react-hot-toast";
 import styles from "./LoginForm.module.css";
+import { getLogoImagePath } from "@/lib/theme/logoImageFiles";
+import { DEFAULT_THEME } from "@/lib/theme/types";
 
-import logo from "@/src/assets/logo/logo.png";
+const logoSrc = getLogoImagePath(DEFAULT_THEME, "logo");
 
 /**
  * کامپوننت فرم ورود با Username + Password
@@ -108,8 +110,10 @@ export default function LoginForm() {
         <div className={styles.logoContainer}>
           <h1 className={styles.logo}>
             <Image
-              src={logo}
+              src={logoSrc}
               alt="dingmoney دینگ مانی"
+              width={516}
+              height={300}
               className={styles.logoImage}
               priority
             />

@@ -3,8 +3,9 @@
 import React from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useTheme } from "@/lib/contexts/ThemeContext";
+import { getMenuImagePath } from "@/lib/theme/menuImageFiles";
 import type { MenuItemPresentation } from "@/lib/theme/types";
-import { MENU_IMAGES } from "@/lib/theme/menuAssets";
 
 type MenuItemProps = {
   presentation: MenuItemPresentation;
@@ -18,15 +19,17 @@ type MenuItemProps = {
 
 function MenuItemContent({
   presentation,
+  themeId,
   priority = false,
 }: {
   presentation: MenuItemPresentation;
+  themeId: ReturnType<typeof useTheme>["themeId"];
   priority?: boolean;
 }) {
   if (presentation.kind === "image") {
     return (
       <Image
-        src={MENU_IMAGES[presentation.imageKey]}
+        src={getMenuImagePath(themeId, presentation.imageKey)}
         alt={presentation.alt}
         className="theme-menu-item__image"
         width={320}
@@ -61,10 +64,15 @@ export default function MenuItem({
   wrapperClassName = "",
   priority = false,
 }: MenuItemProps) {
+  const { themeId } = useTheme();
   const itemClassName = ["theme-menu-item", className].filter(Boolean).join(" ");
 
   const content = (
-    <MenuItemContent presentation={presentation} priority={priority} />
+    <MenuItemContent
+      presentation={presentation}
+      themeId={themeId}
+      priority={priority}
+    />
   );
 
   if (href) {

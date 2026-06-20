@@ -1,4 +1,5 @@
 import type { ThemeDefinition } from "@/lib/theme/types";
+import { themeLayoutBgImage, themeHeaderFrameImage } from "@/lib/theme/assetPaths";
 import {
   IMAGE_MENU_PRESENTATIONS,
   SHARED_IMAGE_MENU_TOKENS,
@@ -19,7 +20,11 @@ export const darkTheme: ThemeDefinition = {
       accent: "#00d4aa",
       accentMuted: "rgba(0, 212, 170, 0.12)",
       layoutBg: "#0e0e0f",
-      layoutBgImage: "url(/backgrounds/layout_BG.webp)",
+      layoutBgImage: themeLayoutBgImage("dark"),
+      headerBg: "rgba(14, 14, 15, 0.55)",
+      headerFrameImage: themeHeaderFrameImage("dark"),
+      headerFrameBlendMode: "lighten",
+      headerFrameFilter: "none",
     },
     menu: SHARED_IMAGE_MENU_TOKENS,
   },
