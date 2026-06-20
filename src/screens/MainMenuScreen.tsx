@@ -12,6 +12,7 @@ import gameRoomImage from '../assets/menu/menu-game-room.png';
 import tournamentImage from '../assets/menu/tournament.png';
 import leaderboardImage from '../assets/menu/menu-leaderboard.png';
 import myProfileImage from '../assets/menu/menu-my-profile.png';
+import settingsImage from '../assets/menu/settings.png';
 import reportsImage from '../assets/menu/menu-reports.png';
 import supportImage from '../assets/menu/support.png';
 import logoutImage from '../assets/menu/menu-logout.png';
@@ -21,6 +22,7 @@ type MenuName =
   | 'Tournaments'
   | 'Leaderboard'
   | 'My Profile'
+  | 'Settings'
   | 'Financial Reports'
   | 'Support'
   | 'Logout';
@@ -133,6 +135,31 @@ const MainMenuScreen: React.FC = () => {
               <Image 
                 src={myProfileImage} 
                 alt="My Profile" 
+                className={styles.menuImage}
+                width={320}
+                height={120}
+                style={{ width: '100%', height: 'auto' }}
+                priority
+              />
+            </div>
+          </Link>
+
+          <Link href="/player/settings">
+            <div
+              className={styles.menuItem}
+              onClick={() => handleMenuClick('Settings')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleMenuClick('Settings');
+                }
+              }}
+            >
+              <Image
+                src={settingsImage}
+                alt="Settings"
                 className={styles.menuImage}
                 width={320}
                 height={120}

@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { HeaderVisibilityProvider } from "@/lib/contexts/HeaderVisibilityContext";
+import { ThemeProvider } from "@/lib/contexts/ThemeContext";
 import { ActiveGamesProvider } from "@/lib/contexts/ActiveGamesContext";
 import { ActiveGamesOrchestratorProvider } from "@/lib/activeGames/ActiveGamesOrchestratorProvider";
 import PlayerLayoutClient from "./PlayerLayoutClient";
@@ -21,10 +22,14 @@ export default function PlayerLayout({
 }) {
   return (
     <div
-      className="h-dvh min-h-dvh overflow-hidden bg-[#0E0E0F] bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: "url(/backgrounds/layout_BG.webp)" }}
+      className="h-dvh min-h-dvh overflow-hidden bg-cover bg-center bg-no-repeat player-layout-root"
+      style={{
+        backgroundColor: "var(--player-layout-bg, #0E0E0F)",
+        backgroundImage: "var(--player-layout-bg-image, url(/backgrounds/layout_BG.webp))",
+      }}
     >
-      <HeaderVisibilityProvider>
+      <ThemeProvider>
+        <HeaderVisibilityProvider>
         <ActiveGamesOrchestratorProvider>
           <ActiveGamesProvider>
             <PlayerLayoutClient>{children}</PlayerLayoutClient>
@@ -32,6 +37,7 @@ export default function PlayerLayout({
           </ActiveGamesProvider>
         </ActiveGamesOrchestratorProvider>
       </HeaderVisibilityProvider>
+      </ThemeProvider>
     </div>
   );
 }

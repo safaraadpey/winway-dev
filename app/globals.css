@@ -7,6 +7,30 @@
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-left: env(safe-area-inset-left, 0px);
   --safe-area-right: env(safe-area-inset-right, 0px);
+
+  --player-text-primary: #ffffff;
+  --player-text-muted: #9ca3af;
+  --player-page-overlay: rgba(14, 14, 15, 0.55);
+  --player-surface: rgba(26, 26, 26, 0.75);
+  --player-surface-elevated: #2d2d2d;
+  --player-border: rgba(64, 64, 64, 0.5);
+  --player-accent: #00d4aa;
+  --player-accent-muted: rgba(0, 212, 170, 0.12);
+  --player-layout-bg: #0e0e0f;
+  --player-layout-bg-image: url(/backgrounds/layout_BG.webp);
+}
+
+html[data-theme="light"] {
+  --player-text-primary: #111827;
+  --player-text-muted: #6b7280;
+  --player-page-overlay: rgba(245, 245, 247, 0.88);
+  --player-surface: rgba(255, 255, 255, 0.92);
+  --player-surface-elevated: #ffffff;
+  --player-border: rgba(209, 213, 219, 0.9);
+  --player-accent: #059669;
+  --player-accent-muted: rgba(5, 150, 105, 0.1);
+  --player-layout-bg: #f3f4f6;
+  --player-layout-bg-image: none;
 }
 
 :root, html, body {

@@ -69,6 +69,7 @@ const avatarMap: Record<string, any> = {
 const AVAILABLE_AVATAR_IDS = ['001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011', '012', '013', '014', '015', '017', '018', '019', '020', '021', '022', '023', '024', '025'];
 import type { ProfileInfo } from "@/src/types/profile";
 import toast from "react-hot-toast";
+import Link from "next/link";
 import styles from "./ProfilePage.module.css";
 
 export default function ProfilePage() {
@@ -357,6 +358,11 @@ export default function ProfilePage() {
     >
       <div className={styles.content}>
         <h1 className={styles.title}>پروفایل من</h1>
+
+        <Link href="/player/settings" className={styles.settingsLink}>
+          <span className={styles.settingsLinkLabel}>تنظیمات</span>
+          <span className={styles.settingsLinkHint}>تم و سایر گزینه‌ها</span>
+        </Link>
 
         {/* بخش آواتار */}
         {!hideAvatarSection && (

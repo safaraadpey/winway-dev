@@ -2,8 +2,7 @@
 
 .container {
   min-height: 100vh;
-  /* Let the shared /player layout background show through */
-  background-color: rgba(14, 14, 15, 0.55);
+  background-color: var(--player-page-overlay, rgba(14, 14, 15, 0.55));
   padding: 1rem;
   padding-bottom: 2rem;
 }
@@ -21,23 +20,54 @@
 .title {
   font-size: 1.75rem;
   font-weight: bold;
-  color: #ffffff;
-  margin-bottom: 2rem;
+  color: var(--player-text-primary, #ffffff);
+  margin-bottom: 1rem;
   text-align: center;
 }
 
+.settingsLink {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  width: 100%;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--player-border, rgba(64, 64, 64, 0.5));
+  background-color: var(--player-surface, rgba(26, 26, 26, 0.75));
+  text-decoration: none;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.settingsLink:hover {
+  border-color: var(--player-accent, #00d4aa);
+}
+
+.settingsLinkLabel {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--player-accent, #00d4aa);
+}
+
+.settingsLinkHint {
+  font-size: 0.75rem;
+  color: var(--player-text-muted, #9ca3af);
+}
+
 .section {
-  background-color: rgba(26, 26, 26, 0.75);
+  background-color: var(--player-surface, rgba(26, 26, 26, 0.75));
   border-radius: 0.75rem;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
+  border: 1px solid var(--player-border, rgba(64, 64, 64, 0.5));
 }
 
 .sectionLabel {
   display: block;
   font-size: 1rem;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--player-text-primary, #ffffff);
   margin-bottom: 1rem;
 }
 
@@ -125,11 +155,11 @@
 .input {
   flex: 1;
   padding: 0.875rem 1rem;
-  background-color: #2d2d2d;
-  border: 1px solid #404040;
+  background-color: var(--player-surface-elevated, #2d2d2d);
+  border: 1px solid var(--player-border, #404040);
   border-radius: 0.5rem;
   font-size: 1rem;
-  color: #ffffff;
+  color: var(--player-text-primary, #ffffff);
   outline: none;
   transition: all 0.2s;
 }
@@ -173,7 +203,7 @@
 /* Helper Text */
 .helperText {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: var(--player-text-muted, #9ca3af);
   margin-top: 0.5rem;
   line-height: 1.4;
 }
@@ -272,12 +302,12 @@
 
 .infoLabel {
   font-size: 0.875rem;
-  color: #9ca3af;
+  color: var(--player-text-muted, #9ca3af);
 }
 
 .infoValue {
   font-size: 0.875rem;
-  color: #ffffff;
+  color: var(--player-text-primary, #ffffff);
   font-weight: 500;
 }
 
@@ -321,7 +351,7 @@
 .formLabel {
   font-size: 0.875rem;
   font-weight: 500;
-  color: #ffffff;
+  color: var(--player-text-primary, #ffffff);
 }
 
 .submitButton {
