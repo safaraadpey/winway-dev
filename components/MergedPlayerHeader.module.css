@@ -216,7 +216,9 @@
 .balanceAmount {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 22px;
+  margin-top: 3px;
+  margin-left: 4px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--player-balance-amount-color, #FEEEB4);
   font-family: inherit;
