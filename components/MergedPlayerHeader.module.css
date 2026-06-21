@@ -155,6 +155,13 @@
   border: none;
   border-radius: 25px;
   overflow: hidden;
+  position: relative;
+  isolation: isolate;
+}
+
+.balanceCapsule > * {
+  position: relative;
+  z-index: 1;
 }
 
 .dingBg {
@@ -165,6 +172,11 @@
 
 .dingBg .balanceAmount {
   text-align: left;
+  color: var(--player-ding-balance-amount-color, var(--player-balance-amount-color, #FEEEB4));
+}
+
+.tomanBg .balanceAmount {
+  color: var(--player-toman-balance-amount-color, var(--player-balance-amount-color, #FEEEB4));
 }
 
 .tomanBg {
@@ -173,12 +185,40 @@
   justify-content: space-between;
 }
 
+/* Light theme: balance capsule PNG backgrounds at 40% transparency */
+:global(html[data-theme="light"]) .dingBg,
+:global(html[data-theme="light"]) .tomanBg {
+  background-image: none;
+}
+
+:global(html[data-theme="light"]) .dingBg::before,
+:global(html[data-theme="light"]) .tomanBg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+  opacity: var(--player-balance-capsule-bg-opacity, 0.6);
+  pointer-events: none;
+  z-index: 0;
+}
+
+:global(html[data-theme="light"]) .dingBg::before {
+  background-image: var(--player-ding-balance-bg-image, none);
+}
+
+:global(html[data-theme="light"]) .tomanBg::before {
+  background-image: var(--player-toman-balance-bg-image, none);
+}
+
 .balanceAmount {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: clamp(0.7rem, 3.2vw, 1rem);
+  font-size: clamp(0.7rem, 3.2vw, 22px);
   font-weight: 700;
-  color: #FEEEB4;
+  color: var(--player-balance-amount-color, #FEEEB4);
   font-family: inherit;
   direction: ltr;
   text-align: left;

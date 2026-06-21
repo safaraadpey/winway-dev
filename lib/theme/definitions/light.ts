@@ -1,5 +1,5 @@
 import type { ThemeDefinition } from "@/lib/theme/types";
-import { themeHeaderFrameImage, themeDingBalanceBgImage, themeTomanBalanceBgImage, themeActiveGameChipBgImage } from "@/lib/theme/assetPaths";
+import { themeHeaderFrameImage, themeDingBalanceBgImage, themeTomanBalanceBgImage } from "@/lib/theme/assetPaths";
 import {
   IMAGE_MENU_PRESENTATIONS,
   SHARED_IMAGE_MENU_TOKENS,
@@ -27,8 +27,8 @@ export const lightTheme: ThemeDefinition = {
       headerFrameFilter: "none",
       dingBalanceBgImage: themeDingBalanceBgImage("light"),
       tomanBalanceBgImage: themeTomanBalanceBgImage("light"),
-      activeGameChipBgImage: themeActiveGameChipBgImage("light"),
-      activeGameChipRadius: "999px",
+      activeGameChipBgImage: "none",
+      activeGameChipRadius: "12px",
     },
     menu: {
       ...SHARED_IMAGE_MENU_TOKENS,

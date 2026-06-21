@@ -5,8 +5,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import styles from "./MyActiveGames.module.css";
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
-import playPng from "../src/assets/logo/play.png";
-import hourglassPng from "../src/assets/logo/hourglass.png";
+import { useTheme } from "@/lib/contexts/ThemeContext";
+import { getActiveGameIconPath } from "@/lib/theme/activeGameIconFiles";
 
 /**
  * کامپوننت نمایش روم‌های فعال پلیر
@@ -17,6 +17,7 @@ export default function MyActiveGames() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { rooms, loading, error, invalidate } = useActiveGamesContext();
+  const { themeId } = useTheme();
 
   const isOnGameScreen =
     pathname.startsWith("/player/gameroom") ||
@@ -41,7 +42,7 @@ export default function MyActiveGames() {
       case "playing":
         return (
           <Image
-            src={playPng}
+            src={getActiveGameIconPath(themeId, "play")}
             className={styles.playIcon}
             alt="play"
             width={24}
@@ -52,7 +53,7 @@ export default function MyActiveGames() {
       case "waiting":
         return (
           <Image
-            src={hourglassPng}
+            src={getActiveGameIconPath(themeId, "waiting")}
             className={styles.waitingIcon}
             alt="waiting"
             width={16}

@@ -28,6 +28,7 @@
   --player-toman-balance-bg-image: none;
   --player-active-game-chip-bg-image: url(/themes/dark/assets/gamebadge.png);
   --player-active-game-chip-radius: 999px;
+  --player-balance-amount-color: #FEEEB4;
   --menu-screen-overlay: rgba(14, 14, 15, 0.55);
   --menu-item-bg: transparent;
   --menu-item-bg-image: none;
@@ -55,9 +56,12 @@ html[data-theme="light"] {
   --player-header-frame-filter: none;
   --player-ding-balance-bg-image: url(/themes/light/assets/ding_BG.png);
   --player-toman-balance-bg-image: url(/themes/light/assets/toman_BG.png);
-  --player-active-game-chip-bg-image: url(/themes/light/assets/gamebadge.png);
-  --player-active-game-chip-radius: 999px;
-  --menu-screen-overlay: #ffffff;
+  --player-balance-capsule-bg-opacity: 0.6;
+  --player-ding-balance-amount-color: #8B6914;
+  --player-toman-balance-amount-color: #1E3A5F;
+  --player-active-game-chip-bg-image: none;
+  --player-active-game-chip-radius: 12px;
+  --player-active-game-chip-text-color: #111827;
   --menu-item-bg: transparent;
   --menu-item-bg-image: none;
   --menu-item-bg-gradient: none;

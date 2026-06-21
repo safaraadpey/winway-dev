@@ -5,11 +5,12 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { useTheme } from "@/lib/contexts/ThemeContext";
+import { getBackIconPath } from "@/lib/theme/headerIconFiles";
 import styles from "./MergedPlayerHeader.module.css";
 
 import dingCoinIcon from "@/src/assets/icons/ding-coin.png";
 import refreshIcon from "@/src/assets/icons/refresh.webp";
-import backIconPng from "@/src/assets/logo/back.png";
 
 // Import آواتارهای موجود (کپی از PlayerStatusBar برای عدم دستکاری کامپوننت قبلی)
 import avatar001 from "@/src/assets/avatars/avatar-001.png";
@@ -88,6 +89,7 @@ export default function MergedPlayerHeader({
   refreshDisabled = false,
 }: MergedPlayerHeaderProps) {
   const router = useRouter();
+  const { themeId } = useTheme();
 
   const [playerName, setPlayerName] = useState<string>("اسم بازیکن");
   const [avatarId, setAvatarId] = useState<string>("001");
@@ -266,7 +268,28 @@ export default function MergedPlayerHeader({
         <div className={styles.backButtonPlaceholder}>
           {showBackButton ? (
             <button className={styles.backButton} onClick={handleBackClick} aria-label="بازگشت">
-              <Image src={backIconPng} alt="بازگشت" className={styles.backIcon} width={24} height={24} />
+              {themeId === "newStyle" ? (
+                <svg
+                  className={styles.backIcon}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M19 12H5M12 19l-7-7 7-7" />
+                </svg>
+              ) : (
+                <Image
+                  src={getBackIconPath(themeId)}
+                  alt="بازگشت"
+                  className={styles.backIcon}
+                  width={24}
+                  height={24}
+                />
+              )}
             </button>
           ) : null}
         </div>
