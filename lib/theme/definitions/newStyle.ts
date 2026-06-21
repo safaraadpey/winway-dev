@@ -1,5 +1,5 @@
 import type { ThemeDefinition } from "@/lib/theme/types";
-import { themeLayoutBgImage, themeHeaderFrameImage } from "@/lib/theme/assetPaths";
+import { themeLayoutBgImage, themeHeaderFrameImage, themeDingBalanceBgImage, themeTomanBalanceBgImage } from "@/lib/theme/assetPaths";
 import {
   IMAGE_MENU_PRESENTATIONS,
   SHARED_IMAGE_MENU_TOKENS,
@@ -25,6 +25,10 @@ export const newStyleTheme: ThemeDefinition = {
       headerFrameImage: themeHeaderFrameImage("newStyle"),
       headerFrameBlendMode: "lighten",
       headerFrameFilter: "none",
+      dingBalanceBgImage: themeDingBalanceBgImage("newStyle"),
+      tomanBalanceBgImage: themeTomanBalanceBgImage("newStyle"),
+      activeGameChipBgImage: "none",
+      activeGameChipRadius: "12px",
     },
     menu: SHARED_IMAGE_MENU_TOKENS,
   },

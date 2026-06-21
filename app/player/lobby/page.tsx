@@ -3,7 +3,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
-import LobbyInfo from '@/components/LobbyInfo';
 import LobbyRoomCard from '@/components/LobbyRoomCard';
 import toast from 'react-hot-toast';
 import styles from './lobby.module.css';
@@ -36,7 +35,6 @@ export default function LobbyPage() {
   const [roomGroups, setRoomGroups] = useState<RoomPriceGroup[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [onlinePlayersCount, setOnlinePlayersCount] = useState<number>(0);
 
   const hasToken = Boolean(sessionSnap.authReady && sessionSnap.accessToken);
   const visibilityState = typeof document !== "undefined" ? document.visibilityState : "visible";
@@ -54,8 +52,8 @@ export default function LobbyPage() {
     }
   };
 
-  const computeSnapshotHash = (groups: RoomPriceGroup[], onlinePlayers: number): string => {
-    const parts: string[] = [String(onlinePlayers)];
+  const computeSnapshotHash = (groups: RoomPriceGroup[]): string => {
+    const parts: string[] = [];
     // Keep it deterministic and cheap; include all fields that affect UI.
     for (const g of groups) {
       parts.push(
@@ -160,11 +158,8 @@ export default function LobbyPage() {
         const sortedGroups = [...groups].sort((a, b) => a.price - b.price);
         setRoomGroups(sortedGroups);
 
-        const onlinePlayers = Number(json?.onlineCount?.onlinePlayers ?? 0) || 0;
-        setOnlinePlayersCount(onlinePlayers);
-
         // Backoff logic based on snapshot stability
-        const hash = computeSnapshotHash(sortedGroups, onlinePlayers);
+        const hash = computeSnapshotHash(sortedGroups);
         const prev = lastSnapshotHashRef.current;
         const unchanged = Boolean(prev) && prev === hash;
         lastSnapshotHashRef.current = hash;
@@ -282,13 +277,6 @@ export default function LobbyPage() {
 
   return (
     <div className={styles.lobbyContainer}>
-      {/* اطلاعات لابی */}
-      <div className={styles.lobbyHeader}>
-        <LobbyInfo 
-          activePlayersCount={roomGroups.reduce((sum, group) => sum + group.players, 0)}
-          onlinePlayersCount={onlinePlayersCount}
-        />
-      </div>
       {errorMessage && (
         <div className={styles.errorMessage}>
           {errorMessage}

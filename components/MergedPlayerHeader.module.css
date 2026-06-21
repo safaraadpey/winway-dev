@@ -158,12 +158,18 @@
 }
 
 .dingBg {
-  background-image: url("../src/assets/logo/ding_BG.png");
-  background-color: rgba(255, 255, 255, 1);
+  background-color: rgba(147, 197, 253, 0.05);
+  background-image: var(--player-ding-balance-bg-image, none);
+  justify-content: space-between;
+}
+
+.dingBg .balanceAmount {
+  text-align: left;
 }
 
 .tomanBg {
-  background-image: url("../src/assets/logo/toman_BG.png");
+  background-color: rgba(147, 197, 253, 0.05);
+  background-image: var(--player-toman-balance-bg-image, none);
   justify-content: space-between;
 }
 

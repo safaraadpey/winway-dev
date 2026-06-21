@@ -30,15 +30,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding-top: 8px;
-  padding-bottom: 8px;
-  padding-left: 16px;
-  padding-right: 16px;
-  min-height: 40px;
+  gap: 6px;
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
+  padding: 0 12px;
   min-width: fit-content;
-  border-radius: 999px;
-  background-image: url("../src/assets/logo/gamebadge.png");
+  box-sizing: border-box;
+  border-radius: var(--player-active-game-chip-radius, 999px);
+  background-image: var(--player-active-game-chip-bg-image, url(/themes/dark/assets/gamebadge.png));
   background-repeat: no-repeat;
   background-position: center;
   background-size: 100% 100%;
@@ -75,7 +75,7 @@
 
 .chipText {
   color: #e5e7eb;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1;
   direction: ltr;
@@ -83,34 +83,34 @@
 }
 
 .playIcon {
-  width: 24px;
-  height: 24px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
   display: block;
   object-fit: contain;
 }
 
 .waitingIcon {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
   display: block;
   object-fit: contain;
 }
 
 .settlingIcon {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   color: #60a5fa; /* آبی */
   flex-shrink: 0;
 }
 
 .trophyIcon {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   color: #fbbf24; /* طلایی */
   flex-shrink: 0;
-  margin-right: 4px;
+  margin-right: 3px;
 }
 
 .emptyState {

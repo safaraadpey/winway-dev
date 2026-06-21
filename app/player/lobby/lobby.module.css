@@ -6,10 +6,6 @@
   padding-bottom: 0px;
 }
 
-.lobbyHeader {
-  margin-bottom: 0.45rem;
-}
-
 .roomsList {
   display: flex;
   flex-direction: column;

@@ -19,3 +19,18 @@ export function themeLayoutBgImage(themeId: ThemeId): string {
 export function themeHeaderFrameImage(themeId: ThemeId): string {
   return `url(${themeAssetPath(themeId, "assets", "headerframe.png")})`;
 }
+
+/** Ding balance capsule background (`public/themes/{id}/assets/ding_BG.png`). */
+export function themeDingBalanceBgImage(themeId: ThemeId): string {
+  return `url(${themeAssetPath(themeId, "assets", "ding_BG.png")})`;
+}
+
+/** Toman balance capsule background (`public/themes/{id}/assets/toman_BG.png`). */
+export function themeTomanBalanceBgImage(themeId: ThemeId): string {
+  return `url(${themeAssetPath(themeId, "assets", "toman_BG.png")})`;
+}
+
+/** Active game chip background (`public/themes/{id}/assets/gamebadge.png`). */
+export function themeActiveGameChipBgImage(themeId: ThemeId): string {
+  return `url(${themeAssetPath(themeId, "assets", "gamebadge.png")})`;
+}

@@ -1,5 +1,5 @@
 import type { ThemeDefinition } from "@/lib/theme/types";
-import { themeLayoutBgImage, themeHeaderFrameImage } from "@/lib/theme/assetPaths";
+import { themeLayoutBgImage, themeHeaderFrameImage, themeActiveGameChipBgImage } from "@/lib/theme/assetPaths";
 import {
   IMAGE_MENU_PRESENTATIONS,
   SHARED_IMAGE_MENU_TOKENS,
@@ -25,6 +25,10 @@ export const darkTheme: ThemeDefinition = {
       headerFrameImage: themeHeaderFrameImage("dark"),
       headerFrameBlendMode: "lighten",
       headerFrameFilter: "none",
+      dingBalanceBgImage: "none",
+      tomanBalanceBgImage: "none",
+      activeGameChipBgImage: themeActiveGameChipBgImage("dark"),
+      activeGameChipRadius: "999px",
     },
     menu: SHARED_IMAGE_MENU_TOKENS,
   },

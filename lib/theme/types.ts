@@ -59,6 +59,10 @@ export interface PlayerTokens {
   headerFrameImage: string;
   headerFrameBlendMode: string;
   headerFrameFilter: string;
+  dingBalanceBgImage: string;
+  tomanBalanceBgImage: string;
+  activeGameChipBgImage: string;
+  activeGameChipRadius: string;
 }
 
 export interface ThemeTokens {
