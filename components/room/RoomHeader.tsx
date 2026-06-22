@@ -114,7 +114,7 @@ export default function RoomHeader({
         ) : (
           <>
             <div
-              className={`${styles.prizeChip} ${styles.prizeChipGameBadge} ${hasLineWinner ? styles.prizeChipLineWinner : ""}`}
+              className={`${styles.prizeChip} ${styles.prizeChipLine} ${hasLineWinner ? styles.prizeChipLineWinner : ""}`}
             >
               <span className={`${styles.prizeValue} latin-number`}>
                 {formatNumber(linePrize)}
@@ -122,7 +122,7 @@ export default function RoomHeader({
               <span className={styles.prizeLabel}>خط</span>
             </div>
             <div
-              className={`${styles.prizeChip} ${styles.prizeChipGameBadge} ${hasFullWinner ? styles.prizeChipLineWinner : ""}`}
+              className={`${styles.prizeChip} ${styles.prizeChipFull} ${hasFullWinner ? styles.prizeChipLineWinner : ""}`}
             >
               <span className={`${styles.prizeValue} latin-number`}>
                 {formatNumber(fullPrize)}

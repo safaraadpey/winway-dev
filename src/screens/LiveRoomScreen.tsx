@@ -1111,12 +1111,9 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
         {/* RoomHeader Section - Fixed, doesn't scroll */}
         <div className="flex-shrink-0 px-4 pt-2 pb-1">
           <div
-            className="rounded-2xl overflow-hidden bg-cover bg-center bg-no-repeat p-2 flex flex-col gap-1"
+            className={`${styles.gameStatusPanel} bg-cover bg-center bg-no-repeat`}
             style={{
               backgroundImage: `linear-gradient(rgba(0,0,0,0.28), rgba(0,0,0,0.28)), url(${gameHeaderBg.src})`,
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: "center center",
-              backgroundSize: "100% 100%",
             }}
           >
             <RoomHeader

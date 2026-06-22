@@ -270,4 +270,93 @@
   font-family: inherit;
 }
 
+.brandLogoWrap {
+  flex-shrink: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.brandLogo {
+  width: auto;
+  height: 41px;
+  object-fit: contain;
+}
+
+:global(html[data-theme="light"]) .container {
+  background-color: #ffffff;
+  border-radius: 0 0 24px 24px;
+  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.06);
+  padding-bottom: 10px;
+}
+
+:global(html[data-theme="light"]) .container::before {
+  display: none;
+}
+
+:global(html[data-theme="light"]) .backButton {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  color: #059669;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+:global(html[data-theme="light"]) .playerPill {
+  background-image: none;
+  background-color: transparent;
+  height: auto;
+  min-height: 40px;
+  padding: 0;
+}
+
+:global(html[data-theme="light"]) .playerName {
+  color: #5b21b6;
+  font-size: 1.05rem;
+}
+
+:global(html[data-theme="light"]) .avatarContainer {
+  background-color: #f3e8ff;
+  border: 1px solid #ddd6fe;
+}
+
+:global(html[data-theme="light"]) .brandLogoWrap {
+  display: flex;
+}
+
+:global(html[data-theme="light"]) .row2 {
+  padding-left: 16px;
+  padding-right: 16px;
+  gap: 8px;
+}
+
+:global(html[data-theme="light"]) .dingBg::before,
+:global(html[data-theme="light"]) .tomanBg::before {
+  display: none;
+}
+
+:global(html[data-theme="light"]) .dingBg {
+  background-color: #f3e8ff;
+  border: 1px solid #e9d5ff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+:global(html[data-theme="light"]) .tomanBg {
+  background-color: #fef9c3;
+  border: 1px solid #fde68a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+:global(html[data-theme="light"]) .dingBg .balanceAmount {
+  color: #6d28d9;
+}
+
+:global(html[data-theme="light"]) .tomanBg .balanceAmount {
+  color: #c2410c;
+}
+
+:global(html[data-theme="light"]) .loadingText {
+  color: #9ca3af;
+}
+
 

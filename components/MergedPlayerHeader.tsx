@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import { getBackIconPath } from "@/lib/theme/headerIconFiles";
+import { getLogoImagePath } from "@/lib/theme/logoImageFiles";
 import styles from "./MergedPlayerHeader.module.css";
 
 import dingCoinIcon from "@/src/assets/icons/ding-coin.png";
@@ -299,6 +300,17 @@ export default function MergedPlayerHeader({
             <Image src={getAvatarImage()} alt="Player Avatar" className={styles.avatar} width={32} height={32} />
           </div>
           <div className={styles.playerName}>{playerLoading ? "..." : playerName}</div>
+        </div>
+
+        <div className={styles.brandLogoWrap}>
+          <Image
+            src={getLogoImagePath(themeId, "playerHeaderLogo")}
+            alt="Ding Money"
+            className={styles.brandLogo}
+            width={96}
+            height={40}
+            priority={false}
+          />
         </div>
       </div>
 

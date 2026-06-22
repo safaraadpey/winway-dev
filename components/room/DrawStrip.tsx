@@ -134,31 +134,25 @@ export default function DrawStrip({
         )}
         <span className={`${styles.badge} latin-number`}>90/{drawsCount}</span>
         {roomName && commitShort && (
-          <span className="relative inline-flex flex-wrap items-center justify-center gap-2 rounded-full border border-[rgba(101,79,150,1)] bg-black/40 pl-[6px] pr-[2px] py-[2px] text-[12px] text-white/90">
+          <span className={styles.commitRow}>
             {copyToast && (
               <span
                 role="status"
                 aria-live="polite"
-                className={`pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg border px-2 py-1 text-[12px] shadow-lg ${
-                  copyToast === "success"
-                    ? "border-emerald-300 bg-emerald-600 text-white"
-                    : "border-red-300 bg-red-600 text-white"
+                className={`${styles.copyToast} ${
+                  copyToast === "success" ? styles.copyToastSuccess : styles.copyToastError
                 }`}
               >
                 {copyToast === "success" ? "کپی شد" : "خطا در کپی"}
               </span>
             )}
-            <span className="whitespace-nowrap">
+            <span className={styles.commitText}>
               <span dir="ltr" className="latin-number">
                 {roomName}
               </span>{" "}
-              <span className="text-white/70">کد</span>
+              <span className={styles.commitCodeLabel}>کد</span>
             </span>
-            <button
-              type="button"
-              onClick={copyCommit}
-              className="rounded-full border border-[rgba(42,146,178,1)] bg-[rgba(42,146,178,1)] px-2 py-[2px] text-[11px] text-white font-semibold active:opacity-80"
-            >
+            <button type="button" onClick={copyCommit} className={styles.copyButton}>
               کپی هش
             </button>
           </span>

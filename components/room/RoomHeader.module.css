@@ -64,6 +64,11 @@
   background-image: url("../../src/assets/logo/gamebadge.png");
 }
 
+.prizeChipLine,
+.prizeChipFull {
+  background-image: url("../../src/assets/logo/gamebadge.png");
+}
+
 .prizeChipLineWinner {
   border: 2px solid #fbbf24;
   box-shadow: 0 0 12px rgba(251, 191, 36, 0.5);
@@ -92,4 +97,58 @@
   color: #e5e7eb;
   font-size: clamp(0.65rem, 2.8vw, 0.8125rem);
   font-weight: 600;
+}
+
+:global(html[data-theme="light"]) .muteButton {
+  background-color: #7c3aed;
+  border-color: #ddd6fe;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.18);
+}
+
+:global(html[data-theme="light"]) .prizeChip {
+  background-image: none;
+  box-shadow: none;
+  border-radius: 1rem;
+  padding: 8px 12px;
+}
+
+:global(html[data-theme="light"]) .prizeChipLine {
+  background-color: #ede9fe;
+  border: 1px solid #ddd6fe;
+}
+
+:global(html[data-theme="light"]) .prizeChipFull {
+  background-color: #dbeafe;
+  border: 1px solid #bfdbfe;
+}
+
+:global(html[data-theme="light"]) .prizeChipLineWinner {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18);
+}
+
+:global(html[data-theme="light"]) .prizeChipLine .prizeValue {
+  color: #6d28d9;
+}
+
+:global(html[data-theme="light"]) .prizeChipFull .prizeValue {
+  color: #1d4ed8;
+}
+
+:global(html[data-theme="light"]) .prizeChipLine .prizeLabel {
+  color: #7c3aed;
+}
+
+:global(html[data-theme="light"]) .prizeChipFull .prizeLabel {
+  color: #2563eb;
+}
+
+:global(html[data-theme="light"]) .tournamentChip {
+  background-color: #f5f3ff;
+  border: 1px solid #ddd6fe;
+}
+
+:global(html[data-theme="light"]) .tournamentChip .prizeValue {
+  color: #6d28d9;
 }

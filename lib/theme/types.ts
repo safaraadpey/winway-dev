@@ -27,7 +27,12 @@ export type MenuImageKey =
   | "logout"
   | "support";
 
-export type LogoImageKey = "logo" | "ingameLogo" | "ogPreview" | "brand";
+export type LogoImageKey =
+  | "logo"
+  | "ingameLogo"
+  | "playerHeaderLogo"
+  | "ogPreview"
+  | "brand";
 
 export type MenuItemPresentation =
   | { kind: "image"; imageKey: MenuImageKey; alt: string }

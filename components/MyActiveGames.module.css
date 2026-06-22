@@ -83,30 +83,56 @@
 }
 
 :global(html[data-theme="light"]) .chip {
-  border-radius: 12px;
+  border-radius: 999px;
   background-image: none;
-  background-color: transparent;
+  background-color: #f3e8ff;
   box-shadow: none;
-  border-color: transparent;
+  border: 1px solid #ddd6fe;
 }
 
 :global(html[data-theme="light"]) .chip:hover,
 :global(html[data-theme="light"]) .chip:active {
   box-shadow: none;
   filter: none;
+  background-color: #ede9fe;
 }
 
 :global(html[data-theme="light"]) .chipActive {
-  border-color: rgba(5, 150, 105, 0.55);
-  box-shadow: none;
+  border-color: #86efac;
+  background-color: #ecfdf5;
+  box-shadow: 0 0 0 1px rgba(134, 239, 172, 0.45);
 }
 
 :global(html[data-theme="light"]) .chipActive:hover {
-  border-color: rgba(5, 150, 105, 0.75);
+  border-color: #4ade80;
+  background-color: #d1fae5;
 }
 
 :global(html[data-theme="light"]) .chipText {
-  color: var(--player-active-game-chip-text-color, #111827);
+  color: #6d28d9;
+}
+
+:global(html[data-theme="light"]) .container {
+  margin-top: 0;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+:global(html[data-theme="light"]) .emptyState,
+:global(html[data-theme="light"]) .errorState {
+  background: #faf5ff;
+  border-color: #ddd6fe;
+  color: #6d28d9;
+}
+
+:global(html[data-theme="light"]) .errorText {
+  color: #6d28d9;
+}
+
+:global(html[data-theme="light"]) .retryButton {
+  background: #ecfdf5;
+  border-color: #86efac;
+  color: #166534;
 }
 
 .playIcon {

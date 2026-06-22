@@ -4,8 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { supabase } from "@/lib/supabaseClient";
-import tournamentBg from "@/src/assets/tournament/10.png";
-import myActiveGameBg from "@/src/assets/logo/MyActiveGame.png";
+import styles from "./tournaments.module.css";
 
 type TournamentRow = {
   id: string;
@@ -144,81 +143,54 @@ export default function TournamentsPage() {
   };
 
   return (
-    <div className="h-full bg-[#0E0E0F] bg-cover bg-center bg-no-repeat flex justify-center overflow-hidden">
-      <div className="w-full max-w-md h-full px-4 py-6 flex flex-col min-h-0">
-        <div className="space-y-4 flex-shrink-0">
-          <div className="flex items-center justify-between text-white">
-            <div>
-              <h1 className="text-2xl font-bold">تورنومنت‌ها</h1>
-            </div>
+    <div className={styles.page}>
+      <div className={styles.inner}>
+        <div className={styles.headerBlock}>
+          <div className={styles.titleRow}>
+            <h1 className={styles.title}>تورنومنت‌ها</h1>
             <button
+              type="button"
               onClick={() => void fetchTournaments()}
-              className="px-3 py-1.5 text-sm rounded-lg bg-[#1F2937] text-gray-100 hover:bg-[#111827] transition"
+              className={styles.refreshButton}
             >
               بروزرسانی
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className={styles.tabs}>
             <button
+              type="button"
               onClick={() => setViewMode("active")}
-              className={`px-3 py-1.5 text-sm rounded-full border transition ${
-                viewMode === "active"
-                  ? "text-white border-transparent"
-                  : "bg-[#111827] text-white border-gray-700 hover:bg-[#1F2937]"
+              className={`${styles.tab} ${
+                viewMode === "active" ? styles.tabActive : styles.tabInactive
               }`}
-              style={
-                viewMode === "active"
-                  ? {
-                      backgroundImage: `url(${myActiveGameBg.src})`,
-                      backgroundRepeat: "no-repeat",
-                      backgroundPosition: "center center",
-                      backgroundSize: "100% 100%",
-                    }
-                  : undefined
-              }
             >
               در حال اجرا
             </button>
             <button
+              type="button"
               onClick={() => setViewMode("finished")}
-              className={`px-3 py-1.5 text-sm rounded-full border transition ${
-                viewMode === "finished"
-                  ? "text-white border-transparent"
-                  : "bg-[#111827] text-white border-gray-700 hover:bg-[#1F2937]"
+              className={`${styles.tab} ${
+                viewMode === "finished" ? styles.tabActive : styles.tabInactive
               }`}
-              style={
-                viewMode === "finished"
-                  ? {
-                      backgroundImage: `url(${myActiveGameBg.src})`,
-                      backgroundRepeat: "no-repeat",
-                      backgroundPosition: "center center",
-                      backgroundSize: "100% 100%",
-                    }
-                  : undefined
-              }
             >
               پایان یافته
             </button>
           </div>
         </div>
 
-        <div className="mt-4 flex-1 min-h-0 overflow-y-auto space-y-3 pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <div className={styles.list}>
           {loading ? (
-            <div className="flex flex-col items-center justify-center text-white py-16 gap-3">
-              <div className="w-8 h-8 border-4 border-gray-700 border-t-emerald-400 rounded-full animate-spin" />
-              <p className="text-gray-300 text-sm">در حال بارگذاری تورنومنت‌ها...</p>
+            <div className={styles.loading}>
+              <div className={styles.loadingSpinner} aria-hidden="true" />
+              <p className={styles.loadingText}>در حال بارگذاری تورنومنت‌ها...</p>
             </div>
           ) : (
             <>
-              {error && (
-                <div className="rounded-lg border border-red-500/40 bg-red-500/10 text-red-100 px-3 py-2 text-sm">
-                  {error}
-                </div>
-              )}
+              {error && <div className={styles.errorBox}>{error}</div>}
 
               {!error && filteredRows.length === 0 && (
-                <div className="rounded-lg border border-gray-700 bg-[#111827] text-gray-200 px-4 py-6 text-center">
+                <div className={styles.emptyBox}>
                   {viewMode === "active"
                     ? "فعلاً تورنومنت فعالی وجود ندارد."
                     : "فعلاً تورنومنت پایان یافته‌ای وجود ندارد."}
@@ -226,7 +198,7 @@ export default function TournamentsPage() {
               )}
 
               {!error && filteredRows.length > 0 && (
-                <div className="space-y-3">
+                <div className={styles.cards}>
                   {filteredRows.map((t) => {
                     const entriesCount = entryCounts[t.id] ?? 0;
                     const minPlayersForGuarantee =
@@ -247,21 +219,14 @@ export default function TournamentsPage() {
                             handleTournamentClick(t.id);
                           }
                         }}
-                        className="rounded-xl border border-transparent px-4 py-3 text-white shadow-lg shadow-black/30 cursor-pointer transition transform hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-emerald-400/60"
-                        style={{
-                          backgroundImage: `url(${tournamentBg.src})`,
-                          backgroundRepeat: "no-repeat",
-                          backgroundPosition: "center center",
-                          backgroundSize: "100% 100%",
-                          backgroundColor: "#111827",
-                        }}
+                        className={styles.card}
                       >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="font-extrabold text-xl text-[#212121]">
+                        <div className={styles.cardHeader}>
+                          <div className={styles.cardTitle}>
                             {t.title || "بدون عنوان"}
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs px-2 py-1 rounded-full border border-gray-500/60 bg-black/40 font-medium text-gray-100">
+                          <div className={styles.cardBadges}>
+                            <span className={styles.dateBadge}>
                               {t.start_at
                                 ? `${new Date(t.start_at).toLocaleDateString("fa-IR")}، ${new Date(
                                     t.start_at
@@ -271,19 +236,16 @@ export default function TournamentsPage() {
                                   })}`
                                 : "نامشخص"}
                             </span>
-                            <span className="text-xs px-2 py-1 rounded-full bg-[rgba(0,255,170,0.6)] text-[rgba(49,63,56,1)] border border-[rgba(0,0,0,0.3)] font-semibold">
+                            <span className={styles.statusBadge}>
                               {statusLabel(t.status)}
                             </span>
                           </div>
                         </div>
 
-                        <div
-                          className="mt-2 grid gap-x-3 gap-y-1 text-sm text-gray-200"
-                          style={{ gridTemplateColumns: "repeat(3, 1fr)" }}
-                        >
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-[#212121] text-xs font-bold">قیمت بلیت</span>
-                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-gray-500/60 bg-black/40 font-medium text-gray-100">
+                        <div className={styles.detailsGrid}>
+                          <div className={styles.field}>
+                            <span className={styles.fieldLabel}>قیمت بلیت</span>
+                            <span className={styles.fieldValue}>
                               {t.ticket_price != null
                                 ? t.ticket_price <= 0
                                   ? "رایگان"
@@ -291,31 +253,31 @@ export default function TournamentsPage() {
                                 : "-"}
                             </span>
                           </div>
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-[#212121] text-xs font-bold">تعداد شرکت‌کننده</span>
-                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-gray-500/60 bg-black/40 font-medium text-gray-100">
+                          <div className={styles.field}>
+                            <span className={styles.fieldLabel}>تعداد شرکت‌کننده</span>
+                            <span className={styles.fieldValue}>
                               {entriesCount.toLocaleString("fa-IR")}
                             </span>
                           </div>
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-xs font-bold text-[#212121]">تعداد برنده نهایی</span>
-                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-gray-500/60 bg-black/40 font-medium text-gray-100">
+                          <div className={styles.field}>
+                            <span className={styles.fieldLabel}>تعداد برنده نهایی</span>
+                            <span className={styles.fieldValue}>
                               {finalWinnersCount != null
                                 ? finalWinnersCount.toLocaleString("fa-IR")
                                 : "-"}
                             </span>
                           </div>
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-xs font-bold text-[#212121]">جایزه تضمینی</span>
-                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-gray-500/60 bg-black/40 font-medium text-gray-100">
+                          <div className={styles.field}>
+                            <span className={styles.fieldLabel}>جایزه تضمینی</span>
+                            <span className={styles.fieldValue}>
                               {t.guaranteed_prize != null
                                 ? `${t.guaranteed_prize.toLocaleString("fa-IR")} ${t.currency ?? ""}`
                                 : "-"}
                             </span>
                           </div>
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-xs font-bold text-[#212121]">حداقل بازیکن</span>
-                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-gray-500/60 bg-black/40 font-medium text-gray-100">
+                          <div className={styles.field}>
+                            <span className={styles.fieldLabel}>حداقل بازیکن</span>
+                            <span className={styles.fieldValue}>
                               {minPlayersForGuarantee != null
                                 ? minPlayersForGuarantee.toLocaleString("fa-IR")
                                 : "-"}
@@ -334,4 +296,3 @@ export default function TournamentsPage() {
     </div>
   );
 }
-

@@ -5,7 +5,27 @@
   color: #ffffff;
 }
 
+.gameStatusPanel {
+  border-radius: 1rem;
+  overflow: hidden;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+}
+
 :global(html[data-theme="light"]) .root {
-  background-color: #ffffff;
+  background-color: #faf9ff;
   color: var(--player-text-primary, #111827);
+}
+
+:global(html[data-theme="light"]) .gameStatusPanel {
+  background-image: none !important;
+  background-color: #ffffff;
+  border: 1px solid #ddd6fe;
+  border-radius: 1.75rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
 }
