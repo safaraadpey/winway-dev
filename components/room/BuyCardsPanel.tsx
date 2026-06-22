@@ -103,9 +103,10 @@ export default function BuyCardsPanel({
     : `تایید ${totalPrice.toLocaleString("en-US")} تومن`;
 
   const hasSecondary = Boolean(onSecondaryAction && secondaryActionLabel);
+  const maxDisplay = maxBuy ?? maxQuantity;
 
   return (
-    <div className={`${panelStyles.panelSurface} rounded-2xl p-3 space-y-4`}>
+    <div className={`${panelStyles.panelSurface} rounded-2xl p-3 space-y-3`}>
       <div className={panelStyles.buyPanelTopRow}>
         <div className={panelStyles.buyPanelControls}>
           {(showMusicToggle || onToggleMusic) && (
@@ -119,17 +120,20 @@ export default function BuyCardsPanel({
               <span className="text-lg">{musicEnabled ? "🔊" : "🔇"}</span>
             </button>
           )}
-
-          <div className={panelStyles.quantityBadge}>
-            <span className={panelStyles.quantityBadgeLabel}>تعداد خرید</span>
-            <span className={panelStyles.quantityBadgeValue}>
-              {`${minQuantity} ~ ${maxBuy ?? maxQuantity}`}
-            </span>
-          </div>
         </div>
 
-        <div className={panelStyles.stepper}>
+        <div className={panelStyles.quantityBadge}>
+          <span className={panelStyles.quantityBadgeLabel}>تعداد کارت</span>
+          <span className={panelStyles.quantityBadgeValue} dir="ltr">
+            {`${quantity}/${maxDisplay}`}
+          </span>
+        </div>
+      </div>
+
+      <div className={panelStyles.buyPanelActionRow}>
+        {!isCancelMode && (
           <button
+            type="button"
             onClick={handleDecrease}
             disabled={quantity <= minQuantity || controlsDisabled}
             aria-label="کاهش"
@@ -137,27 +141,15 @@ export default function BuyCardsPanel({
           >
             <Image src={minusButtonImg} alt="" width={48} height={48} priority={false} />
           </button>
+        )}
 
-          <span className={panelStyles.stepperValue}>{quantity}</span>
-
-          <button
-            onClick={handleIncrease}
-            disabled={quantity >= maxQuantity || controlsDisabled}
-            aria-label="افزایش"
-            className={panelStyles.stepperButton}
-          >
-            <Image src={plusButtonImg} alt="" width={48} height={48} priority={false} />
-          </button>
-        </div>
-      </div>
-
-      <div className={hasSecondary ? "flex gap-2" : ""}>
         <button
+          type="button"
           onClick={handleConfirmClick}
           disabled={buttonDisabled}
-          className={`${
+          className={
             isCancelMode ? panelStyles.confirmButtonCancel : panelStyles.confirmButton
-          } ${hasSecondary ? panelStyles.confirmButtonHalf : ""}`}
+          }
           style={purchaseButtonStyle}
         >
           {isSubmitting ? (
@@ -189,16 +181,31 @@ export default function BuyCardsPanel({
           )}
         </button>
 
-        {hasSecondary && (
+        {!isCancelMode && (
           <button
+            type="button"
+            onClick={handleIncrease}
+            disabled={quantity >= maxQuantity || controlsDisabled}
+            aria-label="افزایش"
+            className={panelStyles.stepperButton}
+          >
+            <Image src={plusButtonImg} alt="" width={48} height={48} priority={false} />
+          </button>
+        )}
+      </div>
+
+      {hasSecondary && (
+        <div className="flex gap-2">
+          <button
+            type="button"
             onClick={() => void onSecondaryAction?.()}
             disabled={secondaryDisabled}
             className={`${panelStyles.confirmButtonCancel} ${panelStyles.confirmButtonHalf}`}
           >
             {secondaryActionLabel}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {showConfirmModal && !isCancelMode && (
         <div className={panelStyles.confirmModalOverlay}>
