@@ -7,6 +7,7 @@ import {
   verifyDrawPayload,
   type DrawVerificationOutcome,
 } from "@/lib/provablyFairVerify";
+import styles from "./DrawFairnessPage.module.css";
 
 const STANDALONE_FAIRNESS_PATH = "/draw-fairness.html";
 const STANDALONE_JSON_STORAGE_KEY = "winway_draw_fairness_json";
@@ -83,33 +84,27 @@ export default function DrawFairnessPage() {
   };
 
   return (
-    <div className="h-full min-h-0 overflow-y-auto bg-[#0E0E0F] px-4 pb-8 pt-2 text-white [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-      <div className="mx-auto max-w-md space-y-5">
-        <header className="text-center space-y-1">
-          <h1 className="text-xl font-extrabold text-[#FEEEB4]">بررسی قرعه</h1>
-          <p
-            dir="rtl"
-            className="text-right text-[13px] text-white/70 leading-relaxed"
-          >
+    <div className={styles.page}>
+      <div className={styles.inner}>
+        <header className={styles.header}>
+          <h1 className={styles.title}>بررسی قرعه</h1>
+          <p className={styles.intro}>
             برای دریافت اطلاعات provably fair در پایان بازی روی دکمه «کپی هش»
             بزنید و اطلاعات کپی‌شده را در کادر مشخصات قرعه در پایین صفحه
             الصاق کنید و دکمه محاسبه را بزنید.
           </p>
         </header>
 
-        <section className="space-y-2">
-          <label htmlFor="verify-json" className="text-sm font-semibold text-white/90">
+        <section className={styles.section}>
+          <label htmlFor="verify-json" className={styles.label}>
             JSON مشخصات قرعه
           </label>
-          <div className="overflow-hidden rounded-2xl border border-[#2a3a52] bg-black/50 focus-within:border-[#2a92b2]">
-            <div
-              dir="rtl"
-              className="flex items-center justify-end border-b border-[#2a3a52] px-2 py-1.5"
-            >
+          <div className={styles.textareaWrap}>
+            <div className={styles.textareaToolbar}>
               <button
                 type="button"
                 onClick={handlePasteFromClipboard}
-                className="rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-[11px] font-semibold text-white/90 active:opacity-80"
+                className={styles.pasteButton}
               >
                 الصاق از کلیپ بورد
               </button>
@@ -124,85 +119,71 @@ export default function DrawFairnessPage() {
               }}
               placeholder={EXAMPLE_PLACEHOLDER}
               rows={10}
-              className="latin-number block w-full resize-y border-0 bg-transparent p-3 text-[12px] leading-relaxed text-white/90 outline-none"
+              className={`${styles.textarea} latin-number`}
             />
           </div>
-          {pasteError && (
-            <p className="text-right text-[12px] text-red-300">{pasteError}</p>
-          )}
+          {pasteError && <p className={styles.pasteError}>{pasteError}</p>}
         </section>
 
         <button
           type="button"
           onClick={handleVerify}
           disabled={loading || !jsonInput.trim()}
-          className="w-full rounded-2xl bg-[#2a92b2] py-3 text-center text-sm font-bold text-white shadow-lg active:opacity-90 disabled:opacity-50"
+          className={styles.primaryButton}
         >
           {loading ? "در حال محاسبه…" : "محاسبه"}
         </button>
 
-        <p
-          dir="rtl"
-          className="text-right text-[13px] text-white/70 leading-relaxed"
-        >
+        <p className={styles.hint}>
           برای اعتماد بیشتر می‌توانید محاسبه‌گر مستقل مرورگر را استفاده کنید
         </p>
 
         <button
           type="button"
           onClick={handleOpenStandalone}
-          className="w-full rounded-2xl border border-white/20 bg-transparent py-3 text-center text-sm font-bold text-white/90 active:opacity-90"
+          className={styles.secondaryButton}
         >
           بررسی مستقل در مرورگر
         </button>
 
         {parseError && (
-          <div
-            role="alert"
-            className="rounded-2xl border border-red-400/50 bg-red-950/40 px-4 py-3 text-[13px] text-red-200"
-          >
+          <div role="alert" className={styles.parseError}>
             {parseError}
           </div>
         )}
 
         {outcome && (
           <section
-            className={`rounded-2xl border p-4 space-y-4 ${
-              outcome.ok
-                ? "border-emerald-400/50 bg-emerald-950/30"
-                : "border-red-400/50 bg-red-950/30"
+            className={`${styles.resultSection} ${
+              outcome.ok ? styles.resultOk : styles.resultFail
             }`}
           >
-            <div className="text-center">
+            <div>
               <p
-                className={`text-lg font-extrabold ${
-                  outcome.ok ? "text-emerald-300" : "text-red-300"
+                className={`${styles.resultTitle} ${
+                  outcome.ok ? styles.resultTitleOk : styles.resultTitleFail
                 }`}
               >
                 {outcome.ok ? "✅ قرعه معتبر و provably fair" : "❌ تأیید ناموفق"}
               </p>
             </div>
 
-            <ul className="space-y-2">
+            <ul className={styles.checkList}>
               {outcome.checks.map((check) => (
                 <li
                   key={check.id}
-                  className={`rounded-xl border px-3 py-2 text-[12px] ${
-                    check.passed
-                      ? "border-emerald-500/30 bg-emerald-900/20"
-                      : "border-red-500/30 bg-red-900/20"
+                  className={`${styles.checkItem} ${
+                    check.passed ? styles.checkItemOk : styles.checkItemFail
                   }`}
                 >
-                  <div className="flex items-start gap-2">
-                    <span className="mt-0.5 shrink-0">
+                  <div className={styles.checkRow}>
+                    <span className={styles.checkMark}>
                       {check.passed ? "✓" : "✗"}
                     </span>
                     <div>
-                      <p className="font-semibold text-white/90">{check.label}</p>
+                      <p className={styles.checkLabel}>{check.label}</p>
                       {check.detail && (
-                        <p className="mt-1 text-white/65 leading-relaxed">
-                          {check.detail}
-                        </p>
+                        <p className={styles.checkDetail}>{check.detail}</p>
                       )}
                     </div>
                   </div>
@@ -211,14 +192,9 @@ export default function DrawFairnessPage() {
             </ul>
 
             {outcome.reproducedDraws.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-[12px] font-semibold text-white/80">
-                  اعداد بازتولید‌شده:
-                </p>
-                <p
-                  dir="ltr"
-                  className="latin-number rounded-xl border border-white/10 bg-black/40 p-2 text-[11px] leading-relaxed text-white/75 break-all"
-                >
+              <div className={styles.reproducedBlock}>
+                <p className={styles.reproducedLabel}>اعداد بازتولید‌شده:</p>
+                <p className={`${styles.reproducedValue} latin-number`}>
                   {outcome.reproducedDraws.join(", ")}
                 </p>
               </div>
@@ -226,26 +202,31 @@ export default function DrawFairnessPage() {
           </section>
         )}
 
-        <section
-          dir="rtl"
-          className="rounded-2xl border border-[#1f2837] bg-black/40 p-4 space-y-3 text-right text-[13px] leading-relaxed text-white/85"
-        >
-          <h2 className="text-sm font-bold text-[#FEEEB4]">روش محاسبه</h2>
-          <ol className="list-decimal list-outside mr-4 space-y-2 text-white/80">
+        <section className={styles.infoSection}>
+          <h2 className={styles.infoTitle}>روش محاسبه</h2>
+          <ol className={styles.infoList}>
             <li>
-              قبل از بازی <span className="text-white/90">serverSeedHash</span>{" "}
-              (کد commit) در میز نمایش داده و قابل کپی است.
+              قبل از بازی{" "}
+              <span className={styles.infoHighlight}>serverSeedHash</span> (کد
+              commit) در میز نمایش داده و قابل کپی است.
             </li>
             <li>
-              پس از بازی <span className="text-white/90">serverSeed</span>{" "}
-              منتشر می‌شود. تأیید commit:
-              <code dir="ltr" className="mx-1 block mt-1 rounded-lg bg-black/50 px-2 py-1 text-left text-[11px] latin-number text-emerald-200/90">
+              پس از بازی{" "}
+              <span className={styles.infoHighlight}>serverSeed</span> منتشر
+              می‌شود. تأیید commit:
+              <code
+                dir="ltr"
+                className={`${styles.codeBlock} ${styles.codeBlockGreen} latin-number`}
+              >
                 sha256(bytes_from_hex(serverSeed)) = serverSeedHash
               </code>
             </li>
             <li>
               برای هر قرعه، بین اعداد ۱ تا ۹۰ که هنوز نیامده‌اند، کلید
-              <code dir="ltr" className="mx-1 block mt-1 rounded-lg bg-black/50 px-2 py-1 text-left text-[11px] latin-number text-sky-200/90">
+              <code
+                dir="ltr"
+                className={`${styles.codeBlock} ${styles.codeBlockBlue} latin-number`}
+              >
                 sha256(utf8(hex(seed)+&apos;:&apos;+n))
               </code>
               محاسبه می‌شود و عددی که <strong>کمینه</strong> کلید را دارد
@@ -253,10 +234,11 @@ export default function DrawFairnessPage() {
             </li>
             <li>
               ترتیب بازتولید‌شده با{" "}
-              <span className="text-white/90">drawnNumbers</span> مقایسه می‌شود.
+              <span className={styles.infoHighlight}>drawnNumbers</span> مقایسه
+              می‌شود.
             </li>
           </ol>
-          <p className="text-[12px] text-amber-200/80 border-t border-white/10 pt-2">
+          <p className={styles.warning}>
             توجه: هش commit روی بایت‌های seed است، نه روی متن hex (
             <span dir="ltr" className="latin-number">
               sha256(utf8(serverSeed))

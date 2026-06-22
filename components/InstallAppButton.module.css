@@ -68,6 +68,23 @@
   line-height: 1.45;
 }
 
+:global(html[data-theme="light"]) .actionLink {
+  background: #ffffff;
+  border-color: #ddd6fe;
+  box-shadow: 0 4px 16px rgba(124, 58, 237, 0.06);
+  color: #7c3aed;
+  text-shadow: none;
+}
+
+:global(html[data-theme="light"]) .actionLink:active {
+  background: #faf5ff;
+  opacity: 1;
+}
+
+:global(html[data-theme="light"]) .actionLinkDescription {
+  color: #8b7cb5;
+}
+
 .helpText {
   margin: 0;
   padding: 0.7rem 0.75rem;

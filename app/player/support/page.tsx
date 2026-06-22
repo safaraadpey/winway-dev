@@ -3,6 +3,7 @@
 import React, { useEffect } from "react";
 import Link from "next/link";
 import installStyles from "@/components/InstallAppButton.module.css";
+import styles from "@/components/support/SupportPage.module.css";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 
 const supportLinks = [
@@ -28,14 +29,14 @@ export default function SupportPage() {
   }, [setShowBackButton, setOnBackClick]);
 
   return (
-    <div className="min-h-full bg-[#0E0E0F] px-4 pb-8 pt-2">
-      <div className="mx-auto max-w-md space-y-5">
-        <header className="text-center space-y-1">
-          <h1 className="text-2xl font-extrabold text-[#FEEEB4]">پشتیبانی</h1>
-          <p className="text-sm text-white/70">راهنما و ابزارهای کمکی</p>
+    <div className={styles.page}>
+      <div className={styles.inner}>
+        <header className={styles.header}>
+          <h1 className={styles.title}>پشتیبانی</h1>
+          <p className={styles.subtitle}>راهنما و ابزارهای کمکی</p>
         </header>
 
-        <nav className="space-y-3 px-1" aria-label="منوی پشتیبانی">
+        <nav className={styles.nav} aria-label="منوی پشتیبانی">
           {supportLinks.map((item) => (
             <Link
               key={item.href}

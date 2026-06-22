@@ -1,10 +1,39 @@
 /* FinancialReportsPage.module.css */
 
 .container {
-  min-height: 100vh;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background-color: var(--player-page-overlay, rgba(14, 14, 15, 0.55));
-  padding: 1rem;
+  padding: 1rem 1rem 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.pageHeader {
+  flex-shrink: 0;
+  max-width: 800px;
+  width: 100%;
+  margin: 0 auto;
+  position: relative;
+  z-index: 2;
+  background-color: var(--player-page-overlay, rgba(14, 14, 15, 0.55));
+  padding-bottom: 0.25rem;
+}
+
+.scrollBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-top: 0.25rem;
   padding-bottom: 2rem;
+  scrollbar-width: none;
+}
+
+.scrollBody::-webkit-scrollbar {
+  display: none;
 }
 
 .content {
@@ -16,7 +45,7 @@
   font-size: 1.75rem;
   font-weight: bold;
   color: #ffffff;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
   text-align: center;
 }
 
@@ -24,7 +53,7 @@
 .periodTabs {
   display: flex;
   gap: 0.5rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .periodTab {
@@ -40,6 +69,16 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+}
+
+.periodTabIcon {
+  display: none;
+  font-size: 0.95rem;
+  line-height: 1;
 }
 
 .periodTab:hover {
@@ -102,6 +141,17 @@
   border-radius: 0.75rem;
   padding: 1.5rem;
   margin-bottom: 2rem;
+  overflow: hidden;
+  transition:
+    margin-bottom 0.35s ease,
+    padding 0.35s ease,
+    box-shadow 0.35s ease;
+}
+
+.gameStatsSectionCollapsed {
+  margin-bottom: 1rem;
+  padding-top: 1rem;
+  padding-bottom: 1rem;
 }
 
 .statsList {
@@ -109,6 +159,23 @@
   flex-direction: column;
   gap: 0;
   margin-top: 1rem;
+  overflow: hidden;
+  max-height: 520px;
+  opacity: 1;
+  transition:
+    max-height 0.35s ease,
+    opacity 0.28s ease,
+    margin-top 0.35s ease;
+}
+
+.gameStatsSectionCollapsed .statsList {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+}
+
+.gameStatsSectionCollapsed .sectionTitle {
+  margin-bottom: 0;
 }
 
 .statsItem {
@@ -158,6 +225,15 @@
   font-weight: 600;
   color: #ffffff;
   margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sectionTitleIcon {
+  display: none;
+  font-size: 1.1rem;
+  line-height: 1;
 }
 
 .emptyState {
@@ -177,6 +253,14 @@
   border-radius: 0.5rem;
   padding: 1rem;
   border-left: 4px solid #00d4aa;
+}
+
+.transactionItemDeposit {
+  border-left-color: #10b981;
+}
+
+.transactionItemWithdraw {
+  border-left-color: #14b8a6;
 }
 
 .transactionHeader {
@@ -299,6 +383,173 @@
 
 .errorText {
   color: #dc2626;
+}
+
+:global(html[data-theme="light"]) .pageHeader {
+  background: linear-gradient(180deg, #fdfbff 0%, #f5f0ff 100%);
+}
+
+:global(html[data-theme="light"]) .scrollBody {
+  background: linear-gradient(180deg, #f5f0ff 0%, #ede9fe 100%);
+}
+
+:global(html[data-theme="light"]) .container {
+  background: linear-gradient(180deg, #fdfbff 0%, #f5f0ff 52%, #ede9fe 100%);
+}
+
+:global(html[data-theme="light"]) .title {
+  color: #6d28d9;
+  font-weight: 800;
+  position: relative;
+}
+
+:global(html[data-theme="light"]) .loadingText {
+  color: #7c3aed;
+}
+
+:global(html[data-theme="light"]) .errorContainer {
+  color: #7c3aed;
+}
+
+:global(html[data-theme="light"]) .periodTab {
+  background-color: #ffffff;
+  color: #7c3aed;
+  border-color: #ddd6fe;
+  border-radius: 1rem;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.06);
+}
+
+:global(html[data-theme="light"]) .periodTab:hover {
+  background-color: #faf5ff;
+}
+
+:global(html[data-theme="light"]) .periodTabActive {
+  background-image: linear-gradient(135deg, #c084fc 0%, #a855f7 48%, #6366f1 100%);
+  background-color: transparent;
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.28);
+}
+
+:global(html[data-theme="light"]) .periodTabActive:hover {
+  background-color: transparent;
+}
+
+:global(html[data-theme="light"]) .periodTabIcon {
+  display: inline-flex;
+}
+
+:global(html[data-theme="light"]) .gameStatsSection {
+  background-color: #ffffff;
+  border-color: #ebe4ff;
+  border-radius: 1.25rem;
+  box-shadow: 0 4px 20px rgba(124, 58, 237, 0.08);
+}
+
+:global(html[data-theme="light"]) .sectionTitle {
+  color: #6d28d9;
+  font-weight: 700;
+}
+
+:global(html[data-theme="light"]) .sectionTitleIcon {
+  display: inline-flex;
+}
+
+:global(html[data-theme="light"]) .statsItem {
+  border-bottom-color: #ede9fe;
+  padding: 0.75rem 0.25rem;
+}
+
+:global(html[data-theme="light"]) .statsLabel {
+  color: #5b21b6;
+}
+
+:global(html[data-theme="light"]) .statsValue {
+  color: #6d28d9;
+  font-weight: 700;
+}
+
+:global(html[data-theme="light"]) .statsValue.positive {
+  color: #059669;
+}
+
+:global(html[data-theme="light"]) .statsValue.negative {
+  color: #dc2626;
+}
+
+:global(html[data-theme="light"]) .transactionsSection {
+  background-color: transparent;
+  padding: 0;
+}
+
+:global(html[data-theme="light"]) .emptyState {
+  background-color: #ffffff;
+  border: 1px solid #ddd6fe;
+  border-radius: 1rem;
+  color: #7c3aed;
+  box-shadow: 0 4px 16px rgba(124, 58, 237, 0.06);
+}
+
+:global(html[data-theme="light"]) .transactionItem {
+  background-color: #ffffff;
+  border-radius: 1rem;
+  border: 1px solid #ebe4ff;
+  border-left: 4px solid #14b8a6;
+  box-shadow: 0 4px 16px rgba(124, 58, 237, 0.06);
+  padding: 1rem 1rem 1rem 0.875rem;
+}
+
+:global(html[data-theme="light"]) .transactionItemDeposit {
+  border-left-color: #10b981;
+}
+
+:global(html[data-theme="light"]) .transactionItemWithdraw {
+  border-left-color: #14b8a6;
+}
+
+:global(html[data-theme="light"]) .typeDeposit {
+  background-color: #dcfce7;
+  color: #15803d;
+  border-radius: 999px;
+}
+
+:global(html[data-theme="light"]) .typeWithdraw {
+  background-color: #ffe4e6;
+  color: #be123c;
+  border-radius: 999px;
+}
+
+:global(html[data-theme="light"]) .transactionAmount {
+  color: #5b21b6;
+  font-weight: 800;
+}
+
+:global(html[data-theme="light"]) .transactionDate {
+  color: #8b7cb5;
+}
+
+:global(html[data-theme="light"]) .actorLabel,
+:global(html[data-theme="light"]) .actorId {
+  color: #8b7cb5;
+}
+
+:global(html[data-theme="light"]) .actorName {
+  color: #6d28d9;
+}
+
+:global(html[data-theme="light"]) .actorRole {
+  color: #7c3aed;
+}
+
+:global(html[data-theme="light"]) .transactionDescription {
+  border-top-color: #ede9fe;
+  color: #8b7cb5;
+}
+
+:global(html[data-theme="light"]) .loadingSpinner {
+  border-color: rgba(124, 58, 237, 0.12);
+  border-top-color: #7c3aed;
 }
 
 /* Responsive */

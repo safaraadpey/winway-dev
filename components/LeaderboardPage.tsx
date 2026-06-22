@@ -87,6 +87,9 @@ export default function LeaderboardPage() {
               activeTab === "history" ? styles.tabActive : ""
             }`}
           >
+            <span className={styles.tabIcon} aria-hidden="true">
+              📋
+            </span>
             سوابق من
           </button>
           <button
@@ -95,6 +98,9 @@ export default function LeaderboardPage() {
               activeTab === "ranking" ? styles.tabActive : ""
             }`}
           >
+            <span className={styles.tabIcon} aria-hidden="true">
+              🏆
+            </span>
             رتبه بندی
           </button>
         </div>
@@ -109,6 +115,9 @@ export default function LeaderboardPage() {
                   activePeriod === "daily" ? styles.periodTabActive : ""
                 }`}
               >
+                <span className={styles.periodTabIcon} aria-hidden="true">
+                  📅
+                </span>
                 روزانه
               </button>
               <button
@@ -117,6 +126,9 @@ export default function LeaderboardPage() {
                   activePeriod === "weekly" ? styles.periodTabActive : ""
                 }`}
               >
+                <span className={styles.periodTabIcon} aria-hidden="true">
+                  📅
+                </span>
                 هفتگی
               </button>
               <button
@@ -125,6 +137,9 @@ export default function LeaderboardPage() {
                   activePeriod === "monthly" ? styles.periodTabActive : ""
                 }`}
               >
+                <span className={styles.periodTabIcon} aria-hidden="true">
+                  📅
+                </span>
                 ماهیانه
               </button>
             </div>
@@ -132,39 +147,69 @@ export default function LeaderboardPage() {
             {/* نمایش آمار بر اساس بازه زمانی */}
             <div className={styles.statsGrid}>
               <div className={styles.statCard}>
-                <div className={styles.statLabel}>مجموع برد</div>
-                <div className={styles.statValue}>
-                  {formatAmount(currentStats.totalWinnings)}
+                <span className={styles.statIcon} aria-hidden="true">
+                  📈
+                </span>
+                <div className={styles.statCardMain}>
+                  <div className={styles.statLabel}>مجموع برد</div>
+                  <div className={styles.statValue}>
+                    {formatAmount(currentStats.totalWinnings)}
+                  </div>
                 </div>
               </div>
               <div className={styles.statCard}>
-                <div className={styles.statLabel}>مجموع برد تورنومنت</div>
-                <div className={styles.statValue}>
-                  {formatAmount(currentStats.tournamentWinnings)}
+                <span className={styles.statIcon} aria-hidden="true">
+                  🏆
+                </span>
+                <div className={styles.statCardMain}>
+                  <div className={styles.statLabel}>مجموع برد تورنومنت</div>
+                  <div className={styles.statValue}>
+                    {formatAmount(currentStats.tournamentWinnings)}
+                  </div>
                 </div>
               </div>
               <div className={styles.statCard}>
-                <div className={styles.statLabel}>مجموع خرید</div>
-                <div className={styles.statValue}>
-                  {formatAmount(currentStats.totalPurchases)}
+                <span className={styles.statIcon} aria-hidden="true">
+                  🛒
+                </span>
+                <div className={styles.statCardMain}>
+                  <div className={styles.statLabel}>مجموع خرید</div>
+                  <div className={styles.statValue}>
+                    {formatAmount(currentStats.totalPurchases)}
+                  </div>
                 </div>
               </div>
               <div className={styles.statCard}>
-                <div className={styles.statLabel}>تعداد کارت</div>
-                <div className={styles.statValue}>
-                  {formatAmount(currentStats.cardCount)}
+                <span className={styles.statIcon} aria-hidden="true">
+                  💳
+                </span>
+                <div className={styles.statCardMain}>
+                  <div className={styles.statLabel}>تعداد کارت</div>
+                  <div className={styles.statValue}>
+                    {formatAmount(currentStats.cardCount)}
+                  </div>
                 </div>
               </div>
               <div className={styles.statCard}>
-                <div className={styles.statLabel}>تعداد برد خطی</div>
-                <div className={styles.statValue}>
-                  {formatAmount(currentStats.lineWinsCount)}
+                <span className={styles.statIcon} aria-hidden="true">
+                  📈
+                </span>
+                <div className={styles.statCardMain}>
+                  <div className={styles.statLabel}>تعداد برد خطی</div>
+                  <div className={styles.statValue}>
+                    {formatAmount(currentStats.lineWinsCount)}
+                  </div>
                 </div>
               </div>
               <div className={styles.statCard}>
-                <div className={styles.statLabel}>تعداد برد پر</div>
-                <div className={styles.statValue}>
-                  {formatAmount(currentStats.fullWinsCount)}
+                <span className={styles.statIcon} aria-hidden="true">
+                  👥
+                </span>
+                <div className={styles.statCardMain}>
+                  <div className={styles.statLabel}>تعداد برد پر</div>
+                  <div className={styles.statValue}>
+                    {formatAmount(currentStats.fullWinsCount)}
+                  </div>
                 </div>
               </div>
             </div>

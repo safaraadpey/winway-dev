@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { loadFinancialReports } from "@/services/financial-reports";
 import type {
@@ -21,7 +21,73 @@ export default function FinancialReportsPage() {
   const [data, setData] = useState<FinancialReportsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activePeriod, setActivePeriod] = useState<ReportPeriod>("month");
+  const [statsExpanded, setStatsExpanded] = useState(true);
   const periodCacheRef = useRef<Partial<Record<ReportPeriod, FinancialReportsData>>>({});
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const updateStatsExpandedFromScroll = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const edgeThreshold = 24;
+    const canScroll = scrollHeight - clientHeight > edgeThreshold;
+
+    if (!canScroll) {
+      setStatsExpanded(true);
+      return;
+    }
+
+    const atTop = scrollTop <= edgeThreshold;
+    const atBottom =
+      scrollTop + clientHeight >= scrollHeight - edgeThreshold;
+
+    if (atTop) {
+      setStatsExpanded(true);
+      return;
+    }
+
+    if (atBottom) {
+      setStatsExpanded((wasExpanded) => {
+        if (!wasExpanded) {
+          requestAnimationFrame(() => {
+            container.scrollTo({
+              top: container.scrollHeight,
+              behavior: "auto",
+            });
+          });
+        }
+        return true;
+      });
+      return;
+    }
+
+    setStatsExpanded(false);
+  }, []);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      updateStatsExpandedFromScroll();
+    };
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+    };
+  }, [updateStatsExpandedFromScroll, data, activePeriod]);
+
+  useEffect(() => {
+    setStatsExpanded(true);
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: "auto" });
+  }, [activePeriod]);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(updateStatsExpandedFromScroll);
+    return () => cancelAnimationFrame(raf);
+  }, [data, updateStatsExpandedFromScroll]);
 
   useEffect(() => {
     setShowBackButton(true);
@@ -145,7 +211,7 @@ export default function FinancialReportsPage() {
 
   if (loading && !data) {
     return (
-      <div className={styles.container}>
+      <div className={styles.container} ref={scrollContainerRef}>
         <div className={styles.loadingContainer}>
           <div className={styles.loadingSpinner}></div>
           <p className={styles.loadingText}>در حال بارگذاری...</p>
@@ -156,7 +222,7 @@ export default function FinancialReportsPage() {
 
   if (!data) {
     return (
-      <div className={styles.container}>
+      <div className={styles.container} ref={scrollContainerRef}>
         <div className={styles.errorContainer}>
           <p className={styles.errorText}>خطا در بارگذاری گزارشات مالی</p>
         </div>
@@ -216,10 +282,9 @@ export default function FinancialReportsPage() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.content}>
+      <div className={styles.pageHeader}>
         <h1 className={styles.title}>گزارشات مالی</h1>
 
-        {/* تب‌های دوره زمانی */}
         <div className={styles.periodTabs}>
           {(["day", "week", "month"] as ReportPeriod[]).map((period) => (
             <button
@@ -229,14 +294,29 @@ export default function FinancialReportsPage() {
                 activePeriod === period ? styles.periodTabActive : ""
               }`}
             >
+              <span className={styles.periodTabIcon} aria-hidden="true">
+                📅
+              </span>
               {PERIOD_LABELS[period]}
             </button>
           ))}
         </div>
+      </div>
 
+      <div className={styles.scrollBody} ref={scrollContainerRef}>
+        <div className={styles.content}>
         {/* آمار بازی */}
-        <div className={styles.gameStatsSection}>
-          <h2 className={styles.sectionTitle}>آمار مالی</h2>
+        <div
+          className={`${styles.gameStatsSection} ${
+            statsExpanded ? "" : styles.gameStatsSectionCollapsed
+          }`}
+        >
+          <h2 className={styles.sectionTitle}>
+            <span className={styles.sectionTitleIcon} aria-hidden="true">
+              📊
+            </span>
+            آمار مالی
+          </h2>
           <div className={styles.statsList}>
             <div className={styles.statsItem}>
               <span className={styles.statsLabel}>مجموع کارت خریده شده</span>
@@ -277,7 +357,12 @@ export default function FinancialReportsPage() {
 
         {/* لیست تراکنش‌ها */}
         <div className={styles.transactionsSection}>
-          <h2 className={styles.sectionTitle}>تراکنش‌ها</h2>
+          <h2 className={styles.sectionTitle}>
+            <span className={styles.sectionTitleIcon} aria-hidden="true">
+              💳
+            </span>
+            تراکنش‌ها
+          </h2>
           {transactions.length === 0 ? (
             <div className={styles.emptyState}>
               <p>تراکنشی در این دوره یافت نشد</p>
@@ -285,7 +370,14 @@ export default function FinancialReportsPage() {
           ) : (
             <div className={styles.transactionsList}>
               {transactions.map((tx) => (
-                <div key={tx.id} className={styles.transactionItem}>
+                <div
+                  key={tx.id}
+                  className={`${styles.transactionItem} ${
+                    tx.type === "deposit"
+                      ? styles.transactionItemDeposit
+                      : styles.transactionItemWithdraw
+                  }`}
+                >
                   <div className={styles.transactionHeader}>
                     <div className={styles.transactionType}>
                       <span
@@ -336,6 +428,7 @@ export default function FinancialReportsPage() {
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

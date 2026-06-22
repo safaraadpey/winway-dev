@@ -176,12 +176,13 @@
 }
 
 .tomanBg .balanceAmount {
-  color: var(--player-toman-balance-amount-color, var(--player-balance-amount-color, #FEEEB4));
+  color: rgba(63, 146, 180, 1);
 }
 
 .tomanBg {
-  background-color: rgba(147, 197, 253, 0.05);
-  background-image: var(--player-toman-balance-bg-image, none);
+  background-color: #111c2f;
+  background-image: url("../../src/assets/logo/gamebadge.png");
+  border: 1px solid transparent;
   justify-content: space-between;
 }
 
@@ -342,8 +343,8 @@
 }
 
 :global(html[data-theme="light"]) .tomanBg {
-  background-color: #fef9c3;
-  border: 1px solid #fde68a;
+  background-color: #dbeafe;
+  border: 1px solid #bfdbfe;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
@@ -352,11 +353,22 @@
 }
 
 :global(html[data-theme="light"]) .tomanBg .balanceAmount {
-  color: #c2410c;
+  color: #1d4ed8;
 }
 
 :global(html[data-theme="light"]) .loadingText {
   color: #9ca3af;
 }
 
+:global(html[data-theme="newStyle"]) .tomanBg {
+  background-color: rgba(147, 197, 253, 0.05);
+  background-image: var(--player-ding-balance-bg-image, none);
+  border: none;
+  justify-content: space-between;
+}
+
+:global(html[data-theme="newStyle"]) .tomanBg .balanceAmount {
+  text-align: left;
+  color: var(--player-ding-balance-amount-color, var(--player-balance-amount-color, #FEEEB4));
+}
 
