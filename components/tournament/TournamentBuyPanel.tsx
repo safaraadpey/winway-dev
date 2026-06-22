@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
-import buyCardButtonBg from "@/src/assets/logo/BuyCardBotton.png";
 import minusButtonImg from "@/src/assets/logo/minusBotton.png";
 import plusButtonImg from "@/src/assets/logo/plusBotton.png";
 import panelStyles from "@/components/room/gameRoomPanels.module.css";
@@ -87,17 +86,6 @@ export default function TournamentBuyPanel({
   const totalPrice = quantity * price;
   const controlsDisabled = disabled || isCancelMode;
   const buttonDisabled = disabled || isSubmitting;
-  const buttonClass = isCancelMode
-    ? "w-full py-4 rounded-xl bg-red-600 text-white font-bold text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-98 transition-transform"
-    : "w-full py-4 rounded-xl bg-transparent text-[#006400] font-bold text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-98 transition-transform";
-  const purchaseButtonStyle = !isCancelMode
-    ? {
-        backgroundImage: `url(${buyCardButtonBg.src})`,
-        backgroundRepeat: "no-repeat",
-        backgroundPosition: "center",
-        backgroundSize: "100% 100%",
-      }
-    : undefined;
   const ctaLabel = isCancelMode
     ? actionLabel || "لغو رزرو"
     : `تایید ${totalPrice.toLocaleString("en-US")} ${currencyLabel}`;
@@ -106,59 +94,63 @@ export default function TournamentBuyPanel({
 
   return (
     <div className={`${panelStyles.panelSurface} rounded-2xl p-3 space-y-4`}>
-      <div className="flex items-center justify-between gap-0.5">
-        <div className="flex items-center gap-2">
+      <div className={panelStyles.tournamentBuyTopRow}>
+        <div className={panelStyles.tournamentBuyControls}>
           {(showMusicToggle || onToggleMusic) && (
             <button
               type="button"
               onClick={onToggleMusic}
               aria-label={`موسیقی ${musicEnabled ? "روشن" : "خاموش"}`}
               disabled={!onToggleMusic}
-              className="inline-flex items-center gap-2 rounded-full border border-gray-600 px-1.5 py-1 text-white bg-black/40 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+              className={panelStyles.musicButton}
             >
               <span className="text-lg">{musicEnabled ? "🔊" : "🔇"}</span>
             </button>
           )}
 
-          <div className="inline-flex flex-col items-center rounded-full border border-gray-600 px-3 py-1 text-white">
-            <span className="text-xs leading-tight">تعداد خرید</span>
-            <span className="text-base font-semibold">
+          <div className={panelStyles.tournamentRangeBadge}>
+            <span className={panelStyles.tournamentRangeBadgeLabel}>تعداد خرید</span>
+            <span className={panelStyles.tournamentRangeBadgeValue}>
               {`${displayMin ?? minQuantity} ~ ${displayMax ?? maxBuy ?? maxQuantity}`}
             </span>
           </div>
         </div>
 
-        <div className="bg-[#111111]/60 rounded-full px-1 py-1 flex items-center justify-center gap-4 border border-gray-600">
+        <div className={panelStyles.tournamentStepperGroup}>
           <button
+            type="button"
             onClick={handleDecrease}
             disabled={quantity <= minQuantity || controlsDisabled}
             aria-label="کاهش"
-            className="w-12 h-12 rounded-full bg-transparent p-0 flex items-center justify-center shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-transform overflow-hidden"
+            className={panelStyles.stepperButton}
           >
             <Image src={minusButtonImg} alt="" width={48} height={48} priority={false} />
           </button>
 
-          <span className="text-white text-3xl font-semibold min-w-[60px] text-center">
-            {quantity}
-          </span>
+          <span className={panelStyles.tournamentQuantity}>{quantity}</span>
 
           <button
+            type="button"
             onClick={handleIncrease}
             disabled={quantity >= maxQuantity || controlsDisabled}
             aria-label="افزایش"
-            className="w-12 h-12 rounded-full bg-transparent p-0 flex items-center justify-center shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-transform overflow-hidden"
+            className={panelStyles.stepperButton}
           >
             <Image src={plusButtonImg} alt="" width={48} height={48} priority={false} />
           </button>
         </div>
       </div>
 
-      <div className={hasSecondary ? "flex gap-2" : ""}>
+      <div className={hasSecondary ? panelStyles.tournamentActionsRow : undefined}>
         <button
+          type="button"
           onClick={handleConfirm}
           disabled={buttonDisabled}
-          className={`${buttonClass} ${hasSecondary ? "flex-1" : ""}`}
-          style={purchaseButtonStyle}
+          className={
+            isCancelMode
+              ? panelStyles.tournamentCancelButton
+              : panelStyles.tournamentConfirmButton
+          }
         >
           {isSubmitting ? (
             <span className="flex items-center justify-center gap-2">
@@ -191,9 +183,10 @@ export default function TournamentBuyPanel({
 
         {hasSecondary && (
           <button
+            type="button"
             onClick={() => void onSecondaryAction?.()}
             disabled={secondaryDisabled}
-            className="flex-1 w-full py-4 rounded-xl bg-red-600 text-white font-bold text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-98 transition-transform"
+            className={panelStyles.tournamentCancelButton}
           >
             {secondaryActionLabel}
           </button>
@@ -202,5 +195,3 @@ export default function TournamentBuyPanel({
     </div>
   );
 }
-
-

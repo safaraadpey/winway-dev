@@ -7,6 +7,7 @@ import panelStyles from "@/components/room/gameRoomPanels.module.css";
 
 interface ActiveTablesSectionProps {
   title?: string;
+  titleClassName?: string;
   emptyMessage?: string;
   tables?: ActiveTable[];
   onTableClick?: (tableId: string) => void;
@@ -14,6 +15,7 @@ interface ActiveTablesSectionProps {
 
 export default function ActiveTablesSection({
   title = "میزهای فعال",
+  titleClassName,
   emptyMessage = "هیچ میز فعالی وجود ندارد",
   tables = [],
   onTableClick,
@@ -23,11 +25,11 @@ export default function ActiveTablesSection({
 
   return (
     <div
-      className={`${panelStyles.activeCardsPanelSurface} space-y-3 rounded-2xl px-3 pt-[4px] pb-[6px] mt-[9px] min-h-[200px]`}
+      className={`${panelStyles.activeCardsPanelSurface} space-y-3 rounded-2xl px-3 pt-[4px] pb-[6px] min-h-[200px]`}
     >
       <div className={panelStyles.activeTablesTitleWrap}>
         <span className={panelStyles.activeTablesTitleLine} aria-hidden="true" />
-        <h3 className={panelStyles.activeTablesTitle}>{title}</h3>
+        <h3 className={titleClassName ?? panelStyles.activeTablesTitle}>{title}</h3>
         <span className={panelStyles.activeTablesTitleLine} aria-hidden="true" />
       </div>
 

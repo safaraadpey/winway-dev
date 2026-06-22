@@ -13,6 +13,7 @@ import toast from "react-hot-toast";
 import TournamentRoomLoadingFallback from "@/components/TournamentRoomLoadingFallback";
 import panelStyles from "@/components/room/gameRoomPanels.module.css";
 import loadingStyles from "@/components/playerScreenLoading.module.css";
+import screenStyles from "@/src/screens/TournamentRoomScreen.module.css";
 
 interface TournamentRoomScreenProps {
   tournamentId?: string;
@@ -761,13 +762,13 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   if (error || !tournament) {
     return (
       <div className={`${loadingStyles.page} ${loadingStyles.pageCentered} px-4`}>
-        <div className="max-w-md w-full rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-6 text-center space-y-3">
-          <div className="text-lg font-semibold text-red-200">
+        <div className={screenStyles.errorBox}>
+          <div className={screenStyles.errorTitle}>
             {error || "تورنومنت یافت نشد"}
           </div>
           <button
             onClick={() => router.push("/player/tournaments")}
-            className="mt-2 rounded-xl bg-white/10 text-white px-4 py-2 hover:bg-white/20 transition"
+            className={screenStyles.errorBackButton}
           >
             بازگشت به لیست تورنومنت‌ها
           </button>
@@ -777,67 +778,63 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   }
 
   return (
-    <div className="min-h-screen bg-[#0E0E0F] bg-cover bg-center bg-no-repeat px-4 py-4">
-      <div className="max-w-md mx-auto space-y-4 text-white">
+    <div className={screenStyles.root}>
+      <div className={screenStyles.inner}>
         {globalRegistrationLocked && (
-          <div className="rounded-xl border border-red-500/50 bg-amber-500/10 px-3 py-2 text-sm text-white text-right">
+          <div className={screenStyles.lockBanner}>
             {globalRegistrationLockReason
               ? globalRegistrationLockReason
               : "ثبت نام در همه بازی‌ها موقتاً توسط ادمین قفل شده است."}
           </div>
         )}
-        <div
-          className={`${panelStyles.panelSurface} rounded-2xl px-4 py-3 space-y-2 text-sm`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-gray-200 text-sm">
+        <div className={`${panelStyles.panelSurface} ${screenStyles.infoPanel}`}>
+          <div className={screenStyles.infoRow}>
+            <span className={screenStyles.infoTitle}>
               {tournament?.title ?? ""}
             </span>
             <div className="flex items-center gap-2 text-right">
-              <span className="text-gray-300">بازیکن</span>
-              <span className="text-emerald-300 font-semibold">
+              <span className={screenStyles.infoLabel}>بازیکن</span>
+              <span className={screenStyles.infoValuePlayers}>
                 {playersLabel != null ? playersLabel : "-"}
               </span>
             </div>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-gray-300">
+          <div className={screenStyles.infoRow}>
+            <span className={screenStyles.infoLabel}>
               جایزه کل {showGuaranteeLabel ? "(گارانتی)" : ""}
             </span>
-            <span className="text-amber-300 font-semibold">{prizeLabel}</span>
+            <span className={screenStyles.infoValuePrize}>{prizeLabel}</span>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-gray-300">(Buy-in) ورودی</span>
-            <span className="text-gray-100 font-semibold">{buyInLabel}</span>
+          <div className={screenStyles.infoRow}>
+            <span className={screenStyles.infoLabel}>(Buy-in) ورودی</span>
+            <span className={screenStyles.infoValueDefault}>{buyInLabel}</span>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-gray-300">تعداد برنده نهایی</span>
-            <span className="text-emerald-300 font-semibold">
+          <div className={screenStyles.infoRow}>
+            <span className={screenStyles.infoLabel}>تعداد برنده نهایی</span>
+            <span className={screenStyles.infoValueWinners}>
               {Number.isFinite(winnersCount) ? winnersCount.toLocaleString("fa-IR") : "-"}
             </span>
           </div>
         </div>
 
         {(tournament?.status === "finished" || tournament?.status === "settling") && (
-          <div
-            className={`${panelStyles.panelSurface} rounded-2xl px-4 py-3 text-sm`}
-          >
-            <div className="font-semibold text-emerald-200">برنده‌ها</div>
+          <div className={`${panelStyles.panelSurface} ${screenStyles.winnersPanel}`}>
+            <div className={screenStyles.winnersTitle}>برنده‌ها</div>
             {winnersLoading ? (
-              <div className="mt-2 text-emerald-200/70">در حال دریافت برنده‌ها...</div>
+              <div className={screenStyles.winnersLoading}>در حال دریافت برنده‌ها...</div>
             ) : winners.length === 0 ? (
-              <div className="mt-2 text-emerald-200/70">برنده‌ای ثبت نشده است.</div>
+              <div className={screenStyles.winnersEmpty}>برنده‌ای ثبت نشده است.</div>
             ) : (
               <div className="mt-2 space-y-2">
                 {winners.map((winner, index) => (
-                  <div key={`${winner.userId}-${index}`} className="flex items-center justify-between">
+                  <div key={`${winner.userId}-${index}`} className={screenStyles.winnerRow}>
                     <div className="flex items-center gap-2">
-                      <span className="text-emerald-300 font-semibold">
+                      <span className={screenStyles.winnerRank}>
                         {winner.rank ?? index + 1}.
                       </span>
                       <span>{winner.name}</span>
                     </div>
-                    <div className="text-emerald-200">
+                    <div className={screenStyles.winnerAmount}>
                       {winner.amount != null ? winner.amount.toLocaleString("fa-IR") : "-"}
                     </div>
                   </div>
@@ -882,6 +879,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
 
         <ActiveTablesSection
           title="میزهای تورنومنت"
+          titleClassName={panelStyles.activeTablesTitleGreen}
           tables={tournamentTables}
           emptyMessage={tablesEmptyMessage}
           onTableClick={handleTableClick}

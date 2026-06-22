@@ -18,7 +18,7 @@ interface TournamentActiveCardsStatusProps {
   tournamentStatus?: string | null;
   currentRoundNo?: number | null;
   waitingListMessage?: string;
-  useLongCountdown?: boolean; // روز:ساعت:دقیقه:ثانیه
+  useLongCountdown?: boolean;
 }
 
 export default function TournamentActiveCardsStatus({
@@ -64,17 +64,15 @@ export default function TournamentActiveCardsStatus({
 
   return (
     <div
-      className={`${panelStyles.activeCardsPanelSurface} space-y-3 rounded-2xl px-3 pt-5 pb-5 mt-3 h-[200px] min-h-[200px] flex flex-col`}
+      className={`${panelStyles.activeCardsPanelSurface} space-y-3 rounded-2xl px-3 pt-5 pb-5 h-[200px] min-h-[200px] flex flex-col`}
     >
-      <div className="flex items-center justify-between h-[39px] max-h-[40px]">
-        <div className="flex items-center gap-2">
-          <span className="text-green-500 font-medium text-[20px]">
-            {statusLabel}
-          </span>
+      <div className={panelStyles.activeCardsHeader}>
+        <div className={panelStyles.activeCardsTimerWrap}>
+          <span className={panelStyles.activeCardsTimer}>{statusLabel}</span>
           {!showRoundStatus && (
             <Image
               src={hourglassPng}
-              alt="hourglass"
+              alt=""
               width={24}
               height={24}
               className="w-6 h-6"
@@ -83,16 +81,14 @@ export default function TournamentActiveCardsStatus({
           )}
         </div>
 
-        <span className="text-white text-sm font-medium">
+        <span className={panelStyles.activeCardsMeta}>
           مجموع کارتها {totalCount}
         </span>
       </div>
 
-      <div
-        className="flex-1 space-y-2 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-      >
+      <div className="flex-1 space-y-2 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {cards.length === 0 ? (
-          <div className="bg-white rounded-lg px-4 py-2 text-center text-gray-500">
+          <div className={panelStyles.activeCardsEmpty}>
             هیچ کارت فعالی وجود ندارد
           </div>
         ) : (
@@ -103,8 +99,8 @@ export default function TournamentActiveCardsStatus({
       </div>
 
       {cards.length === 0 && (
-        <div className="bg-gray-300 rounded-xl px-4 py-[13px] text-center !mt-0">
-          <span className="text-[#2d2f36] text-sm font-medium">
+        <div className={panelStyles.activeCardsWaitingBanner}>
+          <span className={panelStyles.activeCardsWaitingText}>
             {waitingListMessage}
           </span>
         </div>
@@ -112,5 +108,3 @@ export default function TournamentActiveCardsStatus({
     </div>
   );
 }
-
-

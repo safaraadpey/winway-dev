@@ -174,6 +174,119 @@
   flex: 1;
 }
 
+.tournamentBuyTopRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.125rem;
+}
+
+.tournamentBuyControls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tournamentRangeBadge {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 12px;
+  border: 1px solid #4b5563;
+  padding: 0.25rem 0.75rem;
+  color: #ffffff;
+}
+
+.tournamentRangeBadgeLabel {
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+
+.tournamentRangeBadgeValue {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.tournamentStepperGroup {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  border-radius: 12px;
+  border: 1px solid #4b5563;
+  background: rgba(17, 17, 17, 0.6);
+  padding: 0.25rem;
+}
+
+.tournamentQuantity {
+  min-width: 60px;
+  text-align: center;
+  font-size: 1.875rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.tournamentActionsRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.tournamentConfirmButton {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #16a34a 0%, #22c55e 100%);
+  color: #ffffff;
+  font-size: 1.125rem;
+  font-weight: 700;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.tournamentConfirmButton:active {
+  transform: scale(0.98);
+}
+
+.tournamentConfirmButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tournamentCancelButton {
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #dc2626;
+  color: #ffffff;
+  font-size: 1.125rem;
+  font-weight: 700;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.tournamentCancelButton:active {
+  transform: scale(0.98);
+}
+
+.tournamentCancelButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .activeCardsHeader {
   display: flex;
   align-items: center;
@@ -249,6 +362,14 @@
 }
 
 .activeTablesTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: center;
+  color: #4ade80;
+  white-space: nowrap;
+}
+
+.activeTablesTitleGreen {
   font-size: 1rem;
   font-weight: 600;
   text-align: center;
@@ -420,9 +541,9 @@
 }
 
 :global(html[data-theme="light"]) .activeTablesEmpty {
-  border: 1px solid #ddd6fe;
-  background: #ffffff;
-  color: #7c3aed;
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #92400e;
 }
 
 :global(html[data-theme="light"]) .activeCardRow {
@@ -472,4 +593,39 @@
   border: 1.5px solid #86efac;
   background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
   color: #14532d;
+}
+
+:global(html[data-theme="light"]) .tournamentRangeBadge {
+  border-color: #ddd6fe;
+  background: #ffffff;
+  color: #6d28d9;
+}
+
+:global(html[data-theme="light"]) .tournamentStepperGroup {
+  border-color: #ddd6fe;
+  background: #faf5ff;
+}
+
+:global(html[data-theme="light"]) .tournamentQuantity {
+  color: #7c3aed;
+}
+
+:global(html[data-theme="light"]) .tournamentConfirmButton {
+  border: none;
+  border-radius: 12px;
+  color: #ffffff;
+  background: linear-gradient(90deg, #22c55e 0%, #4ade80 100%);
+  box-shadow: 0 4px 14px rgba(34, 197, 94, 0.22);
+}
+
+:global(html[data-theme="light"]) .tournamentCancelButton {
+  border: none;
+  border-radius: 12px;
+  color: #ffffff;
+  background: linear-gradient(90deg, #ef4444 0%, #f472b6 100%);
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.22);
+}
+
+:global(html[data-theme="light"]) .activeTablesTitleGreen {
+  color: #059669;
 }
