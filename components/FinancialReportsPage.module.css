@@ -2,8 +2,7 @@
 
 .container {
   min-height: 100vh;
-  /* Let the shared /player layout background show through */
-  background-color: rgba(14, 14, 15, 0.55);
+  background-color: var(--player-page-overlay, rgba(14, 14, 15, 0.55));
   padding: 1rem;
   padding-bottom: 2rem;
 }
@@ -279,6 +278,11 @@
   border-top-color: #00d4aa;
   border-radius: 50%;
   animation: spin 1s linear infinite;
+}
+
+:global(html[data-theme="light"]) .loadingSpinner {
+  border-color: rgba(17, 24, 39, 0.08);
+  border-top-color: #059669;
 }
 
 @keyframes spin {

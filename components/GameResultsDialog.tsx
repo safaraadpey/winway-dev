@@ -10,6 +10,7 @@ import Confetti from "react-confetti";
 import { motion, AnimatePresence } from "framer-motion";
 import { dispatchWalletPrizeCelebrate } from "@/lib/walletPrizeCelebrate";
 import type { DrawVerificationSpec } from "@/lib/provablyFairDrawSpec";
+import styles from "./GameResultsDialog.module.css";
 
 export type Winner = {
   id: string;
@@ -90,13 +91,11 @@ function WinnerRow({
           : { scale: 1, opacity: 1 }
       }
       transition={{ duration: 0.55, ease: "easeOut" }}
-      className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-1 h-[39px] max-h-[40px] ${
-        isCurrentUser && celebrate
-          ? "bg-black/70 border-2 border-[#fbbf24] shadow-[0_0_14px_rgba(251,191,36,0.55)]"
-          : "bg-black/60 border border-[rgba(101,79,150,1)]"
+      className={`${styles.winnerRow} ${
+        isCurrentUser && celebrate ? styles.winnerRowCelebrate : ""
       }`}
     >
-      <span className="text-base font-semibold text-white">
+      <span className={styles.winnerName}>
         {isCurrentUser && celebrate ? (
           <span className="inline-flex items-center gap-1.5">
             <span aria-hidden>🏅</span>
@@ -110,7 +109,7 @@ function WinnerRow({
         <div ref={prizeRef} className="flex flex-col items-end">
           <div className="flex items-baseline gap-1">
             <motion.span
-              className="latin-number text-lg font-extrabold text-[#fbbf24]"
+              className={`latin-number ${styles.prizeAmount}`}
               animate={
                 celebrate && isCurrentUser
                   ? {
@@ -126,7 +125,7 @@ function WinnerRow({
             >
               {amount.toLocaleString("en-US")}
             </motion.span>
-            <span className="text-sm font-semibold text-[#fbbf24]">تومان</span>
+            <span className={styles.prizeCurrency}>تومان</span>
           </div>
         </div>
       )}
@@ -168,29 +167,18 @@ function WinnersSection({
 
   return (
     <div
-      className="rounded-none px-4 py-4 space-y-3"
+      className={`${styles.winnersSection} space-y-3`}
       style={{
         backgroundImage: `url(${winnersSectionBg})`,
-        backgroundRepeat: "no-repeat",
-        backgroundPosition: "center center",
-        backgroundSize: "100% 100%",
-        backgroundColor: "#1f2735",
       }}
     >
-      <div className="flex items-center justify-center gap-2 text-base font-semibold">
+      <div className={styles.sectionTitle}>
         <span>🏆</span>
-        <span
-          style={{
-            color: "rgba(254, 238, 180, 1)",
-            textShadow: "0 1px 0 rgba(0, 0, 0, 0.6)",
-          }}
-        >
-          {title}
-        </span>
+        <span className={styles.sectionTitleText}>{title}</span>
         <span>🏆</span>
       </div>
       {winners.length === 0 ? (
-        <div className="rounded-2xl bg-[#242c3b] px-3 py-3 text-center text-sm text-gray-400">
+        <div className={styles.emptyWinners}>
           برنده‌ای ثبت نشده است
         </div>
       ) : (
@@ -522,25 +510,19 @@ export default function GameResultsDialog({
           document.body
         )}
 
-      <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 px-4">
+      <div className={styles.overlay}>
         <motion.div
           initial={celebrate ? { scale: 0.92, opacity: 0 } : false}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.45, ease: "easeOut" }}
-          className={`w-full max-w-md rounded-3xl p-5 shadow-2xl text-white space-y-4 ${
-            celebrate
-              ? "border-2 border-[#fbbf24]/80 shadow-[0_0_28px_rgba(251,191,36,0.35)]"
-              : "border border-[#1f2837]"
+          className={`${styles.dialog} space-y-4 ${
+            celebrate ? styles.dialogCelebrate : styles.dialogDefault
           }`}
           style={{
             backgroundImage: `url(${dialogBg})`,
-            backgroundRepeat: "no-repeat",
-            backgroundPosition: "center center",
-            backgroundSize: "100% 100%",
-            backgroundColor: "#0f1720",
           }}
         >
-          <div className="flex flex-col items-center text-center space-y-2">
+          <div className={styles.header}>
             <Image
               src={ingameLogoSrc}
               alt="ingame logo"
@@ -549,19 +531,12 @@ export default function GameResultsDialog({
               style={{ height: 100, width: "auto" }}
               priority={false}
             />
-            <div
-              className="text-[14px] font-extrabold max-w-full truncate"
-              style={{
-                unicodeBidi: "plaintext",
-                color: "rgba(254, 238, 180, 1)",
-                textShadow: "0 1px 0 rgba(0, 0, 0, 0.6)",
-              }}
-            >
+            <div className={styles.title}>
               {celebrate ? "🎉 تبریک! شما برنده شدید" : (title ?? "بازی تمام شد!")}
             </div>
 
             {(proofDisplay || verificationJson) && (
-              <div className="relative w-full space-y-2 text-[12px]">
+              <div className={styles.proofRow}>
                 {copyToast && (
                   <span
                     role="status"
@@ -576,11 +551,11 @@ export default function GameResultsDialog({
                   </span>
                 )}
                 {(proofDisplay || verificationJson) && (
-                  <div className="flex items-center justify-center gap-2">
+                  <div className={styles.proofMeta}>
                     {proofDisplay && (
                       <>
-                        <span className="text-white/70">seed|commit</span>
-                        <span dir="ltr" className="latin-number text-white/90">
+                        <span className={styles.proofLabel}>seed|commit</span>
+                        <span dir="ltr" className={`latin-number ${styles.proofValue}`}>
                           {proofDisplay}
                         </span>
                       </>
@@ -588,7 +563,7 @@ export default function GameResultsDialog({
                     <button
                       type="button"
                       onClick={copyProof}
-                      className="rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-white/90 active:opacity-80"
+                      className={styles.copyButton}
                     >
                       کپی هش
                     </button>
@@ -626,12 +601,9 @@ export default function GameResultsDialog({
           <button
             type="button"
             onClick={onPrimaryAction ?? onClose}
-            className="mt-2 w-full rounded-2xl py-3 text-center text-white font-bold shadow-lg active:opacity-90 transition"
+            className={styles.primaryButton}
             style={{
               backgroundImage: `url(${primaryButtonBg})`,
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: "center center",
-              backgroundSize: "100% 100%",
             }}
           >
             {effectivePrimaryActionLabel}

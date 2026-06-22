@@ -94,9 +94,20 @@ export async function manageWaitingRooms(
   const nowIso = now.toISOString();
 
   let promotedMaxCapacity = 0;
-  const atMaxCapacity = await repo.getWaitingRoomsAtMaxCapacity(limit);
-  for (const room of atMaxCapacity) {
-    const maxPlayers = room.max_players;
+  const waitingForCapacity = await repo.getWaitingRoomsAtMaxCapacity(limit);
+  const templateIdsNeedingMax = [
+    ...new Set(
+      waitingForCapacity
+        .filter((room) => room.max_players == null && room.room_template_id)
+        .map((room) => room.room_template_id as string)
+    ),
+  ];
+  const templateMaxPlayers = await repo.getTemplateMaxPlayersMap(templateIdsNeedingMax);
+
+  for (const room of waitingForCapacity) {
+    const maxPlayers =
+      room.max_players ??
+      (room.room_template_id ? templateMaxPlayers.get(room.room_template_id) ?? null : null);
     if (maxPlayers == null) continue;
 
     const players = await repo.countDistinctActivePlayers(room.id);

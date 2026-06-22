@@ -1,0 +1,11 @@
+.root {
+  height: 100%;
+  overflow: hidden;
+  background-color: rgba(0, 0, 0, 0.4);
+  color: #ffffff;
+}
+
+:global(html[data-theme="light"]) .root {
+  background-color: #ffffff;
+  color: var(--player-text-primary, #111827);
+}

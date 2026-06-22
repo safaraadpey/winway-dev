@@ -3,7 +3,7 @@
 import React from "react";
 import ActiveTableRow from "@/components/ActiveTableRow";
 import { ActiveTable, isActiveTableClickable } from "@/components/ActiveTablesPanel";
-import activeCardsBg from "@/src/assets/logo/ActiveCardsBG.png";
+import panelStyles from "@/components/room/gameRoomPanels.module.css";
 
 interface ActiveTablesSectionProps {
   title?: string;
@@ -19,22 +19,17 @@ export default function ActiveTablesSection({
   onTableClick,
 }: ActiveTablesSectionProps) {
   const hasTables = tables.length > 0;
-  const maxHeight = "146px"; // 3.5 rows based on existing spacing
+  const maxHeight = "146px";
 
   return (
     <div
-      className="space-y-3 border border-transparent rounded-lg px-3 pt-[4px] pb-[6px] mt-[9px] min-h-[200px]"
-      style={{
-        backgroundImage: `url(${activeCardsBg.src})`,
-        backgroundRepeat: "no-repeat",
-        backgroundPosition: "center",
-        backgroundSize: "100% 100%",
-        backgroundColor: "#171A26",
-      }}
+      className={`${panelStyles.activeCardsPanelSurface} space-y-3 rounded-2xl px-3 pt-[4px] pb-[6px] mt-[9px] min-h-[200px]`}
     >
-      <h3 className="text-green-400 font-semibold text-base text-center">
-        {title}
-      </h3>
+      <div className={panelStyles.activeTablesTitleWrap}>
+        <span className={panelStyles.activeTablesTitleLine} aria-hidden="true" />
+        <h3 className={panelStyles.activeTablesTitle}>{title}</h3>
+        <span className={panelStyles.activeTablesTitleLine} aria-hidden="true" />
+      </div>
 
       <div
         className="space-y-2 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
@@ -59,9 +54,7 @@ export default function ActiveTablesSection({
             />
           ))
         ) : (
-          <div className="bg-amber-50 rounded-lg px-4 py-0 h-[50px] flex items-center justify-center text-center text-gray-500">
-            {emptyMessage}
-          </div>
+          <div className={panelStyles.activeTablesEmpty}>{emptyMessage}</div>
         )}
       </div>
     </div>

@@ -2,11 +2,11 @@
 
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
-import ticktBuyBg from "@/src/assets/logo/TicktBuy_BG.png";
 import buyCardButtonBg from "@/src/assets/logo/BuyCardBotton.png";
 import cancelCardButtonBg from "@/src/assets/logo/cancelCardBotton.png";
 import minusButtonImg from "@/src/assets/logo/minusBotton.png";
 import plusButtonImg from "@/src/assets/logo/plusBotton.png";
+import panelStyles from "@/components/room/gameRoomPanels.module.css";
 
 type PanelMode = "purchase" | "cancel";
 
@@ -93,15 +93,9 @@ export default function BuyCardsPanel({
   const totalPrice = quantity * price;
   const controlsDisabled = disabled || isCancelMode;
   const buttonDisabled = disabled || isSubmitting;
-  const buttonClass = isCancelMode
-    ? "w-full py-4 rounded-xl bg-red-600 text-white font-bold text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-98 transition-transform"
-    : "w-full py-4 rounded-xl bg-transparent text-[#006400] font-bold text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-98 transition-transform";
   const purchaseButtonStyle = !isCancelMode
     ? {
         backgroundImage: `url(${buyCardButtonBg.src})`,
-        backgroundRepeat: "no-repeat",
-        backgroundPosition: "center",
-        backgroundSize: "100% 100%",
       }
     : undefined;
   const ctaLabel = isCancelMode
@@ -111,57 +105,46 @@ export default function BuyCardsPanel({
   const hasSecondary = Boolean(onSecondaryAction && secondaryActionLabel);
 
   return (
-    <div
-      className="border border-transparent rounded-2xl p-3 space-y-4"
-      style={{
-        backgroundImage: `url(${ticktBuyBg.src})`,
-        backgroundRepeat: "no-repeat",
-        backgroundPosition: "center",
-        backgroundSize: "100% 100%",
-        backgroundColor: "#151A26",
-      }}
-    >
-        <div className="flex items-center justify-between gap-0.5">
-          <div className="flex items-center gap-2">
-            {(showMusicToggle || onToggleMusic) && (
-              <button
-                type="button"
-                onClick={onToggleMusic}
-                aria-label={`موسیقی ${musicEnabled ? "روشن" : "خاموش"}`}
-                disabled={!onToggleMusic}
-                className="inline-flex items-center gap-2 rounded-full border border-gray-600 px-1.5 py-1 text-white bg-black/40 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <span className="text-lg">{musicEnabled ? "🔊" : "🔇"}</span>
-              </button>
-            )}
+    <div className={`${panelStyles.panelSurface} rounded-2xl p-3 space-y-4`}>
+      <div className={panelStyles.buyPanelTopRow}>
+        <div className={panelStyles.buyPanelControls}>
+          {(showMusicToggle || onToggleMusic) && (
+            <button
+              type="button"
+              onClick={onToggleMusic}
+              aria-label={`موسیقی ${musicEnabled ? "روشن" : "خاموش"}`}
+              disabled={!onToggleMusic}
+              className={panelStyles.musicButton}
+            >
+              <span className="text-lg">{musicEnabled ? "🔊" : "🔇"}</span>
+            </button>
+          )}
 
-          <div className="inline-flex flex-col items-center rounded-full border border-gray-600 px-3 py-1 text-white">
-            <span className="text-xs leading-tight">تعداد خرید</span>
-            <span className="text-base font-semibold">
+          <div className={panelStyles.quantityBadge}>
+            <span className={panelStyles.quantityBadgeLabel}>تعداد خرید</span>
+            <span className={panelStyles.quantityBadgeValue}>
               {`${minQuantity} ~ ${maxBuy ?? maxQuantity}`}
             </span>
           </div>
         </div>
 
-        <div className="bg-[#111111]/60 rounded-full px-1 py-1 flex items-center justify-center gap-4 border border-gray-600">
+        <div className={panelStyles.stepper}>
           <button
             onClick={handleDecrease}
             disabled={quantity <= minQuantity || controlsDisabled}
             aria-label="کاهش"
-            className="w-12 h-12 rounded-full bg-transparent p-0 flex items-center justify-center shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-transform overflow-hidden"
+            className={panelStyles.stepperButton}
           >
             <Image src={minusButtonImg} alt="" width={48} height={48} priority={false} />
           </button>
 
-          <span className="text-white text-3xl font-semibold min-w-[60px] text-center">
-            {quantity}
-          </span>
+          <span className={panelStyles.stepperValue}>{quantity}</span>
 
           <button
             onClick={handleIncrease}
             disabled={quantity >= maxQuantity || controlsDisabled}
             aria-label="افزایش"
-            className="w-12 h-12 rounded-full bg-transparent p-0 flex items-center justify-center shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-transform overflow-hidden"
+            className={panelStyles.stepperButton}
           >
             <Image src={plusButtonImg} alt="" width={48} height={48} priority={false} />
           </button>
@@ -172,7 +155,9 @@ export default function BuyCardsPanel({
         <button
           onClick={handleConfirmClick}
           disabled={buttonDisabled}
-          className={`${buttonClass} ${hasSecondary ? "flex-1" : ""}`}
+          className={`${
+            isCancelMode ? panelStyles.confirmButtonCancel : panelStyles.confirmButton
+          } ${hasSecondary ? panelStyles.confirmButtonHalf : ""}`}
           style={purchaseButtonStyle}
         >
           {isSubmitting ? (
@@ -208,7 +193,7 @@ export default function BuyCardsPanel({
           <button
             onClick={() => void onSecondaryAction?.()}
             disabled={secondaryDisabled}
-            className="flex-1 w-full py-4 rounded-xl bg-red-600 text-white font-bold text-lg shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-98 transition-transform"
+            className={`${panelStyles.confirmButtonCancel} ${panelStyles.confirmButtonHalf}`}
           >
             {secondaryActionLabel}
           </button>
@@ -216,32 +201,18 @@ export default function BuyCardsPanel({
       </div>
 
       {showConfirmModal && !isCancelMode && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 px-4">
-          <div
-            className="w-full max-w-sm rounded-2xl border border-gray-700 p-4 text-white"
-            style={{
-              backgroundImage: `url(${ticktBuyBg.src})`,
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: "center",
-              backgroundSize: "100% 100%",
-              backgroundColor: "#151A26",
-            }}
-          >
-            <div className="mb-2 text-center text-xl font-bold">تایید خرید کارت</div>
-            <div className="mb-4 text-center text-base text-gray-200 leading-7">
-              از خرید خود مطمئنید؟
-            </div>
-            <div className="flex gap-2">
+        <div className={panelStyles.confirmModalOverlay}>
+          <div className={`${panelStyles.panelSurface} ${panelStyles.confirmModal}`}>
+            <div className={panelStyles.confirmModalTitle}>تایید خرید کارت</div>
+            <div className={panelStyles.confirmModalBody}>از خرید خود مطمئنید؟</div>
+            <div className={panelStyles.confirmModalActions}>
               <button
                 type="button"
                 onClick={() => setShowConfirmModal(false)}
                 disabled={isSubmitting}
-                className="flex-1 rounded-xl bg-transparent px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                className={panelStyles.confirmModalSecondaryButton}
                 style={{
                   backgroundImage: `url(${cancelCardButtonBg.src})`,
-                  backgroundRepeat: "no-repeat",
-                  backgroundPosition: "center",
-                  backgroundSize: "100% 100%",
                 }}
               >
                 خیر لغو میکنم
@@ -250,12 +221,9 @@ export default function BuyCardsPanel({
                 type="button"
                 onClick={() => void executeConfirm()}
                 disabled={isSubmitting}
-                className="flex-1 rounded-xl bg-transparent px-3 py-2 text-sm font-semibold text-[#006400] disabled:opacity-50"
+                className={panelStyles.confirmModalPrimaryButton}
                 style={{
                   backgroundImage: `url(${buyCardButtonBg.src})`,
-                  backgroundRepeat: "no-repeat",
-                  backgroundPosition: "center",
-                  backgroundSize: "100% 100%",
                 }}
               >
                 {isSubmitting ? "در حال ثبت..." : "بله ادامه میدم"}

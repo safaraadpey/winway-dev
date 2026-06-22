@@ -10,6 +10,9 @@ import TournamentActiveCardsStatus, { TournamentActiveCardStatus } from "@/compo
 import ActiveTablesSection from "@/components/room/ActiveTablesSection";
 import { ActiveTable } from "@/components/ActiveTablesPanel";
 import toast from "react-hot-toast";
+import TournamentRoomLoadingFallback from "@/components/TournamentRoomLoadingFallback";
+import panelStyles from "@/components/room/gameRoomPanels.module.css";
+import loadingStyles from "@/components/playerScreenLoading.module.css";
 
 interface TournamentRoomScreenProps {
   tournamentId?: string;
@@ -752,30 +755,12 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
       : "هیچ بازی فعالی وجود ندارد";
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-black/40 text-white">
-        <div className="px-4 pt-4 space-y-4">
-          <div className="animate-pulse rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
-            <div className="h-5 w-44 rounded-md bg-white/10" />
-            <div className="h-4 w-64 rounded-md bg-white/10" />
-          </div>
-
-          <div className="animate-pulse rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
-            <div className="h-4 w-40 rounded-md bg-white/10" />
-            <div className="space-y-2">
-              <div className="h-10 rounded-xl bg-white/10" />
-              <div className="h-10 rounded-xl bg-white/10" />
-              <div className="h-10 rounded-xl bg-white/10" />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <TournamentRoomLoadingFallback />;
   }
 
   if (error || !tournament) {
     return (
-      <div className="min-h-screen bg-black/40 text-white flex items-center justify-center px-4">
+      <div className={`${loadingStyles.page} ${loadingStyles.pageCentered} px-4`}>
         <div className="max-w-md w-full rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-6 text-center space-y-3">
           <div className="text-lg font-semibold text-red-200">
             {error || "تورنومنت یافت نشد"}
@@ -802,14 +787,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
           </div>
         )}
         <div
-          className="rounded-2xl border border-transparent px-4 py-3 space-y-2 text-sm"
-          style={{
-            backgroundImage: `url(${require("@/src/assets/logo/TicktBuy_BG.png").default.src})`,
-            backgroundRepeat: "no-repeat",
-            backgroundPosition: "center center",
-            backgroundSize: "100% 100%",
-            backgroundColor: "#151A26",
-          }}
+          className={`${panelStyles.panelSurface} rounded-2xl px-4 py-3 space-y-2 text-sm`}
         >
           <div className="flex items-center justify-between">
             <span className="text-gray-200 text-sm">
@@ -842,14 +820,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
 
         {(tournament?.status === "finished" || tournament?.status === "settling") && (
           <div
-            className="rounded-2xl border border-transparent px-4 py-3 text-sm"
-            style={{
-              backgroundImage: `url(${require("@/src/assets/logo/TicktBuy_BG.png").default.src})`,
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: "center center",
-              backgroundSize: "100% 100%",
-              backgroundColor: "#151A26",
-            }}
+            className={`${panelStyles.panelSurface} rounded-2xl px-4 py-3 text-sm`}
           >
             <div className="font-semibold text-emerald-200">برنده‌ها</div>
             {winnersLoading ? (

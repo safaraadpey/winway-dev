@@ -28,6 +28,7 @@ import {
 } from "@/lib/audio/music";
 import { isMusicEnabled as readMusicEnabled, setMusicEnabled } from "@/lib/audio-settings";
 import { isHardExiting } from "@/lib/auth/hardExit";
+import styles from "./GameRoomScreen.module.css";
 
 interface GameRoomScreenProps {
   roomId?: string;
@@ -953,7 +954,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
   const cardsToRender = cardsToRenderForCancel;
 
   return (
-    <div className="overflow-hidden bg-black/40 min-h-screen">
+    <div className={styles.root}>
       <div className="px-4 space-y-1 pt-4">
         {purchaseLockedByAdmin && (
           <div className="rounded-xl border border-red-500/50 bg-amber-500/10 px-3 py-2 text-sm text-white text-right">

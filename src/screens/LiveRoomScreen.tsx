@@ -33,6 +33,8 @@ import {
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 import { useSession } from "@/lib/contexts/SessionContext";
 import { isHardExiting } from "@/lib/auth/hardExit";
+import styles from "./LiveRoomScreen.module.css";
+import loadingStyles from "@/components/playerScreenLoading.module.css";
 
 type CardWinner = {
   ticketId: string;
@@ -1012,16 +1014,17 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
 
   if (loading && !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black/40 text-white">
-        در حال بارگذاری بازی زنده...
+      <div className={`${loadingStyles.page} ${loadingStyles.pageCentered}`}>
+        <div className={loadingStyles.spinner} aria-hidden="true" />
+        <p className={loadingStyles.message}>در حال بارگذاری بازی زنده...</p>
       </div>
     );
   }
 
   if (error && !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black/40 text-white">
-        {error}
+      <div className={`${loadingStyles.page} ${loadingStyles.pageCentered}`}>
+        <p className={loadingStyles.message}>{error}</p>
       </div>
     );
   }
@@ -1103,7 +1106,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       ?.drawNumber ?? null;
 
   return (
-    <div className="h-full bg-black/40 text-white overflow-hidden">
+    <div className={styles.root}>
       <div className="max-w-3xl mx-auto h-full flex flex-col">
         {/* RoomHeader Section - Fixed, doesn't scroll */}
         <div className="flex-shrink-0 px-4 pt-2 pb-1">

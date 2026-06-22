@@ -28,6 +28,10 @@
   --player-toman-balance-bg-image: none;
   --player-active-game-chip-bg-image: url(/themes/dark/assets/gamebadge.png);
   --player-active-game-chip-radius: 999px;
+  --player-buy-cards-panel-bg-image: url(/themes/dark/assets/TicktBuy_BG.png);
+  --player-buy-cards-panel-bg-color: #151a26;
+  --player-active-cards-panel-bg-image: url(/themes/dark/assets/ActiveCardsBG.png);
+  --player-active-cards-panel-bg-color: #161a26;
   --player-balance-amount-color: #FEEEB4;
   --menu-screen-overlay: rgba(14, 14, 15, 0.55);
   --menu-item-bg: transparent;
@@ -42,7 +46,7 @@
 html[data-theme="light"] {
   --player-text-primary: #111827;
   --player-text-muted: #6b7280;
-  --player-page-overlay: rgba(245, 245, 247, 0.88);
+  --player-page-overlay: #ffffff;
   --player-surface: rgba(255, 255, 255, 0.92);
   --player-surface-elevated: #ffffff;
   --player-border: rgba(209, 213, 219, 0.9);
@@ -62,6 +66,10 @@ html[data-theme="light"] {
   --player-active-game-chip-bg-image: none;
   --player-active-game-chip-radius: 12px;
   --player-active-game-chip-text-color: #111827;
+  --player-buy-cards-panel-bg-image: url(/themes/light/assets/TicktBuy_BG.png);
+  --player-buy-cards-panel-bg-color: #ffffff;
+  --player-active-cards-panel-bg-image: url(/themes/light/assets/ActiveCardsBG.png);
+  --player-active-cards-panel-bg-color: #ffffff;
   --menu-item-bg: transparent;
   --menu-item-bg-image: none;
   --menu-item-bg-gradient: none;
@@ -90,6 +98,10 @@ html[data-theme="newStyle"] {
   --player-toman-balance-bg-image: url(/themes/newStyle/assets/toman_BG.png);
   --player-active-game-chip-bg-image: none;
   --player-active-game-chip-radius: 12px;
+  --player-buy-cards-panel-bg-image: url(/themes/newStyle/assets/TicktBuy_BG.png);
+  --player-buy-cards-panel-bg-color: #151a26;
+  --player-active-cards-panel-bg-image: url(/themes/newStyle/assets/ActiveCardsBG.png);
+  --player-active-cards-panel-bg-color: #161a26;
   --menu-screen-overlay: rgba(14, 14, 15, 0.55);
   --menu-item-bg: transparent;
   --menu-item-bg-image: none;

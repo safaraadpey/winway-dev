@@ -3,7 +3,7 @@
 import React from "react";
 import Image from "next/image";
 import ActiveCardRow from "@/components/ActiveCardRow";
-import activeCardsBg from "@/src/assets/logo/ActiveCardsBG.png";
+import panelStyles from "@/components/room/gameRoomPanels.module.css";
 import hourglassPng from "@/src/assets/logo/hourglass.png";
 
 export interface TournamentActiveCardStatus {
@@ -64,14 +64,7 @@ export default function TournamentActiveCardsStatus({
 
   return (
     <div
-      className="space-y-3 border border-transparent rounded-2xl px-3 pt-5 pb-5 mt-3 h-[200px] min-h-[200px] flex flex-col"
-      style={{
-        backgroundImage: `url(${activeCardsBg.src})`,
-        backgroundRepeat: "no-repeat",
-        backgroundPosition: "center",
-        backgroundSize: "100% 100%",
-        backgroundColor: "#161A26",
-      }}
+      className={`${panelStyles.activeCardsPanelSurface} space-y-3 rounded-2xl px-3 pt-5 pb-5 mt-3 h-[200px] min-h-[200px] flex flex-col`}
     >
       <div className="flex items-center justify-between h-[39px] max-h-[40px]">
         <div className="flex items-center gap-2">

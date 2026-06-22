@@ -2,7 +2,7 @@
 
 import React from "react";
 import ActiveCardRow from "@/components/ActiveCardRow";
-import activeCardsBg from "@/src/assets/logo/ActiveCardsBG.png";
+import panelStyles from "@/components/room/gameRoomPanels.module.css";
 
 export interface ActiveCardStatus {
   id: string;
@@ -15,7 +15,7 @@ interface ActiveCardsStatusProps {
   secondsRemaining?: number;
   minPlayers?: number;
   waitingListMessage?: string;
-  useLongCountdown?: boolean; // روز:ساعت:دقیقه:ثانیه
+  useLongCountdown?: boolean;
 }
 
 export default function ActiveCardsStatus({
@@ -51,22 +51,13 @@ export default function ActiveCardsStatus({
 
   return (
     <div
-      className="space-y-3 border border-transparent rounded-2xl px-3 pt-5 pb-5 mt-3 h-[200px] min-h-[200px] flex flex-col"
-      style={{
-        backgroundImage: `url(${activeCardsBg.src})`,
-        backgroundRepeat: "no-repeat",
-        backgroundPosition: "center",
-        backgroundSize: "100% 100%",
-        backgroundColor: "#161A26",
-      }}
+      className={`${panelStyles.activeCardsPanelSurface} space-y-3 rounded-2xl px-3 pt-5 pb-5 mt-3 h-[200px] min-h-[200px] flex flex-col`}
     >
-      <div className="flex items-center justify-between h-[39px] max-h-[40px]">
-        <div className="flex items-center gap-2">
-          <span className="text-green-500 font-medium text-[25px]">
-            {timerLabel}
-          </span>
+      <div className={panelStyles.activeCardsHeader}>
+        <div className={panelStyles.activeCardsTimerWrap}>
+          <span className={panelStyles.activeCardsTimer}>{timerLabel}</span>
           <svg
-            className="w-6 h-6 text-green-400"
+            className={panelStyles.activeCardsTimerIcon}
             viewBox="0 0 24 24"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
@@ -83,23 +74,21 @@ export default function ActiveCardsStatus({
           </svg>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className={panelStyles.activeCardsMetaWrap}>
           {minPlayers != null && minPlayers > 0 && (
-            <span className="text-white text-sm font-medium">
+            <span className={panelStyles.activeCardsMeta}>
               شروع با {minPlayers} نفر
             </span>
           )}
-          <span className="text-white text-sm font-medium">
+          <span className={panelStyles.activeCardsMeta}>
             مجموع کارتها {totalCount}
           </span>
         </div>
       </div>
 
-      <div
-        className="flex-1 space-y-2 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-      >
+      <div className="flex-1 space-y-2 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {cards.length === 0 ? (
-          <div className="bg-white rounded-lg px-4 py-2 text-center text-gray-500">
+          <div className={panelStyles.activeCardsEmpty}>
             هیچ کارت فعالی وجود ندارد
           </div>
         ) : (
@@ -110,8 +99,8 @@ export default function ActiveCardsStatus({
       </div>
 
       {cards.length === 0 && (
-        <div className="bg-gray-300 rounded-xl px-4 py-[13px] text-center !mt-0">
-          <span className="text-[#2d2f36] text-sm font-medium">
+        <div className={panelStyles.activeCardsWaitingBanner}>
+          <span className={panelStyles.activeCardsWaitingText}>
             {waitingListMessage}
           </span>
         </div>

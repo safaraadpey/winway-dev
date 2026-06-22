@@ -154,9 +154,6 @@ export default function DrawStrip({
               </span>{" "}
               <span className="text-white/70">کد</span>
             </span>
-            <span dir="ltr" className="latin-number">
-              {commitShort}
-            </span>
             <button
               type="button"
               onClick={copyCommit}

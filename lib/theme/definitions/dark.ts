@@ -1,5 +1,6 @@
 import type { ThemeDefinition } from "@/lib/theme/types";
 import { themeLayoutBgImage, themeHeaderFrameImage, themeActiveGameChipBgImage } from "@/lib/theme/assetPaths";
+import { themeActiveCardsPanelBgImage, themeBuyCardsPanelBgImage } from "@/lib/theme/gameRoomAssets";
 import {
   IMAGE_MENU_PRESENTATIONS,
   SHARED_IMAGE_MENU_TOKENS,
@@ -29,6 +30,10 @@ export const darkTheme: ThemeDefinition = {
       tomanBalanceBgImage: "none",
       activeGameChipBgImage: themeActiveGameChipBgImage("dark"),
       activeGameChipRadius: "999px",
+      buyCardsPanelBgImage: themeBuyCardsPanelBgImage("dark"),
+      buyCardsPanelBgColor: "#151A26",
+      activeCardsPanelBgImage: themeActiveCardsPanelBgImage("dark"),
+      activeCardsPanelBgColor: "#161A26",
     },
     menu: SHARED_IMAGE_MENU_TOKENS,
   },

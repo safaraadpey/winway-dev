@@ -88,11 +88,28 @@ export class GameRepo {
         "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,waiting_started_at,min_players,max_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,meta"
       )
       .eq("status", "waiting")
-      .not("max_players", "is", null)
       .order("created_at", { ascending: true })
       .limit(limit);
     if (error) fail("getWaitingRoomsAtMaxCapacity", error.message);
     return (data ?? []) as RoomRow[];
+  }
+
+  async getTemplateMaxPlayersMap(
+    templateIds: string[]
+  ): Promise<Map<string, number | null>> {
+    const out = new Map<string, number | null>();
+    if (templateIds.length === 0) return out;
+
+    const { data, error } = await this.db
+      .from("room_templates")
+      .select("id, max_players")
+      .in("id", templateIds);
+    if (error) fail("getTemplateMaxPlayersMap", error.message);
+
+    for (const row of (data ?? []) as { id: string; max_players: number | null }[]) {
+      out.set(row.id, row.max_players ?? null);
+    }
+    return out;
   }
 
   async getPlayingRoomsDue(limit: number, nowIso: string): Promise<RoomRow[]> {

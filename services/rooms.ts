@@ -230,6 +230,9 @@ export async function joinOrCreateRoom(options: {
     if (error.message.includes("max_cards_per_player exceeded")) {
       throw new Error("سقف تعداد کارت برای این اتاق را رد کرده‌اید");
     }
+    if (error.message.includes("room is full")) {
+      throw new Error("اتاق پر است و ظرفیت بازیکنان تکمیل شده");
+    }
     if (error.message.includes("no active card pool")) {
       throw new Error("هیچ card pool فعالی برای ایجاد اتاق موجود نیست");
     }

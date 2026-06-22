@@ -1,0 +1,122 @@
+.page {
+  min-height: 100vh;
+  background-color: rgba(0, 0, 0, 0.4);
+  color: #ffffff;
+}
+
+.pageCentered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.spinner {
+  width: 3rem;
+  height: 3rem;
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #fbbf24;
+  border-radius: 9999px;
+  animation: playerScreenLoadingSpin 1s linear infinite;
+}
+
+.message {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.skeletonWrap {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.skeletonCard {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1rem;
+}
+
+.skeletonLine {
+  border-radius: 0.375rem;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.skeletonLineWide {
+  height: 1.25rem;
+  width: 11rem;
+  border-radius: 0.375rem;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.skeletonLineMedium {
+  height: 1rem;
+  width: 16rem;
+  border-radius: 0.375rem;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.skeletonLineShort {
+  height: 1rem;
+  width: 10rem;
+  border-radius: 0.375rem;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.skeletonRow {
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.skeletonRows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.skeletonMessageCard {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.75rem 1rem;
+}
+
+@keyframes playerScreenLoadingSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+:global(html[data-theme="light"]) .page {
+  background-color: #ffffff;
+  color: var(--player-text-primary, #111827);
+}
+
+:global(html[data-theme="light"]) .message {
+  color: var(--player-text-muted, #6b7280);
+}
+
+:global(html[data-theme="light"]) .spinner {
+  border-color: rgba(17, 24, 39, 0.08);
+  border-top-color: #059669;
+}
+
+:global(html[data-theme="light"]) .skeletonCard,
+:global(html[data-theme="light"]) .skeletonMessageCard {
+  border-color: #e5e7eb;
+  background: #f9fafb;
+}
+
+:global(html[data-theme="light"]) .skeletonLine,
+:global(html[data-theme="light"]) .skeletonLineWide,
+:global(html[data-theme="light"]) .skeletonLineMedium,
+:global(html[data-theme="light"]) .skeletonLineShort,
+:global(html[data-theme="light"]) .skeletonRow {
+  background: #e5e7eb;
+}

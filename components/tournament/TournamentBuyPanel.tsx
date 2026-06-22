@@ -2,10 +2,10 @@
 
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
-import ticktBuyBg from "@/src/assets/logo/TicktBuy_BG.png";
 import buyCardButtonBg from "@/src/assets/logo/BuyCardBotton.png";
 import minusButtonImg from "@/src/assets/logo/minusBotton.png";
 import plusButtonImg from "@/src/assets/logo/plusBotton.png";
+import panelStyles from "@/components/room/gameRoomPanels.module.css";
 
 type PanelMode = "purchase" | "cancel";
 
@@ -105,16 +105,7 @@ export default function TournamentBuyPanel({
   const hasSecondary = Boolean(onSecondaryAction && secondaryActionLabel);
 
   return (
-    <div
-      className="border border-transparent rounded-2xl p-3 space-y-4"
-      style={{
-        backgroundImage: `url(${ticktBuyBg.src})`,
-        backgroundRepeat: "no-repeat",
-        backgroundPosition: "center",
-        backgroundSize: "100% 100%",
-        backgroundColor: "#151A26",
-      }}
-    >
+    <div className={`${panelStyles.panelSurface} rounded-2xl p-3 space-y-4`}>
       <div className="flex items-center justify-between gap-0.5">
         <div className="flex items-center gap-2">
           {(showMusicToggle || onToggleMusic) && (

@@ -1,5 +1,6 @@
 import type { ThemeDefinition } from "@/lib/theme/types";
 import { themeHeaderFrameImage, themeDingBalanceBgImage, themeTomanBalanceBgImage } from "@/lib/theme/assetPaths";
+import { themeActiveCardsPanelBgImage, themeBuyCardsPanelBgImage } from "@/lib/theme/gameRoomAssets";
 import {
   IMAGE_MENU_PRESENTATIONS,
   SHARED_IMAGE_MENU_TOKENS,
@@ -13,7 +14,7 @@ export const lightTheme: ThemeDefinition = {
     player: {
       textPrimary: "#111827",
       textMuted: "#6b7280",
-      pageOverlay: "rgba(245, 245, 247, 0.88)",
+      pageOverlay: "#ffffff",
       surface: "rgba(255, 255, 255, 0.92)",
       surfaceElevated: "#ffffff",
       border: "rgba(209, 213, 219, 0.9)",
@@ -29,6 +30,10 @@ export const lightTheme: ThemeDefinition = {
       tomanBalanceBgImage: themeTomanBalanceBgImage("light"),
       activeGameChipBgImage: "none",
       activeGameChipRadius: "12px",
+      buyCardsPanelBgImage: themeBuyCardsPanelBgImage("light"),
+      buyCardsPanelBgColor: "#ffffff",
+      activeCardsPanelBgImage: themeActiveCardsPanelBgImage("light"),
+      activeCardsPanelBgColor: "#ffffff",
     },
     menu: {
       ...SHARED_IMAGE_MENU_TOKENS,

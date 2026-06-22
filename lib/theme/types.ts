@@ -63,6 +63,10 @@ export interface PlayerTokens {
   tomanBalanceBgImage: string;
   activeGameChipBgImage: string;
   activeGameChipRadius: string;
+  buyCardsPanelBgImage: string;
+  buyCardsPanelBgColor: string;
+  activeCardsPanelBgImage: string;
+  activeCardsPanelBgColor: string;
 }
 
 export interface ThemeTokens {

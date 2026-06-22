@@ -1,0 +1,261 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+.dialog {
+  width: 100%;
+  max-width: 28rem;
+  border-radius: 1.5rem;
+  padding: 1.25rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  color: #ffffff;
+  background-color: #0f1720;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+}
+
+.dialogDefault {
+  border: 1px solid #1f2837;
+}
+
+.dialogCelebrate {
+  border: 2px solid rgba(251, 191, 36, 0.8);
+  box-shadow: 0 0 28px rgba(251, 191, 36, 0.35);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.5rem;
+}
+
+.title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 800;
+  unicode-bidi: plaintext;
+  color: rgba(254, 238, 180, 1);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+.proofRow {
+  position: relative;
+  width: 100%;
+  font-size: 12px;
+}
+
+.proofMeta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.proofLabel {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.proofValue {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.copyButton {
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.25rem 0.5rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.copyButton:active {
+  opacity: 0.8;
+}
+
+.winnersSection {
+  border-radius: 0;
+  padding: 1rem;
+  background-color: #1f2735;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.sectionTitleText {
+  color: rgba(254, 238, 180, 1);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+.emptyWinners {
+  border-radius: 1rem;
+  background: #242c3b;
+  padding: 0.75rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: #9ca3af;
+}
+
+.winnerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-radius: 1rem;
+  padding: 0.25rem 1rem;
+  height: 39px;
+  max-height: 40px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(101, 79, 150, 1);
+}
+
+.winnerRowCelebrate {
+  background: rgba(0, 0, 0, 0.7);
+  border: 2px solid #fbbf24;
+  box-shadow: 0 0 14px rgba(251, 191, 36, 0.55);
+}
+
+.winnerName {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.prizeAmount {
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: #fbbf24;
+}
+
+.prizeCurrency {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fbbf24;
+}
+
+.primaryButton {
+  margin-top: 0.5rem;
+  width: 100%;
+  border-radius: 1rem;
+  padding: 0.75rem;
+  text-align: center;
+  font-weight: 700;
+  color: #ffffff;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+  transition: opacity 0.15s ease;
+}
+
+.primaryButton:active {
+  opacity: 0.9;
+}
+
+:global(html[data-theme="light"]) .overlay {
+  background-color: rgba(15, 23, 42, 0.35);
+}
+
+:global(html[data-theme="light"]) .dialog {
+  background-image: none !important;
+  background-color: #ffffff;
+  color: #111827;
+  border-color: transparent !important;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.12);
+}
+
+:global(html[data-theme="light"]) .dialogCelebrate {
+  border: 2px solid rgba(124, 58, 237, 0.22) !important;
+  box-shadow: 0 12px 40px rgba(124, 58, 237, 0.14) !important;
+}
+
+:global(html[data-theme="light"]) .title {
+  color: #6d28d9;
+  text-shadow: none;
+  font-size: 15px;
+}
+
+:global(html[data-theme="light"]) .proofLabel {
+  color: #9ca3af;
+}
+
+:global(html[data-theme="light"]) .proofValue {
+  color: #7c3aed;
+}
+
+:global(html[data-theme="light"]) .copyButton {
+  border: none;
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  color: #ffffff;
+  font-weight: 600;
+  background: linear-gradient(90deg, #38bdf8 0%, #7c3aed 100%);
+}
+
+:global(html[data-theme="light"]) .winnersSection {
+  background-image: none !important;
+  background-color: #ffffff;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.06);
+}
+
+:global(html[data-theme="light"]) .sectionTitleText {
+  color: #6d28d9;
+  text-shadow: none;
+}
+
+:global(html[data-theme="light"]) .emptyWinners {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+:global(html[data-theme="light"]) .winnerRow {
+  background: #f5f5f7;
+  border: 1px solid #e5e7eb;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+:global(html[data-theme="light"]) .winnerRowCelebrate {
+  background: #f3f2f6;
+  border: 1.5px solid rgba(167, 139, 250, 0.28);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);
+}
+
+:global(html[data-theme="light"]) .winnerName {
+  color: #374151;
+}
+
+:global(html[data-theme="light"]) .prizeAmount,
+:global(html[data-theme="light"]) .prizeCurrency {
+  color: #374151;
+}
+
+:global(html[data-theme="light"]) .primaryButton {
+  background-image: none !important;
+  border: 1.5px solid #86efac;
+  border-radius: 999px;
+  color: #166534;
+  background: linear-gradient(180deg, #ecfdf5 0%, #f0fdf4 55%, #ffffff 100%);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.12);
+}

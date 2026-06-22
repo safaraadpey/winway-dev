@@ -52,6 +52,11 @@
   animation: spin 1s linear infinite;
 }
 
+:global(html[data-theme="light"]) .loadingSpinner {
+  border-color: rgba(17, 24, 39, 0.08);
+  border-top-color: #059669;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
