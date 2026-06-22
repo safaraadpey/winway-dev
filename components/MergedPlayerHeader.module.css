@@ -181,7 +181,7 @@
 
 .tomanBg {
   background-color: #111c2f;
-  background-image: url("../../src/assets/logo/gamebadge.png");
+  background-image: var(--player-active-game-chip-bg-image, url(/themes/dark/assets/gamebadge.png));
   border: 1px solid transparent;
   justify-content: space-between;
 }
