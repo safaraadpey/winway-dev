@@ -268,7 +268,15 @@ export default function MergedPlayerHeader({
         <div className={styles.backButtonPlaceholder}>
           {showBackButton ? (
             <button className={styles.backButton} onClick={handleBackClick} aria-label="بازگشت">
-              {themeId === "newStyle" ? (
+              {themeId === "dark" ? (
+                <Image
+                  src={getBackIconPath(themeId)}
+                  alt="بازگشت"
+                  className={styles.backIcon}
+                  width={24}
+                  height={24}
+                />
+              ) : (
                 <svg
                   className={styles.backIcon}
                   viewBox="0 0 24 24"
@@ -281,14 +289,6 @@ export default function MergedPlayerHeader({
                 >
                   <path d="M19 12H5M12 19l-7-7 7-7" />
                 </svg>
-              ) : (
-                <Image
-                  src={getBackIconPath(themeId)}
-                  alt="بازگشت"
-                  className={styles.backIcon}
-                  width={24}
-                  height={24}
-                />
               )}
             </button>
           ) : null}

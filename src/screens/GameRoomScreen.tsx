@@ -954,7 +954,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
 
   return (
     <div className="overflow-hidden bg-black/40 min-h-screen">
-      <div className="px-4 space-y-1 pt-1">
+      <div className="px-4 space-y-1 pt-4">
         {purchaseLockedByAdmin && (
           <div className="rounded-xl border border-red-500/50 bg-amber-500/10 px-3 py-2 text-sm text-white text-right">
             {globalRegistrationLockReason

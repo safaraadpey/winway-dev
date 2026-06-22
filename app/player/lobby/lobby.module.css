@@ -2,7 +2,7 @@
   min-height: 100vh;
   background-color: var(--menu-screen-overlay, rgba(14, 14, 15, 0.55));
   padding: 0 21px 0 25px;
-  padding-top: 0px;
+  padding-top: 16px;
   padding-bottom: 0px;
 }
 
@@ -65,7 +65,7 @@
 
 @media (max-width: 640px) {
   .lobbyContainer {
-    padding: 0 20px 0 0.75rem;
+    padding: 16px 20px 0 0.75rem;
   }
 
   .roomImageContainer {
