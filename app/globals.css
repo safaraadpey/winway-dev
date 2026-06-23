@@ -32,7 +32,9 @@
   --player-buy-cards-panel-bg-color: #151a26;
   --player-active-cards-panel-bg-image: url(/themes/dark/assets/ActiveCardsBG.png);
   --player-active-cards-panel-bg-color: #161a26;
-  --player-balance-amount-color: #e5ce96;
+  --player-balance-amount-color: #fff8e5;
+  --player-ding-balance-amount-color: #fff8e5;
+  --player-toman-balance-amount-color: #fff8e5;
   --menu-screen-overlay: rgba(14, 14, 15, 0.55);
   --menu-item-bg: transparent;
   --menu-item-bg-image: none;
@@ -61,8 +63,8 @@ html[data-theme="light"] {
   --player-ding-balance-bg-image: url(/themes/light/assets/ding_BG.png);
   --player-toman-balance-bg-image: url(/themes/light/assets/toman_BG.png);
   --player-balance-capsule-bg-opacity: 0.6;
-  --player-ding-balance-amount-color: #8B6914;
-  --player-toman-balance-amount-color: #1E3A5F;
+  --player-ding-balance-amount-color: #5b21b6;
+  --player-toman-balance-amount-color: #1e3a5f;
   --player-active-game-chip-bg-image: none;
   --player-active-game-chip-radius: 12px;
   --player-active-game-chip-text-color: #111827;

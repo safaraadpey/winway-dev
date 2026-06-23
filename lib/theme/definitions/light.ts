@@ -28,6 +28,8 @@ export const lightTheme: ThemeDefinition = {
       headerFrameFilter: "none",
       dingBalanceBgImage: themeDingBalanceBgImage("light"),
       tomanBalanceBgImage: themeTomanBalanceBgImage("light"),
+      dingBalanceAmountColor: "#5b21b6",
+      tomanBalanceAmountColor: "#1e3a5f",
       activeGameChipBgImage: "none",
       activeGameChipRadius: "12px",
       buyCardsPanelBgImage: themeBuyCardsPanelBgImage("light"),

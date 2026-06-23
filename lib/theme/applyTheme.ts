@@ -20,6 +20,8 @@ function tokensToCssProperties(tokens: ThemeTokens): Record<string, string> {
     "--player-header-frame-filter": player.headerFrameFilter,
     "--player-ding-balance-bg-image": player.dingBalanceBgImage,
     "--player-toman-balance-bg-image": player.tomanBalanceBgImage,
+    "--player-ding-balance-amount-color": player.dingBalanceAmountColor,
+    "--player-toman-balance-amount-color": player.tomanBalanceAmountColor,
     "--player-active-game-chip-bg-image": player.activeGameChipBgImage,
     "--player-active-game-chip-radius": player.activeGameChipRadius,
     "--player-buy-cards-panel-bg-image": player.buyCardsPanelBgImage,

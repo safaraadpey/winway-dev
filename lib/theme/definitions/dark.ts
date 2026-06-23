@@ -28,6 +28,8 @@ export const darkTheme: ThemeDefinition = {
       headerFrameFilter: "none",
       dingBalanceBgImage: themeDingBalanceBgImage("dark"),
       tomanBalanceBgImage: themeTomanBalanceBgImage("dark"),
+      dingBalanceAmountColor: "#fff8e5",
+      tomanBalanceAmountColor: "#fff8e5",
       activeGameChipBgImage: themeActiveGameChipBgImage("dark"),
       activeGameChipRadius: "999px",
       buyCardsPanelBgImage: themeBuyCardsPanelBgImage("dark"),

@@ -28,6 +28,8 @@ export const newStyleTheme: ThemeDefinition = {
       headerFrameFilter: "none",
       dingBalanceBgImage: themeDingBalanceBgImage("newStyle"),
       tomanBalanceBgImage: themeTomanBalanceBgImage("newStyle"),
+      dingBalanceAmountColor: "#fff8e5",
+      tomanBalanceAmountColor: "#c4c8d0",
       activeGameChipBgImage: "none",
       activeGameChipRadius: "12px",
       buyCardsPanelBgImage: themeBuyCardsPanelBgImage("newStyle"),

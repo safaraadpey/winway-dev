@@ -66,6 +66,8 @@ export interface PlayerTokens {
   headerFrameFilter: string;
   dingBalanceBgImage: string;
   tomanBalanceBgImage: string;
+  dingBalanceAmountColor: string;
+  tomanBalanceAmountColor: string;
   activeGameChipBgImage: string;
   activeGameChipRadius: string;
   buyCardsPanelBgImage: string;

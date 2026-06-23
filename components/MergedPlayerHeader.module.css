@@ -172,11 +172,11 @@
 
 .dingBg .balanceAmount {
   text-align: left;
-  color: var(--player-ding-balance-amount-color, var(--player-balance-amount-color, #e5ce96));
+  color: var(--player-ding-balance-amount-color, var(--player-balance-amount-color, #fff8e5));
 }
 
 .tomanBg .balanceAmount {
-  color: #ffffff;
+  color: var(--player-toman-balance-amount-color, var(--player-balance-amount-color, #fff8e5));
 }
 
 .tomanBg {
@@ -219,8 +219,8 @@
   min-width: 0;
   margin-top: 3px;
   margin-left: 4px;
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 300;
   color: var(--player-balance-amount-color, #FEEEB4);
   font-family: inherit;
   direction: ltr;
@@ -349,11 +349,11 @@
 }
 
 :global(html[data-theme="light"]) .dingBg .balanceAmount {
-  color: #6d28d9;
+  color: var(--player-ding-balance-amount-color, #5b21b6);
 }
 
 :global(html[data-theme="light"]) .tomanBg .balanceAmount {
-  color: #7b8394;
+  color: var(--player-toman-balance-amount-color, #1e3a5f);
 }
 
 :global(html[data-theme="light"]) .loadingText {
