@@ -6,7 +6,6 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useTheme } from "@/lib/contexts/ThemeContext";
-import { getBackIconPath } from "@/lib/theme/headerIconFiles";
 import { getLogoImagePath } from "@/lib/theme/logoImageFiles";
 import styles from "./MergedPlayerHeader.module.css";
 
@@ -269,28 +268,18 @@ export default function MergedPlayerHeader({
         <div className={styles.backButtonPlaceholder}>
           {showBackButton ? (
             <button className={styles.backButton} onClick={handleBackClick} aria-label="بازگشت">
-              {themeId === "dark" ? (
-                <Image
-                  src={getBackIconPath(themeId)}
-                  alt="بازگشت"
-                  className={styles.backIcon}
-                  width={24}
-                  height={24}
-                />
-              ) : (
-                <svg
-                  className={styles.backIcon}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M19 12H5M12 19l-7-7 7-7" />
-                </svg>
-              )}
+              <svg
+                className={styles.backIcon}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M19 12H5M12 19l-7-7 7-7" />
+              </svg>
             </button>
           ) : null}
         </div>
@@ -382,8 +371,8 @@ export default function MergedPlayerHeader({
                   src={dingCoinIcon}
                   alt="Ding Coin"
                   className={`${styles.coinIcon} ${isRefreshingBalances ? styles.refreshSpinning : ""}`}
-                  width={32}
-                  height={32}
+                  width={30}
+                  height={30}
                 />
               </motion.div>
             </>

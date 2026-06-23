@@ -16,11 +16,20 @@ const PERIOD_LABELS: Record<ReportPeriod, string> = {
   month: "ماه",
 };
 
+type TransactionFilter = "deposit" | "withdraw";
+
+const TRANSACTION_FILTER_LABELS: Record<TransactionFilter, string> = {
+  deposit: "واریزی‌ها",
+  withdraw: "پرداختی‌ها",
+};
+
 export default function FinancialReportsPage() {
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
   const [data, setData] = useState<FinancialReportsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activePeriod, setActivePeriod] = useState<ReportPeriod>("month");
+  const [transactionFilter, setTransactionFilter] =
+    useState<TransactionFilter>("deposit");
   const [statsExpanded, setStatsExpanded] = useState(true);
   const periodCacheRef = useRef<Partial<Record<ReportPeriod, FinancialReportsData>>>({});
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -280,6 +289,10 @@ export default function FinancialReportsPage() {
     return sum;
   }, 0);
 
+  const filteredTransactions = transactions.filter(
+    (tx) => tx.type === transactionFilter
+  );
+
   return (
     <div className={styles.container}>
       <div className={styles.pageHeader}>
@@ -357,19 +370,49 @@ export default function FinancialReportsPage() {
 
         {/* لیست تراکنش‌ها */}
         <div className={styles.transactionsSection}>
-          <h2 className={styles.sectionTitle}>
-            <span className={styles.sectionTitleIcon} aria-hidden="true">
-              💳
-            </span>
-            تراکنش‌ها
-          </h2>
-          {transactions.length === 0 ? (
+          <div className={styles.transactionsSectionHeader}>
+            <h2 className={styles.sectionTitle}>
+              <span className={styles.sectionTitleIcon} aria-hidden="true">
+                💳
+              </span>
+              تراکنش‌ها
+            </h2>
+            <div
+              className={styles.transactionFilterTabs}
+              role="tablist"
+              aria-label="فیلتر نوع تراکنش"
+            >
+              {(["deposit", "withdraw"] as TransactionFilter[]).map((filter) => (
+                <button
+                  key={filter}
+                  type="button"
+                  role="tab"
+                  aria-selected={transactionFilter === filter}
+                  onClick={() => setTransactionFilter(filter)}
+                  className={`${styles.transactionFilterTab} ${
+                    transactionFilter === filter
+                      ? styles.transactionFilterTabActive
+                      : ""
+                  }`}
+                >
+                  {TRANSACTION_FILTER_LABELS[filter]}
+                </button>
+              ))}
+            </div>
+          </div>
+          {filteredTransactions.length === 0 ? (
             <div className={styles.emptyState}>
-              <p>تراکنشی در این دوره یافت نشد</p>
+              <p>
+                {transactions.length === 0
+                  ? "تراکنشی در این دوره یافت نشد"
+                  : transactionFilter === "deposit"
+                    ? "واریزی در این دوره یافت نشد"
+                    : "پرداختی در این دوره یافت نشد"}
+              </p>
             </div>
           ) : (
             <div className={styles.transactionsList}>
-              {transactions.map((tx) => (
+              {filteredTransactions.map((tx) => (
                 <div
                   key={tx.id}
                   className={`${styles.transactionItem} ${

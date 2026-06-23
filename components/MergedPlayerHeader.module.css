@@ -172,16 +172,16 @@
 
 .dingBg .balanceAmount {
   text-align: left;
-  color: var(--player-ding-balance-amount-color, var(--player-balance-amount-color, #FEEEB4));
+  color: var(--player-ding-balance-amount-color, var(--player-balance-amount-color, #e5ce96));
 }
 
 .tomanBg .balanceAmount {
-  color: rgba(63, 146, 180, 1);
+  color: #ffffff;
 }
 
 .tomanBg {
   background-color: #111c2f;
-  background-image: var(--player-active-game-chip-bg-image, url(/themes/dark/assets/gamebadge.png));
+  background-image: var(--player-toman-balance-bg-image, none);
   border: 1px solid transparent;
   justify-content: space-between;
 }
@@ -231,8 +231,8 @@
 }
 
 .coinIcon {
-  width: clamp(24px, 7vw, 32px);
-  height: clamp(24px, 7vw, 32px);
+  width: clamp(22.8px, 6.65vw, 30.4px);
+  height: clamp(22.8px, 6.65vw, 30.4px);
   object-fit: contain;
   flex-shrink: 0;
 }
@@ -353,7 +353,7 @@
 }
 
 :global(html[data-theme="light"]) .tomanBg .balanceAmount {
-  color: #1d4ed8;
+  color: #7b8394;
 }
 
 :global(html[data-theme="light"]) .loadingText {
@@ -369,6 +369,6 @@
 
 :global(html[data-theme="newStyle"]) .tomanBg .balanceAmount {
   text-align: left;
-  color: var(--player-ding-balance-amount-color, var(--player-balance-amount-color, #FEEEB4));
+  color: #c4c8d0;
 }
 

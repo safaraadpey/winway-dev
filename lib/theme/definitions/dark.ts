@@ -1,5 +1,5 @@
 import type { ThemeDefinition } from "@/lib/theme/types";
-import { themeLayoutBgImage, themeHeaderFrameImage, themeActiveGameChipBgImage } from "@/lib/theme/assetPaths";
+import { themeLayoutBgImage, themeHeaderFrameImage, themeActiveGameChipBgImage, themeDingBalanceBgImage, themeTomanBalanceBgImage } from "@/lib/theme/assetPaths";
 import { themeActiveCardsPanelBgImage, themeBuyCardsPanelBgImage } from "@/lib/theme/gameRoomAssets";
 import {
   IMAGE_MENU_PRESENTATIONS,
@@ -26,8 +26,8 @@ export const darkTheme: ThemeDefinition = {
       headerFrameImage: themeHeaderFrameImage("dark"),
       headerFrameBlendMode: "lighten",
       headerFrameFilter: "none",
-      dingBalanceBgImage: "none",
-      tomanBalanceBgImage: "none",
+      dingBalanceBgImage: themeDingBalanceBgImage("dark"),
+      tomanBalanceBgImage: themeTomanBalanceBgImage("dark"),
       activeGameChipBgImage: themeActiveGameChipBgImage("dark"),
       activeGameChipRadius: "999px",
       buyCardsPanelBgImage: themeBuyCardsPanelBgImage("dark"),

@@ -52,6 +52,7 @@ export interface DevPlayerJoinPresetTemplateLimit {
   maxJoinsPerTick: number | null;
   minNormalPlayersPerRoom: number | null;
   maxDevPlayersPerRoom: number | null;
+  quickFillEnabled: boolean;
 }
 
 export interface DevPlayerActiveRow {
@@ -94,6 +95,7 @@ export interface DevPlayerTemplateRoomLimitPayload {
   max_joins_per_tick: number;
   min_normal_players_per_room: number | null;
   max_dev_players_per_room: number | null;
+  quick_fill_enabled: boolean;
 }
 
 export interface DevPlayerRuntimeStats {

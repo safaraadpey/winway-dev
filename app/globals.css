@@ -24,15 +24,15 @@
   --player-header-frame-image: url(/themes/dark/assets/headerframe.png);
   --player-header-frame-blend-mode: lighten;
   --player-header-frame-filter: none;
-  --player-ding-balance-bg-image: none;
-  --player-toman-balance-bg-image: none;
+  --player-ding-balance-bg-image: url(/themes/dark/assets/ding_BG.png);
+  --player-toman-balance-bg-image: url(/themes/dark/assets/toman_BG.png);
   --player-active-game-chip-bg-image: url(/themes/dark/assets/gamebadge.png);
   --player-active-game-chip-radius: 999px;
   --player-buy-cards-panel-bg-image: url(/themes/dark/assets/TicktBuy_BG.png);
   --player-buy-cards-panel-bg-color: #151a26;
   --player-active-cards-panel-bg-image: url(/themes/dark/assets/ActiveCardsBG.png);
   --player-active-cards-panel-bg-color: #161a26;
-  --player-balance-amount-color: #FEEEB4;
+  --player-balance-amount-color: #e5ce96;
   --menu-screen-overlay: rgba(14, 14, 15, 0.55);
   --menu-item-bg: transparent;
   --menu-item-bg-image: none;

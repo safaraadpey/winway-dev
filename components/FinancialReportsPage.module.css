@@ -220,6 +220,52 @@
   padding: 1.5rem;
 }
 
+.transactionsSectionHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.transactionsSectionHeader .sectionTitle {
+  margin-bottom: 0;
+}
+
+.transactionFilterTabs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.transactionFilterTab {
+  flex: 1;
+  padding: 0.625rem 0.75rem;
+  background-color: transparent;
+  color: #ffffff;
+  border: 1px solid rgba(73, 72, 76, 1);
+  border-radius: 200px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.transactionFilterTab:hover {
+  background-color: rgba(0, 0, 0, 0.15);
+}
+
+.transactionFilterTabActive {
+  background-image: url("../src/assets/logo/lobbyInfo.png");
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: 100% 100%;
+  background-color: transparent;
+  color: #ffffff;
+}
+
+.transactionFilterTabActive:hover {
+  background-color: transparent;
+}
+
 .sectionTitle {
   font-size: 1.25rem;
   font-weight: 600;
@@ -481,6 +527,31 @@
 :global(html[data-theme="light"]) .transactionsSection {
   background-color: transparent;
   padding: 0;
+}
+
+:global(html[data-theme="light"]) .transactionFilterTab {
+  background-color: #ffffff;
+  color: #7c3aed;
+  border-color: #ddd6fe;
+  border-radius: 1rem;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.06);
+}
+
+:global(html[data-theme="light"]) .transactionFilterTab:hover {
+  background-color: #faf5ff;
+}
+
+:global(html[data-theme="light"]) .transactionFilterTabActive {
+  background-image: linear-gradient(135deg, #c084fc 0%, #a855f7 48%, #6366f1 100%);
+  background-color: transparent;
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.28);
+}
+
+:global(html[data-theme="light"]) .transactionFilterTabActive:hover {
+  background-color: transparent;
 }
 
 :global(html[data-theme="light"]) .emptyState {

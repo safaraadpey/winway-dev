@@ -129,6 +129,7 @@ function joinDraftToPayload(
           limits.maxDevPlayersPerRoom.trim() !== ""
             ? Number(limits.maxDevPlayersPerRoom)
             : null,
+        quick_fill_enabled: limits.quickFillEnabled,
       };
     }),
     template_room_limit_enabled_ids: enabledTemplateIds,
@@ -148,6 +149,7 @@ type TemplateLimitDraft = {
   maxJoinsPerTick: string;
   minNormalPlayersPerRoom: string;
   maxDevPlayersPerRoom: string;
+  quickFillEnabled: boolean;
 };
 
 function emptyTemplateLimitDraft(): TemplateLimitDraft {
@@ -158,6 +160,7 @@ function emptyTemplateLimitDraft(): TemplateLimitDraft {
     maxJoinsPerTick: String(DEFAULT_TEMPLATE_MAX_JOINS_PER_TICK),
     minNormalPlayersPerRoom: "",
     maxDevPlayersPerRoom: "",
+    quickFillEnabled: false,
   };
 }
 
@@ -200,6 +203,7 @@ function buildTemplateRoomLimitsFromPreset(
           : String(limit.minNormalPlayersPerRoom),
       maxDevPlayersPerRoom:
         limit.maxDevPlayersPerRoom === null ? "" : String(limit.maxDevPlayersPerRoom),
+      quickFillEnabled: limit.quickFillEnabled,
     };
   }
 
@@ -272,6 +276,10 @@ function isTemplateLimitCustomized(limits: TemplateLimitDraft): boolean {
   }
 
   if (limits.minNormalPlayersPerRoom.trim() !== "" || limits.maxDevPlayersPerRoom.trim() !== "") {
+    return true;
+  }
+
+  if (limits.quickFillEnabled) {
     return true;
   }
 
@@ -841,7 +849,7 @@ export default function DevPlayerSettingsManager() {
   const updateTemplateRoomLimit = (
     templateId: string,
     field: keyof TemplateLimitDraft,
-    value: string
+    value: string | boolean
   ) => {
     setJoinDraft((prev) => ({
       ...prev,
@@ -1220,6 +1228,13 @@ export default function DevPlayerSettingsManager() {
                             }
                             onMaxChange={(value) =>
                               updateTemplateRoomLimit(template.id, "maxJoinsPerTick", value)
+                            }
+                          />
+                          <ToggleRow
+                            label="پر کردن سریع"
+                            checked={limits.quickFillEnabled}
+                            onChange={(value) =>
+                              updateTemplateRoomLimit(template.id, "quickFillEnabled", value)
                             }
                           />
                         </div>

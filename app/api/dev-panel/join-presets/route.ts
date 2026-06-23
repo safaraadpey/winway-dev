@@ -34,6 +34,7 @@ function normalizeTemplateLimits(raw: unknown): Array<{
   max_joins_per_tick: number;
   min_normal_players_per_room: number | null;
   max_dev_players_per_room: number | null;
+  quick_fill_enabled: boolean;
 }> {
   if (!Array.isArray(raw)) return [];
 
@@ -45,6 +46,7 @@ function normalizeTemplateLimits(raw: unknown): Array<{
     max_joins_per_tick: number;
     min_normal_players_per_room: number | null;
     max_dev_players_per_room: number | null;
+    quick_fill_enabled: boolean;
   }> = [];
 
   for (const item of raw) {
@@ -91,6 +93,7 @@ function normalizeTemplateLimits(raw: unknown): Array<{
       max_joins_per_tick: maxJoinsPerTick,
       min_normal_players_per_room: minNormalPlayersPerRoom,
       max_dev_players_per_room: maxDevPlayersPerRoom,
+      quick_fill_enabled: Boolean((item as any).quick_fill_enabled),
     });
   }
 
@@ -108,6 +111,7 @@ async function savePresetTemplateLimits(
     max_joins_per_tick: number;
     min_normal_players_per_room: number | null;
     max_dev_players_per_room: number | null;
+    quick_fill_enabled: boolean;
   }>
 ) {
   const { error: deleteError } = await supabase
@@ -131,6 +135,7 @@ async function savePresetTemplateLimits(
         max_joins_per_tick: limit.max_joins_per_tick,
         min_normal_players_per_room: limit.min_normal_players_per_room,
         max_dev_players_per_room: limit.max_dev_players_per_room,
+        quick_fill_enabled: limit.quick_fill_enabled,
       }))
     );
 
@@ -147,6 +152,7 @@ function mapPresetRow(
     max_joins_per_tick: number | null;
     min_normal_players_per_room: number | null;
     max_dev_players_per_room: number | null;
+    quick_fill_enabled: boolean;
   }>
 ) {
   return {
@@ -188,6 +194,7 @@ function mapPresetRow(
         limit.max_dev_players_per_room === undefined
           ? null
           : Number(limit.max_dev_players_per_room),
+      quickFillEnabled: Boolean(limit.quick_fill_enabled),
     })),
     updatedAt: row.updated_at ?? null,
   };
@@ -334,7 +341,7 @@ export async function POST(request: NextRequest) {
     const { data: limitRows, error: limitsError } = await supabase
       .from("dev_player_join_preset_template_limits")
       .select(
-        "template_id, min_active_rooms, max_active_rooms, join_interval_seconds, max_joins_per_tick, min_normal_players_per_room, max_dev_players_per_room"
+        "template_id, min_active_rooms, max_active_rooms, join_interval_seconds, max_joins_per_tick, min_normal_players_per_room, max_dev_players_per_room, quick_fill_enabled"
       )
       .eq("preset_id", savedPreset.id);
 

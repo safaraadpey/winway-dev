@@ -40,6 +40,7 @@ function mapJoinPresetRow(
     max_joins_per_tick: number | null;
     min_normal_players_per_room: number | null;
     max_dev_players_per_room: number | null;
+    quick_fill_enabled: boolean;
   }>
 ) {
   return {
@@ -81,6 +82,7 @@ function mapJoinPresetRow(
         limit.max_dev_players_per_room === undefined
           ? null
           : Number(limit.max_dev_players_per_room),
+      quickFillEnabled: Boolean(limit.quick_fill_enabled),
     })),
     updatedAt: row.updated_at ?? null,
   };
@@ -231,7 +233,7 @@ async function loadSettingsBundle(supabase: any) {
       ? await supabase
           .from("dev_player_join_preset_template_limits")
           .select(
-            "preset_id, template_id, min_active_rooms, max_active_rooms, join_interval_seconds, max_joins_per_tick, min_normal_players_per_room, max_dev_players_per_room"
+            "preset_id, template_id, min_active_rooms, max_active_rooms, join_interval_seconds, max_joins_per_tick, min_normal_players_per_room, max_dev_players_per_room, quick_fill_enabled"
           )
           .in("preset_id", presetIds)
       : { data: [], error: null };
