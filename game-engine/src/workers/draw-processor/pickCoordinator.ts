@@ -61,6 +61,7 @@ export interface PickCoordinatorOptions {
   batchSize: number;
   maxRoundsPerPoll: number;
   maxRoundsPerWake: number;
+  pickDiagnostics: boolean;
 }
 
 export interface PickCoordinator {
@@ -89,10 +90,11 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
     repo: opts.repo,
     log: opts.log,
     refreshIntervalMs: QUEUE_CACHE_REFRESH_MS,
+    dbRefreshEnabled: opts.pickDiagnostics,
   });
 
   const runPickLoopHeartbeat = (): void => {
-    if (stopped || heartbeatInFlight) return;
+    if (!opts.pickDiagnostics || stopped || heartbeatInFlight) return;
     const queueState = queueCache.snapshot();
     if (queueState.queuedJobsCount <= 0) return;
     heartbeatInFlight = true;
@@ -112,7 +114,9 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
     }
   };
 
-  const heartbeatTimer = setInterval(runPickLoopHeartbeat, PICK_LOOP_HEARTBEAT_MS);
+  const heartbeatTimer = opts.pickDiagnostics
+    ? setInterval(runPickLoopHeartbeat, PICK_LOOP_HEARTBEAT_MS)
+    : null;
 
   const schedulePick = (reason: DrawProcessorWakeReason): void => {
     if (stopped) return;
@@ -123,7 +127,9 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
     } else if (!pickLoopRunning && wakeReason === "poll") {
       wakeReason = reason;
     }
-    queueCache.requestRefresh();
+    if (opts.pickDiagnostics) {
+      queueCache.requestRefresh();
+    }
     void runPickLoop();
   };
 
@@ -149,6 +155,8 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
           totalPicked += picked;
           queueCache.notePicked(picked);
           roundsLeft -= 1;
+        } else if (!opts.pickDiagnostics) {
+          queueCache.reset();
         }
 
         const queued = queueCache.hasQueued() || pendingPick;
@@ -256,7 +264,14 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
     }
 
     deferAsync(
-      () => emitPickDebugSnapshot(opts.log, opts.repo, pickDebug, opts.batchSize),
+      () =>
+        emitPickDebugSnapshot(
+          opts.log,
+          opts.repo,
+          pickDebug,
+          opts.batchSize,
+          opts.pickDiagnostics
+        ),
       opts.log,
       "pick_debug_snapshot"
     );
@@ -306,7 +321,7 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
     schedulePick,
     stop: () => {
       stopped = true;
-      clearInterval(heartbeatTimer);
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
       queueCache.stop();
     },
   };

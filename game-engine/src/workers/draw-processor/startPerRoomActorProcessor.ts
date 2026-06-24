@@ -57,6 +57,7 @@ export function startPerRoomActorProcessor(ctx: WorkerContext): () => void {
     batchSize: config.drawProcessorBatchSize,
     maxRoundsPerPoll: config.drawProcessorMaxBatchesPerTick,
     maxRoundsPerWake: config.drawProcessorMaxBatchesPerWake,
+    pickDiagnostics: config.drawPickDiagnostics,
   });
 
   coordinatorRef.schedulePick = coordinator.schedulePick;

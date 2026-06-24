@@ -33,6 +33,7 @@ export interface ProcessDrawBatchEngineOptions {
   cardRegistry?: GlobalCardRegistry | null;
   drainMonitor?: DrainMonitorContext;
   pickDebug?: PickDebugContext;
+  pickDiagnostics?: boolean;
 }
 
 export async function processDrawBatchEngine(
@@ -42,9 +43,16 @@ export async function processDrawBatchEngine(
   stateManager: RoomStateManager
 ): Promise<DrawBatchResult> {
   const repo = new GameRepo(supabase);
+  const pickDiagnostics = opts.pickDiagnostics === true;
 
-  if (opts.pickDebug) {
-    await emitPickDebugSnapshot(log, repo, opts.pickDebug, opts.batchSize);
+  if (opts.pickDebug && pickDiagnostics) {
+    await emitPickDebugSnapshot(
+      log,
+      repo,
+      opts.pickDebug,
+      opts.batchSize,
+      true
+    );
   }
   const pickStep = await timedStep(() => pickDrawJobs(supabase, opts.batchSize));
   const picked = pickStep.result;

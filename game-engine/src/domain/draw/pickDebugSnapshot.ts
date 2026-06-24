@@ -25,8 +25,11 @@ export async function emitPickDebugSnapshot(
   log: Logger,
   repo: GameRepo,
   pickDebug: PickDebugContext,
-  batchSize: number
+  batchSize: number,
+  enabled = true
 ): Promise<void> {
+  if (!enabled) return;
+
   const [queueState, flags] = await Promise.all([
     repo.fetchPickDebugQueueState(),
     Promise.resolve(pickDebug.getFlags()),

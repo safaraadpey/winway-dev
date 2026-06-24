@@ -75,6 +75,8 @@ export interface EngineConfig {
   roomLoopMaxActiveRooms: number;
   /** When false, no scheduled/tick workers start (manageWaitingRooms, draw loop, etc.). */
   schedulerEnabled: boolean;
+  /** Pick-path DB snapshots (fetchPickDebugQueueState, pick_debug_snapshot logs). Off in production. */
+  drawPickDiagnostics: boolean;
 }
 
 function parseRoles(raw: string | undefined): Set<EngineRole> {
@@ -198,5 +200,6 @@ export function loadConfig(): EngineConfig {
       process.env.ROOM_LOOP_MAX_ACTIVE_ROOMS ?? "50"
     ),
     schedulerEnabled: process.env.SCHEDULER_ENABLED === "true",
+    drawPickDiagnostics: process.env.DRAW_PICK_DIAGNOSTICS === "true",
   };
 }

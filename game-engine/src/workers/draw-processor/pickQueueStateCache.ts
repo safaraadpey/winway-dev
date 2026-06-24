@@ -13,6 +13,7 @@ export interface PickQueueStateCache {
   noteEnqueued(count?: number): void;
   notePicked(count: number): void;
   requestRefresh(): void;
+  reset(): void;
   stop(): void;
 }
 
@@ -27,14 +28,18 @@ export function createPickQueueStateCache(opts: {
   repo: GameRepo;
   log: Logger;
   refreshIntervalMs?: number;
+  /** When false, in-memory counters only — no fetchPickDebugQueueState polls. */
+  dbRefreshEnabled?: boolean;
 }): PickQueueStateCache {
   const refreshIntervalMs = opts.refreshIntervalMs ?? 500;
+  const dbRefreshEnabled = opts.dbRefreshEnabled !== false;
   let state: PickQueueSnapshot = { ...EMPTY_SNAPSHOT };
   let refreshInFlight = false;
   let stopped = false;
+  let timer: ReturnType<typeof setInterval> | null = null;
 
   const refresh = async (): Promise<void> => {
-    if (stopped || refreshInFlight) return;
+    if (!dbRefreshEnabled || stopped || refreshInFlight) return;
     refreshInFlight = true;
     try {
       const live = await opts.repo.fetchPickDebugQueueState();
@@ -52,11 +57,12 @@ export function createPickQueueStateCache(opts: {
     }
   };
 
-  const timer = setInterval(() => {
+  if (dbRefreshEnabled) {
+    timer = setInterval(() => {
+      void refresh();
+    }, refreshIntervalMs);
     void refresh();
-  }, refreshIntervalMs);
-
-  void refresh();
+  }
 
   return {
     snapshot: () => ({ ...state }),
@@ -69,11 +75,14 @@ export function createPickQueueStateCache(opts: {
       state.processingJobsCount += count;
     },
     requestRefresh: () => {
-      void refresh();
+      if (dbRefreshEnabled) void refresh();
+    },
+    reset: () => {
+      state = { ...EMPTY_SNAPSHOT };
     },
     stop: () => {
       stopped = true;
-      clearInterval(timer);
+      if (timer) clearInterval(timer);
     },
   };
 }

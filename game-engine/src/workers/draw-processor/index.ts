@@ -250,6 +250,7 @@ function startLegacyDrainProcessor(ctx: WorkerContext): () => void {
       cardRegistry: await ensureCardRegistry(),
       drainMonitor,
       pickDebug: opts.pickDebug,
+      pickDiagnostics: config.drawPickDiagnostics,
     };
 
     const runBatch = executesBusinessLogic(config.runtime)
