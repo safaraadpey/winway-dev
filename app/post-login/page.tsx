@@ -12,6 +12,7 @@ import {
   isMainHost,
   isNonPlayerRole,
 } from "@/lib/auth/portalHosts";
+import { signOutInBackground } from "@/lib/auth/signOutInBackground";
 
 function redirectToAdmin(path: string) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
@@ -61,14 +62,14 @@ export default function PostLoginPage() {
         const onAdminHost = isAdminHost(hostname);
 
         if (onMainHost && isNonPlayerRole(userRole)) {
-          await supabase.auth.signOut();
           setAdminPortalRequired(true);
+          signOutInBackground();
           return;
         }
 
         if (onAdminHost && userRole === "player") {
-          await supabase.auth.signOut();
           setPlayerPortalRequired(true);
+          signOutInBackground();
           return;
         }
 

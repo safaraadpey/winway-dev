@@ -1,45 +1,50 @@
 "use client";
 
 import { getAdminHost, getAdminOrigin } from "@/lib/auth/portalHosts";
+import styles from "./AdminPortalRequiredScreen.module.css";
 
 type AdminPortalRequiredScreenProps = {
   onBackToLogin?: () => void;
+  asOverlay?: boolean;
 };
 
 export default function AdminPortalRequiredScreen({
   onBackToLogin,
+  asOverlay = false,
 }: AdminPortalRequiredScreenProps) {
   const adminHost = getAdminHost();
   const adminOrigin = getAdminOrigin();
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100 px-5">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-lg">
-        <h1 className="mb-3 text-xl font-bold text-gray-900">
-          ورود به داشبورد مدیریت
-        </h1>
-        <p className="mb-5 text-sm leading-6 text-gray-600">
-          حساب شما با نقش مدیریتی ثبت شده است. برای ورود به داشبورد مدیریت،
-          لطفاً از دامنه{" "}
-          <span className="font-semibold text-gray-900">{adminHost}</span>{" "}
-          استفاده کنید.
-        </p>
-        <a
-          href={`${adminOrigin}/login`}
-          className="inline-flex w-full items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white"
+  const content = (
+    <div className={styles.card}>
+      <h1 className={styles.title}>ورود به داشبورد مدیریت</h1>
+      <p className={styles.text}>
+        حساب شما با نقش مدیریتی ثبت شده است. برای ورود به داشبورد مدیریت،
+        لطفاً از دامنه <span className={styles.host}>{adminHost}</span>{" "}
+        استفاده کنید.
+      </p>
+      <a href={`${adminOrigin}/login`} className={styles.primaryLink}>
+        ورود به داشبورد مدیریت
+      </a>
+      {onBackToLogin ? (
+        <button
+          type="button"
+          onClick={onBackToLogin}
+          className={styles.secondaryButton}
         >
-          ورود به داشبورد مدیریت
-        </a>
-        {onBackToLogin ? (
-          <button
-            type="button"
-            onClick={onBackToLogin}
-            className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-700"
-          >
-            بازگشت به ورود پلیر
-          </button>
-        ) : null}
-      </div>
+          بازگشت به ورود پلیر
+        </button>
+      ) : null}
+    </div>
+  );
+
+  if (asOverlay) {
+    return <div className={styles.backdrop}>{content}</div>;
+  }
+
+  return (
+    <div className={styles.backdrop} style={{ position: "relative", minHeight: "100vh" }}>
+      {content}
     </div>
   );
 }

@@ -10,7 +10,8 @@ import styles from "./LoginForm.module.css";
 import { getLogoImagePath } from "@/lib/theme/logoImageFiles";
 import { DEFAULT_THEME } from "@/lib/theme/types";
 import AdminPortalRequiredScreen from "@/components/auth/AdminPortalRequiredScreen";
-import { isMainHost, isNonPlayerRole } from "@/lib/auth/portalHosts";
+import { getAdminHost, isMainHost, isNonPlayerRole } from "@/lib/auth/portalHosts";
+import { signOutInBackground } from "@/lib/auth/signOutInBackground";
 
 const logoSrc = getLogoImagePath(DEFAULT_THEME, "logo");
 
@@ -73,34 +74,35 @@ export default function LoginForm() {
           toast.error(signInError.message || "خطایی در ورود رخ داد");
         }
       } else if (data.user) {
-        // چک کردن status و role کاربر
+        const roleFromAuth =
+          (data.user.user_metadata?.role as string | undefined) ??
+          (data.user.app_metadata?.role as string | undefined);
+
         const { data: userData, error: userError } = await supabase
           .from("users")
           .select("status, role")
           .eq("id", data.user.id)
           .single();
 
-        if (userError) {
+        const resolvedRole = userData?.role ?? roleFromAuth;
+
+        if (userError && !resolvedRole) {
           console.error("LoginForm: error fetching user status", userError);
           toast.error("خطا در بررسی وضعیت حساب کاربری");
-          await supabase.auth.signOut();
+          signOutInBackground();
           return;
         }
 
-        // اگر اکانت پلیر تعلیق شده باشد
-        if (userData?.status === "suspended" && userData?.role === "player") {
-          await supabase.auth.signOut();
+        if (userData?.status === "suspended" && resolvedRole === "player") {
+          signOutInBackground();
           toast.error("کاربر گرامی؛ اکانت شما موقتا به حالت تعلیق درآمده، لطفا با پشتیبانی و یا ایجنت خود تماس بگیرید.");
           return;
         }
 
-        // نقش‌های غیر پلیر باید از دامنه admin وارد شوند
-        if (
-          isNonPlayerRole(userData?.role) &&
-          isMainHost(window.location.hostname)
-        ) {
-          await supabase.auth.signOut();
+        if (isNonPlayerRole(resolvedRole) && isMainHost(window.location.hostname)) {
           setAdminPortalRequired(true);
+          signOutInBackground();
+          toast.error(`برای ورود به داشبورد مدیریت از ${getAdminHost()} استفاده کنید.`);
           return;
         }
 
@@ -114,14 +116,6 @@ export default function LoginForm() {
       setLoading(false);
     }
   };
-
-  if (adminPortalRequired) {
-    return (
-      <AdminPortalRequiredScreen
-        onBackToLogin={() => setAdminPortalRequired(false)}
-      />
-    );
-  }
 
   return (
     <div className={styles.container}>
@@ -314,6 +308,13 @@ export default function LoginForm() {
             </button>
           </div>
         </div>
+      )}
+
+      {adminPortalRequired && (
+        <AdminPortalRequiredScreen
+          asOverlay
+          onBackToLogin={() => setAdminPortalRequired(false)}
+        />
       )}
     </div>
   );
