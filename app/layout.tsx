@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import GlobalUserStateClient from "./GlobalUserStateClient";
 import PWARegistration from "@/components/PWARegistration";
+import TextScalingGuard from "@/components/TextScalingGuard";
 import { getLogoImagePath } from "@/lib/theme/logoImageFiles";
 import { DEFAULT_THEME } from "@/lib/theme/types";
 
@@ -54,6 +55,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  minimumScale: 1,
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
@@ -90,6 +92,7 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-[#0E0E0F]">
+        <TextScalingGuard />
         <PWARegistration />
         <div className="relative mx-auto min-h-dvh w-full max-w-[390px] overflow-x-hidden bg-[#0E0E0F]">
           <GlobalUserStateClient>{children}</GlobalUserStateClient>

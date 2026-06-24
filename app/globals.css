@@ -125,8 +125,35 @@ html[data-theme="newStyle"] {
   background-color: #0e0e0f;
 }
 
+/*
+ * Lock typography against OS accessibility / browser text scaling.
+ * html font-size in px stabilizes rem-based sizing across devices.
+ */
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: none;
+  -moz-text-size-adjust: none;
+  text-size-adjust: none;
+}
+
+body {
+  -webkit-text-size-adjust: none;
+  -moz-text-size-adjust: none;
+  text-size-adjust: none;
+}
+
 body, button, input, textarea, select, * {
   font-family: inherit;
+}
+
+button,
+input,
+textarea,
+select {
+  -webkit-text-size-adjust: none;
+  -moz-text-size-adjust: none;
+  text-size-adjust: none;
+  font-size: inherit;
 }
 
 /* اعداد لاتین با فونت جداگانه و خط فاصله صفر */
