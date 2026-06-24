@@ -34,7 +34,7 @@ function mapRpcRow(period: DevPlayerFinancePeriod, row: Record<string, unknown>)
 }
 
 async function loadSummaryForPeriod(
-  supabase: ReturnType<Awaited<ReturnType<typeof getDevPanelContextOrThrow>>["supabase"]>,
+  supabase: Awaited<ReturnType<typeof getDevPanelContextOrThrow>>["supabase"],
   period: DevPlayerFinancePeriod,
   timezone: string
 ): Promise<DevPlayerFinanceSummary> {
