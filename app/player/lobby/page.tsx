@@ -292,9 +292,10 @@ export default function LobbyPage() {
             <p className={styles.emptyText}>هیچ روم فعالی وجود ندارد</p>
           </div>
         ) : (
-          roomGroups.map((group) => (
+          roomGroups.map((group, index) => (
             <LobbyRoomCard
               key={`${group.price}_${group.currency}`}
+              listIndex={index}
               price={group.price}
               currency={group.currency}
               roomName={group.roomName}

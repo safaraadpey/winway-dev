@@ -6,11 +6,30 @@ import styles from './LobbyRoomCard.module.css';
 
 // Import room images
 import room5 from '@/src/assets/room/5.png';
+import room6 from '@/src/assets/room/6.png';
+import room8 from '@/src/assets/room/8.png';
 import room10 from '@/src/assets/room/10.png';
+import room11 from '@/src/assets/room/11.png';
 import room20 from '@/src/assets/room/20.png';
-import room50 from '@/src/assets/room/50.png';
-import room100 from '@/src/assets/room/100.png';
-import room200 from '@/src/assets/room/200.png';
+import room21 from '@/src/assets/room/21.png';
+
+const LOBBY_ROOM_IMAGES = [
+  room5,
+  room6,
+  room8,
+  room10,
+  room11,
+  room20,
+  room21,
+] as const;
+
+function getRoomImageByListIndex(listIndex: number) {
+  if (listIndex <= 0) return LOBBY_ROOM_IMAGES[0];
+  if (listIndex >= LOBBY_ROOM_IMAGES.length) {
+    return LOBBY_ROOM_IMAGES[LOBBY_ROOM_IMAGES.length - 1];
+  }
+  return LOBBY_ROOM_IMAGES[listIndex];
+}
 
 export type LobbyRoomCardVariant = 'minimal' | 'expanded';
 
@@ -26,6 +45,8 @@ export interface LobbyRoomCardProps {
   playingPlayers?: number;
   templateId?: string;
   entryRoomId?: string | null;
+  /** ترتیب کارت در لیست لابی (۰ = اولین، برای انتخاب تصویر پس‌زمینه) */
+  listIndex?: number;
   variant?: LobbyRoomCardVariant; // حالت نمایش: minimal (فقط عکس) یا expanded (همه اطلاعات)
   onClick?: (price: number, templateId?: string, entryRoomId?: string | null) => void;
 }
@@ -46,23 +67,10 @@ export default function LobbyRoomCard({
   players,
   templateId,
   entryRoomId,
+  listIndex = 0,
   variant = 'minimal', // حالت پیش‌فرض: minimal
   onClick
 }: LobbyRoomCardProps) {
-  // تابع برای دریافت عکس روم بر اساس قیمت
-  const getRoomImage = (price: number) => {
-    // تبدیل قیمت به هزار تومان برای تطبیق با نام فایل‌ها
-    const priceInThousands = price / 1000;
-    
-    if (priceInThousands <= 5) return room5;
-    if (priceInThousands <= 10) return room10;
-    if (priceInThousands <= 20) return room20;
-    if (priceInThousands <= 50) return room50;
-    if (priceInThousands <= 100) return room100;
-    return room200;
-  };
-
-  // تابع برای فرمت کردن قیمت
   const formatPrice = (price: number) => {
   return new Intl.NumberFormat('en-US').format(price);
   };
@@ -91,7 +99,7 @@ export default function LobbyRoomCard({
     >
       <div className={styles.roomImageContainer}>
         <Image
-          src={getRoomImage(price)}
+          src={getRoomImageByListIndex(listIndex)}
           alt={`روم ${formatPrice(price)} تومان`}
           className={styles.roomImage}
           fill={false}
