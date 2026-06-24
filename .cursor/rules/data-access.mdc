@@ -1,0 +1,109 @@
+---
+description: Supabase + direct PostgreSQL hybrid — when to use each data path
+alwaysApply: true
+---
+
+# Data Access Architecture Standard
+
+This project follows a Supabase + Direct PostgreSQL hybrid architecture.
+
+## Core Principle
+
+Supabase is a productivity layer.
+
+PostgreSQL is the source of truth.
+
+When business correctness matters, read from PostgreSQL.
+
+## Use Supabase For
+
+* Authentication
+* Session Management
+* User Accounts
+* Realtime
+* Presence
+* Broadcast
+* Realtime Subscriptions
+* Storage
+* Images
+* Videos
+* Documents
+* User Uploads
+* Non-critical reads
+* Profiles
+* Settings
+* Static lists
+* Catalog data
+
+## Use Direct PostgreSQL For
+
+* Wallet State
+* Financial State
+* Settlement Data
+* Audit Data
+* Room State
+* Game State
+* Tournament State
+* Active Cards
+* Active Players
+* Room Population
+* Winners
+* Draw History
+* Critical Counters
+* Critical Snapshot APIs
+
+## Snapshot APIs
+
+Prefer PostgreSQL for:
+
+* GET /gameroom
+* GET /live-room
+* GET /wallet
+* GET /tournament
+
+Do not use Supabase SDK as the sole source of truth for critical snapshots.
+
+## Required Infrastructure
+
+All projects must include:
+
+* lib/db/postgres.ts
+* lib/db/supabase.ts
+
+and maintain two independent data-access paths.
+
+## Debugging Rule
+
+When investigating data inconsistencies:
+
+1. Database
+2. Direct PostgreSQL
+3. Supabase SDK
+
+Compare all three layers before drawing conclusions.
+
+Never assume:
+
+Supabase SDK == PostgreSQL
+
+Treat Supabase as a convenience layer over PostgreSQL.
+
+## Architecture Preference
+
+When implementing new features:
+
+* Use Supabase for productivity.
+* Use PostgreSQL for certainty.
+* Financial correctness always wins over convenience.
+
+## Before Completing Any Data Task
+
+Ask:
+
+"Is this data business-critical or source-of-truth?"
+
+If yes:
+Prefer PostgreSQL.
+
+If no:
+Supabase is acceptable.

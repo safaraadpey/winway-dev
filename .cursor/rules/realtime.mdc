@@ -1,0 +1,35 @@
+---
+description: Realtime for UI freshness only — snapshot APIs and PostgreSQL are source of truth
+alwaysApply: true
+---
+
+# Realtime Architecture Standard
+
+Realtime is **not** the source of truth.
+
+## Purpose
+
+Use realtime only for **notification** and **UI freshness**.
+
+Any critical realtime update must be **recoverable** by a trusted snapshot API.
+
+## Rooms, games, wallet, tournaments, cards, winners, draw history
+
+* Realtime **may** update the UI optimistically.
+* Snapshot API **must** be able to correct the UI.
+* **Direct PostgreSQL** is preferred for critical snapshot reads.
+
+## Forbidden
+
+Never make **financial** or **game-final** decisions based only on realtime events.
+
+Decisions that affect money, winners, settlement, or authoritative game state require snapshot confirmation (prefer PostgreSQL-backed APIs).
+
+## Before completing a realtime feature
+
+Ask:
+
+1. What snapshot API corrects this UI if realtime is wrong or missed?
+2. Is any business-critical logic triggered solely by a realtime event? If yes, refactor.
+
+See also: `.cursor/rules/data-access.mdc` for Supabase vs PostgreSQL paths.

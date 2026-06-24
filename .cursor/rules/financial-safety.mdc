@@ -1,0 +1,35 @@
+---
+description: Financial correctness over UI speed — backend PostgreSQL, idempotent, auditable
+alwaysApply: true
+---
+
+# Financial Safety Standard
+
+Financial correctness is more important than UI speed or convenience.
+
+## Forbidden
+
+Never finalize wallet, balance, payment, refund, prize, or settlement logic **only in the frontend**.
+
+## Financial operations must
+
+* Use **Direct PostgreSQL** where correctness matters
+* Be **idempotent** (see `.cursor/rules/idempotency.mdc`)
+* Be **auditable**
+* Have **before/after balance** records
+* **Avoid double spending**
+* **Avoid duplicate settlement**
+* **Log critical steps** with stable prefixes (see `.cursor/rules/observability.mdc` — e.g. `[Wallet]`, `[Payment]`, `[Settlement]`)
+* **Prefer database transactions**
+
+## Optimistic UI
+
+Optimistic UI is allowed **only as display**.
+
+The final truth must come from the **backend / source of truth** (PostgreSQL-backed APIs, not Supabase SDK alone — see `.cursor/rules/data-access.mdc`).
+
+Realtime must not drive financial decisions (see `.cursor/rules/realtime.mdc`).
+
+## Before completing any financial feature
+
+Confirm: where is the authoritative write? where is the audit trail? what prevents duplicate settlement on retry?

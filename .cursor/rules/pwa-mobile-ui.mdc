@@ -1,0 +1,35 @@
+---
+description: Fixed mobile-first PWA UI — shell, safe-area, no uncontrolled responsive drift
+alwaysApply: true
+---
+
+# PWA & Mobile UI Standard
+
+This app is a **fixed mobile-first PWA / game UI**.
+
+Do not introduce **uncontrolled responsive behavior**.
+
+## Before changing mobile UI
+
+* **Respect fixed app shell** — `max-w-[390px]` centered column; do not widen or reflow the shell unless explicitly requested
+* **Respect safe-area insets** — `env(safe-area-inset-*)` for notches and home indicators
+* **Avoid accidental `vw` / `vh` / `clamp()`** in sensitive UI (especially numeric text — see `.cursor/rules/ui-typography.mdc`)
+* **Keep touch targets usable** — adequate hit area and spacing for buttons and controls
+* **Keep numeric text stable** — `numeric-text numeric-text--{size}`; fixed px for balances, timers, prices
+* **Test installed PWA and mobile browser** — standalone vs in-browser can differ (viewport, safe-area, scroll)
+
+## Do not change unless explicitly requested
+
+* Layout width
+* Shell behavior
+* Visual proportions
+* Image-based menu cards / buttons scaling strategy
+
+## Image vs text
+
+Image assets may scale with container width; **real text and numbers** must follow typography rules — do not conflate layout issues with font scaling.
+
+## Related rules
+
+* `.cursor/rules/ui-typography.mdc` — numeric text and forbidden sizing units
+* `.cursor/rules/state-management.mdc` — client state on navigation / hard exit in PWA

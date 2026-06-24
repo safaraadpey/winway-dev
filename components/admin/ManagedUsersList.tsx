@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { filterManagedUsers, getCachedManagedUsersBase, loadManagedUsers } from "@/services/users";
 import type {
   ManagedUserRoleFilter,
@@ -21,6 +21,8 @@ const ALL_ROLE_TABS: { key: ManagedUserRoleFilter; label: string }[] = [
 
 export default function ManagedUsersList({ pageTitle }: ManagedUsersListProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const userDetailBasePath = pathname.startsWith("/agent") ? "/agent/users" : "/admin/users";
   const cached = getCachedManagedUsersBase();
   const [baseUsers, setBaseUsers] = useState<ManagedUserSummary[]>(
     () => cached?.usersAll ?? []
@@ -178,12 +180,7 @@ export default function ManagedUsersList({ pageTitle }: ManagedUsersListProps) {
         : "bg-[#1b1f2a]"; // ادمین
 
     const navigateToUser = () => {
-      // تعیین مسیر بر اساس نقش کاربر فعلی
-      if (currentRole === "agent") {
-        router.push(`/agent/users/${u.id}`);
-      } else {
-        router.push(`/admin/users/${u.id}`);
-      }
+      router.push(`${userDetailBasePath}/${u.id}`);
     };
 
     return (

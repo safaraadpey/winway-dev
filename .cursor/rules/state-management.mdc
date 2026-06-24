@@ -1,0 +1,30 @@
+---
+description: Critical state needs source of truth, recovery, and cleanup — not React-only
+alwaysApply: true
+---
+
+# State Management Standard
+
+Critical state must **not** live only in React state.
+
+React state is for **rendering**, not business truth.
+
+## For player-facing game, room, wallet, tournament, and session state
+
+Define explicitly:
+
+1. **Source of truth** — backend / PostgreSQL snapshot (see `.cursor/rules/data-access.mdc`)
+2. **Cache / state layer** — Context, store, or in-memory cache; how stale is tolerated
+3. **Reset / cleanup path** — what runs on leave room, logout, navigation
+4. **Recovery snapshot** — which API restores correct UI after reconnect or error (see `.cursor/rules/realtime.mdc`)
+5. **Clear state on hard exit** — must participate in Hard Exit cleanup (see `.cursor/rules/hard-exit.mdc`)
+
+## Rules of thumb
+
+* Realtime updates **display**; snapshots **correct** (`.cursor/rules/realtime.mdc`)
+* Wallet / settlement truth stays on the server (`.cursor/rules/financial-safety.mdc`)
+* Never derive financial or game-final outcomes from React state alone
+
+## Before completing a stateful feature
+
+Document: where is truth, what clears on exit, what API recovers if the client desyncs.

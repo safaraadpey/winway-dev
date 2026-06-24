@@ -1,0 +1,40 @@
+---
+description: Critical mutations must be safe to retry — no duplicate money, cards, or state
+alwaysApply: true
+---
+
+# Idempotency Standard
+
+All **critical operations** must be idempotent.
+
+## In scope
+
+* Join room
+* Buy card
+* Start room
+* Draw number
+* Declare winner
+* Settlement
+* Refund
+* Wallet update
+* Hard exit
+* Retry jobs
+
+Repeated calls must **not** duplicate money, cards, winners, jobs, or state transitions.
+
+## Implementation tools
+
+Use:
+
+* **Unique keys** (idempotency keys, client request IDs)
+* **Transaction guards**
+* **Database constraints** (unique indexes, check constraints)
+* **Status checks** (only transition from allowed states)
+
+## Before finishing any critical mutation
+
+Explain **why it is safe to retry** — what prevents double spend, double join, double draw, or duplicate settlement on replay.
+
+If retry safety is unclear, add guards or document the failure mode before merging.
+
+See also: `.cursor/rules/hard-exit.mdc` (Hard Exit idempotency), `.cursor/rules/data-access.mdc` (PostgreSQL as source of truth).

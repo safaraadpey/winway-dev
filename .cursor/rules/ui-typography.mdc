@@ -1,0 +1,73 @@
+---
+description: Fixed mobile game UI — numeric typography and player-facing text consistency
+alwaysApply: true
+---
+
+# UI & typography consistency (player-facing)
+
+This app is a **fixed mobile game UI** (390px design). Typography must look **identical across Android, iOS, and PWA** — not scaled by device settings or system fonts.
+
+## Numeric text (required)
+
+All **player-facing numbers** must use global classes from `app/globals.css`:
+
+```tsx
+<span className="numeric-text numeric-text--18" dir="ltr">
+  {amount.toLocaleString("en-US")}
+</span>
+```
+
+Available sizes: `--11`, `--12`, `--13`, `--14`, `--16`, `--17`, `--18`, `--20`, `--24`, `--25`, `--30`, `--32`, `--36`.
+
+In CSS modules, prefer:
+
+```css
+.balanceAmount {
+  composes: numeric-text numeric-text--18 from global;
+}
+```
+
+### Applies to
+
+Balances, coins, prices, countdowns, timers, room codes, draw numbers, player counts, leaderboard values, tournament stats, prize amounts, quantities, and any other **sensitive numeric UI**.
+
+## Font rules for numbers
+
+- **Use**: `Vazirmatn` (bundled via `app/layout.tsx`)
+- **Required features**: `font-variant-numeric: tabular-nums lining-nums` and `font-feature-settings: "tnum" 1, "lnum" 1` (provided by `.numeric-text`)
+- **Never use for numbers**: `Inter`, `Segoe UI`, `Arial`, `Roboto`, or other system UI fonts
+- **Do not use** `.latin-number` for new code; it exists only for backward compatibility
+
+## Forbidden for sensitive numeric UI
+
+Do **not** use `rem`, `em`, `vw`, `vh`, or `clamp()` for font sizes on balances, coins, prices, countdowns, room codes, leaderboard values, or similar numeric labels.
+
+Use **fixed `px`** via `numeric-text--{size}` or explicit `font-size: Npx` in module CSS that composes from `.numeric-text`.
+
+## CSS module pattern
+
+```css
+/* ✅ GOOD */
+.prizeValue {
+  composes: numeric-text numeric-text--14 from global;
+  font-weight: 800;
+  color: #fcd34d;
+}
+
+/* ❌ BAD */
+.prizeValue {
+  font-size: clamp(0.7rem, 3.2vw, 1rem);
+  font-family: "Inter", sans-serif;
+}
+```
+
+## Out of scope (do not change unless asked)
+
+Image-based buttons, menu card artwork, app shell width (`max-w-[390px]`), and layout structure.
+
+## Before finishing any UI task
+
+1. Search changed files for new numeric displays (`toLocaleString`, counts, timers, prices).
+2. Confirm each uses `numeric-text numeric-text--{size}` (or composes from global).
+3. Confirm no `rem`/`em`/`vw`/`clamp()` on sensitive numeric font sizes.
+4. Confirm no system font fallbacks on number elements.

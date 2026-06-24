@@ -1,0 +1,28 @@
+---
+description: Stable API contracts — backward compatibility and complete critical snapshots
+alwaysApply: true
+---
+
+# API Contracts Standard
+
+API responses must have **stable contracts**.
+
+Do not change response shapes casually.
+
+## For every API change
+
+* **Check all consumers** (frontend, game-engine, mobile/PWA, scripts)
+* **Preserve backward compatibility** when possible
+* Return **consistent error shapes**
+* Include **enough fields for recovery / debugging**
+* **Avoid returning partial critical snapshots**
+
+## Critical snapshot APIs
+
+Must return **complete, self-consistent** data (rooms, live game, wallet, tournament, etc.).
+
+Partial or stale mixes of fields force clients to guess — prefer one authoritative read (see `.cursor/rules/data-access.mdc`).
+
+## Before completing an API change
+
+List consumers affected, document breaking changes if any, and confirm error responses match existing patterns.

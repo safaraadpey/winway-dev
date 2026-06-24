@@ -1,0 +1,170 @@
+---
+description: Guaranteed Hard Exit — logout and recovery must work without API or router
+alwaysApply: true
+---
+
+# Hard Exit Architecture Standard
+
+This application must always provide a guaranteed escape route from a broken application state.
+
+## Core Principle
+
+Hard Exit must not depend on:
+
+* API availability
+* Auth providers
+* Router state
+* Realtime state
+* WebSocket state
+* Background jobs
+
+Exit must always work.
+
+## Required Behavior
+
+When implementing logout, emergency exit, room exit, session recovery, or fatal error recovery:
+
+Prefer Hard Exit over standard logout.
+
+## Standard Flow
+
+User Click Exit
+↓
+Set Hard Exit Flag
+↓
+Block UI
+↓
+Stop Polling
+↓
+Stop Realtime
+↓
+Stop WebSockets
+↓
+Stop Background Jobs
+↓
+Clear Stores
+↓
+Clear Cache
+↓
+Clear Session
+↓
+Fire SignOut Async
+↓
+Force Redirect
+
+## Idempotency Rule
+
+Hard Exit must be idempotent.
+
+Multiple calls must produce a single execution.
+
+Use:
+
+isHardExiting()
+
+or equivalent protection.
+
+## Cleanup Requirements
+
+Stop:
+
+* Supabase Realtime
+* WebSockets
+* SSE
+* Firebase listeners
+* SignalR connections
+
+Stop:
+
+* setInterval
+* setTimeout loops
+* React Query polling
+* SWR refresh
+* custom pollers
+
+Clear:
+
+* Zustand
+* Redux
+* Context state
+* Local stores
+
+Clear:
+
+* Auth tokens
+* Session cookies
+* LocalStorage
+* SessionStorage
+* Cached user data
+
+## Navigation Rule
+
+Never rely on:
+
+router.push('/login')
+
+For Hard Exit.
+
+Prefer:
+
+window.location.replace('/login')
+
+or
+
+window.location.href = '/login'
+
+## SignOut Rule
+
+Do not wait for signOut completion.
+
+Run asynchronously.
+
+Example:
+
+supabase.auth.signOut().catch(() => {})
+
+## Timeout Fallback
+
+Always keep a redirect fallback timer.
+
+Example:
+
+setTimeout(() => {
+window.location.replace('/login')
+}, 750)
+
+## Global Event
+
+Publish:
+
+app:hard-exit
+
+Allow listeners to perform cleanup.
+
+## Observability
+
+Log:
+
+[HardExit] Started
+[HardExit] Realtime Stopped
+[HardExit] State Cleared
+[HardExit] Redirecting
+
+## Use Cases
+
+Apply this pattern for:
+
+* Logout
+* Emergency Exit
+* Session Recovery
+* Broken Realtime
+* Room Corruption
+* Infinite Loading
+* Fatal Client Errors
+* PWA Recovery
+
+## Final Principle
+
+No matter what fails:
+
+Exit must always work.

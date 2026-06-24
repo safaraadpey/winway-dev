@@ -1,0 +1,43 @@
+---
+description: Searchable logs with stable prefixes for important features
+alwaysApply: true
+---
+
+# Observability Standard
+
+Every important feature must include clear, searchable logs.
+
+## Stable log prefixes
+
+Use consistent bracketed prefixes such as:
+
+* `[Wallet]`
+* `[Room]`
+* `[RoomLoop]`
+* `[Scheduler]`
+* `[Janitor]`
+* `[Realtime]`
+* `[HardExit]`
+* `[Payment]`
+* `[Settlement]`
+
+Add a new prefix only when the domain is distinct and recurring. Prefer an existing prefix when the feature fits.
+
+## Logs must answer
+
+For important operations, logs should make it easy to determine:
+
+* **What started?**
+* **What input was received?**
+* **What source of truth was used?** (PostgreSQL vs Supabase SDK vs cache)
+* **What changed?**
+* **What failed?**
+* **What fallback ran?**
+
+## Hot loops
+
+Do **not** add noisy logs inside hot loops unless **rate-limited** (e.g. every N iterations, on state change only, or on error).
+
+## Before completing a feature
+
+Confirm important paths have searchable logs with stable prefixes — not ad-hoc `console.log` strings that cannot be grepped across the codebase.
