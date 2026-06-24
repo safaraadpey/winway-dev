@@ -1,6 +1,6 @@
 "use client";
 
-import { getAdminHost, getAdminOrigin } from "@/lib/auth/portalHosts";
+import { getAdminHost } from "@/lib/auth/portalHosts";
 import styles from "./AdminPortalRequiredScreen.module.css";
 
 type AdminPortalRequiredScreenProps = {
@@ -13,7 +13,6 @@ export default function AdminPortalRequiredScreen({
   asOverlay = false,
 }: AdminPortalRequiredScreenProps) {
   const adminHost = getAdminHost();
-  const adminOrigin = getAdminOrigin();
 
   const content = (
     <div className={styles.card}>
@@ -23,16 +22,13 @@ export default function AdminPortalRequiredScreen({
         لطفاً از دامنه <span className={styles.host}>{adminHost}</span>{" "}
         استفاده کنید.
       </p>
-      <a href={`${adminOrigin}/login`} className={styles.primaryLink}>
-        ورود به داشبورد مدیریت
-      </a>
       {onBackToLogin ? (
         <button
           type="button"
           onClick={onBackToLogin}
-          className={styles.secondaryButton}
+          className={styles.closeButton}
         >
-          بازگشت به ورود پلیر
+          متوجه شدم
         </button>
       ) : null}
     </div>
