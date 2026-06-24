@@ -8,9 +8,16 @@ import {
 } from "../../runtime/draw-processor-wake.js";
 import { executesBusinessLogic } from "../../runtime.js";
 import type { WorkerContext } from "../context.js";
+import { createAdaptivePollScheduler } from "./adaptivePollScheduler.js";
 import { createPickCoordinator } from "./pickCoordinator.js";
 import { RoomDrawActorPool } from "./roomDrawActorPool.js";
 import { startDrawJobWakeListener } from "./wakeListener.js";
+
+const RESET_BACKOFF_REASONS = new Set<DrawProcessorWakeReason>([
+  "realtime",
+  "enqueue",
+  "backlog",
+]);
 
 /**
  * Phase 2: pick coordinator + per-room serial actors.
@@ -47,6 +54,8 @@ export function startPerRoomActorProcessor(ctx: WorkerContext): () => void {
     onWorkRequeued: () => coordinatorRef.schedulePick("backlog"),
   });
 
+  let pollScheduler: ReturnType<typeof createAdaptivePollScheduler>;
+
   const coordinator = createPickCoordinator({
     supabase,
     log,
@@ -58,6 +67,17 @@ export function startPerRoomActorProcessor(ctx: WorkerContext): () => void {
     maxRoundsPerPoll: config.drawProcessorMaxBatchesPerTick,
     maxRoundsPerWake: config.drawProcessorMaxBatchesPerWake,
     pickDiagnostics: config.drawPickDiagnostics,
+    onPollCycleComplete: (result) => {
+      if (result.totalPicked > 0) {
+        pollScheduler.resetToFast();
+        return;
+      }
+      pollScheduler.notifyPollCycle({
+        totalPicked: result.totalPicked,
+        rpcAttemptedEmpty: result.rpcAttemptedEmpty,
+        lockDeferred: result.lockDeferred,
+      });
+    },
   });
 
   coordinatorRef.schedulePick = coordinator.schedulePick;
@@ -77,9 +97,19 @@ export function startPerRoomActorProcessor(ctx: WorkerContext): () => void {
 
   const requestPick = (reason: DrawProcessorWakeReason): void => {
     if (stopped) return;
+    if (RESET_BACKOFF_REASONS.has(reason)) {
+      pollScheduler.resetToFast();
+    }
     void maybeReapStaleJobs();
     void ensureCardRegistry().then(() => coordinator.schedulePick(reason));
   };
+
+  pollScheduler = createAdaptivePollScheduler({
+    baseIntervalMs: config.drawProcessorIntervalMs,
+    enabled: config.drawPickIdleBackoff,
+    log,
+    onPoll: () => requestPick("poll"),
+  });
 
   const unregisterWake = registerDrawProcessorWake((reason) => {
     if (!config.drawProcessorWakeOnEnqueue) return;
@@ -91,15 +121,11 @@ export function startPerRoomActorProcessor(ctx: WorkerContext): () => void {
       ? startDrawJobWakeListener(supabase, log)
       : () => undefined;
 
-  requestPick("poll");
-  const timer = setInterval(
-    () => requestPick("poll"),
-    config.drawProcessorIntervalMs
-  );
+  pollScheduler.start();
 
   return () => {
     stopped = true;
-    clearInterval(timer);
+    pollScheduler.stop();
     unregisterWake();
     stopWakeListener();
     coordinator.stop();

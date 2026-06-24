@@ -24,8 +24,14 @@ import { executesBusinessLogic } from "../../runtime.js";
 import type { WorkerContext } from "../context.js";
 import { startPerRoomActorProcessor } from "./startPerRoomActorProcessor.js";
 import { startDrawJobWakeListener } from "./wakeListener.js";
+import { createAdaptivePollScheduler } from "./adaptivePollScheduler.js";
 
 const MICRO_WAKE_REASONS = new Set<DrawProcessorWakeReason>(["enqueue", "realtime"]);
+const RESET_BACKOFF_REASONS = new Set<DrawProcessorWakeReason>([
+  "realtime",
+  "enqueue",
+  "backlog",
+]);
 
 export function startDrawProcessor(ctx: WorkerContext): () => void {
   if (
@@ -56,6 +62,7 @@ function startLegacyDrainProcessor(ctx: WorkerContext): () => void {
   const repo = new GameRepo(supabase);
   const worker = "draw-processor";
   let cardRegistry: GlobalCardRegistry | null = null;
+  let pollScheduler: ReturnType<typeof createAdaptivePollScheduler>;
 
   const ensureCardRegistry = async (): Promise<GlobalCardRegistry | null> => {
     if (!executesBusinessLogic(config.runtime)) return null;
@@ -127,6 +134,9 @@ function startLegacyDrainProcessor(ctx: WorkerContext): () => void {
 
   const requestDrain = (reason: DrawProcessorWakeReason): void => {
     if (stopped) return;
+    if (RESET_BACKOFF_REASONS.has(reason)) {
+      pollScheduler.resetToFast();
+    }
     if (inFlight) {
       pendingDrain = true;
       if (isMicroWake(reason)) {
@@ -157,6 +167,8 @@ function startLegacyDrainProcessor(ctx: WorkerContext): () => void {
     inFlight = true;
     let lockHeld = false;
     const cycleWakeReason = wakeReason;
+    let pollTotals: DrawBatchResult | null = null;
+    let pollLockDeferred = false;
     try {
       await maybeReapStaleJobs();
       const lock = await acquireLeaderLock({
@@ -172,6 +184,9 @@ function startLegacyDrainProcessor(ctx: WorkerContext): () => void {
         pendingDrain = true;
         if (isMicroWake(cycleWakeReason)) {
           wakeReason = cycleWakeReason;
+        }
+        if (cycleWakeReason === "poll") {
+          pollLockDeferred = true;
         }
         return;
       }
@@ -198,6 +213,7 @@ function startLegacyDrainProcessor(ctx: WorkerContext): () => void {
         pickDebug,
         activeWakeReason: cycleWakeReason,
       });
+      pollTotals = totals;
 
       if (totals.requeued > 0) {
         pendingDrain = true;
@@ -215,6 +231,26 @@ function startLegacyDrainProcessor(ctx: WorkerContext): () => void {
         log,
       });
       inFlight = false;
+
+      if (cycleWakeReason === "poll") {
+        if (pollLockDeferred) {
+          pollScheduler.notifyPollCycle({
+            totalPicked: 0,
+            rpcAttemptedEmpty: false,
+            lockDeferred: true,
+          });
+        } else if (pollTotals) {
+          if (pollTotals.picked > 0) {
+            pollScheduler.resetToFast();
+          } else {
+            pollScheduler.notifyPollCycle({
+              totalPicked: 0,
+              rpcAttemptedEmpty: true,
+              lockDeferred: false,
+            });
+          }
+        }
+      }
 
       if (pendingDrain && !stopped) {
         pendingDrain = false;
@@ -362,15 +398,18 @@ function startLegacyDrainProcessor(ctx: WorkerContext): () => void {
       ? startDrawJobWakeListener(supabase, log)
       : () => undefined;
 
-  void runDrainCycle();
-  const timer = setInterval(
-    () => requestDrain("poll"),
-    config.drawProcessorIntervalMs
-  );
+  pollScheduler = createAdaptivePollScheduler({
+    baseIntervalMs: config.drawProcessorIntervalMs,
+    enabled: config.drawPickIdleBackoff,
+    log,
+    onPoll: () => requestDrain("poll"),
+  });
+
+  pollScheduler.start();
 
   return () => {
     stopped = true;
-    clearInterval(timer);
+    pollScheduler.stop();
     unregisterWake();
     stopWakeListener();
   };

@@ -51,6 +51,13 @@ function deferAsync(
   });
 }
 
+export interface PickPollCycleResult {
+  reason: DrawProcessorWakeReason;
+  totalPicked: number;
+  rpcAttemptedEmpty: boolean;
+  lockDeferred: boolean;
+}
+
 export interface PickCoordinatorOptions {
   supabase: SupabaseAdmin;
   log: Logger;
@@ -62,6 +69,7 @@ export interface PickCoordinatorOptions {
   maxRoundsPerPoll: number;
   maxRoundsPerWake: number;
   pickDiagnostics: boolean;
+  onPollCycleComplete?: (result: PickPollCycleResult) => void;
 }
 
 export interface PickCoordinator {
@@ -146,11 +154,17 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
 
     let roundsLeft = burstBudget;
     let totalPicked = 0;
+    let cycleLockDeferred = false;
+    let cycleRpcAttemptedEmpty = false;
 
     try {
       while (!stopped) {
         pendingPick = false;
-        const picked = await attemptPick(cycleReason);
+        const attempt = await attemptPick(cycleReason);
+        if (attempt.lockDeferred) cycleLockDeferred = true;
+        if (attempt.rpcAttemptedEmpty) cycleRpcAttemptedEmpty = true;
+
+        const picked = attempt.picked;
         if (picked > 0) {
           totalPicked += picked;
           queueCache.notePicked(picked);
@@ -181,6 +195,14 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
       });
     } finally {
       pickLoopRunning = false;
+      if (cycleReason === "poll") {
+        opts.onPollCycleComplete?.({
+          reason: cycleReason,
+          totalPicked,
+          rpcAttemptedEmpty: cycleRpcAttemptedEmpty,
+          lockDeferred: cycleLockDeferred,
+        });
+      }
       if ((pendingPick || queueCache.hasQueued()) && !stopped) {
         void runPickLoop();
       }
@@ -197,7 +219,11 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
 
   const attemptPick = async (
     activeWakeReason: DrawProcessorWakeReason
-  ): Promise<number> => {
+  ): Promise<{
+    picked: number;
+    lockDeferred: boolean;
+    rpcAttemptedEmpty: boolean;
+  }> => {
     const drainMonitor = createDrainMonitorContext();
     const pickDebug: PickDebugContext = {
       workerId: lockToken,
@@ -238,7 +264,7 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
             "Another engine replica may hold the Redis draw-processor lock — run only one engine per DB.",
         });
       }
-      return 0;
+      return { picked: 0, lockDeferred: true, rpcAttemptedEmpty: false };
     }
 
     consecutiveLockSkips = 0;
@@ -277,7 +303,7 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
     );
 
     if (!pickStep || pickStep.result.length === 0) {
-      return 0;
+      return { picked: 0, lockDeferred: false, rpcAttemptedEmpty: true };
     }
 
     const picked = pickStep.result;
@@ -288,7 +314,11 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
     );
     const jobs = filtered.toProcess;
     if (jobs.length === 0) {
-      return picked.length;
+      return {
+        picked: picked.length,
+        lockDeferred: false,
+        rpcAttemptedEmpty: false,
+      };
     }
 
     const pickPerJobMs = pickStep.timing.durationMs / picked.length;
@@ -314,7 +344,11 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
       opts.pool.dispatch(job, pickContext);
     }
 
-    return picked.length;
+    return {
+      picked: picked.length,
+      lockDeferred: false,
+      rpcAttemptedEmpty: false,
+    };
   };
 
   return {

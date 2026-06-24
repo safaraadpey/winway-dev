@@ -77,6 +77,8 @@ export interface EngineConfig {
   schedulerEnabled: boolean;
   /** Pick-path DB snapshots (fetchPickDebugQueueState, pick_debug_snapshot logs). Off in production. */
   drawPickDiagnostics: boolean;
+  /** Back off rpc_pick_draw_jobs poll when queue is empty; Realtime wake resets to fast. */
+  drawPickIdleBackoff: boolean;
 }
 
 function parseRoles(raw: string | undefined): Set<EngineRole> {
@@ -201,5 +203,6 @@ export function loadConfig(): EngineConfig {
     ),
     schedulerEnabled: process.env.SCHEDULER_ENABLED === "true",
     drawPickDiagnostics: process.env.DRAW_PICK_DIAGNOSTICS === "true",
+    drawPickIdleBackoff: process.env.DRAW_PICK_IDLE_BACKOFF !== "false",
   };
 }
