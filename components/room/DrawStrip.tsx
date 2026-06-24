@@ -128,11 +128,11 @@ export default function DrawStrip({
       <div className={styles.labelRow}>
         {roomName && showRoomBadge && (
           <span className={styles.roomBadge}>
-            <span className={`${styles.roomBadgeValue} latin-number`}>{roomName}</span>
+            <span className={`${styles.roomBadgeValue} numeric-text numeric-text--11`}>{roomName}</span>
             <span className={styles.roomBadgeLabel}>شماره میز</span>
           </span>
         )}
-        <span className={`${styles.badge} latin-number`}>90/{drawsCount}</span>
+        <span className={`${styles.badge} numeric-text numeric-text--11`}>90/{drawsCount}</span>
         {roomName && commitShort && (
           <span className={styles.commitRow}>
             {copyToast && (
@@ -147,7 +147,7 @@ export default function DrawStrip({
               </span>
             )}
             <span className={styles.commitText}>
-              <span dir="ltr" className="latin-number">
+              <span dir="ltr" className="numeric-text numeric-text--12">
                 {roomName}
               </span>{" "}
               <span className={styles.commitCodeLabel}>کد</span>
@@ -175,7 +175,7 @@ export default function DrawStrip({
           </div>
         )}
         <div
-          className={`${styles.current} ${isWinningFullDraw ? styles.currentWinning : ""} latin-number`}
+          className={`${styles.current} ${isWinningFullDraw ? styles.currentWinning : ""} numeric-text numeric-text--32`}
         >
           {display}
         </div>

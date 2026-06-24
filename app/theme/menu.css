@@ -79,13 +79,17 @@
 }
 
 .theme-menu-item__liveBadgeCount {
+  font-family: "Vazirmatn", sans-serif !important;
+  font-size: 36px;
+  line-height: 36px;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
   color: #e5e7eb;
-  font-size: 2.25rem;
   font-weight: 600;
-  line-height: 1;
   direction: ltr;
   text-align: left;
-  font-variant-numeric: tabular-nums;
 }
 
 html[data-theme="dark"] .theme-menu-item__liveBadge {

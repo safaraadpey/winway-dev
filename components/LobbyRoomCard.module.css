@@ -70,11 +70,9 @@
 }
 
 .playersCount {
-  font-size: 0.875rem;
+  composes: numeric-text numeric-text--14 from global;
   font-weight: 600;
   color: #ffffff;
-  font-family: 'Arial', sans-serif;
-  line-height: 1;
 }
 
 .priceStack {
@@ -135,11 +133,9 @@
 }
 
 .priceCount {
-  font-size: 32px;
+  composes: numeric-text numeric-text--32 from global;
   font-weight: 500;
   color: rgba(255, 255, 255, 1);
-  font-family: 'Arial', sans-serif;
-  line-height: 1;
 }
 
 .roomInfo {
@@ -150,11 +146,10 @@
 }
 
 .roomPrice {
-  font-size: 1.5rem;
+  composes: numeric-text numeric-text--24 from global;
   font-weight: 700;
   color: #fbbf24;
   text-align: center;
-  font-family: 'Arial', sans-serif;
 }
 
 .roomNameExpanded {
@@ -188,10 +183,9 @@
 }
 
 .statValue {
-  font-size: 1rem;
+  composes: numeric-text numeric-text--16 from global;
   font-weight: 600;
   color: #fff;
-  font-family: 'Arial', sans-serif;
 }
 
 .roomStatus {

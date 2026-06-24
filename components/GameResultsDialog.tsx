@@ -109,7 +109,7 @@ function WinnerRow({
         <div ref={prizeRef} className="flex flex-col items-end">
           <div className="flex items-baseline gap-1">
             <motion.span
-              className={`latin-number ${styles.prizeAmount}`}
+              className={`numeric-text numeric-text--18 ${styles.prizeAmount}`}
               animate={
                 celebrate && isCurrentUser
                   ? {
@@ -555,7 +555,7 @@ export default function GameResultsDialog({
                     {proofDisplay && (
                       <>
                         <span className={styles.proofLabel}>seed|commit</span>
-                        <span dir="ltr" className={`latin-number ${styles.proofValue}`}>
+                        <span dir="ltr" className={`numeric-text numeric-text--14 ${styles.proofValue}`}>
                           {proofDisplay}
                         </span>
                       </>

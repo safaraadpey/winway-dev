@@ -139,7 +139,7 @@
 }
 
 .quantityBadgeValue {
-  font-size: 1rem;
+  composes: numeric-text numeric-text--16 from global;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -272,7 +272,7 @@
 }
 
 .tournamentRangeBadgeValue {
-  font-size: 1rem;
+  composes: numeric-text numeric-text--16 from global;
   font-weight: 600;
 }
 
@@ -288,9 +288,9 @@
 }
 
 .tournamentQuantity {
+  composes: numeric-text numeric-text--30 from global;
   min-width: 60px;
   text-align: center;
-  font-size: 1.875rem;
   font-weight: 600;
   color: #ffffff;
 }
@@ -371,7 +371,7 @@
 }
 
 .activeCardsTimer {
-  font-size: 25px;
+  composes: numeric-text numeric-text--25 from global;
   font-weight: 500;
   color: #22c55e;
 }
@@ -475,7 +475,9 @@
 }
 
 .activeCardRowCount {
-  font-size: 0.875rem;
+  font-size: 14px;
+  line-height: 18px;
+  font-family: "Vazirmatn", sans-serif;
   color: #4b5563;
 }
 

@@ -1183,7 +1183,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
         title={
           <span dir="rtl">
             نتیجه بازی شماره :{" "}
-            <span dir="ltr" className="latin-number">
+            <span dir="ltr" className="numeric-text numeric-text--16">
               {roomName}
             </span>
           </span>

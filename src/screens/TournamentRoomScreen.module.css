@@ -49,21 +49,25 @@
 }
 
 .infoValuePlayers {
+  composes: numeric-text numeric-text--14 from global;
   color: #6ee7b7;
   font-weight: 600;
 }
 
 .infoValuePrize {
+  composes: numeric-text numeric-text--14 from global;
   color: #fcd34d;
   font-weight: 600;
 }
 
 .infoValueDefault {
+  composes: numeric-text numeric-text--14 from global;
   color: #f3f4f6;
   font-weight: 600;
 }
 
 .infoValueWinners {
+  composes: numeric-text numeric-text--14 from global;
   color: #6ee7b7;
   font-weight: 600;
 }
@@ -92,11 +96,13 @@
 }
 
 .winnerRank {
+  composes: numeric-text numeric-text--14 from global;
   color: #6ee7b7;
   font-weight: 600;
 }
 
 .winnerAmount {
+  composes: numeric-text numeric-text--14 from global;
   color: #a7f3d0;
 }
 

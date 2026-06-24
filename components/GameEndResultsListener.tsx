@@ -535,7 +535,7 @@ export default function GameEndResultsListener() {
           dialogRoomName ? (
             <span dir="rtl">
               نتیجه بازی شماره :{" "}
-              <span dir="ltr" className="latin-number">
+              <span dir="ltr" className="numeric-text numeric-text--16">
                 {dialogRoomName}
               </span>
             </span>

@@ -183,9 +183,13 @@
 }
 
 .cellNumber {
-  font-weight: 700; /* font-bold */
+  font-family: "Vazirmatn", sans-serif !important;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+  font-weight: 700;
   line-height: 1;
-  font-family: 'Inter', 'Segoe UI', sans-serif;
 }
 
 .cellNumberNormal {

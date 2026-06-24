@@ -233,6 +233,7 @@
 }
 
 .fieldValue {
+  composes: numeric-text numeric-text--14 from global;
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;

@@ -81,12 +81,11 @@
 }
 
 .prizeValue {
+  composes: numeric-text numeric-text--14 from global;
   flex: 1 1 auto;
   min-width: 0;
   color: rgba(63, 146, 180, 1);
   font-weight: 800;
-  font-size: clamp(0.7rem, 3.2vw, 1rem);
-  line-height: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -95,8 +94,10 @@
 .prizeLabel {
   flex-shrink: 0;
   color: #e5e7eb;
-  font-size: clamp(0.65rem, 2.8vw, 0.8125rem);
+  font-size: 13px;
+  line-height: 13px;
   font-weight: 600;
+  font-family: "Vazirmatn", sans-serif;
 }
 
 :global(html[data-theme="light"]) .muteButton {

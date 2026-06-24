@@ -156,9 +156,95 @@ select {
   font-size: inherit;
 }
 
-/* اعداد لاتین با فونت جداگانه و خط فاصله صفر */
+/*
+ * Fixed-size numeric typography for balances, counts, timers, prices, etc.
+ * Uses only Vazirmatn (loaded in app/layout) to avoid Android system numeric fonts.
+ */
+.numeric-text {
+  font-family: "Vazirmatn", sans-serif !important;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  letter-spacing: normal;
+  font-weight: inherit;
+  font-style: normal;
+  -webkit-text-size-adjust: none !important;
+  -moz-text-size-adjust: none !important;
+  text-size-adjust: none !important;
+}
+
+.numeric-text--11 {
+  font-size: 11px;
+  line-height: 11px;
+}
+
+.numeric-text--12 {
+  font-size: 12px;
+  line-height: 12px;
+}
+
+.numeric-text--13 {
+  font-size: 13px;
+  line-height: 13px;
+}
+
+.numeric-text--14 {
+  font-size: 14px;
+  line-height: 14px;
+}
+
+.numeric-text--16 {
+  font-size: 16px;
+  line-height: 16px;
+}
+
+.numeric-text--17 {
+  font-size: 17px;
+  line-height: 17px;
+}
+
+.numeric-text--18 {
+  font-size: 18px;
+  line-height: 18px;
+}
+
+.numeric-text--20 {
+  font-size: 20px;
+  line-height: 20px;
+}
+
+.numeric-text--24 {
+  font-size: 24px;
+  line-height: 24px;
+}
+
+.numeric-text--25 {
+  font-size: 25px;
+  line-height: 25px;
+}
+
+.numeric-text--30 {
+  font-size: 30px;
+  line-height: 30px;
+}
+
+.numeric-text--32 {
+  font-size: 32px;
+  line-height: 32px;
+}
+
+.numeric-text--36 {
+  font-size: 36px;
+  line-height: 36px;
+}
+
+/* Backward-compatible alias — prefer numeric-text + size modifier in new code */
 .latin-number {
-  font-family: 'Inter', 'Segoe UI', sans-serif !important;
-  font-variant-numeric: lining-nums;
-  line-height: 1 !important; /* leading-none */
+  font-family: "Vazirmatn", sans-serif !important;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  letter-spacing: normal;
+  line-height: 1 !important;
+  -webkit-text-size-adjust: none !important;
+  -moz-text-size-adjust: none !important;
+  text-size-adjust: none !important;
 }

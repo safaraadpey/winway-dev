@@ -119,7 +119,7 @@ export default function DrawFairnessPage() {
               }}
               placeholder={EXAMPLE_PLACEHOLDER}
               rows={10}
-              className={`${styles.textarea} latin-number`}
+              className={`${styles.textarea} numeric-text numeric-text--14`}
             />
           </div>
           {pasteError && <p className={styles.pasteError}>{pasteError}</p>}
@@ -194,7 +194,7 @@ export default function DrawFairnessPage() {
             {outcome.reproducedDraws.length > 0 && (
               <div className={styles.reproducedBlock}>
                 <p className={styles.reproducedLabel}>اعداد بازتولید‌شده:</p>
-                <p className={`${styles.reproducedValue} latin-number`}>
+                <p className={`${styles.reproducedValue} numeric-text numeric-text--16`}>
                   {outcome.reproducedDraws.join(", ")}
                 </p>
               </div>
@@ -216,7 +216,7 @@ export default function DrawFairnessPage() {
               می‌شود. تأیید commit:
               <code
                 dir="ltr"
-                className={`${styles.codeBlock} ${styles.codeBlockGreen} latin-number`}
+                className={`${styles.codeBlock} ${styles.codeBlockGreen} numeric-text numeric-text--14`}
               >
                 sha256(bytes_from_hex(serverSeed)) = serverSeedHash
               </code>
@@ -225,7 +225,7 @@ export default function DrawFairnessPage() {
               برای هر قرعه، بین اعداد ۱ تا ۹۰ که هنوز نیامده‌اند، کلید
               <code
                 dir="ltr"
-                className={`${styles.codeBlock} ${styles.codeBlockBlue} latin-number`}
+                className={`${styles.codeBlock} ${styles.codeBlockBlue} numeric-text numeric-text--14`}
               >
                 sha256(utf8(hex(seed)+&apos;:&apos;+n))
               </code>
@@ -240,7 +240,7 @@ export default function DrawFairnessPage() {
           </ol>
           <p className={styles.warning}>
             توجه: هش commit روی بایت‌های seed است، نه روی متن hex (
-            <span dir="ltr" className="latin-number">
+            <span dir="ltr" className="numeric-text numeric-text--14">
               sha256(utf8(serverSeed))
             </span>{" "}
             استفاده نمی‌شود).

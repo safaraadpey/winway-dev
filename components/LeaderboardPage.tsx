@@ -231,8 +231,8 @@ export default function LeaderboardPage() {
                 <div className={styles.rankingBody}>
                   {leaderboard.map((entry) => (
                     <div key={entry.playerId} className={styles.rankingRow}>
-                      <div className={styles.rankingCell}>{entry.cardCount}</div>
-                      <div className={styles.rankingCell}>
+                      <div className={styles.rankingCellNumeric}>{entry.cardCount}</div>
+                      <div className={styles.rankingCellNumeric}>
                         {formatAmount(entry.totalWins)}
                       </div>
                       <div className={styles.rankingCell}>
@@ -242,7 +242,7 @@ export default function LeaderboardPage() {
                           </span>
                         </div>
                       </div>
-                      <div className={styles.rankingCell}>{entry.rank}</div>
+                      <div className={styles.rankingCellNumeric}>{entry.rank}</div>
                     </div>
                   ))}
                 </div>

@@ -150,7 +150,7 @@
 }
 
 .statValue {
-  font-size: 1.25rem;
+  composes: numeric-text numeric-text--20 from global;
   color: #ffffff;
   font-weight: 600;
   text-align: center;
@@ -316,8 +316,17 @@
   align-items: center;
 }
 
+.rankingCellNumeric {
+  composes: numeric-text numeric-text--14 from global;
+  color: #ffffff;
+  text-align: right;
+  direction: rtl;
+}
+
 .rankingCell {
-  font-size: 0.875rem;
+  font-size: 14px;
+  line-height: 18px;
+  font-family: "Vazirmatn", sans-serif;
   color: #ffffff;
   text-align: right;
   direction: rtl;
@@ -494,6 +503,7 @@
 }
 
 :global(html[data-theme="light"]) .rankingCell,
+:global(html[data-theme="light"]) .rankingCellNumeric,
 :global(html[data-theme="light"]) .playerName {
   color: #5b21b6;
 }

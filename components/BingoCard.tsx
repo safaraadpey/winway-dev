@@ -471,7 +471,7 @@ export default function BingoCard({
                     <motion.span
                       className={`${styles.cellNumber} ${
                         marked ? styles.cellNumberMarked : styles.cellNumberNormal
-                      } latin-number`}
+                      } numeric-text`}
                       initial={false}
                       animate={{
                         opacity: marked ? 0.3 : 1,
