@@ -64,7 +64,7 @@
   position: absolute;
   left: 34%;
   top: 38%;
-  transform: translate(calc(-50% + 50px), calc(-50% + 7px));
+  transform: translate(calc(-50% + 60px), calc(-50% + 13px));
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -80,8 +80,8 @@
 
 .theme-menu-item__liveBadgeCount {
   font-family: "Vazirmatn", sans-serif !important;
-  font-size: 32.4px;
-  line-height: 32.4px;
+  font-size: 25.92px;
+  line-height: 25.92px;
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
   -webkit-text-size-adjust: none;
@@ -93,15 +93,15 @@
 }
 
 html[data-theme="dark"] .theme-menu-item__liveBadge {
-  transform: translate(calc(-50% + 50px), calc(-50% + 3px));
+  transform: translate(calc(-50% + 60px), calc(-50% + 9px));
 }
 
 html[data-theme="dark"] .theme-menu-item[data-menu-item="gameRoom"] .theme-menu-item__liveBadge {
-  transform: translate(calc(-50% + 50px), calc(-50% - 5px));
+  transform: translate(calc(-50% + 60px), calc(-50% + 1px));
 }
 
 html[data-theme="light"] .theme-menu-item__liveBadge {
-  transform: translate(calc(-50% + 70px), calc(-50% + 1px));
+  transform: translate(calc(-50% + 80px), calc(-50% + 7px));
 }
 
 html[data-theme="light"] .theme-menu-item__liveBadgeCount {

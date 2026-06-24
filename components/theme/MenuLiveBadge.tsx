@@ -8,8 +8,8 @@ function UsersIcon() {
   return (
     <svg
       className="theme-menu-item__liveBadgeIcon"
-      width="32.4"
-      height="32.4"
+      width="25.92"
+      height="25.92"
       viewBox="0 0 48 36"
       fill="none"
       aria-hidden
