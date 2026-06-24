@@ -315,6 +315,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
             currentPlayers: 0,
             templateId: view.room.template_id,
             canCancel: false,
+            requiresPassword: view.room.requires_password,
           };
         } else {
           // حالت‌های waiting / running / finished با روم واقعی
@@ -335,6 +336,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
             currentPlayers: view.active_cards.length,
             templateId: view.room.template_id,
             canCancel: view.can_cancel,
+            requiresPassword: view.room.requires_password,
           };
         }
 
@@ -852,7 +854,10 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
   );
 
   // مدیریت افزودن به لیست (خرید کارت) یا لغو رزرو
-  const handleAddToList = async (selectedQuantity: number) => {
+  const handleAddToList = async (
+    selectedQuantity: number,
+    roomPassword?: string
+  ) => {
     if (!roomInfo || !roomInfo.templateId) {
       toast.error("اطلاعات روم ناقص است");
       return;
@@ -862,6 +867,11 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
 
     if (!isCancelMode && globalRegistrationLocked) {
       toast.error("ثبت نام بازی توسط ادمین موقتاً قفل شده است");
+      return;
+    }
+
+    if (roomInfo.requiresPassword && !roomPassword?.trim()) {
+      toast.error("رمز اتاق الزامی است");
       return;
     }
   
@@ -888,6 +898,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
       const result = await joinOrCreateRoom({
         templateId: roomInfo.templateId,
         cardCount: selectedQuantity,
+        password: roomPassword,
       });
 
       console.log("[JOIN_RPC][DONE]", {
@@ -969,6 +980,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
             minQuantity={1}
             maxQuantity={roomInfo.maxPlayers || 10}
             maxBuy={roomInfo.maxPlayers || 10}
+            requiresPassword={Boolean(roomInfo.requiresPassword)}
             musicEnabled={isMusicEnabled}
             onToggleMusic={roomId ? handleToggleMusic : undefined}
             showMusicToggle

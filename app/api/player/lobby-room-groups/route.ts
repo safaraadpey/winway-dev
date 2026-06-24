@@ -5,6 +5,7 @@ type LobbyRoomGroup = {
   templateId: string | null;
   price: number;
   currency: string;
+  roomName: string | null;
   waitingRooms: number;
   playingRooms: number; // includes live + playing
   totalRooms: number;
@@ -29,7 +30,7 @@ export async function GET(request: Request) {
     // 1) Active templates (exclude inactive)
     const { data: templates, error: templatesError } = await supabase
       .from("room_templates")
-      .select("id, price, currency, status")
+      .select("id, name, price, currency, status")
       .neq("status", "inactive")
       .order("price", { ascending: true });
 
@@ -43,6 +44,7 @@ export async function GET(request: Request) {
 
     const templateRows = (templates || []) as Array<{
       id: string;
+      name: string | null;
       price: any;
       currency: string | null;
       status: string | null;
@@ -103,6 +105,7 @@ export async function GET(request: Request) {
         templateId: t.id,
         price: Number(t.price || 0),
         currency: (t.currency || "IRR") as string,
+        roomName: t.name?.trim() || null,
         waitingRooms: 0,
         playingRooms: 0,
         totalRooms: 0,
@@ -128,6 +131,7 @@ export async function GET(request: Request) {
           templateId: templateId ?? null,
           price,
           currency,
+          roomName: null,
           waitingRooms: 0,
           playingRooms: 0,
           totalRooms: 0,

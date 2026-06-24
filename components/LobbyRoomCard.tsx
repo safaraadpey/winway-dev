@@ -17,6 +17,7 @@ export type LobbyRoomCardVariant = 'minimal' | 'expanded';
 export interface LobbyRoomCardProps {
   price: number;
   currency: string;
+  roomName?: string | null;
   waitingRooms: number;
   playingRooms: number;
   totalRooms: number;
@@ -38,6 +39,7 @@ export interface LobbyRoomCardProps {
 export default function LobbyRoomCard({
   price,
   currency,
+  roomName,
   waitingRooms,
   playingRooms,
   totalRooms,
@@ -76,6 +78,7 @@ export default function LobbyRoomCard({
   const isExpanded = variant === 'expanded';
   const hasPlayerBreakdown =
     Number.isFinite(waitingPlayers) && Number.isFinite(playingPlayers);
+  const displayRoomName = roomName?.trim() || null;
 
   return (
     <div
@@ -124,10 +127,19 @@ export default function LobbyRoomCard({
               : players}
           </span>
         </div>
-        {/* نمایش قیمت در حالت minimal */}
+        {/* قیمت و نام اتاق — پایین سمت راست */}
         {!isExpanded && (
-          <div className={styles.priceBadge}>
-            <span className={styles.priceCount}>{formatPrice(price)}</span>
+          <div className={styles.priceStack}>
+            <div className={styles.priceBadge}>
+              <span className={styles.priceCount}>{formatPrice(price)}</span>
+            </div>
+            {displayRoomName ? (
+              <div className={styles.roomNameBadge}>
+                <span className={styles.roomNameText}>{displayRoomName}</span>
+              </div>
+            ) : (
+              <div className={styles.roomNameSpacer} aria-hidden="true" />
+            )}
           </div>
         )}
       </div>
@@ -138,6 +150,9 @@ export default function LobbyRoomCard({
           <div className={styles.roomPrice}>
             {formatPrice(price)} تومان
           </div>
+          {displayRoomName ? (
+            <div className={styles.roomNameExpanded}>{displayRoomName}</div>
+          ) : null}
           <div className={styles.roomStats}>
             <span className={styles.statItem}>
               <span className={styles.statLabel}>اتاق‌ها:</span>

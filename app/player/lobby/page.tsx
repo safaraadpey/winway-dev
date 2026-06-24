@@ -14,6 +14,7 @@ import { isHardExiting } from "@/lib/auth/hardExit";
 interface RoomPriceGroup {
   price: number;
   currency: string;
+  roomName?: string | null;
   waitingRooms: number;
   playingRooms: number;
   totalRooms: number;
@@ -61,6 +62,7 @@ export default function LobbyPage() {
           g.templateId ?? "",
           String(g.price ?? 0),
           g.currency ?? "",
+          g.roomName ?? "",
           String(g.waitingRooms ?? 0),
           String(g.playingRooms ?? 0),
           String(g.totalRooms ?? 0),
@@ -295,6 +297,7 @@ export default function LobbyPage() {
               key={`${group.price}_${group.currency}`}
               price={group.price}
               currency={group.currency}
+              roomName={group.roomName}
               waitingRooms={group.waitingRooms}
               playingRooms={group.playingRooms}
               totalRooms={group.totalRooms}

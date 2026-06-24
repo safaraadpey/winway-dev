@@ -341,6 +341,7 @@ export interface RoomInfo {
   currentPlayers: number;
   templateId?: string;
   canCancel?: boolean;
+  requiresPassword?: boolean;
 }
 
 export async function loadRoomInfo(roomId: string): Promise<RoomInfo | null> {
@@ -587,6 +588,7 @@ export type GameRoomView = {
     max_cards_per_player: number | null;
     starts_at: string | null;
     ends_at: string | null;
+    requires_password: boolean;
   };
   server_now: string;
   countdown_seconds: number;

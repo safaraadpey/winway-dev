@@ -30,6 +30,7 @@ type GameRoomView = {
     max_cards_per_player: number | null;
     starts_at: string | null;
     ends_at: string | null;
+    requires_password: boolean;
   };
   server_now: string;
   countdown_seconds: number;
@@ -254,6 +255,11 @@ async function buildViewFromRoomId(
     currentUserId,
   });
 
+  const requiresPassword = await getTemplateRequiresPassword(
+    supabase,
+    (room.room_template_id as string | null) ?? null
+  );
+
   const view: GameRoomView = {
     mode,
     room: {
@@ -270,6 +276,7 @@ async function buildViewFromRoomId(
       max_cards_per_player: room.max_cards_per_player ?? null,
       starts_at: lifecycle.starts_at,
       ends_at: lifecycle.ends_at,
+      requires_password: requiresPassword,
     },
     server_now: serverNow,
     countdown_seconds: countdownSeconds,
@@ -419,7 +426,8 @@ async function buildViewFromTemplateId(
         min_players,
         max_cards_per_player,
         max_players,
-        status
+        status,
+        password
       `
     )
     .eq("id", templateId)
@@ -444,6 +452,10 @@ async function buildViewFromTemplateId(
     }
   );
 
+  const requiresPassword = templateRequiresPassword(
+    (template as { password?: string | null }).password
+  );
+
   const view: GameRoomView = {
     mode: "preview",
     room: {
@@ -460,6 +472,7 @@ async function buildViewFromTemplateId(
       max_cards_per_player: template.max_cards_per_player ?? null,
       starts_at: null,
       ends_at: null,
+      requires_password: requiresPassword,
     },
     server_now: serverNow,
     countdown_seconds: 0,
@@ -487,6 +500,26 @@ async function getRoomTemplateType(
 
   if (error || !data) return null;
   return ((data as any).room_type as string | null) ?? null;
+}
+
+function templateRequiresPassword(password: string | null | undefined): boolean {
+  return typeof password === "string" && password.trim().length > 0;
+}
+
+async function getTemplateRequiresPassword(
+  supabase: ReturnType<typeof createServiceClient>,
+  templateId: string | null
+): Promise<boolean> {
+  if (!templateId) return false;
+
+  const { data, error } = await supabase
+    .from("room_templates")
+    .select("password")
+    .eq("id", templateId)
+    .maybeSingle();
+
+  if (error || !data) return false;
+  return templateRequiresPassword((data as { password?: string | null }).password);
 }
 
 function computeCanCancel({
