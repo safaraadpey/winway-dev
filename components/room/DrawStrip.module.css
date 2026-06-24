@@ -128,7 +128,6 @@
 }
 
 .current {
-  composes: numeric-text numeric-text--32 from global;
   position: relative;
   z-index: 1;
   width: 64px;
@@ -140,12 +139,24 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 800;
   color: #ffffff;
+}
+
+.currentValue {
+  composes: numeric-text numeric-text--32 from global;
+  display: block;
+  line-height: 1;
+  font-weight: 700;
+  color: inherit;
+  text-align: center;
+  padding-top: 6px;
 }
 
 .currentWinning {
   color: #fbbf24;
+}
+
+.currentWinning .currentValue {
   text-shadow: 0 0 12px rgba(251, 191, 36, 0.55);
 }
 

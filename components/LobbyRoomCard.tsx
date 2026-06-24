@@ -144,7 +144,7 @@ export default function LobbyRoomCard({
               <rect x="3" y="14" width="7" height="7" rx="1"></rect>
               <rect x="14" y="14" width="7" height="7" rx="1"></rect>
             </svg>
-            <span className={styles.badgeCount}>{totalRooms}</span>
+            <span className={styles.badgeCount}>{playingRooms}</span>
           </div>
         </div>
         {/* قیمت و نام اتاق — پایین سمت راست */}

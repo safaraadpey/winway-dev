@@ -175,9 +175,11 @@ export default function DrawStrip({
           </div>
         )}
         <div
-          className={`${styles.current} ${isWinningFullDraw ? styles.currentWinning : ""} numeric-text numeric-text--32`}
+          className={`${styles.current} ${isWinningFullDraw ? styles.currentWinning : ""}`}
         >
-          {display}
+          <span dir="ltr" className={styles.currentValue}>
+            {display}
+          </span>
         </div>
       </div>
       <div className={styles.historyWrapper}>
