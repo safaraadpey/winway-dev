@@ -9,6 +9,8 @@ import toast from "react-hot-toast";
 import styles from "./LoginForm.module.css";
 import { getLogoImagePath } from "@/lib/theme/logoImageFiles";
 import { DEFAULT_THEME } from "@/lib/theme/types";
+import AdminPortalRequiredScreen from "@/components/auth/AdminPortalRequiredScreen";
+import { isMainHost, isNonPlayerRole } from "@/lib/auth/portalHosts";
 
 const logoSrc = getLogoImagePath(DEFAULT_THEME, "logo");
 
@@ -29,6 +31,7 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
+  const [adminPortalRequired, setAdminPortalRequired] = useState(false);
 
   /**
    * هندل کردن submit فرم
@@ -84,14 +87,23 @@ export default function LoginForm() {
           return;
         }
 
-        // اگر اکانت پلیر تعلیق شده باشد (ایجنت/سوپر/ادمین مجاز به ورود هستند)
+        // اگر اکانت پلیر تعلیق شده باشد
         if (userData?.status === "suspended" && userData?.role === "player") {
           await supabase.auth.signOut();
           toast.error("کاربر گرامی؛ اکانت شما موقتا به حالت تعلیق درآمده، لطفا با پشتیبانی و یا ایجنت خود تماس بگیرید.");
           return;
         }
 
-        // ورود موفق
+        // نقش‌های غیر پلیر باید از دامنه admin وارد شوند
+        if (
+          isNonPlayerRole(userData?.role) &&
+          isMainHost(window.location.hostname)
+        ) {
+          await supabase.auth.signOut();
+          setAdminPortalRequired(true);
+          return;
+        }
+
         toast.success("خوش آمدید!");
         router.push("/post-login");
       }
@@ -102,6 +114,14 @@ export default function LoginForm() {
       setLoading(false);
     }
   };
+
+  if (adminPortalRequired) {
+    return (
+      <AdminPortalRequiredScreen
+        onBackToLogin={() => setAdminPortalRequired(false)}
+      />
+    );
+  }
 
   return (
     <div className={styles.container}>
