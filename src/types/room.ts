@@ -24,6 +24,9 @@ export type RoomType = "normal" | "tournament";
 
 export type RoomCurrency = "IRR" | "USD";
 
+/** حداقل تعداد بازیکن برای شروع اتاق عادی */
+export const MIN_ROOM_PLAYERS = 2;
+
 export type RoomTemplateStatus = "active" | "draining" | "inactive";
 
 /**
@@ -44,7 +47,7 @@ export type RoomTemplatePayload = {
   /** ارز قیمت کارت (room_templates.currency) */
   currency: RoomCurrency;
 
-  /** حداقل بازیکن برای شروع (room_templates.min_players) */
+  /** حداقل بازیکن برای شروع (room_templates.min_players) — حداقل ۲ */
   minPlayers: number;
 
   /**
@@ -141,7 +144,7 @@ export function mapRoomTemplateFromDb(row: RoomTemplateDbRow): RoomTemplatePaylo
     name: row.name ?? "",
     cardPrice: Number(row.price ?? 0),
     currency: (row.currency as RoomCurrency) ?? "IRR",
-    minPlayers: row.min_players ?? 1,
+    minPlayers: Math.max(row.min_players ?? MIN_ROOM_PLAYERS, MIN_ROOM_PLAYERS),
     maxPlayers: row.max_players ?? null,
     maxCardsPerPlayer: row.max_cards_per_player ?? 999999,
     commissionPercent: Number(row.commission_rate ?? 0),
@@ -177,7 +180,7 @@ export function mapRoomTemplateToDbUpdate(
     name: payload.name,
     price: payload.cardPrice,
     currency: payload.currency,
-    min_players: payload.minPlayers,
+    min_players: Math.max(payload.minPlayers, MIN_ROOM_PLAYERS),
     max_players: payload.maxPlayers ?? null,
     countdown_sec: payload.countdownSec,
     waiting_timeout_seconds: payload.waitingTimeoutSeconds,
@@ -213,7 +216,7 @@ export function createEmptyRoomTemplate(): RoomTemplatePayload {
     name: "",
     cardPrice: 0,
     currency: "IRR",
-    minPlayers: 1,
+    minPlayers: MIN_ROOM_PLAYERS,
     maxPlayers: null,
     maxCardsPerPlayer: 1,
     commissionPercent: 0,

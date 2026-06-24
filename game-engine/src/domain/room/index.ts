@@ -13,6 +13,7 @@ import { addSecondsWithJitter } from "./drawScheduleJitter.js";
 
 const FIRST_DRAW_DELAY_SEC = 7;
 const DEFAULT_COUNTDOWN_SEC = 120;
+const MIN_ROOM_PLAYERS = 2;
 
 export interface ManageWaitingResult {
   promoted: number;
@@ -111,7 +112,7 @@ export async function manageWaitingRooms(
     if (maxPlayers == null) continue;
 
     const players = await repo.countDistinctActivePlayers(room.id);
-    const minPlayers = room.min_players ?? 1;
+    const minPlayers = Math.max(room.min_players ?? MIN_ROOM_PLAYERS, MIN_ROOM_PLAYERS);
     if (players < maxPlayers) continue;
 
     const ok = await promoteWaitingRoom(
@@ -134,7 +135,7 @@ export async function manageWaitingRooms(
 
   for (const room of due) {
     const players = await repo.countDistinctActivePlayers(room.id);
-    const minPlayers = room.min_players ?? 1;
+    const minPlayers = Math.max(room.min_players ?? MIN_ROOM_PLAYERS, MIN_ROOM_PLAYERS);
 
     if (players >= minPlayers) {
       const ok = await promoteWaitingRoom(

@@ -5,6 +5,7 @@ import type {
   RoomTemplatePayload,
   RoomTemplateStatus,
 } from "@/src/types/room";
+import { MIN_ROOM_PLAYERS } from "@/src/types/room";
 import toast from "react-hot-toast";
 
 export type RoomTemplatePanelMode = "collapsed" | "edit" | "create";
@@ -40,6 +41,7 @@ function normalizeTemplateForForm(
       : DEFAULT_WAITING_TIMEOUT_SECONDS;
   return {
     ...template,
+    minPlayers: Math.max(template.minPlayers ?? MIN_ROOM_PLAYERS, MIN_ROOM_PLAYERS),
     waitingTimeoutSeconds: waiting,
     roomType: "normal",
   };
@@ -142,6 +144,16 @@ export default function RoomTemplatePanel({
         form.maxPlayers === 0
       ) {
         setForm((prev) => ({ ...prev, maxPlayers: null }));
+      }
+      return;
+    }
+    if (key === "minPlayers") {
+      if (
+        form.minPlayers === undefined ||
+        form.minPlayers === null ||
+        form.minPlayers < MIN_ROOM_PLAYERS
+      ) {
+        setForm((prev) => ({ ...prev, minPlayers: MIN_ROOM_PLAYERS }));
       }
       return;
     }
@@ -324,6 +336,12 @@ export default function RoomTemplatePanel({
 
     const maxPlayers =
       form.maxPlayers != null && form.maxPlayers > 0 ? form.maxPlayers : null;
+
+    if (form.minPlayers < MIN_ROOM_PLAYERS) {
+      toast.error(`حداقل بازیکن باید حداقل ${MIN_ROOM_PLAYERS} نفر باشد.`);
+      return;
+    }
+
     if (maxPlayers != null && maxPlayers < form.minPlayers) {
       toast.error(
         `حداکثر بازیکن (${maxPlayers}) نمی‌تواند کمتر از حداقل بازیکن (${form.minPlayers}) باشد.`,
@@ -523,6 +541,7 @@ export default function RoomTemplatePanel({
         <FieldRow label="حداقل بازیکن" suffix="نفر">
           <input
             type="number"
+            min={MIN_ROOM_PLAYERS}
             className="w-24 bg-neutral-700 border border-neutral-600 rounded px-2 py-1 text-xs text-left [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             value={getNumberDisplayValue("minPlayers")}
             onChange={handleNumberChange("minPlayers")}
