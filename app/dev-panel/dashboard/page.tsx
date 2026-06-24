@@ -8,6 +8,7 @@ import { getCurrentUserRoleInfo } from "@/lib/auth-helpers";
 import { hardExitFromCurrentPanel } from "@/lib/auth/hardExit";
 
 const DEV_MENU_ITEMS = [
+  { label: "گزارش مالی Dev Player", path: "/dev-panel/finance" },
   { label: "تنظیمات Dev Player", path: "/dev-panel/settings" },
   { label: "کاربران", path: "/dev-panel/users" },
   { label: "استخر کارت‌ها", path: "/dev-panel/card-pool" },

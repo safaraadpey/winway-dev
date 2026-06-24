@@ -8,8 +8,8 @@ function UsersIcon() {
   return (
     <svg
       className="theme-menu-item__liveBadgeIcon"
-      width="36"
-      height="36"
+      width="32.4"
+      height="32.4"
       viewBox="0 0 48 36"
       fill="none"
       aria-hidden
@@ -46,7 +46,7 @@ export default function MenuLiveBadge({ count }: MenuLiveBadgeProps) {
 
   return (
     <span className="theme-menu-item__liveBadge" aria-hidden>
-      <span className="theme-menu-item__liveBadgeCount numeric-text numeric-text--36">
+      <span className="theme-menu-item__liveBadgeCount numeric-text">
         {count.toLocaleString("en-US")}
       </span>
       <UsersIcon />

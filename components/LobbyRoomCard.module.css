@@ -48,10 +48,17 @@
   background-color: rgba(225, 71, 71, 1);
 }
 
-.playersBadge {
+.topBadges {
   position: absolute;
   top: 0.5rem;
   left: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.playersBadge,
+.tablesBadge {
   display: flex;
   align-items: center;
   gap: 0.25rem;
@@ -62,14 +69,14 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.playerIcon {
+.badgeIcon {
   width: 16px;
   height: 16px;
   color: #ffffff;
   flex-shrink: 0;
 }
 
-.playersCount {
+.badgeCount {
   composes: numeric-text numeric-text--14 from global;
   font-weight: 600;
   color: #ffffff;

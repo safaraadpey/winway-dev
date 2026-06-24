@@ -44,8 +44,6 @@ export default function LobbyRoomCard({
   playingRooms,
   totalRooms,
   players,
-  waitingPlayers,
-  playingPlayers,
   templateId,
   entryRoomId,
   variant = 'minimal', // حالت پیش‌فرض: minimal
@@ -76,8 +74,6 @@ export default function LobbyRoomCard({
   };
 
   const isExpanded = variant === 'expanded';
-  const hasPlayerBreakdown =
-    Number.isFinite(waitingPlayers) && Number.isFinite(playingPlayers);
   const displayRoomName = roomName?.trim() || null;
 
   return (
@@ -105,27 +101,43 @@ export default function LobbyRoomCard({
           sizes="(max-width: 640px) 100vw, 600px"
           priority
         />
-        {/* نمایش تعداد بازیکنان با آیکون */}
-        <div className={styles.playersBadge}>
-          <svg
-            className={styles.playerIcon}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-            <circle cx="9" cy="7" r="4"></circle>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-          </svg>
-          <span className={styles.playersCount}>
-            {hasPlayerBreakdown
-              ? `${Number(waitingPlayers)}/${Number(playingPlayers)}`
-              : players}
-          </span>
+        <div className={styles.topBadges}>
+          <div className={styles.playersBadge}>
+            <svg
+              className={styles.badgeIcon}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+            <span className={styles.badgeCount}>{players}</span>
+          </div>
+          <div className={styles.tablesBadge}>
+            <svg
+              className={styles.badgeIcon}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+              <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+              <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+              <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+            </svg>
+            <span className={styles.badgeCount}>{totalRooms}</span>
+          </div>
         </div>
         {/* قیمت و نام اتاق — پایین سمت راست */}
         {!isExpanded && (

@@ -72,6 +72,7 @@ export default function GameEndResultsListener() {
   const refreshDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(false);
   const pollEnabledRef = useRef(false);
+  const resultsFetchInFlightRef = useRef(false);
 
   const currentUserId = session.userId;
   const { scheduleWalletBalanceSync } = useBalancesContext();
@@ -129,7 +130,10 @@ export default function GameEndResultsListener() {
       activeRoomsRef.current.clear();
     };
 
-    const onHardExit = () => cleanupListenerResources();
+    const onHardExit = () => {
+      resultsFetchInFlightRef.current = false;
+      cleanupListenerResources();
+    };
     window.addEventListener(HARD_EXIT_EVENT, onHardExit);
     return () => window.removeEventListener(HARD_EXIT_EVENT, onHardExit);
   }, []);
@@ -459,31 +463,33 @@ export default function GameEndResultsListener() {
     session.tokenVersion,
   ]);
 
-  // queue consumer: show one popup at a time
+  // queue consumer: fetch results first, then open dialog (matches LiveRoomScreen)
   useEffect(() => {
     if (!enabled) return;
     if (dialogOpen) return;
+    if (resultsFetchInFlightRef.current) return;
     if (queue.length === 0) return;
     if (shouldSuppressBecauseLiveRoomAlreadyHandlesIt) return;
 
     const next = queue[0];
+    resultsFetchInFlightRef.current = true;
     setDialogRoomName(next.roomName);
-    setResults(null);
-    setDialogOpen(true);
 
     traceFetch("GameEndResultsListener:fetch", {
       action: "room-results",
       roomId: next.roomId,
       pathname,
     });
+
     fetchRoomResultsWhenPrizesReady(next.roomId)
       .then((r) => {
-        if (!isMountedRef.current) return;
+        if (!isMountedRef.current || suppressRef.current) return;
         setResults(r);
+        setDialogOpen(true);
         scheduleWalletBalanceSync?.(`room-settled:${next.roomId}`);
       })
       .catch(() => {
-        if (!isMountedRef.current) return;
+        if (!isMountedRef.current || suppressRef.current) return;
         setResults({
           lineWinners: [],
           fullWinners: [],
@@ -493,6 +499,10 @@ export default function GameEndResultsListener() {
           isTournament: false,
           tournamentId: null,
         });
+        setDialogOpen(true);
+      })
+      .finally(() => {
+        resultsFetchInFlightRef.current = false;
       });
   }, [
     enabled,
@@ -500,6 +510,7 @@ export default function GameEndResultsListener() {
     queue,
     shouldSuppressBecauseLiveRoomAlreadyHandlesIt,
     scheduleWalletBalanceSync,
+    pathname,
   ]);
 
   const handleClose = () => {

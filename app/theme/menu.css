@@ -80,8 +80,8 @@
 
 .theme-menu-item__liveBadgeCount {
   font-family: "Vazirmatn", sans-serif !important;
-  font-size: 36px;
-  line-height: 36px;
+  font-size: 32.4px;
+  line-height: 32.4px;
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
   -webkit-text-size-adjust: none;
@@ -94,6 +94,10 @@
 
 html[data-theme="dark"] .theme-menu-item__liveBadge {
   transform: translate(calc(-50% + 50px), calc(-50% + 3px));
+}
+
+html[data-theme="dark"] .theme-menu-item[data-menu-item="gameRoom"] .theme-menu-item__liveBadge {
+  transform: translate(calc(-50% + 50px), calc(-50% - 5px));
 }
 
 html[data-theme="light"] .theme-menu-item__liveBadge {
