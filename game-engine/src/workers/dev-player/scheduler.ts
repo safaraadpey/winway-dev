@@ -61,7 +61,9 @@ export function startDevPlayerScheduler(ctx: WorkerContext): () => void {
       if (!lock.proceed) return;
       lockHeld = lock.lockHeld;
 
-      await buildScheduleBatch(repo, log);
+      await buildScheduleBatch(repo, log, new Date(), {
+        maxInsertsPerTick: config.devPlayerSchedulerMaxInsertsPerTick,
+      });
     } catch (err) {
       log.error(`${worker} tick error`, {
         error: err instanceof Error ? err.message : String(err),

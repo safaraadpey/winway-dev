@@ -204,9 +204,6 @@ export default function TournamentsPage() {
                     const minPlayersForGuarantee =
                       t.meta?.min_players_for_guarantee ?? null;
                     const finalWinnersCount = t.meta?.final_winners_count ?? null;
-                    const entryCurrency =
-                      (t.meta?.entry_currency || t.currency || "IRR").toString();
-
                     return (
                       <div
                         key={t.id}
@@ -244,12 +241,12 @@ export default function TournamentsPage() {
 
                         <div className={styles.detailsGrid}>
                           <div className={styles.field}>
-                            <span className={styles.fieldLabel}>قیمت بلیت</span>
+                            <span className={styles.fieldLabel}>قیمت کارت(تومان)</span>
                             <span className={styles.fieldValue}>
                               {t.ticket_price != null
                                 ? t.ticket_price <= 0
                                   ? "رایگان"
-                                  : `${t.ticket_price.toLocaleString("fa-IR")} ${entryCurrency}`
+                                  : t.ticket_price.toLocaleString("fa-IR")
                                 : "-"}
                             </span>
                           </div>
@@ -271,7 +268,7 @@ export default function TournamentsPage() {
                             <span className={styles.fieldLabel}>جایزه تضمینی</span>
                             <span className={styles.fieldValue}>
                               {t.guaranteed_prize != null
-                                ? `${t.guaranteed_prize.toLocaleString("fa-IR")} ${t.currency ?? ""}`
+                                ? t.guaranteed_prize.toLocaleString("fa-IR")
                                 : "-"}
                             </span>
                           </div>

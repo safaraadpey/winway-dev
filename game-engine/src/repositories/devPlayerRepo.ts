@@ -1,5 +1,5 @@
 import type { SupabaseAdmin } from "../db/supabase-admin.js";
-import { mapJoinsInWorkCycleByTemplate } from "../domain/dev-players/schedulerCycle.js";
+import { parseSchedulerBehaviorState } from "../domain/dev-players/behaviorState.js";
 import type {
   DevPlayerConfigSnapshot,
   DevPlayerJoinPresetSnapshot,
@@ -9,6 +9,8 @@ import type {
   PlayWindow,
   RoomTemplateSnapshot,
   ScheduleInsertRow,
+  ScheduleOutcomeCounts,
+  SchedulerBehaviorState,
   TemplateLimitSnapshot,
 } from "../domain/dev-players/types.js";
 
@@ -54,32 +56,6 @@ export class DevPlayerRepo {
     };
   }
 
-  private mapRuntimeRow(data: Record<string, unknown>) {
-    const rawNextJoin = data.scheduler_next_join_at_by_template;
-    const nextJoinAtByTemplate: Record<string, string> = {};
-    if (rawNextJoin && typeof rawNextJoin === "object" && !Array.isArray(rawNextJoin)) {
-      for (const [templateId, value] of Object.entries(rawNextJoin as Record<string, unknown>)) {
-        if (typeof value === "string" && value.trim()) {
-          nextJoinAtByTemplate[templateId] = value;
-        }
-      }
-    }
-
-    const phase = data.scheduler_cycle_phase === "pause" ? "pause" : "work";
-    return {
-      cyclePhase: phase as "work" | "pause",
-      cyclePhaseEndsAt:
-        data.scheduler_cycle_phase_ends_at === null ||
-        data.scheduler_cycle_phase_ends_at === undefined
-          ? null
-          : String(data.scheduler_cycle_phase_ends_at),
-      nextJoinAtByTemplate,
-      joinsInWorkCycleByTemplate: mapJoinsInWorkCycleByTemplate(
-        data.scheduler_joins_in_work_cycle_by_template
-      ),
-    };
-  }
-
   async getSettings(): Promise<DevPlayerSettingsSnapshot | null> {
     const bundle = await this.getSettingsWithRuntime();
     return bundle?.settings ?? null;
@@ -89,7 +65,7 @@ export class DevPlayerRepo {
     const { data, error } = await this.db
       .from("dev_player_settings")
       .select(
-        "system_enabled, scheduler_enabled, scheduler_tick_interval_seconds, processor_tick_interval_seconds, scheduler_pause_after_seconds, scheduler_pause_duration_seconds, timezone, active_join_preset_id, scheduler_cycle_phase, scheduler_cycle_phase_ends_at, scheduler_next_join_at_by_template, scheduler_joins_in_work_cycle_by_template"
+        "system_enabled, scheduler_enabled, scheduler_tick_interval_seconds, processor_tick_interval_seconds, scheduler_pause_after_seconds, scheduler_pause_duration_seconds, timezone, active_join_preset_id, scheduler_behavior_state"
       )
       .eq("id", true)
       .maybeSingle();
@@ -97,33 +73,21 @@ export class DevPlayerRepo {
     if (!data) return null;
     return {
       settings: this.mapSettingsRow(data as Record<string, unknown>),
-      runtime: this.mapRuntimeRow(data as Record<string, unknown>),
+      behaviorState: parseSchedulerBehaviorState(
+        (data as Record<string, unknown>).scheduler_behavior_state
+      ),
     };
   }
 
-  async updateSchedulerRuntime(args: {
-    cyclePhase?: "work" | "pause";
-    cyclePhaseEndsAt?: string | null;
-    nextJoinAtByTemplate?: Record<string, string>;
-    joinsInWorkCycleByTemplate?: Record<string, number>;
-  }): Promise<void> {
-    const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
-    if (args.cyclePhase !== undefined) update.scheduler_cycle_phase = args.cyclePhase;
-    if (args.cyclePhaseEndsAt !== undefined) {
-      update.scheduler_cycle_phase_ends_at = args.cyclePhaseEndsAt;
-    }
-    if (args.nextJoinAtByTemplate !== undefined) {
-      update.scheduler_next_join_at_by_template = args.nextJoinAtByTemplate;
-    }
-    if (args.joinsInWorkCycleByTemplate !== undefined) {
-      update.scheduler_joins_in_work_cycle_by_template = args.joinsInWorkCycleByTemplate;
-    }
-
+  async updateSchedulerBehaviorState(state: SchedulerBehaviorState): Promise<void> {
     const { error } = await this.db
       .from("dev_player_settings")
-      .update(update)
+      .update({
+        scheduler_behavior_state: state,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", true);
-    if (error) fail("updateSchedulerRuntime", error.message);
+    if (error) fail("updateSchedulerBehaviorState", error.message);
   }
 
   async getOccupiedDevPlayerIds(devPlayerUserIds: string[]): Promise<Set<string>> {
@@ -202,7 +166,7 @@ export class DevPlayerRepo {
     const { data, error } = await this.db
       .from("dev_player_join_preset_template_limits")
       .select(
-        "template_id, min_active_rooms, max_active_rooms, join_interval_seconds, max_joins_per_tick, min_normal_players_per_room, max_dev_players_per_room"
+        "template_id, min_active_rooms, max_active_rooms, join_interval_seconds, max_joins_per_tick, min_normal_players_per_room, max_dev_players_per_room, quick_fill_enabled"
       )
       .eq("preset_id", presetId);
     if (error) fail("getPresetTemplateLimits", error.message);
@@ -227,7 +191,29 @@ export class DevPlayerRepo {
         row.max_dev_players_per_room === null || row.max_dev_players_per_room === undefined
           ? null
           : Number(row.max_dev_players_per_room),
+      quickFillEnabled: Boolean(row.quick_fill_enabled),
     }));
+  }
+
+  async getWaitingRoomCountsByTemplate(
+    templateIds: string[]
+  ): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    if (templateIds.length === 0) return counts;
+    for (const id of templateIds) counts.set(id, 0);
+
+    const { data, error } = await this.db
+      .from("rooms")
+      .select("room_template_id")
+      .in("room_template_id", templateIds)
+      .eq("status", "waiting");
+    if (error) fail("getWaitingRoomCountsByTemplate", error.message);
+
+    for (const row of data ?? []) {
+      const templateId = String(row.room_template_id);
+      counts.set(templateId, (counts.get(templateId) ?? 0) + 1);
+    }
+    return counts;
   }
 
   async getJoinTargetRoomPlayerCounts(
@@ -293,7 +279,7 @@ export class DevPlayerRepo {
     if (templateIds.length === 0) return [];
     const { data, error } = await this.db
       .from("room_templates")
-      .select("id, name, price, vip, room_type, status, max_cards_per_player")
+      .select("id, name, price, vip, room_type, status, max_cards_per_player, max_players")
       .in("id", templateIds);
     if (error) fail("getTemplatesByIds", error.message);
     return (data ?? []).map((row) => ({
@@ -304,6 +290,10 @@ export class DevPlayerRepo {
       roomType: row.room_type || "normal",
       status: row.status || "active",
       maxCardsPerPlayer: Math.max(1, Number(row.max_cards_per_player ?? 1)),
+      maxPlayers:
+        row.max_players === null || row.max_players === undefined
+          ? null
+          : Number(row.max_players),
     }));
   }
 
@@ -328,28 +318,6 @@ export class DevPlayerRepo {
     return counts;
   }
 
-  async getLastScheduleAtByTemplate(
-    templateIds: string[]
-  ): Promise<Map<string, string>> {
-    const map = new Map<string, string>();
-    if (templateIds.length === 0) return map;
-
-    const { data, error } = await this.db
-      .from("dev_room_schedules")
-      .select("room_template_id, created_at")
-      .in("room_template_id", templateIds)
-      .order("created_at", { ascending: false });
-    if (error) fail("getLastScheduleAtByTemplate", error.message);
-
-    for (const row of data ?? []) {
-      const templateId = String(row.room_template_id);
-      if (!map.has(templateId)) {
-        map.set(templateId, String(row.created_at));
-      }
-    }
-    return map;
-  }
-
   async getWalletBalance(userId: string): Promise<number> {
     const { data, error } = await this.db
       .from("wallets")
@@ -369,6 +337,40 @@ export class DevPlayerRepo {
       .in("status", ["draft", "approved", "processing"]);
     if (error) fail("hasPendingSchedule", error.message);
     return (count ?? 0) > 0;
+  }
+
+  async getScheduledUserIdsSince(
+    templateId: string,
+    sinceIso: string
+  ): Promise<Set<string>> {
+    const { data, error } = await this.db
+      .from("dev_room_schedules")
+      .select("user_id")
+      .eq("room_template_id", templateId)
+      .gte("created_at", sinceIso);
+    if (error) fail("getScheduledUserIdsSince", error.message);
+    return new Set((data ?? []).map((row) => String(row.user_id)));
+  }
+
+  async getScheduleOutcomeCountsSince(
+    templateId: string,
+    sinceIso: string
+  ): Promise<ScheduleOutcomeCounts> {
+    const { data, error } = await this.db
+      .from("dev_room_schedules")
+      .select("status")
+      .eq("room_template_id", templateId)
+      .gte("created_at", sinceIso)
+      .in("status", ["done", "failed"]);
+    if (error) fail("getScheduleOutcomeCountsSince", error.message);
+
+    let succeeded = 0;
+    let failed = 0;
+    for (const row of data ?? []) {
+      if (row.status === "done") succeeded += 1;
+      else if (row.status === "failed") failed += 1;
+    }
+    return { succeeded, failed };
   }
 
   async insertSchedules(rows: ScheduleInsertRow[]): Promise<number> {

@@ -62,6 +62,7 @@ export interface EngineConfig {
   devPlayerSchedulerIntervalMs: number;
   devPlayerProcessorIntervalMs: number;
   devPlayerProcessorBatchLimit: number;
+  devPlayerSchedulerMaxInsertsPerTick: number;
   devPlayerSchedulerLockTtlSec: number;
   devPlayerProcessorLockTtlSec: number;
   // ---- room-actor game loop ----
@@ -188,6 +189,9 @@ export function loadConfig(): EngineConfig {
     ),
     devPlayerProcessorBatchLimit: Number(
       process.env.DEV_PLAYER_PROCESSOR_BATCH_LIMIT ?? "10"
+    ),
+    devPlayerSchedulerMaxInsertsPerTick: Number(
+      process.env.DEV_PLAYER_SCHEDULER_MAX_INSERTS_PER_TICK ?? "10"
     ),
     devPlayerSchedulerLockTtlSec: Number(
       process.env.DEV_PLAYER_SCHEDULER_LOCK_TTL_SEC ?? "55"

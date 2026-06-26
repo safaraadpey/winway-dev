@@ -1,13 +1,15 @@
 import type { DevPlayerConfigSnapshot } from "./types.js";
 import { pickRandom } from "./random.js";
 
-/** Prefer dev players not currently seated in waiting/playing rooms. */
+/**
+ * Pick a dev player excluding user ids (occupied, already scheduled this cycle, etc.).
+ * Does not reuse excluded players — returns null when none left.
+ */
 export function pickDevPlayerForJoin(
   candidates: DevPlayerConfigSnapshot[],
-  occupiedDevPlayerIds: Set<string>
+  excludedUserIds: Set<string>
 ): DevPlayerConfigSnapshot | null {
   if (candidates.length === 0) return null;
-
-  const unused = candidates.filter((player) => !occupiedDevPlayerIds.has(player.userId));
-  return pickRandom(unused.length > 0 ? unused : candidates);
+  const available = candidates.filter((player) => !excludedUserIds.has(player.userId));
+  return pickRandom(available);
 }
