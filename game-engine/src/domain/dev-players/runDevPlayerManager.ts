@@ -10,7 +10,7 @@ import {
 import { isWithinPlayWindow } from "./isWithinPlayWindow.js";
 import { pickDevPlayerForJoin } from "./selectDevPlayer.js";
 import { isPriceInPlayerRange, isTemplateJoinable } from "./templateGates.js";
-import { rollNaturalDripTicketCount } from "./ticketRoll.js";
+import { rollTicketCount } from "./ticketRoll.js";
 import type {
   BuildScheduleBatchOptions,
   BuildScheduleBatchResult,
@@ -22,6 +22,14 @@ import type {
   SchedulerBehaviorState,
   TemplateBehaviorState,
 } from "./types.js";
+
+/** Random 1..min(player max, template max_cards_per_player). */
+function rollTicketCountForJoin(
+  player: DevPlayerConfigSnapshot,
+  template: RoomTemplateSnapshot
+): number {
+  return rollTicketCount(player.maxTicketCount, template.maxCardsPerPlayer);
+}
 
 function emptySkipped(): BuildScheduleBatchResult["skipped"] {
   return {
@@ -323,7 +331,7 @@ export async function runDevPlayerManager(
           settings,
           excludedUserIds,
           now,
-          ticketCountForPlayer: () => 1,
+          ticketCountForPlayer: (player) => rollTicketCountForJoin(player, template),
           skipped,
         });
         if (!row) break;
@@ -367,10 +375,7 @@ export async function runDevPlayerManager(
         settings,
         excludedUserIds,
         now,
-        ticketCountForPlayer: (player) =>
-          templateState.mode === "natural_join_drip"
-            ? rollNaturalDripTicketCount(player.maxTicketCount, template.maxCardsPerPlayer)
-            : 1,
+        ticketCountForPlayer: (player) => rollTicketCountForJoin(player, template),
         skipped,
       });
 

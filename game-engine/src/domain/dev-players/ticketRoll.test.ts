@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { rollNaturalDripTicketCount, rollTicketCount } from "./ticketRoll.js";
+import { rollTicketCount } from "./ticketRoll.js";
 
 describe("ticketRoll", () => {
   it("ticket count stays within 1..maxTicketCount", () => {
@@ -20,10 +20,13 @@ describe("ticketRoll", () => {
     }
   });
 
-  it("natural drip returns 1 or 2 when template allows", () => {
-    for (let i = 0; i < 30; i += 1) {
-      const count = rollNaturalDripTicketCount(5, 5);
-      assert.ok(count === 1 || count === 2);
+  it("uses uniform random across full 1..cap range", () => {
+    const seen = new Set<number>();
+    for (let i = 0; i < 200; i += 1) {
+      seen.add(rollTicketCount(3, 3));
     }
+    assert.ok(seen.has(1));
+    assert.ok(seen.has(2));
+    assert.ok(seen.has(3));
   });
 });

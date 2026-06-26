@@ -16,14 +16,3 @@ export function rollTicketCount(
   return randomIntInclusive(1, upperBound);
 }
 
-/** ~15% chance of 2 cards in natural drip. */
-export function rollNaturalDripTicketCount(
-  maxTicketCount: number,
-  templateMaxCardsPerPlayer?: number | null
-): number {
-  const rolled = rollTicketCount(maxTicketCount, templateMaxCardsPerPlayer);
-  if (rolled >= 2 && randomIntInclusive(1, 100) <= 15) {
-    return Math.min(2, rolled);
-  }
-  return 1;
-}
