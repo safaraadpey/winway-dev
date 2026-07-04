@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { updateSupabaseSession } from "@/lib/supabase/middleware";
 
 const DEFAULT_MAIN_HOST = "dingmoney.org";
 const DEFAULT_ADMIN_HOST = "admin.dingmoney.org";
@@ -14,7 +15,7 @@ function buildRedirectUrl(req: NextRequest, targetHost: string): URL {
   return url;
 }
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const host = getHost(req);
   const pathname = req.nextUrl.pathname;
 
@@ -29,9 +30,11 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(buildRedirectUrl(req, adminHost));
   }
 
-  return NextResponse.next();
+  return updateSupabaseSession(req);
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };

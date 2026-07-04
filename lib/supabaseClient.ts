@@ -1,16 +1,11 @@
-import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { getSupabasePublicEnv } from "@/lib/supabase/env";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const { url, anonKey } = getSupabasePublicEnv();
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    'Missing Supabase environment variables. Please check your .env.local file.'
-  )
-}
-
-// Create a single supabase client for the browser
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+// Cookie-backed browser client; pairs with lib/supabase/server.ts + middleware refresh.
+export const supabase: SupabaseClient = createBrowserClient(url, anonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
@@ -20,15 +15,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       eventsPerSecond: 20,
     },
   },
-})
+});
 
-// Helper function for server components (if needed later)
 export function createSupabaseClient() {
-  return supabase
+  return supabase;
 }
 
-// For client-side usage
 export function getSupabaseClient() {
-  return supabase
+  return supabase;
 }
-

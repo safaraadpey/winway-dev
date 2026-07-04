@@ -10,6 +10,7 @@
     "test:supabase": "node scripts/test-connection.js"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.81.1",
     "@upstash/redis": "^1.38.0",
     "framer-motion": "^12.23.24",
