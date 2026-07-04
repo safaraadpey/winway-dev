@@ -12,6 +12,7 @@ import { hardExitFromCurrentPanel } from "@/lib/auth/hardExit";
 import ShamsiDateInput from "@/components/common/ShamsiDateInput";
 import { supabase } from "@/lib/supabaseClient";
 import { getCachedAdminPermissions, getCurrentAdminPermissions } from "@/lib/admin-permissions";
+import AdminDashboardReportSkeleton from "@/components/admin/AdminDashboardReportSkeleton";
 import type { DashboardPeriod, DashboardData } from "@/src/types/dashboard";
 import type { AdminPermissions } from "@/src/types/admins";
 import InstallAppButton from "@/components/InstallAppButton";
@@ -27,7 +28,7 @@ export default function AdminDashboardPage() {
   const router = useRouter();
   const { setShowHeader, setShowBackButton, setOnBackClick } = useHeaderVisibility();
   const [data, setData] = useState<DashboardData | null>(() => getCachedDashboardData());
-  const [loading, setLoading] = useState(() => getCachedDashboardData() === null);
+  const [reportLoading, setReportLoading] = useState(() => getCachedDashboardData() === null);
   const [activePeriod, setActivePeriod] = useState<PeriodTab>("day");
   const [rangeFrom, setRangeFrom] = useState("");
   const [rangeTo, setRangeTo] = useState("");
@@ -41,75 +42,94 @@ export default function AdminDashboardPage() {
     deposits: number;
     withdrawals: number;
   } | null>(null);
-  const [permissions, setPermissions] = useState<AdminPermissions | null>(() => getCachedAdminPermissions());
+  const [permissions, setPermissions] = useState<AdminPermissions | null>(() =>
+    getCachedAdminPermissions()
+  );
   const [adminZeroId, setAdminZeroId] = useState<string | null>(null);
 
   useEffect(() => {
-    // برای داشبورد هدر را نمایش می‌دهیم و دکمه back لازم نیست
     setShowHeader(true);
     setShowBackButton(false);
     setOnBackClick(null);
-
-    return () => {
-      // هنگام خروج از صفحه تنظیمات خاصی لازم نیست
-    };
   }, [setShowHeader, setShowBackButton, setOnBackClick]);
 
   useEffect(() => {
-    async function fetchData() {
+    let cancelled = false;
+
+    async function loadShellMeta() {
       try {
-        const result = await loadDashboardData({ maxAgeMs: 30_000, force: true });
-        setData(result);
-        
-        // بارگذاری دسترسی‌ها اگر admin است
-        if (result?.user?.role === "admin") {
-          // Used to hide some menus for non-adminzero admins.
-          const { data: adminZero } = await supabase
+        const [adminZeroRes, perms] = await Promise.all([
+          supabase
             .from("users")
             .select("id")
             .eq("username", "adminzero")
             .eq("role", "admin")
-            .maybeSingle();
-          setAdminZeroId(adminZero?.id ?? null);
+            .maybeSingle(),
+          getCurrentAdminPermissions({ maxAgeMs: 60_000 }),
+        ]);
 
-          const perms = await getCurrentAdminPermissions({ maxAgeMs: 60_000 });
-          setPermissions(perms);
-        }
+        if (cancelled) return;
+
+        setAdminZeroId(adminZeroRes.data?.id ?? null);
+        setPermissions(perms);
       } catch (error) {
-        console.error("Error loading admin dashboard data:", error);
-      } finally {
-        setLoading(false);
+        console.error("Error loading admin dashboard shell metadata:", error);
       }
     }
 
-    fetchData();
+    void loadShellMeta();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadReports() {
+      try {
+        const result = await loadDashboardData({ maxAgeMs: 30_000, force: true });
+        if (cancelled) return;
+        setData(result);
+      } catch (error) {
+        console.error("Error loading admin dashboard reports:", error);
+      } finally {
+        if (!cancelled) {
+          setReportLoading(false);
+        }
+      }
+    }
+
+    void loadReports();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const summary =
-    activePeriod === "range"
-      ? rangeSummary
-      : data?.summaries[activePeriod];
+    activePeriod === "range" ? rangeSummary : data?.summaries[activePeriod];
   const hasReferralCode = Boolean(data?.user?.referralCode);
   const userRole = data?.user?.role;
-  const isAdmin = userRole === "admin";
+  const isAdmin = !data?.user || userRole === "admin";
   const adminSubRole = data?.user?.adminSubRole || null;
   const normalizedSubRole = adminSubRole ? adminSubRole.toLowerCase() : null;
   const isAdminZero = isAdmin && !!adminZeroId && data?.user?.id === adminZeroId;
-  // مدیر کل (null/manager)، مالی و پشتیبانی می‌توانند گزارش مالی را ببینند
-  const canViewFinancialReport =
-    isAdmin &&
-    (normalizedSubRole === null ||
-      normalizedSubRole === "manager" ||
-      normalizedSubRole === "finance" ||
-      normalizedSubRole === "support");
-  
-  // بررسی دسترسی‌ها: مدیر کل همه دسترسی‌ها را دارد، سایر مدیران بر اساس permissions
+  const reportAccessResolved = Boolean(data?.user);
+  const canViewFinancialReport = reportAccessResolved
+    ? isAdmin &&
+      (normalizedSubRole === null ||
+        normalizedSubRole === "manager" ||
+        normalizedSubRole === "finance" ||
+        normalizedSubRole === "support")
+    : true;
+
   const canAccessRooms = isAdmin && (permissions?.rooms ?? true);
   const canAccessTournaments = isAdmin;
   const canAccessUsers = isAdmin && (permissions?.users ?? true);
   const canAccessTransactions = isAdmin && (permissions?.transactions ?? true);
   const canAccessEntryBanner = isAdmin && (permissions?.entry_banner ?? true);
-  // Only adminzero can see "Admins" and "Card pool" menus.
   const canAccessAdmins = isAdminZero && (permissions?.admins ?? true);
 
   const handleLogout = () => {
@@ -142,13 +162,75 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const renderReportContent = () => {
+    if (activePeriod === "range") {
+      if (!rangeFrom || !rangeTo || rangeFrom > rangeTo) {
+        return <div className="text-center py-4 text-gray-400">بازه تاریخ معتبر انتخاب کنید</div>;
+      }
+      if (rangeLoading) {
+        return <AdminDashboardReportSkeleton />;
+      }
+      if (!rangeSummary) {
+        return <div className="text-center py-4 text-gray-400">بازه را اعمال کنید</div>;
+      }
+    } else if (reportLoading || !summary) {
+      return <AdminDashboardReportSkeleton />;
+    }
+
+    if (!summary) {
+      return <div className="text-center py-4 text-gray-400">داده‌ای موجود نیست</div>;
+    }
+
+    return (
+      <div className="grid grid-cols-2 gap-y-1">
+        <span>کانیات کل</span>
+        <span className="text-right font-mono">{summary.ticketsVolumeTotal.toLocaleString("en-US")}</span>
+        <span>کانیات کل تورنومنت‌ها</span>
+        <span className="text-right font-mono">
+          {(summary.tournamentTicketsVolumeTotal ?? 0).toLocaleString("en-US")}
+        </span>
+        <span>کانیات کل بازی‌ها</span>
+        <span className="text-right font-mono">
+          {Math.max(
+            0,
+            summary.ticketsVolumeTotal - (summary.tournamentTicketsVolumeTotal ?? 0)
+          ).toLocaleString("en-US")}
+        </span>
+        <span>کانیات پنل‌ها</span>
+        <span className="text-right font-mono">
+          {Math.max(0, summary.ticketsVolumeTotal - summary.ticketsVolume).toLocaleString("en-US")}
+        </span>
+        <span>کانیات من</span>
+        <span className="text-right font-mono">{summary.ticketsVolume.toLocaleString("en-US")}</span>
+        <span>کانیات از تورنومنت</span>
+        <span className="text-right font-mono">
+          {(summary.tournamentCommission ?? 0).toLocaleString("en-US")}
+        </span>
+        <span>کانیات از بازی‌ها</span>
+        <span className="text-right font-mono">
+          {Math.max(0, summary.ticketsVolume - (summary.tournamentCommission ?? 0)).toLocaleString(
+            "en-US"
+          )}
+        </span>
+        <span>تاپ آپ گارانتی</span>
+        <span className="text-right font-mono">
+          {(summary.tournamentGuaranteePayout ?? 0).toLocaleString("en-US")}
+        </span>
+        <span>واریز</span>
+        <span className="text-right font-mono">{summary.deposits.toLocaleString("en-US")}</span>
+        <span>برداشت</span>
+        <span className="text-right font-mono">{summary.withdrawals.toLocaleString("en-US")}</span>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-[#0E0E0F] p-4">
       <div className="max-w-2xl mx-auto">
         <div className="mb-4">
           <InstallAppButton label="نصب اپ ادمین" />
         </div>
-        {/* کارت اطلاعات کاربر و ردیف کد معرف */}
+
         <div className="mb-4">
           <div className="flex items-center justify-between gap-3 mb-3">
             <div className="flex items-center gap-3">
@@ -156,11 +238,15 @@ export default function AdminDashboardPage() {
                 {data?.user?.displayName?.[0]?.toUpperCase() || "A"}
               </div>
               <div className="flex flex-col">
-                <span className="text-white text-lg font-semibold">
-                  {data?.user?.displayName || "ادمین"}
-                </span>
+                {reportLoading && !data?.user?.displayName ? (
+                  <div className="h-5 w-28 rounded bg-gray-800 animate-pulse mb-1" />
+                ) : (
+                  <span className="text-white text-lg font-semibold">
+                    {data?.user?.displayName || "ادمین"}
+                  </span>
+                )}
                 <span className="text-gray-300 text-xs">
-                  {data?.user?.role === "admin"
+                  {data?.user?.role === "admin" || !data?.user
                     ? "ادمین"
                     : data?.user?.role === "agent"
                     ? "ایجنت"
@@ -168,10 +254,8 @@ export default function AdminDashboardPage() {
                     ? "سوپر"
                     : "کاربر"}
                 </span>
-                {/* نمایش ID حذف شد؛ فقط نام کاربری/نمایشی باقی می‌ماند */}
               </div>
             </div>
-            {/* دکمه خروج */}
             <button
               onClick={handleLogout}
               className="px-4 py-2 rounded-xl bg-red-700 text-white text-sm font-semibold hover:bg-red-600 active:bg-red-800 whitespace-nowrap"
@@ -180,19 +264,17 @@ export default function AdminDashboardPage() {
             </button>
           </div>
 
-          {/* ردیف کد معرف ساده (بدون دراپ‌داون) - برای همه admin ها */}
           {isAdmin && (
             <div className="flex gap-3">
-              {/* نمایش کد فعلی */}
               <div className="flex-1">
                 <div className="w-full h-12 rounded-xl bg-[#1f1f1f] border border-gray-700 text-gray-100 flex items-center px-4">
-                  <span className="text-base font-mono">
-                    {data?.user?.referralCode || ""}
-                  </span>
+                  {reportLoading && !data?.user ? (
+                    <div className="h-4 w-20 rounded bg-gray-800 animate-pulse" />
+                  ) : (
+                    <span className="text-base font-mono">{data?.user?.referralCode || ""}</span>
+                  )}
                 </div>
               </div>
-
-              {/* دکمه ثبت/تغییر کد معرف */}
               <button
                 onClick={() => router.push("/admin/settings")}
                 className="px-4 h-12 rounded-xl bg-teal-700 text-white text-sm font-semibold shadow-md hover:bg-teal-600 active:bg-teal-800 whitespace-nowrap"
@@ -203,7 +285,6 @@ export default function AdminDashboardPage() {
           )}
         </div>
 
-        {/* تب‌های بازه زمانی و کارت آمار مالی - برای مدیر کل و مدیر مالی */}
         {canViewFinancialReport && (
           <div className="rounded-2xl bg-[#151515] border border-gray-800 mb-6">
             <div className="grid grid-cols-4 text-center text-sm font-semibold rounded-2xl overflow-hidden">
@@ -243,69 +324,12 @@ export default function AdminDashboardPage() {
                   </button>
                 </div>
               )}
-              {activePeriod === "range" && (!rangeFrom || !rangeTo || rangeFrom > rangeTo) ? (
-                <div className="text-center py-4 text-gray-400">بازه تاریخ معتبر انتخاب کنید</div>
-              ) : !summary ||
-                loading ||
-                (activePeriod === "range" && !rangeSummary && !rangeLoading) ? (
-                <div className="text-center py-4 text-gray-400">در حال بارگذاری...</div>
-              ) : (
-                <div className="grid grid-cols-2 gap-y-1">
-                  <span>کانیات کل</span>
-                  <span className="text-right font-mono">
-                    {summary.ticketsVolumeTotal.toLocaleString("en-US")}
-                  </span>
-                  <span>کانیات کل تورنومنت‌ها</span>
-                  <span className="text-right font-mono">
-                    {(summary.tournamentTicketsVolumeTotal ?? 0).toLocaleString("en-US")}
-                  </span>
-                  <span>کانیات کل بازی‌ها</span>
-                  <span className="text-right font-mono">
-                    {Math.max(
-                      0,
-                      summary.ticketsVolumeTotal - (summary.tournamentTicketsVolumeTotal ?? 0)
-                    ).toLocaleString("en-US")}
-                  </span>
-                  <span>کانیات پنل‌ها</span>
-                  <span className="text-right font-mono">
-                    {Math.max(0, summary.ticketsVolumeTotal - summary.ticketsVolume).toLocaleString("en-US")}
-                  </span>
-                  <span>کانیات من</span>
-                  <span className="text-right font-mono">
-                    {summary.ticketsVolume.toLocaleString("en-US")}
-                  </span>
-                  <span>کانیات از تورنومنت</span>
-                  <span className="text-right font-mono">
-                    {(summary.tournamentCommission ?? 0).toLocaleString("en-US")}
-                  </span>
-                  <span>کانیات از بازی‌ها</span>
-                  <span className="text-right font-mono">
-                    {Math.max(
-                      0,
-                      summary.ticketsVolume - (summary.tournamentCommission ?? 0)
-                    ).toLocaleString("en-US")}
-                  </span>
-                  <span>تاپ آپ گارانتی</span>
-                  <span className="text-right font-mono">
-                    {(summary.tournamentGuaranteePayout ?? 0).toLocaleString("en-US")}
-                  </span>
-                  <span>واریز</span>
-                  <span className="text-right font-mono">
-                    {summary.deposits.toLocaleString("en-US")}
-                  </span>
-                  <span>برداشت</span>
-                  <span className="text-right font-mono">
-                    {summary.withdrawals.toLocaleString("en-US")}
-                  </span>
-                </div>
-              )}
+              {renderReportContent()}
             </div>
           </div>
         )}
 
-        {/* منوهای ناوبری اصلی */}
         <div className="space-y-3">
-          {/* منوی "اتاق ها" */}
           {canAccessRooms && (
             <button
               onClick={() => router.push("/admin/room-templates")}
@@ -315,7 +339,6 @@ export default function AdminDashboardPage() {
               <span className="text-xl">›</span>
             </button>
           )}
-          {/* منوی "تورنومنت‌ها" */}
           {canAccessTournaments && (
             <button
               onClick={() => router.push("/admin/tournaments")}
@@ -325,7 +348,6 @@ export default function AdminDashboardPage() {
               <span className="text-xl">›</span>
             </button>
           )}
-          {/* منوی "بازی‌ها" */}
           {isAdmin && (
             <button
               onClick={() => router.push("/admin/games")}
@@ -335,7 +357,6 @@ export default function AdminDashboardPage() {
               <span className="text-xl">›</span>
             </button>
           )}
-          {/* منوی "کاربران" */}
           {canAccessUsers && (
             <button
               onClick={() => router.push("/admin/users")}
@@ -345,7 +366,6 @@ export default function AdminDashboardPage() {
               <span className="text-xl">›</span>
             </button>
           )}
-          {/* منوی "تراکنش ها" */}
           {canAccessTransactions && (
             <button
               onClick={() => router.push("/admin/transactions")}
@@ -355,7 +375,6 @@ export default function AdminDashboardPage() {
               <span className="text-xl">›</span>
             </button>
           )}
-          {/* منوی "بنر ورودی" */}
           {canAccessEntryBanner && (
             <button
               onClick={() => router.push("/admin/entry-banner")}
@@ -365,7 +384,6 @@ export default function AdminDashboardPage() {
               <span className="text-xl">›</span>
             </button>
           )}
-          {/* منوی "مدیران" */}
           {canAccessAdmins && (
             <button
               onClick={() => router.push("/admin/admins")}
@@ -375,7 +393,6 @@ export default function AdminDashboardPage() {
               <span className="text-xl">›</span>
             </button>
           )}
-          {/* منوی "استخر کارتها" - فقط برای adminzero */}
           {isAdminZero && (
             <button
               onClick={() => router.push("/admin/card-pool")}
@@ -385,8 +402,6 @@ export default function AdminDashboardPage() {
               <span className="text-xl">›</span>
             </button>
           )}
-
-          {/* منوی "حساب کاربری" - آخرین گزینه */}
           <button
             onClick={() => router.push("/admin/account")}
             className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
@@ -399,4 +414,3 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
-

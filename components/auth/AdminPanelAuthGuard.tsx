@@ -1,18 +1,20 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { canAccessAdminPanel, getCurrentUserRoleInfo } from "@/lib/auth-helpers";
 import { isHardExiting } from "@/lib/auth/hardExit";
 
+/**
+ * Defense-in-depth guard for admin panel routes.
+ * Server gate runs first; this verifies in the background without blocking shell render.
+ */
 export default function AdminPanelAuthGuard({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const [allowed, setAllowed] = useState(false);
-  const [checking, setChecking] = useState(true);
   const redirectingRef = useRef(false);
 
   useEffect(() => {
@@ -33,8 +35,6 @@ export default function AdminPanelAuthGuard({
         }
 
         if (canAccessAdminPanel(roleInfo.role, roleInfo.admin_sub_role)) {
-          setAllowed(true);
-          setChecking(false);
           return;
         }
 
@@ -62,14 +62,7 @@ export default function AdminPanelAuthGuard({
     };
   }, [router]);
 
-  if (checking || !allowed) {
-    if (isHardExiting()) return null;
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0E0E0F]">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-solid border-gray-300 border-r-transparent" />
-      </div>
-    );
-  }
+  if (isHardExiting()) return null;
 
   return <>{children}</>;
 }

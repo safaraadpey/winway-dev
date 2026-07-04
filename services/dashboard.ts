@@ -4,6 +4,7 @@
 // فعلاً منطق مالی را ساده نگه می‌داریم و فقط اسکلت را می‌سازیم تا بعداً با کوئری‌های دقیق‌تر جایگزین شود.
 
 import { supabase } from "@/lib/supabaseClient";
+import { callAdminApi } from "@/lib/adminApiClient";
 import type {
   DashboardData,
   DashboardPeriod,
@@ -76,6 +77,37 @@ type DashboardCache = {
 };
 
 let dashboardCache: DashboardCache | null = null;
+
+function isAdminPanelRoute(): boolean {
+  return typeof window !== "undefined" && window.location.pathname.startsWith("/admin");
+}
+
+async function loadDashboardDataFromAdminSnapshot(options?: {
+  maxAgeMs?: number;
+  force?: boolean;
+}): Promise<DashboardData> {
+  const maxAgeMs = options?.maxAgeMs ?? 30_000;
+  const cacheKey = "admin-snapshot|v1";
+
+  if (!options?.force && dashboardCache?.key === cacheKey) {
+    const ageMs = Date.now() - dashboardCache.fetchedAtMs;
+    if (ageMs >= 0 && ageMs <= maxAgeMs) {
+      return dashboardCache.data;
+    }
+  }
+
+  const data = await callAdminApi<DashboardData>("/api/admin/dashboard/snapshot", {
+    method: "GET",
+  });
+
+  dashboardCache = {
+    key: cacheKey,
+    fetchedAtMs: Date.now(),
+    data,
+  };
+
+  return data;
+}
 
 export function getCachedDashboardData(): DashboardData | null {
   return dashboardCache?.data ?? null;
@@ -503,6 +535,10 @@ function sumRowsSince(rows: any[], startIso: string, pick: (row: any) => number)
  * - بیلان: واریز - برداشت
  */
 export async function loadDashboardData(options?: { maxAgeMs?: number; force?: boolean }): Promise<DashboardData> {
+  if (isAdminPanelRoute()) {
+    return loadDashboardDataFromAdminSnapshot(options);
+  }
+
   const user = await loadDashboardUserInfo();
 
   if (!user) {

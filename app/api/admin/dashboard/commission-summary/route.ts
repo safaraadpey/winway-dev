@@ -1,3 +1,7 @@
+/**
+ * @deprecated Use GET /api/admin/dashboard/snapshot instead.
+ * Kept temporarily for backward compatibility; not consumed by the admin dashboard UI.
+ */
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminContextOrThrow } from "@/lib/supabaseServer";
 
