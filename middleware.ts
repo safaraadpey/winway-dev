@@ -30,7 +30,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(buildRedirectUrl(req, adminHost));
   }
 
-  return updateSupabaseSession(req);
+  return updateSupabaseSession(req, { pathname });
 }
 
 export const config = {

@@ -40,36 +40,14 @@ export function validateUsername(username: string): boolean {
 // ============================================
 
 import { supabase } from './supabaseClient';
+import type { AdminSubRole, UserRole } from './auth/adminPanelRules';
 
-/**
- * نوع نقش فرعی ادمین
- */
-export type AdminSubRole = 'manager' | 'finance' | 'support' | 'room' | 'dev_panel';
-
-export function isDevPanelSubRole(
-  adminSubRole: AdminSubRole | string | null | undefined
-): boolean {
-  return adminSubRole === 'dev_panel';
-}
-
-export function canAccessAdminPanel(
-  role: UserRole | string | undefined,
-  adminSubRole: AdminSubRole | string | null | undefined
-): boolean {
-  return role === 'admin' && !isDevPanelSubRole(adminSubRole);
-}
-
-export function canAccessDevPanel(
-  role: UserRole | string | undefined,
-  adminSubRole: AdminSubRole | string | null | undefined
-): boolean {
-  return role === 'admin' && isDevPanelSubRole(adminSubRole);
-}
-
-/**
- * نوع نقش اصلی کاربر
- */
-export type UserRole = 'player' | 'admin' | 'super' | 'agent';
+export type { AdminSubRole, UserRole } from './auth/adminPanelRules';
+export {
+  isDevPanelSubRole,
+  canAccessAdminPanel,
+  canAccessDevPanel,
+} from './auth/adminPanelRules';
 
 /**
  * Interface برای اطلاعات نقش کاربر
