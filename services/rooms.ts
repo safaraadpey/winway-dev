@@ -7,6 +7,13 @@ import type { DrawVerificationSpec } from "@/lib/provablyFairDrawSpec";
 import type { ProcessedDraw } from "@/lib/draw-order";
 import { supabase } from "@/lib/supabaseClient";
 import {
+  getGameRoomViewByTemplate,
+  getRoomState as getRoomStateFromEngine,
+  isGameEngineEnabled,
+  joinOrCreateRoomViaEngine,
+  mapJoinEngineError,
+} from "@/lib/gameEngineClient";
+import {
   RoomTemplatePayload,
   RoomTemplateDbRow,
   mapRoomTemplateFromDb,
@@ -208,6 +215,28 @@ export async function joinOrCreateRoom(options: {
     throw new Error("این اتاق در حال حاضر فعال نیست");
   }
 
+  if (isGameEngineEnabled()) {
+    try {
+      const row = await joinOrCreateRoomViaEngine({
+        templateId,
+        cardCount,
+        password,
+      });
+
+      console.log("[JOIN_RPC][DONE]", {
+        room_id: row.room_id,
+        starts_at: row.starts_at,
+        ticket_ids_count: row.ticket_ids?.length ?? 0,
+      });
+
+      return row;
+    } catch (error) {
+      console.error("[JOIN_RPC][ERROR_ENGINE]", error);
+      throw mapJoinEngineError(error);
+    }
+  }
+
+  console.info("[LEGACY_PATH] joinOrCreateRoom → Supabase fn_join_or_create_room");
   console.log("[JOIN_RPC][CALL]", {
     templateId,
     cardCount,
@@ -613,6 +642,22 @@ export async function fetchGameRoomView(params: {
   roomId?: string;
   templateId?: string;
 }): Promise<GameRoomView> {
+  if (isGameEngineEnabled()) {
+    try {
+      if (params.roomId) {
+        return await getRoomStateFromEngine(params.roomId);
+      }
+      if (params.templateId) {
+        return await getGameRoomViewByTemplate(params.templateId);
+      }
+    } catch (error) {
+      console.error("[GameRoomView] engine path failed, falling back to legacy", error);
+      console.info("[LEGACY_PATH] fetchGameRoomView → Vercel /api/player/gameroom (engine fallback)");
+    }
+  } else {
+    console.info("[LEGACY_PATH] fetchGameRoomView → Vercel /api/player/gameroom");
+  }
+
   const search = new URLSearchParams();
   if (params.roomId) search.set("roomId", params.roomId);
   if (params.templateId) search.set("templateId", params.templateId);

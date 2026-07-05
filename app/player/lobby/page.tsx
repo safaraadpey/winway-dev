@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useSession } from "@/lib/contexts/SessionContext";
 import { traceFetch } from "@/lib/debug/netTrace";
 import { isHardExiting } from "@/lib/auth/hardExit";
+import { getLobby, isGameEngineEnabled } from "@/lib/gameEngineClient";
 
 interface RoomPriceGroup {
   price: number;
@@ -136,26 +137,33 @@ export default function LobbyPage() {
           hasToken: true,
         });
 
-        const res = await fetch("/api/player/lobby-snapshot", {
-          method: "GET",
-          headers: { Authorization: `Bearer ${sessionSnap.accessToken}` },
-          cache: "no-store",
-        });
-
-        if (!res.ok) {
-          console.error("fetchRooms: lobby-snapshot failed", res.status);
-          nextError = "خطا در دریافت اطلاعات لابی";
-          setRoomGroups([]);
-          // keep polling, but back off to 30s on errors to avoid hammering
-          stableCountRef.current = Math.min(stableCountRef.current + 1, 2);
-          schedule(stableCountRef.current === 1 ? 30000 : 60000, "error");
-          return;
-        }
-
-        const json = (await res.json()) as {
+        let json: {
           roomGroups?: { groups?: RoomPriceGroup[] };
           onlineCount?: { onlinePlayers?: number };
         };
+
+        if (isGameEngineEnabled()) {
+          json = await getLobby();
+        } else {
+          console.info("[LEGACY_PATH] LobbyPage → Vercel /api/player/lobby-snapshot");
+          const res = await fetch("/api/player/lobby-snapshot", {
+            method: "GET",
+            headers: { Authorization: `Bearer ${sessionSnap.accessToken}` },
+            cache: "no-store",
+          });
+
+          if (!res.ok) {
+            console.error("fetchRooms: lobby-snapshot failed", res.status);
+            nextError = "خطا در دریافت اطلاعات لابی";
+            setRoomGroups([]);
+            stableCountRef.current = Math.min(stableCountRef.current + 1, 2);
+            schedule(stableCountRef.current === 1 ? 30000 : 60000, "error");
+            return;
+          }
+
+          json = (await res.json()) as typeof json;
+        }
+
         const groups = Array.isArray(json?.roomGroups?.groups) ? (json.roomGroups!.groups as RoomPriceGroup[]) : [];
         const sortedGroups = [...groups].sort((a, b) => a.price - b.price);
         setRoomGroups(sortedGroups);

@@ -12,7 +12,9 @@ import http from "node:http";
 import type { SupabaseAdmin } from "../db/supabase-admin.js";
 import type { Logger } from "../metrics/logger.js";
 import { bearerToken, verifyUser } from "./auth.js";
+import { applyCors } from "./cors.js";
 import {
+  getGameRoomView,
   getLobby,
   getRoomState,
   joinOrCreateRoom,
@@ -26,7 +28,9 @@ export interface ApiServerContext {
 }
 
 function send(res: http.ServerResponse, result: CommandResult): void {
-  res.writeHead(result.status, { "Content-Type": "application/json" });
+  if (!res.headersSent) {
+    res.writeHead(result.status, { "Content-Type": "application/json" });
+  }
   res.end(JSON.stringify(result.body));
 }
 
@@ -67,6 +71,10 @@ export function startApiServer(port: number, ctx: ApiServerContext): http.Server
     const path = url.pathname;
     const method = req.method ?? "GET";
 
+    if (applyCors(req, res)) {
+      return;
+    }
+
     if (path === "/health") {
       const redisOk = ctx.pingRedis ? await ctx.pingRedis() : null;
       const okState = redisOk === null || redisOk === true;
@@ -99,6 +107,16 @@ export function startApiServer(port: number, ctx: ApiServerContext): http.Server
 
       if (method === "GET" && path === "/v1/lobby") {
         return send(res, await getLobby(supabase, user));
+      }
+
+      if (method === "GET" && path === "/v1/gameroom") {
+        return send(
+          res,
+          await getGameRoomView(supabase, user, {
+            roomId: url.searchParams.get("roomId"),
+            templateId: url.searchParams.get("templateId"),
+          })
+        );
       }
 
       return send(res, { status: 404, body: { error: "unknown command" } });

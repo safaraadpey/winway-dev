@@ -13,6 +13,8 @@
 
 import type { SupabaseAdmin } from "../db/supabase-admin.js";
 import type { AuthedUser } from "./auth.js";
+import { buildGameRoomView } from "./gameroom-view.js";
+import { buildLobbySnapshot } from "./lobby-snapshot.js";
 
 export interface CommandResult {
   status: number;
@@ -71,13 +73,43 @@ export async function getRoomState(
 }
 
 /**
- * GET /v1/lobby — read-through to game_core.rpc_get_active_rooms.
+ * GET /v1/gameroom — GameRoomView snapshot (roomId or templateId query params).
+ */
+export async function getGameRoomView(
+  supabase: SupabaseAdmin,
+  user: AuthedUser,
+  params: { roomId?: string | null; templateId?: string | null }
+): Promise<CommandResult> {
+  if (!params.roomId && !params.templateId) {
+    return bad("Either roomId or templateId must be provided.");
+  }
+
+  const view = await buildGameRoomView(supabase, user.id, params);
+  if (!view) {
+    return {
+      status: 404,
+      body: {
+        error: params.roomId ? "room_not_found" : "template_not_found",
+        message: params.roomId ? "Room not found." : "Room template not found or inactive.",
+      },
+    };
+  }
+
+  return ok(view);
+}
+
+/**
+ * GET /v1/lobby — lobby snapshot matching /api/player/lobby-snapshot.
  */
 export async function getLobby(
   supabase: SupabaseAdmin,
   _user: AuthedUser
 ): Promise<CommandResult> {
-  const { data, error } = await supabase.rpc("rpc_get_active_rooms");
-  if (error) return bad(error.message, 422);
-  return ok(data);
+  try {
+    const snapshot = await buildLobbySnapshot(supabase);
+    return ok(snapshot);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to load lobby snapshot.";
+    return bad(message, 500);
+  }
 }

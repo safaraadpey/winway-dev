@@ -19,6 +19,10 @@ npm install
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
+
+# Phase 1 Game Engine cutover (optional — defaults off)
+NEXT_PUBLIC_USE_GAME_ENGINE=false
+NEXT_PUBLIC_GAME_ENGINE_URL=http://localhost:8080
 ```
 
 4. در Supabase SQL Editor، فایل `supabase-schema.sql` را اجرا کنید
