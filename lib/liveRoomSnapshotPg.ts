@@ -220,6 +220,7 @@ export function buildLiveRoomCards(
       player_id: ticket.player_user_id,
       player_name: displayName,
       card_number: ticket.card_no,
+      pool_card_id: ticket.pool_card_id,
       card: grid,
       is_my_card: ticket.player_user_id === currentUserId,
     };

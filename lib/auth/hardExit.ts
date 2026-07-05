@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import { teardownActiveGamesForExit } from "@/lib/activeGames/teardownForExit";
 import { clearGameResultsSessionStorage } from "@/lib/gameResultsDedupe";
+import { clearCardPoolMemoryCache } from "@/lib/cardPool/client";
 import { resetSnapshotGate } from "@/lib/activeGames/snapshotGate";
 import { stopLiveRoomMusic } from "@/lib/audio/music";
 import { teardownPanelForExit } from "@/lib/auth/teardownPanelForExit";
@@ -154,6 +155,12 @@ function teardownAppState(role: HardExitRole): void {
 
     try {
       resetSnapshotGate();
+    } catch {
+      // ignore
+    }
+
+    try {
+      clearCardPoolMemoryCache();
     } catch {
       // ignore
     }

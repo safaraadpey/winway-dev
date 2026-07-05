@@ -23,6 +23,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
 # Phase 1 Game Engine cutover (optional — defaults off)
 NEXT_PUBLIC_USE_GAME_ENGINE=false
 NEXT_PUBLIC_GAME_ENGINE_URL=http://localhost:8080
+
+# Card pool browser cache (optional — defaults off)
+NEXT_PUBLIC_USE_CARD_POOL_CACHE=false
 ```
 
 Railway game-engine (required when flag is on for live-room PG parity):

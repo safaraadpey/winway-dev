@@ -33,6 +33,7 @@ import {
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 import { useSession } from "@/lib/contexts/SessionContext";
 import { isHardExiting } from "@/lib/auth/hardExit";
+import { shouldUseDrawsOnlyLiveRoomFallback } from "@/lib/cardPool/client";
 import styles from "./LiveRoomScreen.module.css";
 import loadingStyles from "@/components/playerScreenLoading.module.css";
 
@@ -156,6 +157,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   const lastDrawSyncAtRef = useRef(Date.now());
   const pollInFlightRef = useRef(false);
   const roomStatusRef = useRef<string>("");
+  const cardPoolMetaRef = useRef<LiveRoomSnapshot["card_pool"]>(null);
   const drawIntervalSecRef = useRef(DEFAULT_DRAW_INTERVAL_SEC);
 
   useEffect(() => {
@@ -408,7 +410,8 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   useEffect(() => {
     drawIntervalSecRef.current =
       data?.room?.draw_interval_sec ?? DEFAULT_DRAW_INTERVAL_SEC;
-  }, [data?.room?.draw_interval_sec]);
+    cardPoolMetaRef.current = data?.card_pool ?? null;
+  }, [data?.room?.draw_interval_sec, data?.card_pool]);
 
   const markRealtimeActivity = useCallback(() => {
     lastRealtimeActivityRef.current = Date.now();
@@ -480,6 +483,40 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
 
     pollInFlightRef.current = true;
     try {
+      const cardPoolMeta = cardPoolMetaRef.current;
+      if (shouldUseDrawsOnlyLiveRoomFallback(cardPoolMeta)) {
+        const snapshot = await fetchLiveRoomSnapshot(roomId, { scope: "draws" });
+        const nextStatus = (snapshot.room.status || "").trim().toLowerCase();
+        roomStatusRef.current = nextStatus;
+        const pending = pendingRtDrawsRef.current;
+        pendingRtDrawsRef.current = [];
+        const mergedDraws = mergeDrawLists(snapshot.draws, pending);
+        setData((prev) =>
+          prev
+            ? {
+                ...prev,
+                draws: mergedDraws,
+                room: {
+                  ...prev.room,
+                  status: snapshot.room.status ?? prev.room.status,
+                  next_draw_at:
+                    snapshot.room.next_draw_at ?? prev.room.next_draw_at ?? null,
+                  draw_interval_sec:
+                    snapshot.room.draw_interval_sec ?? prev.room.draw_interval_sec,
+                },
+                server_now: snapshot.server_now ?? prev.server_now,
+              }
+            : prev
+        );
+        markDrawSynced();
+        console.log("[LiveRoom] fallback poll (draws-only, card pool cache warm)", {
+          serverDraws: snapshot.draws.length,
+          pendingRt: pending.length,
+          mergedDraws: mergedDraws.length,
+        });
+        return;
+      }
+
       const snapshot = await fetchLiveRoomSnapshot(roomId);
       const nextStatus = (snapshot.room.status || "").trim().toLowerCase();
       roomStatusRef.current = nextStatus;

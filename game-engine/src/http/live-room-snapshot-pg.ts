@@ -217,8 +217,57 @@ export function buildLiveRoomCards(
       player_id: ticket.player_user_id,
       player_name: displayName,
       card_number: ticket.card_no,
+      pool_card_id: ticket.pool_card_id,
       card: grid,
       is_my_card: ticket.player_user_id === currentUserId,
     };
   });
+}
+
+export type CardPoolVersionMeta = {
+  poolId: string;
+  commitHash: string;
+  prngVersion: string;
+  cardCount: number;
+};
+
+export async function loadCardPoolMetaForRoomFromPg(
+  roomId: string
+): Promise<CardPoolVersionMeta | null> {
+  if (!pgPool) return null;
+
+  try {
+    const result = await pgPool.query<{
+      pool_id: string;
+      commit_hash: string;
+      prng_version: string;
+      card_count: number;
+    }>(
+      `
+      select
+        cp.id::text as pool_id,
+        cp.commit_hash,
+        cp.prng_version,
+        cp.card_count
+      from public.rooms r
+      join public.card_pools cp on cp.id = r.pool_id
+      where r.id = $1::uuid
+      limit 1
+      `,
+      [roomId]
+    );
+
+    const row = result.rows[0];
+    if (!row) return null;
+
+    return {
+      poolId: row.pool_id,
+      commitHash: row.commit_hash,
+      prngVersion: row.prng_version,
+      cardCount: Number(row.card_count ?? 0),
+    };
+  } catch (err) {
+    console.error("[CardPoolCache] loadCardPoolMetaForRoomFromPg error:", err);
+    return null;
+  }
 }

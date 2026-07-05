@@ -14,6 +14,9 @@ import {
   joinOrCreateRoomViaEngine,
   mapJoinEngineError,
 } from "@/lib/gameEngineClient";
+import { ensureCardPoolCache } from "@/lib/cardPool/client";
+import { applyCardPoolCacheToSnapshot } from "@/lib/cardPool/resolve";
+import { isCardPoolCacheEnabled } from "@/lib/cardPool/config";
 import {
   RoomTemplatePayload,
   RoomTemplateDbRow,
@@ -708,11 +711,18 @@ export interface LiveRoomSnapshot {
   } | null;
   server_now?: string;
   draws: ProcessedDraw[];
+  card_pool?: {
+    poolId: string;
+    commitHash: string;
+    prngVersion: string;
+    cardCount: number;
+  } | null;
   cards: Array<{
     ticket_id: string;
     player_id: string | null;
     player_name: string;
     card_number: number | null;
+    pool_card_id?: string | null;
     card: (number | null)[][];
     is_my_card: boolean;
   }>;
@@ -722,18 +732,38 @@ export async function fetchLiveRoomSnapshot(
   roomId: string,
   options?: { scope?: "full" | "draws" }
 ): Promise<LiveRoomSnapshot> {
+  const drawsOnly = options?.scope === "draws";
+  let snapshot: LiveRoomSnapshot;
+
   if (isGameEngineEnabled()) {
     try {
-      const snapshot = await getLiveRoom(roomId, options?.scope);
-      return snapshot as LiveRoomSnapshot;
+      snapshot = (await getLiveRoom(roomId, options?.scope)) as LiveRoomSnapshot;
     } catch (error) {
       console.error("[LiveRoom] engine path failed, falling back to Vercel", error);
       console.info("[FALLBACK_PATH] live-room → Vercel /api/player/live-room");
+      snapshot = await fetchLiveRoomSnapshotFromVercel(roomId, options);
     }
   } else {
     console.info("[LEGACY_PATH] live-room → Vercel /api/player/live-room");
+    snapshot = await fetchLiveRoomSnapshotFromVercel(roomId, options);
   }
 
+  if (!isCardPoolCacheEnabled() || drawsOnly || !snapshot.card_pool) {
+    return snapshot;
+  }
+
+  const warmed = await ensureCardPoolCache(snapshot.card_pool);
+  if (!warmed) {
+    return snapshot;
+  }
+
+  return applyCardPoolCacheToSnapshot(snapshot, snapshot.card_pool);
+}
+
+async function fetchLiveRoomSnapshotFromVercel(
+  roomId: string,
+  options?: { scope?: "full" | "draws" }
+): Promise<LiveRoomSnapshot> {
   const search = new URLSearchParams();
   search.set("roomId", roomId);
   if (options?.scope === "draws") {

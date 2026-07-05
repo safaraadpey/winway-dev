@@ -10,6 +10,7 @@ import {
   loadLiveCardNumbersFromPg,
   loadLiveDrawsFromPg,
   loadLiveTicketsFromPg,
+  loadCardPoolMetaForRoomFromPg,
   logLiveRoomPgCompare,
   mapDrawRows,
   type LiveDrawRow,
@@ -51,9 +52,16 @@ export type LiveRoomResponse = {
     player_id: string | null;
     player_name: string;
     card_number: number | null;
+    pool_card_id: string | null;
     card: Array<Array<number | null>>;
     is_my_card: boolean;
   }>;
+  card_pool?: {
+    poolId: string;
+    commitHash: string;
+    prngVersion: string;
+    cardCount: number;
+  } | null;
 };
 
 export type LiveRoomDrawsOnlyResponse = {
@@ -95,6 +103,7 @@ export async function buildLiveRoomSnapshot(
         commission_rate,
         room_template_id,
         ding_per_number,
+        pool_id,
         meta
       `
     )
@@ -337,6 +346,27 @@ export async function buildLiveRoomSnapshot(
   const cardNumberMap = buildCardNumberMap(cardNumbers);
   const cards = buildLiveRoomCards(tickets, cardNumberMap, userMap, userId);
 
+  let cardPool: LiveRoomResponse["card_pool"] = null;
+  const pgCardPool = await loadCardPoolMetaForRoomFromPg(roomId);
+  if (pgCardPool) {
+    cardPool = pgCardPool;
+  } else if ((room as { pool_id?: string | null }).pool_id) {
+    const poolId = (room as { pool_id?: string | null }).pool_id as string;
+    const { data: poolRow } = await supabase
+      .from("card_pools")
+      .select("id, commit_hash, prng_version, card_count")
+      .eq("id", poolId)
+      .maybeSingle();
+    if (poolRow) {
+      cardPool = {
+        poolId: poolRow.id as string,
+        commitHash: poolRow.commit_hash as string,
+        prngVersion: poolRow.prng_version as string,
+        cardCount: Number(poolRow.card_count ?? 0),
+      };
+    }
+  }
+
   let tournament: LiveRoomResponse["tournament"] = null;
   const { data: roundRow } = await supabase
     .from("tournament_round_rooms")
@@ -380,5 +410,6 @@ export async function buildLiveRoomSnapshot(
     server_now: new Date().toISOString(),
     draws: mapDrawRows(draws),
     cards,
+    card_pool: cardPool,
   };
 }

@@ -10,6 +10,7 @@ import {
   type LiveDrawRow,
   type LiveTicketRow,
 } from "@/lib/liveRoomSnapshotPg";
+import { loadCardPoolMetaForRoomFromPg } from "@/lib/cardPool/cardPoolSnapshotPg";
 import { createServiceClient, getUserFromRequest } from "@/lib/supabaseServer";
 
 export const dynamic = "force-dynamic";
@@ -49,9 +50,16 @@ type LiveRoomResponse = {
     player_id: string | null;
     player_name: string;
     card_number: number | null;
+    pool_card_id: string | null;
     card: Array<Array<number | null>>;
     is_my_card: boolean;
   }>;
+  card_pool?: {
+    poolId: string;
+    commitHash: string;
+    prngVersion: string;
+    cardCount: number;
+  } | null;
 };
 
 export async function GET(request: Request) {
@@ -98,6 +106,7 @@ export async function GET(request: Request) {
         commission_rate,
         room_template_id,
         ding_per_number,
+        pool_id,
         meta
       `
       )
@@ -342,6 +351,27 @@ export async function GET(request: Request) {
     const cardNumberMap = buildCardNumberMap(cardNumbers);
     const cards = buildLiveRoomCards(tickets, cardNumberMap, userMap, user.id);
 
+    let cardPool: LiveRoomResponse["card_pool"] = null;
+    const pgCardPool = await loadCardPoolMetaForRoomFromPg(roomId);
+    if (pgCardPool) {
+      cardPool = pgCardPool;
+    } else if ((room as { pool_id?: string | null }).pool_id) {
+      const poolId = (room as { pool_id?: string | null }).pool_id as string;
+      const { data: poolRow } = await supabase
+        .from("card_pools")
+        .select("id, commit_hash, prng_version, card_count")
+        .eq("id", poolId)
+        .maybeSingle();
+      if (poolRow) {
+        cardPool = {
+          poolId: poolRow.id as string,
+          commitHash: poolRow.commit_hash as string,
+          prngVersion: poolRow.prng_version as string,
+          cardCount: Number(poolRow.card_count ?? 0),
+        };
+      }
+    }
+
     let tournament: LiveRoomResponse["tournament"] = null;
     const { data: roundRow } = await supabase
       .from("tournament_round_rooms")
@@ -385,6 +415,7 @@ export async function GET(request: Request) {
       server_now: new Date().toISOString(),
       draws: mapDrawRows(draws),
       cards,
+      card_pool: cardPool,
     };
 
     return NextResponse.json(response);
