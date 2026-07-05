@@ -43,12 +43,12 @@ export interface LobbyRoomCardProps {
   players: number;
   waitingPlayers?: number;
   playingPlayers?: number;
-  templateId?: string;
+  templateId?: string | null;
   entryRoomId?: string | null;
   /** ترتیب کارت در لیست لابی (۰ = اولین، برای انتخاب تصویر پس‌زمینه) */
   listIndex?: number;
   variant?: LobbyRoomCardVariant; // حالت نمایش: minimal (فقط عکس) یا expanded (همه اطلاعات)
-  onClick?: (price: number, templateId?: string, entryRoomId?: string | null) => void;
+  onClick?: (price: number, templateId?: string | null, entryRoomId?: string | null) => void;
 }
 
 /**

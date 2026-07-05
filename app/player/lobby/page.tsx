@@ -22,7 +22,7 @@ interface RoomPriceGroup {
   players: number;
   waitingPlayers: number;
   playingPlayers: number;
-  templateId?: string;
+  templateId?: string | null;
   entryRoomId?: string | null;
 }
 
@@ -252,7 +252,7 @@ export default function LobbyPage() {
   // تابع برای کلیک روی روم
   const handleRoomClick = async (
     price: number,
-    templateId?: string,
+    templateId?: string | null,
     entryRoomId?: string | null
   ) => {
     if (entryRoomId) {
