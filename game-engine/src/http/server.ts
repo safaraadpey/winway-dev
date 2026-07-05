@@ -15,6 +15,7 @@ import { bearerToken, verifyUser } from "./auth.js";
 import { applyCors } from "./cors.js";
 import {
   getGameRoomView,
+  getLiveRoom,
   getLobby,
   getRoomState,
   joinOrCreateRoom,
@@ -116,6 +117,19 @@ export function startApiServer(port: number, ctx: ApiServerContext): http.Server
             roomId: url.searchParams.get("roomId"),
             templateId: url.searchParams.get("templateId"),
           })
+        );
+      }
+
+      if (method === "GET" && path === "/v1/live-room") {
+        const roomId = url.searchParams.get("roomId");
+        const scopeParam = url.searchParams.get("scope");
+        const scope = scopeParam === "draws" ? "draws" : "full";
+        if (!roomId) {
+          return send(res, { status: 400, body: { error: "roomId is required." } });
+        }
+        return send(
+          res,
+          await getLiveRoom(supabase, user, { roomId, scope })
         );
       }
 

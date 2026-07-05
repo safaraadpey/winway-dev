@@ -25,6 +25,14 @@ NEXT_PUBLIC_USE_GAME_ENGINE=false
 NEXT_PUBLIC_GAME_ENGINE_URL=http://localhost:8080
 ```
 
+Railway game-engine (required when flag is on for live-room PG parity):
+
+```env
+GAME_ENGINE_API=true
+DATABASE_URL=postgresql://...
+GAME_ENGINE_CORS_ORIGINS=https://dingmoney.org,http://localhost:3000
+```
+
 4. در Supabase SQL Editor، فایل `supabase-schema.sql` را اجرا کنید
 
 برای راهنمای کامل، فایل `supabase-setup.md` را مطالعه کنید.

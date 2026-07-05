@@ -15,6 +15,7 @@ import type { SupabaseAdmin } from "../db/supabase-admin.js";
 import type { AuthedUser } from "./auth.js";
 import { buildGameRoomView } from "./gameroom-view.js";
 import { buildLobbySnapshot } from "./lobby-snapshot.js";
+import { buildLiveRoomSnapshot } from "./live-room-view.js";
 
 export interface CommandResult {
   status: number;
@@ -110,6 +111,43 @@ export async function getLobby(
     return ok(snapshot);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to load lobby snapshot.";
+    return bad(message, 500);
+  }
+}
+
+/**
+ * GET /v1/live-room — live room snapshot matching /api/player/live-room.
+ */
+export async function getLiveRoom(
+  supabase: SupabaseAdmin,
+  user: AuthedUser,
+  params: { roomId: string; scope?: "full" | "draws" }
+): Promise<CommandResult> {
+  if (!params.roomId) {
+    return bad("roomId is required.");
+  }
+
+  const scope = params.scope === "draws" ? "draws" : "full";
+
+  try {
+    const snapshot = await buildLiveRoomSnapshot(
+      supabase,
+      user.id,
+      params.roomId,
+      scope
+    );
+
+    if (!snapshot) {
+      return {
+        status: 404,
+        body: { error: "room_not_found", message: "Room not found." },
+      };
+    }
+
+    return ok(snapshot);
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Failed to load live room state.";
     return bad(message, 500);
   }
 }

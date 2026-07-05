@@ -8,6 +8,7 @@ import type { ProcessedDraw } from "@/lib/draw-order";
 import { supabase } from "@/lib/supabaseClient";
 import {
   getGameRoomViewByTemplate,
+  getLiveRoom,
   getRoomState as getRoomStateFromEngine,
   isGameEngineEnabled,
   joinOrCreateRoomViaEngine,
@@ -721,6 +722,18 @@ export async function fetchLiveRoomSnapshot(
   roomId: string,
   options?: { scope?: "full" | "draws" }
 ): Promise<LiveRoomSnapshot> {
+  if (isGameEngineEnabled()) {
+    try {
+      const snapshot = await getLiveRoom(roomId, options?.scope);
+      return snapshot as LiveRoomSnapshot;
+    } catch (error) {
+      console.error("[LiveRoom] engine path failed, falling back to Vercel", error);
+      console.info("[FALLBACK_PATH] live-room → Vercel /api/player/live-room");
+    }
+  } else {
+    console.info("[LEGACY_PATH] live-room → Vercel /api/player/live-room");
+  }
+
   const search = new URLSearchParams();
   search.set("roomId", roomId);
   if (options?.scope === "draws") {

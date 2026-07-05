@@ -1,7 +1,7 @@
 /**
  * Browser client for the Railway Game Engine command API (Phase 1).
  *
- * Hot paths: lobby snapshot, gameroom view, join room.
+ * Hot paths: lobby snapshot, gameroom view, live room snapshot, join room.
  * Falls back to legacy Supabase/Vercel when NEXT_PUBLIC_USE_GAME_ENGINE !== "true".
  */
 
@@ -70,6 +70,49 @@ export type LobbySnapshotResponse = {
   onlineCount: { onlinePlayers: number };
 };
 
+/** Matches /api/player/live-room and LiveRoomSnapshot in services/rooms.ts */
+export type LiveRoomEngineResponse = {
+  room: {
+    id: string;
+    status: string | null;
+    room_code?: string | null;
+    room_seed_hash?: string | null;
+    card_price?: number;
+    currency?: string;
+    min_players?: number | null;
+    max_cards_per_player?: number | null;
+    started_at?: string | null;
+    next_draw_at?: string | null;
+    line_reward_percentage?: number;
+    full_reward_percentage?: number;
+    commission_rate?: number;
+    ding_per_number?: number;
+    draw_interval_sec?: number;
+  };
+  tournament?: {
+    id: string;
+    title: string | null;
+    round_no: number | null;
+  } | null;
+  server_now?: string;
+  draws: Array<{
+    id: string;
+    number: number;
+    created_at: string;
+    processed_at: string;
+  }>;
+  cards?: Array<{
+    ticket_id: string;
+    player_id: string | null;
+    player_name: string;
+    card_number: number | null;
+    card: (number | null)[][];
+    is_my_card: boolean;
+  }>;
+};
+
+const LIVE_ROOM_ENGINE_TIMEOUT_MS = 12_000;
+
 export class GameEngineApiError extends Error {
   constructor(
     message: string,
@@ -95,7 +138,7 @@ async function getAccessToken(): Promise<string> {
 
 async function callGameEngine<T>(
   path: string,
-  options: { method?: "GET" | "POST"; body?: unknown } = {}
+  options: { method?: "GET" | "POST"; body?: unknown; timeoutMs?: number } = {}
 ): Promise<T> {
   const baseUrl = getGameEngineBaseUrl();
   if (!baseUrl) {
@@ -104,33 +147,60 @@ async function callGameEngine<T>(
 
   const token = await getAccessToken();
   const method = options.method ?? "GET";
+  const timeoutMs = options.timeoutMs ?? 0;
 
-  const res = await fetch(`${baseUrl}${path}`, {
-    method,
-    cache: "no-store",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-    },
-    ...(options.body ? { body: JSON.stringify(options.body) } : {}),
-  });
+  const controller = timeoutMs > 0 ? new AbortController() : null;
+  const timeoutId =
+    controller && timeoutMs > 0
+      ? setTimeout(() => controller.abort(), timeoutMs)
+      : null;
 
-  let payload: unknown = null;
   try {
-    payload = await res.json();
-  } catch {
-    payload = null;
-  }
+    const res = await fetch(`${baseUrl}${path}`, {
+      method,
+      cache: "no-store",
+      signal: controller?.signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+      },
+      ...(options.body ? { body: JSON.stringify(options.body) } : {}),
+    });
 
-  if (!res.ok) {
-    const message =
-      (payload as { error?: string; message?: string } | null)?.error ??
-      (payload as { message?: string } | null)?.message ??
-      `Game Engine request failed (${res.status})`;
-    throw new GameEngineApiError(message, res.status);
-  }
+    let payload: unknown = null;
+    try {
+      payload = await res.json();
+    } catch {
+      payload = null;
+    }
 
-  return payload as T;
+    if (!res.ok) {
+      const message =
+        (payload as { error?: string; message?: string } | null)?.error ??
+        (payload as { message?: string } | null)?.message ??
+        `Game Engine request failed (${res.status})`;
+      throw new GameEngineApiError(message, res.status);
+    }
+
+    return payload as T;
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new GameEngineApiError("Game Engine request timed out", 408);
+    }
+    throw err;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
+export function isValidLiveRoomPayload(
+  payload: unknown
+): payload is LiveRoomEngineResponse {
+  if (!payload || typeof payload !== "object") return false;
+  const p = payload as LiveRoomEngineResponse;
+  if (!p.room || typeof p.room.id !== "string") return false;
+  if (!Array.isArray(p.draws)) return false;
+  return true;
 }
 
 function normalizeJoinResult(data: unknown): JoinOrCreateResult {
@@ -218,6 +288,33 @@ export async function getGameRoomViewByTemplate(
     templateId,
   });
   return callGameEngine<GameRoomView>(`/v1/gameroom?${search.toString()}`);
+}
+
+/** Live room snapshot — GET /v1/live-room */
+export async function getLiveRoom(
+  roomId: string,
+  scope?: "full" | "draws"
+): Promise<LiveRoomEngineResponse> {
+  const search = new URLSearchParams({ roomId });
+  if (scope === "draws") {
+    search.set("scope", "draws");
+  }
+
+  console.info("[ENGINE_PATH] live-room → Game Engine /v1/live-room", {
+    roomId,
+    scope: scope ?? "full",
+  });
+
+  const payload = await callGameEngine<unknown>(
+    `/v1/live-room?${search.toString()}`,
+    { timeoutMs: LIVE_ROOM_ENGINE_TIMEOUT_MS }
+  );
+
+  if (!isValidLiveRoomPayload(payload)) {
+    throw new GameEngineApiError("Invalid live-room payload from Game Engine", 502);
+  }
+
+  return payload;
 }
 
 /** Join or create room — POST /v1/rooms/join */

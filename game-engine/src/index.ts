@@ -98,6 +98,8 @@ async function main(): Promise<void> {
     runtime: config.runtime,
     redis: redis ? "enabled" : "disabled",
     schedulerEnabled: config.schedulerEnabled,
+    databaseUrl: process.env.DATABASE_URL?.trim() ? "configured" : "missing",
+    apiEnabled: config.apiEnabled,
   });
 
   if (config.httpPort > 0) {
