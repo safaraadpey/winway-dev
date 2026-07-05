@@ -116,7 +116,16 @@ export async function POST(request: NextRequest) {
 
     await ensureRuntimeFlagsRow(supabase);
 
-    const updatePayload = locked
+    type RuntimeFlagsUpsert = {
+      id: boolean;
+      global_registration_locked: boolean;
+      global_registration_locked_at: string | null;
+      global_registration_locked_by: string | null;
+      global_registration_lock_reason: string | null;
+      updated_at: string;
+    };
+
+    const updatePayload: RuntimeFlagsUpsert = locked
       ? {
           id: true,
           global_registration_locked: true,
