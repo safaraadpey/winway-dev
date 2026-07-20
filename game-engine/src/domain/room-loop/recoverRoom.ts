@@ -59,8 +59,13 @@ export async function recoverRoom(
       },
       skipExistingCheck: true,
       actorTiming: true,
+      leaseFence: actor.leaseFence,
     }
   );
+
+  if (outcome === "fenced") {
+    return "requeue";
+  }
 
   if (outcome === "done") {
     actor.clearNeedsRecovery();

@@ -91,6 +91,7 @@ export async function runOneDrawCycle(
     ownerId: actor.ownerId,
     drawIntervalSec: intervalSec,
     actorDueAtIso: room.next_draw_at,
+    leaseEpoch: actor.leaseFence.leaseEpoch,
   });
 
   switch (insertResult.outcome) {
@@ -159,8 +160,13 @@ export async function runOneDrawCycle(
       },
       skipExistingCheck: true,
       actorTiming: true,
+      leaseFence: actor.leaseFence,
     }
   );
+
+  if (result === "fenced") {
+    return { kind: "not_owner" };
+  }
 
   // 7. Schedule the next ball from cached next_draw_at (overlaps interval with work).
   if (result === "done") {

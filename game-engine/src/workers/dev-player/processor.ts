@@ -3,7 +3,7 @@ import { processScheduleBatch } from "../../domain/dev-players/index.js";
 import { DEFAULT_PROCESSING_STUCK_TIMEOUT_SECONDS } from "../../domain/dev-players/requeueStuckProcessingSchedules.js";
 import { DevPlayerRepo } from "../../repositories/devPlayerRepo.js";
 import { acquireLeaderLock, releaseLeaderLock } from "../../redis/leaderLock.js";
-import { redisKeys } from "../../redis/keys.js";
+import { redisKeysV2 } from "../../redis/keysV2.js";
 import type { WorkerContext } from "../context.js";
 
 const MIN_TICK_SECONDS = 5;
@@ -17,7 +17,7 @@ export function startDevPlayerProcessor(ctx: WorkerContext): () => void {
   const { config, log, redis } = ctx;
   const repo = new DevPlayerRepo(ctx.supabase);
   const lockToken = randomUUID();
-  const lockKey = redisKeys.devPlayerProcessorLeader();
+  const lockKey = redisKeysV2.lockWorkerDevPlayerProcessor();
   const worker = "dev-player-processor";
   const redisLockDegraded = { value: false };
 
@@ -61,6 +61,8 @@ export function startDevPlayerProcessor(ctx: WorkerContext): () => void {
         worker,
         log,
         degraded: redisLockDegraded,
+        coordinationStrict: config.coordinationStrict,
+        engineReplicaCount: config.engineReplicaCount,
       });
       if (!lock.proceed) return;
       lockHeld = lock.lockHeld;

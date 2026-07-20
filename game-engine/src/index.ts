@@ -7,6 +7,8 @@
 import "dotenv/config";
 
 import { loadConfig, type EngineRole } from "./config/env.js";
+import { EngineCoordination } from "./coordination/engineCoordination.js";
+import { logStartupDeployGate } from "./coordination/startupGate.js";
 import { createSupabaseAdmin } from "./db/supabase-admin.js";
 import { startHealthServer } from "./health/server.js";
 import { startApiServer } from "./http/server.js";
@@ -16,11 +18,13 @@ import {
   createRedisConnection,
   type RedisHandle,
 } from "./redis/client.js";
+import { createEngineRegistry } from "./redis/engineRegistry.js";
 import { reapStaleDrawJobs } from "./domain/draw/reapStaleJobs.js";
 import { executesBusinessLogic } from "./runtime.js";
 import { getGlobalCardRegistry } from "./core/card-registry/index.js";
 import { GameRepo } from "./repositories/index.js";
 import { RoomStateManager } from "./state/index.js";
+import { createEngineIdentity } from "./runtime/engineIdentity.js";
 import { startDrawProcessor } from "./workers/draw-processor/index.js";
 import { startRoomLoop } from "./workers/room-loop/index.js";
 import { startRoomScheduler } from "./workers/room-scheduler/index.js";
@@ -80,6 +84,7 @@ function startScheduledWorkers(
 async function main(): Promise<void> {
   const config = loadConfig();
   const log = createLogger(config.logLevel);
+  const identity = createEngineIdentity(config);
   const supabase = createSupabaseAdmin(config);
 
   let redisHandle: RedisHandle | null = createRedisConnection(config, log);
@@ -93,21 +98,49 @@ async function main(): Promise<void> {
     }
   }
 
+  logStartupDeployGate({ config, redis, log });
+
+  const registry = createEngineRegistry({
+    redis,
+    identity,
+    config,
+    log,
+    roles: [...config.roles],
+  });
+  const coordination = new EngineCoordination({
+    config,
+    log,
+    registry,
+  });
+
   log.info("game-engine starting", {
+    engineId: identity.engineId,
     roles: [...config.roles],
     runtime: config.runtime,
     redis: redis ? "enabled" : "disabled",
     schedulerEnabled: config.schedulerEnabled,
     databaseUrl: process.env.DATABASE_URL?.trim() ? "configured" : "missing",
     apiEnabled: config.apiEnabled,
+    coordinationStrict: config.coordinationStrict,
+    engineReplicaCount: config.engineReplicaCount,
   });
+  const pingRedis = redis ? () => redis!.ping() : undefined;
+  const readiness = async () => {
+    const snap = coordination.snapshotReadiness({ config, pingRedis: pingRedis ?? null });
+    if (pingRedis) {
+      snap.redisOk = await pingRedis();
+    }
+    snap.ok =
+      !snap.draining &&
+      (!snap.redisRequired || snap.redisOk === true);
+    return snap;
+  };
 
   if (config.httpPort > 0) {
-    const pingRedis = redis ? () => redis!.ping() : undefined;
     if (config.apiEnabled) {
       startApiServer(config.httpPort, { supabase, log, pingRedis });
     } else {
-      startHealthServer(config.httpPort, log, { pingRedis });
+      startHealthServer(config.httpPort, log, { pingRedis, readiness });
     }
   }
 
@@ -126,7 +159,15 @@ async function main(): Promise<void> {
       roomState,
     });
   }
-  const workerCtx = { supabase, config, log, redis, roomState };
+  const workerCtx = {
+    supabase,
+    config,
+    log,
+    redis,
+    roomState,
+    identity,
+    coordination,
+  };
 
   startScheduledWorkers(config, workerCtx, stops);
 
@@ -140,13 +181,19 @@ async function main(): Promise<void> {
     }
   }
 
+  let shuttingDown = false;
   const shutdown = (): void => {
-    log.info("shutdown signal received");
+    if (shuttingDown) return;
+    shuttingDown = true;
+    log.info("[HardExit] shutdown signal received");
     for (const stop of stops) stop();
     void (async () => {
+      await coordination.awaitGracefulDrain(config.engineDrainTimeoutMs, log);
       if (redis) await redis.close();
+      log.info("[Coordination] shutdown complete");
       process.exit(0);
     })();
+    setTimeout(() => process.exit(0), config.engineDrainTimeoutMs + 750);
   };
 
   process.on("SIGINT", shutdown);

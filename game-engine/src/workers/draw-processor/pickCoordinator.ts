@@ -17,7 +17,7 @@ import {
 } from "../../metrics/drawPerformance.js";
 import type { Logger } from "../../metrics/logger.js";
 import { GameRepo } from "../../repositories/index.js";
-import { redisKeys } from "../../redis/keys.js";
+import { redisKeysV2 } from "../../redis/keysV2.js";
 import {
   acquireLeaderLockWithTimeout,
   releaseLeaderLock,
@@ -69,6 +69,8 @@ export interface PickCoordinatorOptions {
   maxRoundsPerPoll: number;
   maxRoundsPerWake: number;
   pickDiagnostics: boolean;
+  coordinationStrict: boolean;
+  engineReplicaCount: number;
   onPollCycleComplete?: (result: PickPollCycleResult) => void;
 }
 
@@ -79,7 +81,7 @@ export interface PickCoordinator {
 
 export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordinator {
   const lockToken = randomUUID();
-  const lockKey = redisKeys.drawProcessorLeader();
+  const lockKey = redisKeysV2.lockWorkerDrawPicker();
   const worker = "draw-processor";
 
   let stopped = false;
@@ -243,6 +245,8 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
       worker,
       log: opts.log,
       degraded: redisLockDegraded,
+      coordinationStrict: opts.coordinationStrict,
+      engineReplicaCount: opts.engineReplicaCount,
       timeoutMs: LOCK_TIMEOUT_MS,
     });
 

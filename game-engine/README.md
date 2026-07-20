@@ -29,9 +29,11 @@ REDIS_URL=rediss://default:...@....upstash.io:6379
 ```
 
 بدون `REDIS_URL` / `UPSTASH_REDIS_REST_*` هم engine بالا می‌آید (تک‌replica / local dev).  
-اگر Redis configure شده ولی ping یا lock fail شود، engine **degrade** می‌کند و بدون lock ادامه می‌دهد (همه workerها از جمله dev-player).
+با `COORDINATION_STRICT=true` یا `ENGINE_REPLICA_COUNT>1`، workerهای global بدون Redis tick نمی‌زنند (fail-closed).
 
-`GET /health` → `{ ok, redis: "up" | "down" | "disabled" }`
+Runbook: [docs/runbooks/horizontal-scaling-deploy-gate.md](../docs/runbooks/horizontal-scaling-deploy-gate.md)
+
+`GET /health` → liveness · `GET /ready` → coordination-aware readiness
 
 
 ```powershell

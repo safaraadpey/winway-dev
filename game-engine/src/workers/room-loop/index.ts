@@ -17,7 +17,7 @@ import type { WorkerContext } from "../context.js";
 import { RoomLoopManager } from "./roomLoopManager.js";
 
 export function startRoomLoop(ctx: WorkerContext): () => void {
-  const { supabase, config, log, redis } = ctx;
+  const { supabase, config, log, redis, identity, coordination } = ctx;
 
   if (!drivesLoops(config.runtime)) {
     log.info("room-loop idle (GAME_RUNTIME=legacy_db); cron owns rooms");
@@ -43,9 +43,14 @@ export function startRoomLoop(ctx: WorkerContext): () => void {
     config,
     redis,
     stateManager: ctx.roomState,
+    identity,
+    engineRegistry: coordination.getRegistry(),
     getCardRegistry: () => cardRegistry,
     actorCycle: executesBusinessLogic(config.runtime) ? runOneDrawCycle : undefined,
+    isDraining: () => coordination.isDraining(),
   });
+
+  coordination.registerRoomLoopDrain(() => manager.waitForDrain());
 
   manager.start();
 

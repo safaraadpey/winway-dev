@@ -3,6 +3,8 @@ import type { SupabaseAdmin } from "../db/supabase-admin.js";
 import type { Logger } from "../metrics/logger.js";
 import type { GameRedis } from "../redis/types.js";
 import type { RoomStateManager } from "../state/room-state.manager.js";
+import type { EngineIdentity } from "../runtime/engineIdentity.js";
+import type { EngineCoordination } from "../coordination/engineCoordination.js";
 
 export interface WorkerContext {
   supabase: SupabaseAdmin;
@@ -12,4 +14,6 @@ export interface WorkerContext {
   redis: GameRedis | null;
   /** In-memory room runtime (engine mode). */
   roomState: RoomStateManager;
+  identity: EngineIdentity;
+  coordination: EngineCoordination;
 }

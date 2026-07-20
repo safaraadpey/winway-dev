@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { manageWaitingRooms } from "../../domain/room/index.js";
 import { repairUnsettledFinishedRooms } from "../../domain/room/janitorRepair.js";
 import { GameRepo } from "../../repositories/index.js";
-import { redisKeys } from "../../redis/keys.js";
+import { redisKeysV2 } from "../../redis/keysV2.js";
 import { acquireLeaderLock, releaseLeaderLock } from "../../redis/leaderLock.js";
 import { executesBusinessLogic, isIdle } from "../../runtime.js";
 import type { WorkerContext } from "../context.js";
@@ -21,7 +21,7 @@ export function startRoomScheduler(ctx: WorkerContext): () => void {
   const { supabase, config, log, redis } = ctx;
   const repo = new GameRepo(supabase);
   const lockToken = randomUUID();
-  const lockKey = redisKeys.schedulerLeader();
+  const lockKey = redisKeysV2.lockWorkerScheduler();
 
   let stopped = false;
   let inFlight = false;
@@ -65,11 +65,13 @@ export function startRoomScheduler(ctx: WorkerContext): () => void {
       const lock = await acquireLeaderLock({
         redis,
         lockKey,
-        ttlSec: config.drawProcessorLockTtlSec,
+        ttlSec: config.schedulerLockTtlSec,
         token: lockToken,
         worker,
         log,
         degraded: redisLockDegraded,
+        coordinationStrict: config.coordinationStrict,
+        engineReplicaCount: config.engineReplicaCount,
       });
       if (!lock.proceed) return;
       lockHeld = lock.lockHeld;

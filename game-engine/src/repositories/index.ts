@@ -20,6 +20,7 @@ import type {
   OwnerInsertResult,
   ResultRow,
   RoomRow,
+  RoomClaimResult,
   TicketRow,
 } from "./types.js";
 
@@ -225,36 +226,61 @@ export class GameRepo {
     roomId: string,
     ownerId: string,
     leaseSeconds: number
-  ): Promise<boolean> {
+  ): Promise<RoomClaimResult> {
     const { data, error } = await this.db.rpc("rpc_claim_game_room", {
       p_room_id: roomId,
       p_owner_id: ownerId,
       p_lease_seconds: leaseSeconds,
     });
     if (error) fail("rpc_claim_game_room", error.message);
-    return data === true;
+    if (data === true) {
+      return { claimed: true, leaseEpoch: null };
+    }
+    if (data === false) {
+      return { claimed: false, leaseEpoch: null };
+    }
+    const payload =
+      typeof data === "string"
+        ? (JSON.parse(data) as Record<string, unknown>)
+        : (data as Record<string, unknown> | null);
+    const claimed = payload?.claimed === true;
+    const rawEpoch = payload?.lease_epoch;
+    const leaseEpoch =
+      rawEpoch == null
+        ? null
+        : typeof rawEpoch === "number"
+          ? rawEpoch
+          : Number(rawEpoch);
+    return { claimed, leaseEpoch: Number.isFinite(leaseEpoch) ? leaseEpoch : null };
   }
 
   /** Renew an owned lease (heartbeat). Returns false if ownership was lost. */
   async renewLease(
     roomId: string,
     ownerId: string,
-    leaseSeconds: number
+    leaseSeconds: number,
+    leaseEpoch?: number | null
   ): Promise<boolean> {
     const { data, error } = await this.db.rpc("rpc_renew_game_room_lease", {
       p_room_id: roomId,
       p_owner_id: ownerId,
       p_lease_seconds: leaseSeconds,
+      p_lease_epoch: leaseEpoch ?? null,
     });
     if (error) fail("rpc_renew_game_room_lease", error.message);
     return data === true;
   }
 
   /** Release an owned lease (graceful handoff). */
-  async releaseRoom(roomId: string, ownerId: string): Promise<boolean> {
+  async releaseRoom(
+    roomId: string,
+    ownerId: string,
+    leaseEpoch?: number | null
+  ): Promise<boolean> {
     const { data, error } = await this.db.rpc("rpc_release_game_room", {
       p_room_id: roomId,
       p_owner_id: ownerId,
+      p_lease_epoch: leaseEpoch ?? null,
     });
     if (error) fail("rpc_release_game_room", error.message);
     return data === true;
@@ -407,6 +433,7 @@ export class GameRepo {
     ownerId: string;
     drawIntervalSec: number;
     actorDueAtIso?: string | null;
+    leaseEpoch?: number | null;
   }): Promise<OwnerInsertResult> {
     const { data, error } = await this.db.rpc(
       "rpc_insert_draw_if_ready_owner_guard",
@@ -417,6 +444,7 @@ export class GameRepo {
         p_owner_id: args.ownerId,
         p_draw_interval_sec: args.drawIntervalSec,
         p_actor_due_at: args.actorDueAtIso ?? null,
+        p_lease_epoch: args.leaseEpoch ?? null,
       }
     );
     if (error) fail("rpc_insert_draw_if_ready_owner_guard", error.message);
@@ -738,6 +766,8 @@ export class GameRepo {
     handlerStartedAt?: string | null;
     actorEvaluateStartedAt?: string | null;
     actorFinalizeStartedAt?: string | null;
+    ownerId?: string | null;
+    leaseEpoch?: number | null;
   }): Promise<number> {
     const { data, error } = await this.db.rpc("rpc_finalize_engine_draw_job", {
       p_job_id: args.jobId,
@@ -755,6 +785,8 @@ export class GameRepo {
       p_handler_started_at: args.handlerStartedAt ?? null,
       p_actor_evaluate_started_at: args.actorEvaluateStartedAt ?? null,
       p_actor_finalize_started_at: args.actorFinalizeStartedAt ?? null,
+      p_owner_id: args.ownerId ?? null,
+      p_lease_epoch: args.leaseEpoch ?? null,
     });
     if (error) fail("rpc_finalize_engine_draw_job", error.message);
     return typeof data === "number" ? data : Number(data ?? 0);

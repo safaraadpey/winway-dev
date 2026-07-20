@@ -15,7 +15,7 @@ import { deferDrawJobToQueue, shouldDeferDrawJob } from "./drawJobOrdering.js";
 import { applyMarksAndEvaluateWithState } from "./evaluateDraw.js";
 import type { DrawJob } from "./types.js";
 
-export type EngineJobOutcome = "done" | "requeue" | "dead-letter";
+export type EngineJobOutcome = "done" | "requeue" | "dead-letter" | "fenced";
 
 export interface ProcessEngineDrawJobOptions {
   maxAttempts: number;
@@ -25,6 +25,8 @@ export interface ProcessEngineDrawJobOptions {
   skipExistingCheck?: boolean;
   /** Stamp actor_evaluate/finalize columns on finalize RPC. */
   actorTiming?: boolean;
+  /** Room-loop ownership fence for actor finalization. */
+  leaseFence?: { ownerId: string; leaseEpoch: number } | null;
 }
 
 export async function processEngineDrawJob(
@@ -121,7 +123,19 @@ export async function processEngineDrawJob(
         handlerStartedAt,
         actorEvaluateStartedAt,
         actorFinalizeStartedAt,
+        ownerId: opts.leaseFence?.ownerId ?? null,
+        leaseEpoch: opts.leaseFence?.leaseEpoch ?? null,
       });
+      if (credited === -1) {
+        log.warn("[Room] finalize fenced — stale lease epoch or owner", {
+          roomId: job.room_id,
+          drawNumber: job.draw_number,
+          ownerId: opts.leaseFence?.ownerId,
+          leaseEpoch: opts.leaseFence?.leaseEpoch,
+        });
+        stateManager.evict(job.room_id);
+        return -1;
+      }
       if (credited > 0) {
         log.info("ding aggregated (engine)", {
           roomId: job.room_id,
@@ -131,6 +145,10 @@ export async function processEngineDrawJob(
       }
     });
     breakdown.rpc_finalize_engine_draw_job = finalizeStep.timing;
+
+    if (finalizeStep.result === -1) {
+      return "fenced";
+    }
 
     let settled = evalResult.settled;
     const hasUnsettledFull =

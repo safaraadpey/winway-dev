@@ -25,6 +25,14 @@ export interface RoomRow {
   full_reward_percentage: number | null;
   ding_per_number: number | null;
   meta: Record<string, unknown> | null;
+  engine_owner_id?: string | null;
+  engine_lease_until?: string | null;
+  engine_lease_epoch?: number | null;
+}
+
+export interface RoomClaimResult {
+  claimed: boolean;
+  leaseEpoch: number | null;
 }
 
 export type OwnerInsertOutcome =

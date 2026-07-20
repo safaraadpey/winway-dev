@@ -50,6 +50,26 @@ function createIoRedis(config: EngineConfig, log: Logger): RedisHandle {
       `;
       await client.eval(script, 1, key, token);
     },
+    async renewLock(key, token, ttlSeconds) {
+      const script = `
+        if redis.call("get", KEYS[1]) == ARGV[1] then
+          return redis.call("expire", KEYS[1], ARGV[2])
+        else
+          return 0
+        end
+      `;
+      const result = await client.eval(script, 1, key, token, String(ttlSeconds));
+      return result === 1;
+    },
+    async setJsonEx(key, json, ttlSeconds) {
+      await client.set(key, json, "EX", ttlSeconds);
+    },
+    async deleteKey(key) {
+      await client.del(key);
+    },
+    async evalScript(script, keys, args) {
+      return client.eval(script, keys.length, ...keys, ...args);
+    },
     async close() {
       await client.quit();
     },
@@ -93,6 +113,26 @@ function createUpstashRest(config: EngineConfig, log: Logger): RedisHandle {
         end
       `;
       await client.eval(script, [key], [token]);
+    },
+    async renewLock(key, token, ttlSeconds) {
+      const script = `
+        if redis.call("get", KEYS[1]) == ARGV[1] then
+          return redis.call("expire", KEYS[1], ARGV[2])
+        else
+          return 0
+        end
+      `;
+      const result = await client.eval(script, [key], [token, String(ttlSeconds)]);
+      return result === 1;
+    },
+    async setJsonEx(key, json, ttlSeconds) {
+      await client.set(key, json, { ex: ttlSeconds });
+    },
+    async deleteKey(key) {
+      await client.del(key);
+    },
+    async evalScript(script, keys, args) {
+      return client.eval(script, keys, args);
     },
     async close() {},
   };

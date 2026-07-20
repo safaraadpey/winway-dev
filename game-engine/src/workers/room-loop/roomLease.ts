@@ -6,17 +6,19 @@
  * insert RPC. Discovery + claim happens in RoomLoopManager; renew/release here.
  */
 import type { GameRepo } from "../../repositories/index.js";
+import type { RoomClaimResult } from "../../repositories/types.js";
 
 export interface LeaseConfig {
   ownerId: string;
   leaseSeconds: number;
+  leaseEpoch?: number | null;
 }
 
 export async function claimRoomLease(
   repo: GameRepo,
   roomId: string,
-  cfg: LeaseConfig
-): Promise<boolean> {
+  cfg: Pick<LeaseConfig, "ownerId" | "leaseSeconds">
+): Promise<RoomClaimResult> {
   return repo.claimRoom(roomId, cfg.ownerId, cfg.leaseSeconds);
 }
 
@@ -25,7 +27,12 @@ export async function renewRoomLease(
   roomId: string,
   cfg: LeaseConfig
 ): Promise<boolean> {
-  return repo.renewLease(roomId, cfg.ownerId, cfg.leaseSeconds);
+  return repo.renewLease(
+    roomId,
+    cfg.ownerId,
+    cfg.leaseSeconds,
+    cfg.leaseEpoch ?? null
+  );
 }
 
 export async function releaseRoomLease(
@@ -33,7 +40,7 @@ export async function releaseRoomLease(
   roomId: string,
   cfg: LeaseConfig
 ): Promise<boolean> {
-  return repo.releaseRoom(roomId, cfg.ownerId);
+  return repo.releaseRoom(roomId, cfg.ownerId, cfg.leaseEpoch ?? null);
 }
 
 /**

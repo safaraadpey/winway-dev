@@ -1,4 +1,5 @@
 import type { Logger } from "../metrics/logger.js";
+import { shouldFailClosedWithoutRedis } from "../coordination/rolePolicy.js";
 import type { GameRedis } from "./types.js";
 import { releaseLock, tryAcquireLock } from "./locks.js";
 
@@ -32,8 +33,18 @@ export async function acquireLeaderLock(args: {
   worker: string;
   log: Logger;
   degraded: { value: boolean };
+  coordinationStrict?: boolean;
+  engineReplicaCount?: number;
 }): Promise<LeaderLockAcquireResult> {
+  const failClosed = shouldFailClosedWithoutRedis({
+    coordinationStrict: args.coordinationStrict === true,
+    engineReplicaCount: args.engineReplicaCount ?? 1,
+  });
+
   if (!args.redis) {
+    if (failClosed) {
+      return { proceed: false, lockHeld: false };
+    }
     return { proceed: true, lockHeld: false };
   }
 
@@ -55,6 +66,9 @@ export async function acquireLeaderLock(args: {
         error: errMessage(lockErr),
       });
     }
+    if (failClosed) {
+      return { proceed: false, lockHeld: false };
+    }
     return { proceed: true, lockHeld: false };
   }
 }
@@ -73,9 +87,19 @@ export async function acquireLeaderLockWithTimeout(
     log: Logger;
     degraded: { value: boolean };
     timeoutMs: number;
+    coordinationStrict?: boolean;
+    engineReplicaCount?: number;
   }
 ): Promise<LeaderLockAcquireResult> {
+  const failClosed = shouldFailClosedWithoutRedis({
+    coordinationStrict: args.coordinationStrict === true,
+    engineReplicaCount: args.engineReplicaCount ?? 1,
+  });
+
   if (!args.redis) {
+    if (failClosed) {
+      return { proceed: false, lockHeld: false };
+    }
     return { proceed: true, lockHeld: false };
   }
 

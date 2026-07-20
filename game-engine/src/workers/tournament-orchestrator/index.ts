@@ -1,21 +1,19 @@
+import { randomUUID } from "node:crypto";
 import {
   tickDueTournaments,
   tickDueTournamentsEngine,
 } from "../../domain/tournament/index.js";
+import { redisKeysV2 } from "../../redis/keysV2.js";
+import { acquireLeaderLock, releaseLeaderLock } from "../../redis/leaderLock.js";
 import { executesBusinessLogic, isIdle } from "../../runtime.js";
 import type { WorkerContext } from "../context.js";
 
-/**
- * Tournament tick. Replaces pg_cron job 16
- * (`SELECT tournament.fn_tick_due_tournaments()`), moving the SCHEDULING into
- * the engine loop. The per-tournament state machine stays in the atomic DB RPC
- * (WRAP) so behavior is identical; only the driver changes.
- *
- *   - legacy_db : idle (cron owns the tick).
- *   - hybrid / engine : engine drives `fn_tick_due_tournaments` on its interval.
- */
 export function startTournamentOrchestrator(ctx: WorkerContext): () => void {
-  const { supabase, config, log } = ctx;
+  const { supabase, config, log, redis } = ctx;
+  const lockToken = randomUUID();
+  const lockKey = redisKeysV2.lockWorkerTournament();
+  const worker = "tournament-orchestrator";
+  const redisLockDegraded = { value: false };
 
   let stopped = false;
   let inFlight = false;
@@ -33,10 +31,23 @@ export function startTournamentOrchestrator(ctx: WorkerContext): () => void {
     }
     idleLogged = false;
     inFlight = true;
+    let lockHeld = false;
 
     try {
-      // engine mode → TS selection/eligibility decisions, atomic advance via RPC.
-      // hybrid mode → drive the whole DB RPC (WRAP).
+      const lock = await acquireLeaderLock({
+        redis,
+        lockKey,
+        ttlSec: config.tournamentLockTtlSec,
+        token: lockToken,
+        worker,
+        log,
+        degraded: redisLockDegraded,
+        coordinationStrict: config.coordinationStrict,
+        engineReplicaCount: config.engineReplicaCount,
+      });
+      if (!lock.proceed) return;
+      lockHeld = lock.lockHeld;
+
       const opts = { limit: config.tournamentTickBatchLimit };
       if (executesBusinessLogic(config.runtime)) {
         await tickDueTournamentsEngine(supabase, log, opts);
@@ -48,6 +59,14 @@ export function startTournamentOrchestrator(ctx: WorkerContext): () => void {
         error: err instanceof Error ? err.message : String(err),
       });
     } finally {
+      await releaseLeaderLock({
+        redis,
+        lockKey,
+        token: lockToken,
+        lockHeld,
+        worker,
+        log,
+      });
       inFlight = false;
     }
   };

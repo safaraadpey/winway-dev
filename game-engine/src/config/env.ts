@@ -80,6 +80,22 @@ export interface EngineConfig {
   drawPickDiagnostics: boolean;
   /** Back off rpc_pick_draw_jobs poll when queue is empty; Realtime wake resets to fast. */
   drawPickIdleBackoff: boolean;
+  /** When true, global workers skip ticks without Redis (multi-replica safe). */
+  coordinationStrict: boolean;
+  /** Expected Railway replica count (startup warnings only). */
+  engineReplicaCount: number;
+  /** Redis TTL for engine heartbeat key (seconds). */
+  engineHeartbeatTtlSec: number;
+  /** How often to refresh engine heartbeat (milliseconds). */
+  engineHeartbeatIntervalMs: number;
+  /** TTL (seconds) for room-scheduler Redis leader lock. */
+  schedulerLockTtlSec: number;
+  /** TTL (seconds) for tournament orchestrator Redis leader lock. */
+  tournamentLockTtlSec: number;
+  /** Max wait for room actors to finish on SIGTERM (milliseconds). */
+  engineDrainTimeoutMs: number;
+  /** How often renewable locks extend TTL (fraction of TTL, via renew helper). */
+  lockRenewIntervalMs: number;
 }
 
 function parseRoles(raw: string | undefined): Set<EngineRole> {
@@ -208,5 +224,15 @@ export function loadConfig(): EngineConfig {
     schedulerEnabled: process.env.SCHEDULER_ENABLED === "true",
     drawPickDiagnostics: process.env.DRAW_PICK_DIAGNOSTICS === "true",
     drawPickIdleBackoff: process.env.DRAW_PICK_IDLE_BACKOFF !== "false",
+    coordinationStrict: process.env.COORDINATION_STRICT === "true",
+    engineReplicaCount: Number(process.env.ENGINE_REPLICA_COUNT ?? "1"),
+    engineHeartbeatTtlSec: Number(process.env.ENGINE_HEARTBEAT_TTL_SEC ?? "15"),
+    engineHeartbeatIntervalMs: Number(
+      process.env.ENGINE_HEARTBEAT_INTERVAL_MS ?? "5000"
+    ),
+    schedulerLockTtlSec: Number(process.env.SCHEDULER_LOCK_TTL_SEC ?? "30"),
+    tournamentLockTtlSec: Number(process.env.TOURNAMENT_LOCK_TTL_SEC ?? "30"),
+    engineDrainTimeoutMs: Number(process.env.ENGINE_DRAIN_TIMEOUT_MS ?? "25000"),
+    lockRenewIntervalMs: Number(process.env.LOCK_RENEW_INTERVAL_MS ?? "10000"),
   };
 }

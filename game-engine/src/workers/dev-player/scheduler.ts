@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { buildScheduleBatch } from "../../domain/dev-players/index.js";
 import { DevPlayerRepo } from "../../repositories/devPlayerRepo.js";
 import { acquireLeaderLock, releaseLeaderLock } from "../../redis/leaderLock.js";
-import { redisKeys } from "../../redis/keys.js";
+import { redisKeysV2 } from "../../redis/keysV2.js";
 import type { WorkerContext } from "../context.js";
 
 const MIN_TICK_SECONDS = 5;
@@ -17,7 +17,7 @@ export function startDevPlayerScheduler(ctx: WorkerContext): () => void {
   const { config, log, redis } = ctx;
   const repo = new DevPlayerRepo(ctx.supabase);
   const lockToken = randomUUID();
-  const lockKey = redisKeys.devPlayerSchedulerLeader();
+  const lockKey = redisKeysV2.lockWorkerDevPlayerScheduler();
   const worker = "dev-player-scheduler";
   const redisLockDegraded = { value: false };
 
@@ -57,6 +57,8 @@ export function startDevPlayerScheduler(ctx: WorkerContext): () => void {
         worker,
         log,
         degraded: redisLockDegraded,
+        coordinationStrict: config.coordinationStrict,
+        engineReplicaCount: config.engineReplicaCount,
       });
       if (!lock.proceed) return;
       lockHeld = lock.lockHeld;

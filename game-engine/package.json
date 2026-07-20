@@ -12,7 +12,8 @@
     "load-test:draw": "tsx scripts/load-test-draw.ts",
     "analyze:load-test-log": "tsx scripts/analyze-load-test-log.ts",
     "analyze:load-test-log:v2": "tsx scripts/analyze-load-test-log.ts ./load-test-v2.log",
-    "test": "node --import tsx --test src/**/*.test.ts",
+    "test": "tsx scripts/run-tests.ts",
+    "test:multi-replica": "tsx scripts/test-multi-replica.ts",
     "benchmark:marking": "tsx src/benchmarks/marking-benchmark.ts"
   },
   "engines": {

@@ -12,7 +12,7 @@ import { createDrainMonitorContext } from "../../domain/draw/drainMonitor.js";
 import type { PickDebugContext } from "../../domain/draw/pickDebugSnapshot.js";
 import { reapStaleDrawJobs } from "../../domain/draw/reapStaleJobs.js";
 import { GameRepo } from "../../repositories/index.js";
-import { redisKeys } from "../../redis/keys.js";
+import { redisKeysV2 } from "../../redis/keysV2.js";
 import { acquireLeaderLock, releaseLeaderLock } from "../../redis/leaderLock.js";
 import { getGlobalCardRegistry } from "../../core/card-registry/index.js";
 import type { GlobalCardRegistry } from "../../core/card-registry/types.js";
@@ -49,7 +49,7 @@ export function startDrawProcessor(ctx: WorkerContext): () => void {
 function startLegacyDrainProcessor(ctx: WorkerContext): () => void {
   const { supabase, config, log, redis } = ctx;
   const lockToken = randomUUID();
-  const lockKey = redisKeys.drawProcessorLeader();
+  const lockKey = redisKeysV2.lockWorkerDrawPicker();
 
   let stopped = false;
   let inFlight = false;
@@ -179,6 +179,8 @@ function startLegacyDrainProcessor(ctx: WorkerContext): () => void {
         worker,
         log,
         degraded: redisLockDegraded,
+        coordinationStrict: config.coordinationStrict,
+        engineReplicaCount: config.engineReplicaCount,
       });
       if (!lock.proceed) {
         pendingDrain = true;

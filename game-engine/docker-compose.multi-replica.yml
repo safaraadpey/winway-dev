@@ -1,0 +1,47 @@
+# Local three-engine harness (shared Redis + Postgres from .env).
+# Example:
+#   docker compose -f docker-compose.multi-replica.yml up --build
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  engine-a:
+    build: .
+    environment:
+      ENGINE_ID: engine-a
+      REDIS_URL: redis://redis:6379
+      COORDINATION_STRICT: "true"
+      ENGINE_REPLICA_COUNT: "3"
+      ROOM_LOOP_MAX_ACTIVE_ROOMS: "1"
+    env_file:
+      - .env
+    depends_on:
+      - redis
+
+  engine-b:
+    build: .
+    environment:
+      ENGINE_ID: engine-b
+      REDIS_URL: redis://redis:6379
+      COORDINATION_STRICT: "true"
+      ENGINE_REPLICA_COUNT: "3"
+      ROOM_LOOP_MAX_ACTIVE_ROOMS: "1"
+    env_file:
+      - .env
+    depends_on:
+      - redis
+
+  engine-c:
+    build: .
+    environment:
+      ENGINE_ID: engine-c
+      REDIS_URL: redis://redis:6379
+      COORDINATION_STRICT: "true"
+      ENGINE_REPLICA_COUNT: "3"
+      ROOM_LOOP_MAX_ACTIVE_ROOMS: "1"
+    env_file:
+      - .env
+    depends_on:
+      - redis

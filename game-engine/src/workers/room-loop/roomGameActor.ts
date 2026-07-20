@@ -18,6 +18,7 @@ import type { GameRedis } from "../../redis/types.js";
 import type { GameRepo } from "../../repositories/index.js";
 import type { RoomRow } from "../../repositories/types.js";
 import type { RoomStateManager } from "../../state/room-state.manager.js";
+import type { RoomLeaseFence } from "../../coordination/leaseFence.js";
 import { msUntilDue } from "../../domain/room-loop/scheduleNextDraw.js";
 import { renewRoomLease, shouldRenew } from "./roomLease.js";
 import type { RoomLoopMetrics } from "./roomLoopMetrics.js";
@@ -41,10 +42,11 @@ export interface RoomActorDeps {
   stateManager: RoomStateManager;
   ownerId: string;
   leaseSeconds: number;
+  leaseFence: RoomLeaseFence;
   metrics: RoomLoopMetrics;
   getCardRegistry: () => GlobalCardRegistry | null;
   /** Called when the actor stops owning the room (lease lost / finished). */
-  onExit: (roomId: string, reason: string) => void;
+  onExit: (roomId: string, reason: string, fence: RoomLeaseFence) => void;
 }
 
 export type RoomActorCycle = (
@@ -102,6 +104,9 @@ export class RoomGameActor {
   }
   get ownerId(): string {
     return this.deps.ownerId;
+  }
+  get leaseFence(): RoomLeaseFence {
+    return this.deps.leaseFence;
   }
   get metrics(): RoomLoopMetrics {
     return this.deps.metrics;
@@ -208,6 +213,7 @@ export class RoomGameActor {
     const ok = await renewRoomLease(this.repo, this.roomId, {
       ownerId: this.deps.ownerId,
       leaseSeconds: this.deps.leaseSeconds,
+      leaseEpoch: this.deps.leaseFence.leaseEpoch,
     });
     if (ok) {
       this.lastRenewMs = Date.now();
@@ -219,6 +225,6 @@ export class RoomGameActor {
 
   private exit(reason: string): void {
     this.stop();
-    this.deps.onExit(this.roomId, reason);
+    this.deps.onExit(this.roomId, reason, this.deps.leaseFence);
   }
 }

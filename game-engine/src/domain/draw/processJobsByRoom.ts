@@ -3,7 +3,7 @@ import type { DrawBatchResult, DrawJob } from "./types.js";
 import type { GameRedis } from "../../redis/types.js";
 import { tryAcquireLock, releaseLock } from "../../redis/locks.js";
 
-export type JobOutcome = "done" | "requeue" | "dead-letter";
+export type JobOutcome = "done" | "requeue" | "dead-letter" | "fenced";
 
 export interface RoomLockOptions {
   redis: GameRedis;

@@ -67,6 +67,8 @@ export function startPerRoomActorProcessor(ctx: WorkerContext): () => void {
     maxRoundsPerPoll: config.drawProcessorMaxBatchesPerTick,
     maxRoundsPerWake: config.drawProcessorMaxBatchesPerWake,
     pickDiagnostics: config.drawPickDiagnostics,
+    coordinationStrict: config.coordinationStrict,
+    engineReplicaCount: config.engineReplicaCount,
     onPollCycleComplete: (result) => {
       if (result.totalPicked > 0) {
         pollScheduler.resetToFast();

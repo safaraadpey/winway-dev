@@ -1,8 +1,10 @@
 import http from "node:http";
 import type { Logger } from "../metrics/logger.js";
+import type { ReadinessSnapshot } from "../coordination/engineCoordination.js";
 
 export interface HealthContext {
   pingRedis?: () => Promise<boolean>;
+  readiness?: () => Promise<ReadinessSnapshot>;
 }
 
 export function startHealthServer(
@@ -10,16 +12,25 @@ export function startHealthServer(
   log: Logger,
   health: HealthContext = {}
 ): void {
-  const server = http.createServer(async (_req, res) => {
-    if (_req.url === "/health") {
+  const server = http.createServer(async (req, res) => {
+    if (req.url === "/health" || req.url === "/ready") {
       const redisOk = health.pingRedis ? await health.pingRedis() : null;
-      const ok = redisOk === null || redisOk === true;
-      res.writeHead(ok ? 200 : 503, { "Content-Type": "application/json" });
+      const readiness = health.readiness ? await health.readiness() : null;
+      const livenessOk = redisOk === null || redisOk === true;
+      const readyOk =
+        req.url === "/health"
+          ? livenessOk
+          : readiness
+            ? readiness.ok && (readiness.redisOk === null || readiness.redisOk === true)
+            : livenessOk;
+      res.writeHead(readyOk ? 200 : 503, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
-          ok,
+          ok: readyOk,
           service: "game-engine",
+          endpoint: req.url,
           redis: redisOk === null ? "disabled" : redisOk ? "up" : "down",
+          readiness,
         })
       );
       return;

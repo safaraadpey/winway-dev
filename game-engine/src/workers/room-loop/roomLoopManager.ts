@@ -2,16 +2,16 @@
  * RoomLoopManager — discovers claimable playing rooms, claims their lease, and
  * spawns one RoomGameActor per claimed room. It is the only component that
  * acquires/releases leases; actors renew their own.
- *
- * In engine runtime the actor cycle owns live draws. Shadow parity (observe-only)
- * is available when ENABLE_SHADOW_PARITY=true and no actor cycle is wired.
  */
-import { randomUUID } from "node:crypto";
+import type { RoomLeaseFence } from "../../coordination/leaseFence.js";
 import type { EngineConfig } from "../../config/env.js";
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import type { GlobalCardRegistry } from "../../core/card-registry/types.js";
 import type { Logger } from "../../metrics/logger.js";
+import type { EngineRegistry } from "../../redis/engineRegistry.js";
 import type { GameRedis } from "../../redis/types.js";
+import type { EngineIdentity } from "../../runtime/engineIdentity.js";
+import { isValidFence } from "../../coordination/leaseFence.js";
 import { GameRepo } from "../../repositories/index.js";
 import type { RoomStateManager } from "../../state/room-state.manager.js";
 import { runShadowCycle } from "../../domain/room-loop/shadowCycle.js";
@@ -31,9 +31,11 @@ export interface RoomLoopManagerOptions {
   config: EngineConfig;
   redis: GameRedis | null;
   stateManager: RoomStateManager;
+  identity: EngineIdentity;
+  engineRegistry: EngineRegistry | null;
   getCardRegistry: () => GlobalCardRegistry | null;
-  /** Per-draw cycle (engine runtime). When omitted, shadow only if enabled. */
   actorCycle?: RoomActorCycle;
+  isDraining?: () => boolean;
 }
 
 const HEARTBEAT_MS = 10_000;
@@ -47,15 +49,17 @@ export class RoomLoopManager {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private discovering = false;
   private stopped = false;
+  private draining = false;
 
   constructor(opts: RoomLoopManagerOptions) {
     this.opts = opts;
-    this.ownerId = `${process.env.HOSTNAME ?? "engine"}:${randomUUID().slice(0, 8)}`;
+    this.ownerId = opts.identity.ownerId;
   }
 
   start(): void {
     this.opts.log.info("room-loop manager starting", {
       ownerId: this.ownerId,
+      engineId: this.opts.identity.engineId,
       enableShadowParity: this.opts.config.enableShadowParity,
       hasActorCycle: Boolean(this.opts.actorCycle),
       discoveryMs: this.opts.config.roomLoopDiscoveryMs,
@@ -68,21 +72,52 @@ export class RoomLoopManager {
     this.heartbeatTimer = setInterval(() => this.heartbeat(), HEARTBEAT_MS);
   }
 
+  setDraining(): void {
+    this.draining = true;
+  }
+
+  async waitForDrain(): Promise<void> {
+    this.setDraining();
+    const deadline = Date.now() + this.opts.config.engineDrainTimeoutMs;
+    while (this.actors.size > 0 && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    await this.stop();
+  }
+
   async stop(): Promise<void> {
     this.stopped = true;
     if (this.discoveryTimer) clearInterval(this.discoveryTimer);
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-    const roomIds = [...this.actors.keys()];
+    const entries = [...this.actors.entries()];
     for (const actor of this.actors.values()) actor.stop();
     this.actors.clear();
     await Promise.allSettled(
-      roomIds.map((roomId) =>
-        releaseRoomLease(this.opts.repo, roomId, {
-          ownerId: this.ownerId,
-          leaseSeconds: this.opts.config.roomLoopLeaseSec,
-        })
+      entries.map(([roomId, actor]) =>
+        this.releaseOwnedRoom(roomId, actor.leaseFence)
       )
     );
+  }
+
+  private leaseConfig(fence: RoomLeaseFence) {
+    return {
+      ownerId: this.ownerId,
+      leaseSeconds: this.opts.config.roomLoopLeaseSec,
+      leaseEpoch: fence.leaseEpoch,
+    };
+  }
+
+  private async releaseOwnedRoom(
+    roomId: string,
+    fence: RoomLeaseFence
+  ): Promise<void> {
+    await releaseRoomLease(this.opts.repo, roomId, this.leaseConfig(fence)).catch(
+      () => undefined
+    );
+    await this.opts.engineRegistry
+      ?.removeRoomRoute(roomId, fence.leaseEpoch)
+      .catch(() => undefined);
+    this.opts.stateManager.evict(roomId);
   }
 
   private heartbeat(): void {
@@ -98,14 +133,15 @@ export class RoomLoopManager {
   }
 
   private async discover(): Promise<void> {
-    if (this.stopped || this.discovering) return;
+    if (this.stopped || this.discovering || this.draining) return;
+    if (this.opts.isDraining?.()) return;
     this.discovering = true;
     try {
       const claimable = await this.opts.repo.findClaimableRooms(
         this.opts.config.roomLoopMaxActiveRooms || 100
       );
       for (const row of claimable) {
-        if (this.stopped) break;
+        if (this.stopped || this.draining) break;
         if (this.actors.has(row.room_id)) continue;
         if (this.atCapacity()) break;
         await this.tryClaimAndSpawn(row.room_id);
@@ -134,21 +170,30 @@ export class RoomLoopManager {
     const resolved = this.resolveCycle();
     if (!resolved) return;
 
-    const claimed = await claimRoomLease(this.opts.repo, roomId, {
+    const claim = await claimRoomLease(this.opts.repo, roomId, {
       ownerId: this.ownerId,
       leaseSeconds: this.opts.config.roomLoopLeaseSec,
     });
-    if (!claimed) {
+    if (!claim.claimed) {
       this.metrics.noteClaimFailed();
+      return;
+    }
+
+    let leaseEpoch = claim.leaseEpoch;
+    if (leaseEpoch == null || !Number.isFinite(leaseEpoch) || leaseEpoch <= 0) {
+      const roomRow = await this.opts.repo.getRoom(roomId);
+      leaseEpoch = Number(roomRow?.engine_lease_epoch ?? 1);
+    }
+
+    const fence: RoomLeaseFence = { ownerId: this.ownerId, leaseEpoch };
+    if (!isValidFence(fence)) {
+      await releaseRoomLease(this.opts.repo, roomId, this.leaseConfig(fence));
       return;
     }
 
     const room = await this.opts.repo.getRoom(roomId);
     if (!room || room.status !== "playing") {
-      await releaseRoomLease(this.opts.repo, roomId, {
-        ownerId: this.ownerId,
-        leaseSeconds: this.opts.config.roomLoopLeaseSec,
-      });
+      await releaseRoomLease(this.opts.repo, roomId, this.leaseConfig(fence));
       return;
     }
 
@@ -163,31 +208,40 @@ export class RoomLoopManager {
       stateManager: this.opts.stateManager,
       ownerId: this.ownerId,
       leaseSeconds: this.opts.config.roomLoopLeaseSec,
+      leaseFence: fence,
       metrics: this.metrics,
       getCardRegistry: this.opts.getCardRegistry,
-      onExit: (id, reason) => void this.handleExit(id, reason),
+      onExit: (id, reason, fence) => void this.handleExit(id, reason, fence),
     };
 
-    const actor = new RoomGameActor(
-      room,
-      resolved.mode,
-      deps,
-      resolved.cycle
-    );
+    const actor = new RoomGameActor(room, resolved.mode, deps, resolved.cycle);
     actor.noteLeaseRenewed();
     this.actors.set(roomId, actor);
+    void this.opts.engineRegistry
+      ?.publishRoomRoute({
+        roomId,
+        leaseEpoch: fence.leaseEpoch,
+        ttlSec: this.opts.config.roomLoopLeaseSec,
+      })
+      .catch(() => undefined);
     actor.start();
   }
 
-  private async handleExit(roomId: string, reason: string): Promise<void> {
+  private async handleExit(
+    roomId: string,
+    reason: string,
+    fence: RoomLeaseFence
+  ): Promise<void> {
     this.actors.delete(roomId);
     this.metrics.noteReleased();
+    this.opts.stateManager.evict(roomId);
     this.opts.log.info("room-loop actor exit", { roomId, reason });
     if (reason !== "lease-lost" && reason !== "not-owner") {
-      await releaseRoomLease(this.opts.repo, roomId, {
-        ownerId: this.ownerId,
-        leaseSeconds: this.opts.config.roomLoopLeaseSec,
-      }).catch(() => undefined);
+      await this.releaseOwnedRoom(roomId, fence);
+    } else {
+      await this.opts.engineRegistry
+        ?.removeRoomRoute(roomId, fence.leaseEpoch)
+        .catch(() => undefined);
     }
   }
 }
