@@ -4,10 +4,11 @@ import { useEffect } from "react";
 import {
   APP_SPLASH_FADE_MS,
   APP_SPLASH_IMAGE_PATH,
-  APP_SPLASH_MIN_VISIBLE_MS,
+  APP_SPLASH_MAX_VISIBLE_MS,
   APP_SPLASH_OVERLAY_ID,
   APP_SPLASH_SESSION_KEY,
   APP_SPLASH_START_MARK,
+  APP_SPLASH_TARGET_VISIBLE_MS,
 } from "@/lib/splash/appSplash";
 
 type AppSplashScreenProps = {
@@ -38,13 +39,30 @@ function waitForSplashImage(): Promise<void> {
   });
 }
 
-function remainingMinVisibleMs(): number {
+function getSplashStartMs(): number {
   const start = (
     window as unknown as Record<string, number | undefined>
   )[APP_SPLASH_START_MARK];
-  const elapsed =
-    typeof start === "number" ? performance.now() - start : APP_SPLASH_MIN_VISIBLE_MS;
-  return Math.max(0, APP_SPLASH_MIN_VISIBLE_MS - elapsed);
+  return typeof start === "number" ? start : performance.now();
+}
+
+function remainingMs(fromStart: number, budgetMs: number): number {
+  return Math.max(0, budgetMs - (performance.now() - fromStart));
+}
+
+/** Ready when load + image done, and at least TARGET elapsed; capped by MAX. */
+async function waitForSplashDismissGate(fromStart: number): Promise<"ready" | "max"> {
+  const minHold = delay(remainingMs(fromStart, APP_SPLASH_TARGET_VISIBLE_MS));
+  const maxHold = delay(remainingMs(fromStart, APP_SPLASH_MAX_VISIBLE_MS));
+
+  return Promise.race([
+    Promise.all([
+      waitForWindowLoad(),
+      waitForSplashImage(),
+      minHold,
+    ]).then(() => "ready" as const),
+    maxHold.then(() => "max" as const),
+  ]);
 }
 
 function markSplashDone(): void {
@@ -74,20 +92,26 @@ export default function AppSplashScreen({ enabled }: AppSplashScreenProps) {
     let cancelled = false;
 
     const run = async () => {
+      const fromStart = getSplashStartMs();
+      let gate: "ready" | "max" = "ready";
+
       try {
-        await Promise.all([
-          waitForWindowLoad(),
-          waitForSplashImage(),
-          delay(remainingMinVisibleMs()),
-        ]);
+        gate = await waitForSplashDismissGate(fromStart);
       } catch (err) {
         console.warn("[Splash] readiness wait failed (continuing):", err);
       }
 
       if (cancelled) return;
 
+      const visibleMs = Math.round(performance.now() - fromStart);
+      console.info("[Splash] Fading out", {
+        visibleMs,
+        gate,
+        targetMs: APP_SPLASH_TARGET_VISIBLE_MS,
+        maxMs: APP_SPLASH_MAX_VISIBLE_MS,
+      });
+
       overlay.setAttribute("data-fading", "true");
-      console.info("[Splash] Fading out");
 
       await delay(APP_SPLASH_FADE_MS);
       if (cancelled) return;

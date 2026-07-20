@@ -5,8 +5,14 @@ export const APP_SPLASH_IMAGE_PATH = "/images/splash.webp";
 /** Session flag cleared on Hard Exit (`winway_*` keys). */
 export const APP_SPLASH_SESSION_KEY = "winway_app_splash_dismissed";
 
-/** Minimum visible time to avoid a visual pop (not an artificial loading gate). */
-export const APP_SPLASH_MIN_VISIBLE_MS = 350;
+/**
+ * Minimum splash visibility from boot (head script `__WINWAY_SPLASH_START__`).
+ * Increase for a longer branded hold; decrease for snappier entry.
+ */
+export const APP_SPLASH_TARGET_VISIBLE_MS = 2200;
+
+/** Never block longer than this (slow network / missing splash.webp). */
+export const APP_SPLASH_MAX_VISIBLE_MS = 6000;
 
 export const APP_SPLASH_FADE_MS = 320;
 
