@@ -6,6 +6,7 @@ import installStyles from "@/components/InstallAppButton.module.css";
 import styles from "@/components/support/SupportPage.module.css";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useTour } from "@/lib/contexts/TourContext";
+import SupportFaq from "@/components/support/SupportFaq";
 
 const WHATSAPP_SUPPORT_URL = "https://wa.me/14373355495";
 
@@ -13,7 +14,6 @@ const supportLinks = [
   {
     href: "/player/support/draw-review",
     title: "بررسی قرعه",
-    description: "تأیید provably fair با JSON پایان بازی",
   },
 ] as const;
 
@@ -49,9 +49,6 @@ export default function SupportPage() {
               className={installStyles.actionLink}
             >
               <span>{item.title}</span>
-              <span className={installStyles.actionLinkDescription}>
-                {item.description}
-              </span>
             </Link>
           ))}
           <a
@@ -82,13 +79,11 @@ export default function SupportPage() {
             className={installStyles.actionLink}
             onClick={() => void restartOnboardingSequence()}
           >
-            <span>مشاهده دوباره آموزش‌های بازی</span>
-            <span className={installStyles.actionLinkDescription}>
-              راهنمای پیاپی صفحه اصلی، انتخاب اتاق در لابی و خرید کارت در اتاق
-              بازی — همان مسیر آموزش اولیه.
-            </span>
+            <span>مشاهده آموزش اپلیکیشن</span>
           </button>
         </nav>
+
+        <SupportFaq />
       </div>
     </div>
   );

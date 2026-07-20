@@ -1,0 +1,119 @@
+.faqSection {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0 0.25rem;
+}
+
+.faqHeading {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: #feeeb4;
+  text-align: center;
+}
+
+.faqCategory {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.faqCategoryTitle {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.55);
+  text-align: right;
+  padding: 0 0.15rem;
+}
+
+.faqList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.faqItem {
+  border-radius: 12px;
+  border: 1px solid rgba(116, 128, 255, 0.35);
+  background: rgba(20, 16, 40, 0.72);
+  overflow: hidden;
+}
+
+.faqQuestion {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.85rem 0.9rem;
+  border: 0;
+  background: transparent;
+  color: #f3f4ff;
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-align: right;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.faqQuestionText {
+  flex: 1;
+  line-height: 1.45;
+}
+
+.faqChevron {
+  flex-shrink: 0;
+  width: 1.25rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: rgba(196, 181, 253, 0.9);
+  line-height: 1;
+}
+
+.faqAnswerOpen {
+  display: block;
+  padding: 0 0.9rem 0.85rem;
+}
+
+.faqAnswerClosed {
+  display: none;
+}
+
+.faqAnswer {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.78);
+  text-align: right;
+  direction: rtl;
+  unicode-bidi: plaintext;
+}
+
+:global(html[data-theme="light"]) .faqHeading {
+  color: #6d28d9;
+}
+
+:global(html[data-theme="light"]) .faqCategoryTitle {
+  color: #8b7cb5;
+}
+
+:global(html[data-theme="light"]) .faqItem {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: #ddd6fe;
+}
+
+:global(html[data-theme="light"]) .faqQuestion {
+  color: #4c1d95;
+}
+
+:global(html[data-theme="light"]) .faqAnswer {
+  color: #5b5568;
+}
+
+:global(html[data-theme="light"]) .faqChevron {
+  color: #7c3aed;
+}
