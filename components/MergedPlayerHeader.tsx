@@ -306,8 +306,11 @@ export default function MergedPlayerHeader({
       {/* Row 2: Balance capsules */}
       <div
         className={`${styles.row2} ${showBackButton ? "" : styles.row2NoBackButton}`}
-        data-tour-id="game-browser-wallet"
       >
+        <div
+          className={styles.balanceCapsulesGroup}
+          data-tour-id="game-browser-wallet"
+        >
         {/* Toman Capsule */}
         <motion.div
           data-tour-id="player-balance"
@@ -383,6 +386,7 @@ export default function MergedPlayerHeader({
             </>
           )}
         </motion.div>
+        </div>
       </div>
     </div>
   );

@@ -110,6 +110,21 @@
   gap: 8px;
 }
 
+.balanceCapsulesGroup {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: stretch;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.row2NoBackButton .balanceCapsulesGroup {
+  gap: 8px;
+}
+
 .avatarContainer {
   width: 32px;
   height: 32px;
