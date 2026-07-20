@@ -24,6 +24,7 @@ const TOUR_TARGET_BY_ENTRY_ID: Partial<
   gameRoom: "game-room",
   tournaments: "tournaments",
   leaderboard: "leaderboard",
+  support: "support",
 };
 
 const MainMenuScreen: React.FC = () => {

@@ -8,7 +8,6 @@ import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useTour } from "@/lib/contexts/TourContext";
 import { GAME_BROWSER_TOUR_ID } from "@/lib/tour/configs/gameBrowserTour";
 import { GAME_ROOM_TOUR_ID } from "@/lib/tour/configs/gameRoomTour";
-import { MAIN_PAGE_TOUR_ID } from "@/lib/tour/configs/mainPageTour";
 
 const supportLinks = [
   {
@@ -20,7 +19,7 @@ const supportLinks = [
 
 export default function SupportPage() {
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
-  const { restartTour } = useTour();
+  const { restartOnboardingSequence, restartTour } = useTour();
 
   useEffect(() => {
     setShowBackButton(true);
@@ -59,11 +58,12 @@ export default function SupportPage() {
             type="button"
             dir="rtl"
             className={installStyles.actionLink}
-            onClick={() => void restartTour(MAIN_PAGE_TOUR_ID)}
+            onClick={() => void restartOnboardingSequence()}
           >
-            <span>مشاهده دوباره آموزش صفحه اصلی</span>
+            <span>مشاهده دوباره آموزش‌های بازی</span>
             <span className={installStyles.actionLinkDescription}>
-              راهنمای معرفی بخش‌های اصلی DingMoney را دوباره مشاهده کنید.
+              راهنمای پیاپی صفحه اصلی، انتخاب اتاق در لابی و خرید کارت در اتاق
+              بازی — همان مسیر آموزش اولیه.
             </span>
           </button>
           <button
@@ -72,7 +72,7 @@ export default function SupportPage() {
             className={installStyles.actionLink}
             onClick={() => void restartTour(GAME_ROOM_TOUR_ID)}
           >
-            <span>آموزش اتاق بازی</span>
+            <span>فقط آموزش اتاق بازی</span>
             <span className={installStyles.actionLinkDescription}>
               راهنمای خرید کارت و وضعیت اتاق قبل از شروع بازی
             </span>
@@ -83,9 +83,9 @@ export default function SupportPage() {
             className={installStyles.actionLink}
             onClick={() => void restartTour(GAME_BROWSER_TOUR_ID)}
           >
-            <span>آموزش مرورگر بازی</span>
+            <span>فقط آموزش مرورگر بازی</span>
             <span className={installStyles.actionLinkDescription}>
-              شروع دوباره راهنمای انتخاب اتاق
+              شروع دوباره راهنمای انتخاب اتاق در لابی
             </span>
           </button>
         </nav>

@@ -964,7 +964,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     Boolean(roomInfo) &&
     !isTournamentRoom &&
     !purchaseLockedByAdmin;
-  useAutoStartTour(GAME_ROOM_TOUR_ID, tourReady);
+  useAutoStartTour(GAME_ROOM_TOUR_ID, tourReady, { preferQueuedIntent: true });
 
   if (loading || !roomInfo) {
     return <PageLoading />;

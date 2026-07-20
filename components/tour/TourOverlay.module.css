@@ -5,10 +5,20 @@
   pointer-events: none;
 }
 
+/** Blocks all page interaction; only the tooltip receives clicks. */
+.clickShield {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: auto;
+  background: transparent;
+}
+
 .shade {
   position: fixed;
   background: rgba(0, 0, 0, 0.72);
-  pointer-events: auto;
+  pointer-events: none;
+  z-index: 1;
   transition: top 180ms ease, left 180ms ease, width 180ms ease,
     height 180ms ease;
 }
@@ -20,6 +30,7 @@
   box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.22),
     0 0 26px rgba(251, 191, 36, 0.55);
   pointer-events: none;
+  z-index: 2;
   transition: top 180ms ease, left 180ms ease, width 180ms ease,
     height 180ms ease;
   animation: highlightPulse 1.8s ease-in-out infinite;
@@ -27,6 +38,7 @@
 
 .tooltip {
   position: fixed;
+  z-index: 3;
   width: min(328px, calc(100vw - 24px));
   max-height: calc(100dvh - 24px);
   overflow-y: auto;
@@ -50,11 +62,43 @@
   line-height: 1.45;
 }
 
+.stepMediaWrap {
+  margin-top: 10px;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.stepMedia {
+  display: block;
+  width: 100%;
+  max-width: 280px;
+  height: auto;
+  border-radius: 12px;
+  object-fit: contain;
+}
+
 .description {
   margin: 8px 0 0;
   color: rgba(255, 255, 255, 0.86);
   font-size: 14px;
   line-height: 1.75;
+}
+
+.descriptionPreLine {
+  white-space: pre-line;
+}
+
+.brandLogoWrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.brandLogo {
+  width: auto;
+  height: 40px;
+  object-fit: contain;
 }
 
 .footer {

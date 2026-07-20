@@ -26,10 +26,17 @@ export interface TourActionContext {
 
 export interface TourStep {
   id: string;
-  /** Value of the target element's data-tour-id attribute. */
-  target: string;
+  /** Value of the target element's data-tour-id attribute (omit when `modal` is true). */
+  target?: string;
+  /** Centered dialog without a spotlight target. */
+  modal?: boolean;
+  /** Show theme brand logo above title (modal steps). */
+  showBrandLogo?: boolean;
   title: string;
   description: string;
+  /** Public path (e.g. /tour/foo.gif) shown below the title. */
+  mediaSrc?: string;
+  mediaAlt?: string;
   placement?: TourPlacement;
   /** When true, missing targets advance immediately without blocking the tour. */
   optional?: boolean;

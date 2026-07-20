@@ -1,14 +1,27 @@
 import type { TourConfig } from "../types";
+import { advanceTourStep } from "../actions/advanceTourStep";
 import { enterGameLobbyFromMainTourAction } from "../actions/enterGameLobbyFromMainTour";
 
 export const MAIN_PAGE_TOUR_ID = "main-page";
 
 export const mainPageTour: TourConfig = {
   id: MAIN_PAGE_TOUR_ID,
-  version: 1,
+  version: 3,
   title: "راهنمای صفحه اصلی",
   route: "/player/home",
   steps: [
+    {
+      id: "welcome",
+      modal: true,
+      title: "به DingMoney خوش آمدید",
+      description:
+        "در چند قدم کوتاه با بخش‌های اصلی برنامه آشنا می‌شوید تا راحت‌تر بازی کنید.",
+      customAction: {
+        label: "بزن بریم",
+        asPrimary: true,
+        action: advanceTourStep,
+      },
+    },
     {
       id: "player-balance",
       target: "player-balance",
@@ -21,6 +34,8 @@ export const mainPageTour: TourConfig = {
       id: "ding-balance",
       target: "ding-balance",
       title: "دینگ‌های شما",
+      mediaSrc: "/tour/cards_ding_animated.gif",
+      mediaAlt: "نمونه دریافت دینگ هنگام بازی",
       description:
         "دینگ هدیه‌ای است که هنگام بازی جمع می‌کنید. به ازای شماره‌هایی که در بازی برای شما می‌آید، دینگ دریافت می‌کنید. با دینگ‌ها می‌توانید در تورنومنت‌های دینگی آخر هفته شرکت کنید و شانس دوباره بگیرید.",
       placement: "bottom",
@@ -64,6 +79,14 @@ export const mainPageTour: TourConfig = {
       title: "مدیریت حساب",
       description:
         "از این بخش‌ها می‌توانید پروفایل، تنظیمات و گزارش‌های مالی حساب خود را مدیریت کنید.",
+      placement: "top",
+    },
+    {
+      id: "support",
+      target: "support",
+      title: "پشتیبانی",
+      description:
+        "از این بخش می‌توانید با تیم پشتیبانی تماس بگیرید و سوالات و مشکلات خود را مطرح کنید.",
       placement: "top",
     },
     {

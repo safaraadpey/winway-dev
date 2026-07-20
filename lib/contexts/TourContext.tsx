@@ -29,6 +29,7 @@ import {
 } from "@/lib/tour/tourQueue";
 import { readLastGameRoomPath } from "@/lib/tour/lastGameRoomPath";
 import { GAME_ROOM_TOUR_ID } from "@/lib/tour/configs/gameRoomTour";
+import { PLAYER_ONBOARDING_TOUR_IDS } from "@/lib/tour/onboardingSequence";
 
 const PENDING_TOUR_KEY = "product_tour:pending";
 
@@ -42,6 +43,7 @@ type TourContextValue = {
   startTour: (tourId: string) => Promise<void>;
   maybeStartTour: (tourId: string) => Promise<void>;
   restartTour: (tourId: string) => Promise<void>;
+  restartOnboardingSequence: () => Promise<void>;
   consumeQueuedTourStart: (tourId: string) => Promise<ConsumeQueuedTourResult>;
   getTourProgress: (tourId: string) => Promise<TourProgress | null>;
   next: () => Promise<void>;
@@ -176,6 +178,22 @@ export function TourProvider({ children }: { children: ReactNode }) {
     },
     [startTour, userId]
   );
+
+  const restartOnboardingSequence = useCallback(async () => {
+    if (!userId) return;
+    for (const tourId of PLAYER_ONBOARDING_TOUR_IDS) {
+      const config = getTourConfig(tourId);
+      if (config) {
+        await tourStorage.reset(userId, config);
+      }
+    }
+    setActive(null);
+    clearQueuedTourIntent();
+    console.info("[Tour] Onboarding sequence restart", {
+      tourIds: PLAYER_ONBOARDING_TOUR_IDS,
+    });
+    await startTour(PLAYER_ONBOARDING_TOUR_IDS[0]);
+  }, [startTour, userId]);
 
   const getTourProgress = useCallback(
     async (tourId: string) => {
@@ -400,6 +418,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
       startTour,
       maybeStartTour,
       restartTour,
+      restartOnboardingSequence,
       consumeQueuedTourStart,
       getTourProgress,
       next,
@@ -415,6 +434,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
       maybeStartTour,
       next,
       previous,
+      restartOnboardingSequence,
       restartTour,
       skip,
       startTour,

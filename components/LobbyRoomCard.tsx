@@ -92,6 +92,8 @@ export default function LobbyRoomCard({
     <div
       className={`${styles.roomCard} ${isExpanded ? styles.expanded : styles.minimal}`}
       data-tour-id={dataTourId}
+      data-entry-room-id={entryRoomId ?? undefined}
+      data-template-id={templateId ?? undefined}
       onClick={handleClick}
       role="button"
       tabIndex={0}

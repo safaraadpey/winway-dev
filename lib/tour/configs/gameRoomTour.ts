@@ -1,10 +1,11 @@
 import type { TourConfig } from "../types";
+import { advanceTourStep } from "../actions/advanceTourStep";
 
 export const GAME_ROOM_TOUR_ID = "game-room";
 
 export const gameRoomTour: TourConfig = {
   id: GAME_ROOM_TOUR_ID,
-  version: 1,
+  version: 2,
   title: "راهنمای اتاق بازی",
   route: "/player/gameroom",
   steps: [
@@ -20,7 +21,7 @@ export const gameRoomTour: TourConfig = {
       target: "game-room-buy-panel",
       title: "خرید کارت",
       description:
-        "تعداد کارت را انتخاب کنید و با دکمه تایید، کارت‌های خود را برای این اتاق رزرو کنید.",
+        "با دکمه‌های مثبت و منفی تعداد کارت‌های خود را کم و زیاد کنید، سپس با دکمه تایید، کارت‌ها را برای این اتاق رزرو کنید.",
       placement: "bottom",
       optional: true,
     },
@@ -40,6 +41,19 @@ export const gameRoomTour: TourConfig = {
         "میزهای در حال بازی یا آماده در همین اتاق را اینجا می‌بینید. برای ورود به میز دیگر، روی آن بزنید.",
       placement: "top",
       optional: true,
+    },
+    {
+      id: "onboarding-complete",
+      modal: true,
+      showBrandLogo: true,
+      title: "🎉 به DingMoney خوش اومدی!",
+      description:
+        "حالا دیگه همه‌چی آماده‌ست!\nمیزت رو پیدا کن، وارد بازی شو، دینگ جمع کن و از رقابت لذت ببر.\n\nموفق باشی و پر از برد! 🏆",
+      customAction: {
+        label: "بزن بریم! 🚀",
+        asPrimary: true,
+        action: advanceTourStep,
+      },
     },
   ],
 };

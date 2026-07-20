@@ -1,10 +1,11 @@
 import type { TourConfig } from "../types";
+import { enterGameRoomFromLobbyTourAction } from "../actions/enterGameRoomFromLobbyTour";
 
 export const GAME_BROWSER_TOUR_ID = "game-browser";
 
 export const gameBrowserTour: TourConfig = {
   id: GAME_BROWSER_TOUR_ID,
-  version: 1,
+  version: 2,
   title: "راهنمای مرورگر بازی",
   route: "/player/lobby",
   steps: [
@@ -31,6 +32,19 @@ export const gameBrowserTour: TourConfig = {
       description:
         "این نشان‌ها تعداد بازیکنان و میزهای در حال بازی را نمایش می‌دهند. برای ورود، روی خود کارت اتاق بزنید.",
       placement: "bottom",
+    },
+    {
+      id: "enter-game-room",
+      target: "game-browser-first-room",
+      title: "حالا وارد اتاق بازی شوید",
+      description:
+        "آماده‌اید؟ وارد همین اتاق شوید تا خرید کارت و وضعیت بازی را هم با هم مرور کنیم.",
+      placement: "top",
+      customAction: {
+        label: "ورود به اتاق بازی",
+        asPrimary: true,
+        action: enterGameRoomFromLobbyTourAction,
+      },
     },
   ],
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import PageLoading from "@/components/PageLoading";
 import GameRoomScreen from "@/src/screens/GameRoomScreen";
@@ -8,6 +8,7 @@ import LiveRoomScreen from "@/src/screens/LiveRoomScreen";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useTour } from "@/lib/contexts/TourContext";
 import { rememberGameRoomPath } from "@/lib/tour/lastGameRoomPath";
+import { GAME_ROOM_TOUR_ID } from "@/lib/tour/configs/gameRoomTour";
 
 export default function GameRoomClient() {
   const searchParams = useSearchParams();
@@ -16,17 +17,40 @@ export default function GameRoomClient() {
   const roomId = searchParams.get("roomId") ?? undefined;
   const templateId = searchParams.get("templateId") ?? undefined;
   const [liveRoomId, setLiveRoomId] = useState<string | null>(null);
-  const { close } = useTour();
+  const { activeTourId } = useTour();
+  const pendingLiveRoomIdRef = useRef<string | null>(null);
 
-  const handleEnterLive = useCallback((nextRoomId: string) => {
-    setLiveRoomId(nextRoomId);
-  }, []);
+  const handleEnterLive = useCallback(
+    (nextRoomId: string) => {
+      if (activeTourId === GAME_ROOM_TOUR_ID) {
+        pendingLiveRoomIdRef.current = nextRoomId;
+        console.info("[Tour][GameRoom] Deferred live enter during tour", {
+          roomId: nextRoomId,
+        });
+        return;
+      }
+      setLiveRoomId(nextRoomId);
+    },
+    [activeTourId]
+  );
+
+  useEffect(() => {
+    if (activeTourId === GAME_ROOM_TOUR_ID) return;
+    const pending = pendingLiveRoomIdRef.current;
+    if (!pending) return;
+    pendingLiveRoomIdRef.current = null;
+    console.info("[Tour][GameRoom] Applying deferred live enter", {
+      roomId: pending,
+    });
+    setLiveRoomId(pending);
+  }, [activeTourId]);
 
   // roomId in URL changed → leave live view for the new lobby session
   useEffect(() => {
     setLiveRoomId((current) =>
       current && roomId && current !== roomId ? null : current
     );
+    pendingLiveRoomIdRef.current = null;
   }, [roomId]);
 
   useEffect(() => {
@@ -36,17 +60,12 @@ export default function GameRoomClient() {
     );
   }, [roomId, templateId]);
 
-  useEffect(() => {
-    if (roomId && liveRoomId === roomId) {
-      void close();
-    }
-  }, [close, liveRoomId, roomId]);
-
   // Back always returns to lobby (lobby or live phase, any entry path).
   useEffect(() => {
     setShowBackButton(true);
     setOnBackClick(() => () => {
       setLiveRoomId(null);
+      pendingLiveRoomIdRef.current = null;
       router.push("/player/lobby");
     });
     return () => {

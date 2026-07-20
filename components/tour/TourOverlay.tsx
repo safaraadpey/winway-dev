@@ -8,6 +8,9 @@ import React, {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import Image from "next/image";
+import { useThemeId } from "@/lib/contexts/ThemeContext";
+import { getLogoImagePath } from "@/lib/theme/logoImageFiles";
 import type { TourConfig, TourPlacement } from "@/lib/tour/types";
 import styles from "./TourOverlay.module.css";
 
@@ -171,6 +174,21 @@ function getTooltipPosition(
   };
 }
 
+function getCenteredTooltipPosition(tooltip: HTMLElement): TooltipPosition {
+  const tooltipWidth = tooltip.offsetWidth;
+  const tooltipHeight = tooltip.offsetHeight;
+  return {
+    top: Math.max(
+      EDGE_GAP,
+      (window.innerHeight - tooltipHeight) / 2
+    ),
+    left: Math.max(
+      EDGE_GAP,
+      (window.innerWidth - tooltipWidth) / 2
+    ),
+  };
+}
+
 export function TourOverlay({
   tour,
   stepIndex,
@@ -181,7 +199,9 @@ export function TourOverlay({
   onCustomAction,
   onTargetMissing,
 }: TourOverlayProps) {
+  const themeId = useThemeId();
   const step = tour.steps[stepIndex];
+  const isModalStep = step?.modal === true;
   const primaryCustomAction =
     step?.customAction?.asPrimary === true ? step.customAction : null;
   const [mounted, setMounted] = useState(false);
@@ -189,6 +209,7 @@ export function TourOverlay({
   const [rect, setRect] = useState<HighlightRect | null>(null);
   const [tooltipPosition, setTooltipPosition] =
     useState<TooltipPosition | null>(null);
+  const [modalReady, setModalReady] = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
@@ -199,8 +220,21 @@ export function TourOverlay({
     setTarget(null);
     setRect(null);
     setTooltipPosition(null);
+    setModalReady(false);
+
+    if (isModalStep) {
+      setModalReady(true);
+      return () => {
+        cancelled = true;
+        setModalReady(false);
+      };
+    }
 
     const prepareTarget = async () => {
+      if (!step.target) {
+        void onTargetMissing();
+        return;
+      }
       const element = step.optional
         ? getTarget(step.target)
         : await waitForTarget(step.target, () => cancelled);
@@ -226,7 +260,24 @@ export function TourOverlay({
     return () => {
       cancelled = true;
     };
-  }, [onTargetMissing, step.id, step.target]);
+  }, [isModalStep, onTargetMissing, step.id, step.optional, step.target]);
+
+  const centerModalTooltip = useCallback(() => {
+    if (!tooltipRef.current) return;
+    setTooltipPosition(getCenteredTooltipPosition(tooltipRef.current));
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isModalStep || !modalReady) return;
+    centerModalTooltip();
+    const handleResize = () => centerModalTooltip();
+    window.addEventListener("resize", handleResize);
+    window.visualViewport?.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.visualViewport?.removeEventListener("resize", handleResize);
+    };
+  }, [centerModalTooltip, isModalStep, modalReady, step.id]);
 
   const measure = useCallback(() => {
     if (!target || !target.isConnected) return;
@@ -255,6 +306,7 @@ export function TourOverlay({
     if (tooltipRef.current) resizeObserver.observe(tooltipRef.current);
 
     const mutationObserver = new MutationObserver(() => {
+      if (!step.target) return;
       const current = getTarget(step.target);
       if (current && current !== target) setTarget(current);
       if (!current && !target.isConnected) {
@@ -296,10 +348,13 @@ export function TourOverlay({
     );
   }, [rect, step.placement]);
 
-  const isReady = Boolean(rect);
+  const isReady = isModalStep ? modalReady : Boolean(rect);
 
   useEffect(() => {
     if (!isReady || !tooltipRef.current) return;
+    if (isModalStep) {
+      centerModalTooltip();
+    }
     previouslyFocusedRef.current =
       document.activeElement instanceof HTMLElement
         ? document.activeElement
@@ -310,7 +365,7 @@ export function TourOverlay({
       const previous = previouslyFocusedRef.current;
       if (previous?.isConnected) previous.focus({ preventScroll: true });
     };
-  }, [isReady, step.id]);
+  }, [centerModalTooltip, isModalStep, isReady, step.id]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -368,49 +423,64 @@ export function TourOverlay({
 
   return createPortal(
     <div className={styles.root} aria-live="polite">
-      {rect ? (
+      {isReady ? (
         <>
           <div
-            className={styles.shade}
-            style={{ top: 0, left: 0, width: "100%", height: rect.top }}
-          />
-          <div
-            className={styles.shade}
-            style={{
-              top: rect.top,
-              left: 0,
-              width: rect.left,
-              height: rect.height,
-            }}
-          />
-          <div
-            className={styles.shade}
-            style={{
-              top: rect.top,
-              left: rect.right,
-              width: Math.max(0, window.innerWidth - rect.right),
-              height: rect.height,
-            }}
-          />
-          <div
-            className={styles.shade}
-            style={{
-              top: rect.bottom,
-              left: 0,
-              width: "100%",
-              height: Math.max(0, window.innerHeight - rect.bottom),
-            }}
-          />
-          <div
-            className={styles.highlight}
+            className={styles.clickShield}
             aria-hidden="true"
-            style={{
-              top: rect.top,
-              left: rect.left,
-              width: rect.width,
-              height: rect.height,
-            }}
+            onClick={(event) => event.preventDefault()}
           />
+          {isModalStep ? (
+            <div
+              className={styles.shade}
+              style={{ inset: 0 }}
+              aria-hidden="true"
+            />
+          ) : rect ? (
+            <>
+              <div
+                className={styles.shade}
+                style={{ top: 0, left: 0, width: "100%", height: rect.top }}
+              />
+              <div
+                className={styles.shade}
+                style={{
+                  top: rect.top,
+                  left: 0,
+                  width: rect.left,
+                  height: rect.height,
+                }}
+              />
+              <div
+                className={styles.shade}
+                style={{
+                  top: rect.top,
+                  left: rect.right,
+                  width: Math.max(0, window.innerWidth - rect.right),
+                  height: rect.height,
+                }}
+              />
+              <div
+                className={styles.shade}
+                style={{
+                  top: rect.bottom,
+                  left: 0,
+                  width: "100%",
+                  height: Math.max(0, window.innerHeight - rect.bottom),
+                }}
+              />
+              <div
+                className={styles.highlight}
+                aria-hidden="true"
+                style={{
+                  top: rect.top,
+                  left: rect.left,
+                  width: rect.width,
+                  height: rect.height,
+                }}
+              />
+            </>
+          ) : null}
           <div
             ref={tooltipRef}
             className={styles.tooltip}
@@ -425,10 +495,38 @@ export function TourOverlay({
               visibility: tooltipPosition ? "visible" : "hidden",
             }}
           >
+            {step.showBrandLogo ? (
+              <div className={styles.brandLogoWrap}>
+                <Image
+                  src={getLogoImagePath(themeId, "playerHeaderLogo")}
+                  alt="Ding Money"
+                  width={120}
+                  height={48}
+                  className={styles.brandLogo}
+                  priority={false}
+                />
+              </div>
+            ) : null}
             <h2 id={titleId} className={styles.title}>
               {step.title}
             </h2>
-            <p id={descriptionId} className={styles.description}>
+            {step.mediaSrc ? (
+              <div className={styles.stepMediaWrap}>
+                <img
+                  src={step.mediaSrc}
+                  alt={step.mediaAlt ?? ""}
+                  className={styles.stepMedia}
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+            ) : null}
+            <p
+              id={descriptionId}
+              className={`${styles.description} ${
+                isModalStep ? styles.descriptionPreLine : ""
+              }`}
+            >
               {step.description}
             </p>
             {step.customAction && !primaryCustomAction ? (
@@ -445,13 +543,6 @@ export function TourOverlay({
                 {stepIndex + 1} / {tour.steps.length}
               </span>
               <div className={styles.actions}>
-                <button
-                  type="button"
-                  className={`${styles.button} ${styles.skipButton}`}
-                  onClick={() => void onSkip()}
-                >
-                  رد کردن
-                </button>
                 {stepIndex > 0 ? (
                   <button
                     type="button"
@@ -480,6 +571,11 @@ export function TourOverlay({
         </>
       ) : (
         <>
+          <div
+            className={styles.clickShield}
+            aria-hidden="true"
+            onClick={(event) => event.preventDefault()}
+          />
           <div
             className={styles.shade}
             style={{ inset: 0 }}
