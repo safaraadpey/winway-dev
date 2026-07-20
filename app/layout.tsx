@@ -15,6 +15,7 @@ import {
   getAppSplashBootScript,
   getAppSplashCriticalCss,
 } from "@/lib/splash/appSplash";
+import { getPwaInstallBootstrapScript } from "@/lib/pwa/pwaInstallBootstrap";
 
 const ogPreviewImage = getLogoImagePath(DEFAULT_THEME, "ogPreview");
 
@@ -86,14 +87,21 @@ export default function RootLayout({
     ? "/manifest-admin.webmanifest"
     : "/manifest-player.webmanifest";
   const appleTouchIconHref = isAdminHost
-    ? "/icons/admin-icon-192.svg"
-    : "/icons/icon-192.svg";
+    ? "/icons/admin-icon-192.png"
+    : "/icons/icon-192.png";
+  const isProduction = process.env.NODE_ENV === "production";
 
   return (
     <html lang="en">
       <head>
         <link rel="manifest" href={manifestHref} />
         <link rel="apple-touch-icon" href={appleTouchIconHref} />
+        <script
+          id="winway-pwa-install-bootstrap"
+          dangerouslySetInnerHTML={{
+            __html: getPwaInstallBootstrapScript(isProduction),
+          }}
+        />
         {!isAdminHost ? (
           <>
             <link rel="preload" as="image" href={APP_SPLASH_IMAGE_PATH} />

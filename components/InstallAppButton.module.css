@@ -22,6 +22,11 @@
   text-shadow: 0 1px 8px rgba(116, 128, 255, 0.45);
 }
 
+.button:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
 .button:active {
   transform: translateY(1px);
 }
