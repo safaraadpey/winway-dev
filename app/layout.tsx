@@ -4,9 +4,17 @@ import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import GlobalUserStateClient from "./GlobalUserStateClient";
 import PWARegistration from "@/components/PWARegistration";
+import AppSplashScreen from "@/components/AppSplashScreen";
 import TextScalingGuard from "@/components/TextScalingGuard";
 import { getLogoImagePath } from "@/lib/theme/logoImageFiles";
 import { DEFAULT_THEME } from "@/lib/theme/types";
+import {
+  APP_SPLASH_IMAGE_PATH,
+  APP_SPLASH_OVERLAY_ID,
+  APP_SPLASH_SHELL_ID,
+  getAppSplashBootScript,
+  getAppSplashCriticalCss,
+} from "@/lib/splash/appSplash";
 
 const ogPreviewImage = getLogoImagePath(DEFAULT_THEME, "ogPreview");
 
@@ -86,15 +94,35 @@ export default function RootLayout({
       <head>
         <link rel="manifest" href={manifestHref} />
         <link rel="apple-touch-icon" href={appleTouchIconHref} />
+        {!isAdminHost ? (
+          <>
+            <link rel="preload" as="image" href={APP_SPLASH_IMAGE_PATH} />
+            <style
+              id="winway-app-splash-critical"
+              dangerouslySetInnerHTML={{ __html: getAppSplashCriticalCss() }}
+            />
+            <script
+              id="winway-app-splash-boot"
+              dangerouslySetInnerHTML={{ __html: getAppSplashBootScript() }}
+            />
+          </>
+        ) : null}
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap"
         />
       </head>
       <body className="bg-[#0E0E0F]">
+        {!isAdminHost ? (
+          <div id={APP_SPLASH_OVERLAY_ID} aria-hidden="true" />
+        ) : null}
         <TextScalingGuard />
         <PWARegistration />
-        <div className="relative mx-auto min-h-dvh w-full max-w-[390px] overflow-x-hidden bg-[#0E0E0F]">
+        <AppSplashScreen enabled={!isAdminHost} />
+        <div
+          id={APP_SPLASH_SHELL_ID}
+          className="relative mx-auto min-h-dvh w-full max-w-[390px] overflow-x-hidden bg-[#0E0E0F]"
+        >
           <GlobalUserStateClient>{children}</GlobalUserStateClient>
         </div>
         <Toaster

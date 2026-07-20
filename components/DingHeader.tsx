@@ -20,6 +20,8 @@ interface DingHeaderProps {
   onBackClick?: () => void;
   /** وضعیت انیمیشن (اختیاری - اگر hook موجود باشد استفاده می‌شود) */
   isAnimating?: boolean;
+  /** موجودی کم‌رنگ در هدر پنل‌های مدیریتی (ادمین / ایجنت / سوپر) */
+  balanceMuted?: boolean;
 }
 
 /**
@@ -33,7 +35,8 @@ export default function DingHeader({
   loading: propLoading = false,
   showBackButton = false,
   onBackClick,
-  isAnimating: propIsAnimating
+  isAnimating: propIsAnimating,
+  balanceMuted = false,
 }: DingHeaderProps) {
   const router = useRouter();
   // DingHeader فقط از props تغذیه می‌شود تا منبع حقیقت یکتا باشد.
@@ -83,6 +86,7 @@ export default function DingHeader({
         type={balanceType}
         loading={loading}
         isAnimating={isAnimating}
+        muted={balanceMuted}
       />
     </div>
   );

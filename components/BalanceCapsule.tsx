@@ -13,6 +13,8 @@ interface BalanceCapsuleProps {
   type: BalanceType;
   loading?: boolean;
   isAnimating?: boolean;
+  /** Muted styling for admin / agent / super panel headers */
+  muted?: boolean;
 }
 
 /**
@@ -23,7 +25,8 @@ export default function BalanceCapsule({
   balance, 
   type,
   loading = false,
-  isAnimating = false 
+  isAnimating = false,
+  muted = false,
 }: BalanceCapsuleProps) {
   const formatBalance = (amount: number): string => {
     return amount.toLocaleString('en-US');
@@ -35,9 +38,9 @@ export default function BalanceCapsule({
 
   return (
     <motion.div 
-      className={styles.balanceCapsule}
+      className={`${styles.balanceCapsule}${muted ? ` ${styles.balanceCapsuleMuted}` : ''}`}
       animate={
-        isAnimating
+        isAnimating && !muted
           ? {
               backgroundColor: [
                 'rgba(59, 130, 246, 0.1)',
@@ -66,7 +69,7 @@ export default function BalanceCapsule({
           <motion.span 
             className={styles.balanceAmount}
             animate={
-              isAnimating
+              isAnimating && !muted
                 ? {
                     color: [
                       '#fbbf24',
@@ -123,7 +126,7 @@ export default function BalanceCapsule({
               className={styles.balanceAmount}
               style={{ fontSize: '1rem', fontWeight: 600 }}
               animate={
-                isAnimating
+                isAnimating && !muted
                   ? {
                       color: [
                         '#fbbf24',

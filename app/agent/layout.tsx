@@ -23,6 +23,7 @@ function AgentLayoutContent({
           balanceType="toman" 
           tomanBalance={tomanBalance} 
           loading={loading}
+          balanceMuted
           showBackButton={showBackButton}
           onBackClick={onBackClick || undefined}
         />
