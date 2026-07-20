@@ -28,6 +28,8 @@ import {
 } from "@/lib/audio/music";
 import { isMusicEnabled as readMusicEnabled, setMusicEnabled } from "@/lib/audio-settings";
 import { isHardExiting } from "@/lib/auth/hardExit";
+import { useAutoStartTour } from "@/lib/hooks/useAutoStartTour";
+import { GAME_ROOM_TOUR_ID } from "@/lib/tour/configs/gameRoomTour";
 import styles from "./GameRoomScreen.module.css";
 
 interface GameRoomScreenProps {
@@ -954,12 +956,19 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     router.push(`/player/gameroom?roomId=${tableId}`);
   };
 
+  const isTournamentRoom =
+    (roomInfo?.roomType || "").toLowerCase() === "tournament";
+  const purchaseLockedByAdmin = globalRegistrationLocked && !canCancel;
+  const tourReady =
+    !loading &&
+    Boolean(roomInfo) &&
+    !isTournamentRoom &&
+    !purchaseLockedByAdmin;
+  useAutoStartTour(GAME_ROOM_TOUR_ID, tourReady);
+
   if (loading || !roomInfo) {
     return <PageLoading />;
   }
-
-  const purchaseLockedByAdmin = globalRegistrationLocked && !canCancel;
-  const isTournamentRoom = (roomInfo.roomType || "").toLowerCase() === "tournament";
 
   // استفاده از cardsToRenderForCancel که قبلاً تعریف شده
   const cardsToRender = cardsToRenderForCancel;

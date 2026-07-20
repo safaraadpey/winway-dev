@@ -7,6 +7,7 @@ import GameEndResultsListener from "@/components/GameEndResultsListener";
 import { ActiveGamesOrchestratorProvider } from "@/lib/activeGames/ActiveGamesOrchestratorProvider";
 import { ActiveGamesProvider } from "@/lib/contexts/ActiveGamesContext";
 import { InstallPromptProvider } from "@/lib/contexts/InstallPromptContext";
+import { TourProvider } from "@/lib/contexts/TourContext";
 
 export default function GlobalUserStateClient({
   children,
@@ -16,14 +17,16 @@ export default function GlobalUserStateClient({
   return (
     <InstallPromptProvider>
       <SessionProvider>
-        <BalancesProvider>
-          <ActiveGamesOrchestratorProvider>
-            <ActiveGamesProvider>
-              {children}
-              <GameEndResultsListener />
-            </ActiveGamesProvider>
-          </ActiveGamesOrchestratorProvider>
-        </BalancesProvider>
+        <TourProvider>
+          <BalancesProvider>
+            <ActiveGamesOrchestratorProvider>
+              <ActiveGamesProvider>
+                {children}
+                <GameEndResultsListener />
+              </ActiveGamesProvider>
+            </ActiveGamesOrchestratorProvider>
+          </BalancesProvider>
+        </TourProvider>
       </SessionProvider>
     </InstallPromptProvider>
   );

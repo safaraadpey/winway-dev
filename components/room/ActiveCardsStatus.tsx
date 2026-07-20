@@ -52,6 +52,7 @@ export default function ActiveCardsStatus({
   return (
     <div
       className={`${panelStyles.activeCardsPanelSurface} space-y-3 rounded-2xl px-3 pt-5 pb-5 mt-3 h-[200px] min-h-[200px] flex flex-col`}
+      data-tour-id="game-room-waiting-status"
     >
       <div className={panelStyles.activeCardsHeader}>
         <div className={panelStyles.activeCardsTimerWrap}>

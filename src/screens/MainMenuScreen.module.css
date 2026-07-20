@@ -117,3 +117,10 @@
   flex: 1;
   width: 50%;
 }
+
+.accountManagementGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}

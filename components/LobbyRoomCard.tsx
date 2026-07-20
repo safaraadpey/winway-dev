@@ -49,6 +49,8 @@ export interface LobbyRoomCardProps {
   listIndex?: number;
   variant?: LobbyRoomCardVariant; // حالت نمایش: minimal (فقط عکس) یا expanded (همه اطلاعات)
   onClick?: (price: number, templateId?: string | null, entryRoomId?: string | null) => void;
+  dataTourId?: string;
+  statsDataTourId?: string;
 }
 
 /**
@@ -69,7 +71,9 @@ export default function LobbyRoomCard({
   entryRoomId,
   listIndex = 0,
   variant = 'minimal', // حالت پیش‌فرض: minimal
-  onClick
+  onClick,
+  dataTourId,
+  statsDataTourId,
 }: LobbyRoomCardProps) {
   const formatPrice = (price: number) => {
   return new Intl.NumberFormat('en-US').format(price);
@@ -87,6 +91,7 @@ export default function LobbyRoomCard({
   return (
     <div
       className={`${styles.roomCard} ${isExpanded ? styles.expanded : styles.minimal}`}
+      data-tour-id={dataTourId}
       onClick={handleClick}
       role="button"
       tabIndex={0}
@@ -109,7 +114,7 @@ export default function LobbyRoomCard({
           sizes="(max-width: 640px) 100vw, 600px"
           priority
         />
-        <div className={styles.topBadges}>
+        <div className={styles.topBadges} data-tour-id={statsDataTourId}>
           <div className={styles.playersBadge}>
             <svg
               className={styles.badgeIcon}

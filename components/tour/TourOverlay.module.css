@@ -1,0 +1,180 @@
+.root {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;
+}
+
+.shade {
+  position: fixed;
+  background: rgba(0, 0, 0, 0.72);
+  pointer-events: auto;
+  transition: top 180ms ease, left 180ms ease, width 180ms ease,
+    height 180ms ease;
+}
+
+.highlight {
+  position: fixed;
+  border: 2px solid #fbbf24;
+  border-radius: 14px;
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.22),
+    0 0 26px rgba(251, 191, 36, 0.55);
+  pointer-events: none;
+  transition: top 180ms ease, left 180ms ease, width 180ms ease,
+    height 180ms ease;
+  animation: highlightPulse 1.8s ease-in-out infinite;
+}
+
+.tooltip {
+  position: fixed;
+  width: min(328px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  padding: 16px;
+  border: 1px solid rgba(251, 191, 36, 0.65);
+  border-radius: 16px;
+  background: rgba(21, 18, 30, 0.98);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.48);
+  color: #ffffff;
+  direction: rtl;
+  pointer-events: auto;
+  outline: none;
+  animation: tooltipIn 180ms ease-out;
+}
+
+.title {
+  margin: 0;
+  color: #fde68a;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.description {
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.stepCount {
+  composes: numeric-text numeric-text--13 from global;
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.68);
+  direction: ltr;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.button {
+  min-width: 58px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 140ms ease, transform 140ms ease;
+}
+
+.button:hover,
+.button:focus-visible {
+  background: rgba(255, 255, 255, 0.16);
+  outline: 2px solid rgba(251, 191, 36, 0.75);
+  outline-offset: 2px;
+}
+
+.button:active {
+  transform: translateY(1px);
+}
+
+.primaryButton {
+  border-color: #fbbf24;
+  background: #fbbf24;
+  color: #201a09;
+}
+
+.primaryButton:hover,
+.primaryButton:focus-visible {
+  background: #fcd34d;
+}
+
+.skipButton {
+  border-color: transparent;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.customButton {
+  width: 100%;
+  margin-top: 12px;
+  border-color: rgba(96, 165, 250, 0.7);
+  background: rgba(59, 130, 246, 0.16);
+}
+
+.loading {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  width: min(300px, calc(100vw - 32px));
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(21, 18, 30, 0.98);
+  color: #ffffff;
+  font-size: 14px;
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+@keyframes tooltipIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes highlightPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.2),
+      0 0 20px rgba(251, 191, 36, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(251, 191, 36, 0.3),
+      0 0 30px rgba(251, 191, 36, 0.65);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shade,
+  .highlight {
+    transition: none;
+  }
+
+  .highlight,
+  .tooltip {
+    animation: none;
+  }
+}

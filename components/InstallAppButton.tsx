@@ -43,7 +43,12 @@ export default function InstallAppButton({ label = "نصب اپلیکیشن" }: 
 
   return (
     <div className={styles.wrap}>
-      <button type="button" className={styles.button} onClick={handleInstallClick}>
+      <button
+        type="button"
+        className={styles.button}
+        data-tour-id="install-app"
+        onClick={handleInstallClick}
+      >
         {label}
       </button>
       {showInstallGuideModal && (

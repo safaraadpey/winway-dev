@@ -117,7 +117,10 @@ export default function BuyCardsPanel({
   const buttonDisabled = disabled || isSubmitting || passwordMissing;
 
   return (
-    <div className={`${panelStyles.panelSurface} rounded-2xl p-3 space-y-3`}>
+    <div
+      className={`${panelStyles.panelSurface} rounded-2xl p-3 space-y-3`}
+      data-tour-id="game-room-buy-panel"
+    >
       <div className={panelStyles.buyPanelTopRow}>
         <div className={panelStyles.buyPanelControls}>
           {(showMusicToggle || onToggleMusic) && (

@@ -18,6 +18,7 @@ type MenuItemProps = {
   wrapperClassName?: string;
   priority?: boolean;
   liveCount?: number;
+  tourTargetId?: string;
 };
 
 function MenuItemContent({
@@ -73,11 +74,15 @@ export default function MenuItem({
   wrapperClassName = "",
   priority = false,
   liveCount,
+  tourTargetId,
 }: MenuItemProps) {
   const { themeId } = useTheme();
   const itemClassName = ["theme-menu-item", className].filter(Boolean).join(" ");
 
-  const itemProps = menuItemId ? { "data-menu-item": menuItemId } : undefined;
+  const itemProps = {
+    ...(menuItemId ? { "data-menu-item": menuItemId } : {}),
+    ...(tourTargetId ? { "data-tour-id": tourTargetId } : {}),
+  };
 
   const content = (
     <MenuItemContent

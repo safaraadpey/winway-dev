@@ -11,6 +11,8 @@ import { useSession } from "@/lib/contexts/SessionContext";
 import { traceFetch } from "@/lib/debug/netTrace";
 import { isHardExiting } from "@/lib/auth/hardExit";
 import { getLobby, isGameEngineEnabled } from "@/lib/gameEngineClient";
+import { useAutoStartTour } from "@/lib/hooks/useAutoStartTour";
+import { GAME_BROWSER_TOUR_ID } from "@/lib/tour/configs/gameBrowserTour";
 
 interface RoomPriceGroup {
   price: number;
@@ -37,6 +39,11 @@ export default function LobbyPage() {
   const [roomGroups, setRoomGroups] = useState<RoomPriceGroup[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  useAutoStartTour(
+    GAME_BROWSER_TOUR_ID,
+    !loading && !errorMessage && roomGroups.length > 0,
+    { preferQueuedIntent: true }
+  );
 
   const hasToken = Boolean(sessionSnap.authReady && sessionSnap.accessToken);
   const visibilityState = typeof document !== "undefined" ? document.visibilityState : "visible";
@@ -294,7 +301,10 @@ export default function LobbyPage() {
       )}
 
       {/* لیست روم‌ها */}
-      <div className={styles.roomsList}>
+      <div
+        className={styles.roomsList}
+        data-tour-id="game-browser-room-list"
+      >
         {roomGroups.length === 0 ? (
           <div className={styles.emptyState}>
             <p className={styles.emptyText}>هیچ روم فعالی وجود ندارد</p>
@@ -317,6 +327,12 @@ export default function LobbyPage() {
               entryRoomId={group.entryRoomId}
               variant="minimal" // TODO: از تنظیمات ادمین بگیرید
               onClick={handleRoomClick}
+              dataTourId={
+                index === 0 ? "game-browser-first-room" : undefined
+              }
+              statsDataTourId={
+                index === 0 ? "game-browser-first-room-stats" : undefined
+              }
             />
           ))
         )}

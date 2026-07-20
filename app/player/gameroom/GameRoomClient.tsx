@@ -6,6 +6,8 @@ import PageLoading from "@/components/PageLoading";
 import GameRoomScreen from "@/src/screens/GameRoomScreen";
 import LiveRoomScreen from "@/src/screens/LiveRoomScreen";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
+import { useTour } from "@/lib/contexts/TourContext";
+import { rememberGameRoomPath } from "@/lib/tour/lastGameRoomPath";
 
 export default function GameRoomClient() {
   const searchParams = useSearchParams();
@@ -14,6 +16,7 @@ export default function GameRoomClient() {
   const roomId = searchParams.get("roomId") ?? undefined;
   const templateId = searchParams.get("templateId") ?? undefined;
   const [liveRoomId, setLiveRoomId] = useState<string | null>(null);
+  const { close } = useTour();
 
   const handleEnterLive = useCallback((nextRoomId: string) => {
     setLiveRoomId(nextRoomId);
@@ -25,6 +28,19 @@ export default function GameRoomClient() {
       current && roomId && current !== roomId ? null : current
     );
   }, [roomId]);
+
+  useEffect(() => {
+    if (!roomId && !templateId) return;
+    rememberGameRoomPath(
+      `${window.location.pathname}${window.location.search}`
+    );
+  }, [roomId, templateId]);
+
+  useEffect(() => {
+    if (roomId && liveRoomId === roomId) {
+      void close();
+    }
+  }, [close, liveRoomId, roomId]);
 
   // Back always returns to lobby (lobby or live phase, any entry path).
   useEffect(() => {

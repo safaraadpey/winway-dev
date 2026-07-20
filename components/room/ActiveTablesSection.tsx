@@ -26,6 +26,7 @@ export default function ActiveTablesSection({
   return (
     <div
       className={`${panelStyles.activeCardsPanelSurface} space-y-3 rounded-2xl px-3 pt-[4px] pb-[6px] min-h-[200px]`}
+      data-tour-id="game-room-active-tables"
     >
       <div className={panelStyles.activeTablesTitleWrap}>
         <span className={panelStyles.activeTablesTitleLine} aria-hidden="true" />

@@ -304,9 +304,13 @@ export default function MergedPlayerHeader({
       </div>
 
       {/* Row 2: Balance capsules */}
-      <div className={`${styles.row2} ${showBackButton ? "" : styles.row2NoBackButton}`}>
+      <div
+        className={`${styles.row2} ${showBackButton ? "" : styles.row2NoBackButton}`}
+        data-tour-id="game-browser-wallet"
+      >
         {/* Toman Capsule */}
         <motion.div
+          data-tour-id="player-balance"
           data-wallet-toman-target
           className={capsuleClass(styles.tomanBg)}
           animate={tomanCapsuleAnimate}
@@ -342,6 +346,7 @@ export default function MergedPlayerHeader({
 
         {/* Ding Capsule */}
         <motion.div
+          data-tour-id="ding-balance"
           className={capsuleClass(styles.dingBg)}
           animate={dingCapsuleAnimate}
           transition={{ duration: 0.8, ease: "easeInOut" }}
