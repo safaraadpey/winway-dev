@@ -46,7 +46,7 @@ html:not([data-splash-phase="done"]) #${APP_SPLASH_SHELL_ID} {
   padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
     env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
   border: 0;
-  background-color: #111827;
+  background-color: #000000;
   background-image: url("${APP_SPLASH_IMAGE_PATH}");
   background-size: cover;
   background-position: center center;
