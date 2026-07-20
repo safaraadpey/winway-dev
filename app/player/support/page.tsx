@@ -6,8 +6,6 @@ import installStyles from "@/components/InstallAppButton.module.css";
 import styles from "@/components/support/SupportPage.module.css";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useTour } from "@/lib/contexts/TourContext";
-import { GAME_BROWSER_TOUR_ID } from "@/lib/tour/configs/gameBrowserTour";
-import { GAME_ROOM_TOUR_ID } from "@/lib/tour/configs/gameRoomTour";
 
 const supportLinks = [
   {
@@ -19,7 +17,7 @@ const supportLinks = [
 
 export default function SupportPage() {
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
-  const { restartOnboardingSequence, restartTour } = useTour();
+  const { restartOnboardingSequence } = useTour();
 
   useEffect(() => {
     setShowBackButton(true);
@@ -64,28 +62,6 @@ export default function SupportPage() {
             <span className={installStyles.actionLinkDescription}>
               راهنمای پیاپی صفحه اصلی، انتخاب اتاق در لابی و خرید کارت در اتاق
               بازی — همان مسیر آموزش اولیه.
-            </span>
-          </button>
-          <button
-            type="button"
-            dir="rtl"
-            className={installStyles.actionLink}
-            onClick={() => void restartTour(GAME_ROOM_TOUR_ID)}
-          >
-            <span>فقط آموزش اتاق بازی</span>
-            <span className={installStyles.actionLinkDescription}>
-              راهنمای خرید کارت و وضعیت اتاق قبل از شروع بازی
-            </span>
-          </button>
-          <button
-            type="button"
-            dir="rtl"
-            className={installStyles.actionLink}
-            onClick={() => void restartTour(GAME_BROWSER_TOUR_ID)}
-          >
-            <span>فقط آموزش مرورگر بازی</span>
-            <span className={installStyles.actionLinkDescription}>
-              شروع دوباره راهنمای انتخاب اتاق در لابی
             </span>
           </button>
         </nav>

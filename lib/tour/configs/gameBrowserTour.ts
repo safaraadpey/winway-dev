@@ -5,18 +5,10 @@ export const GAME_BROWSER_TOUR_ID = "game-browser";
 
 export const gameBrowserTour: TourConfig = {
   id: GAME_BROWSER_TOUR_ID,
-  version: 2,
+  version: 3,
   title: "راهنمای مرورگر بازی",
   route: "/player/lobby",
   steps: [
-    {
-      id: "wallet-summary",
-      target: "game-browser-wallet",
-      title: "موجودی شما",
-      description:
-        "پیش از ورود به اتاق، موجودی تومان و دینگ خود را در این قسمت بررسی یا به‌روزرسانی کنید.",
-      placement: "bottom",
-    },
     {
       id: "room-list",
       target: "game-browser-first-room",

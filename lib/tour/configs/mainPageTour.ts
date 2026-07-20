@@ -6,7 +6,7 @@ export const MAIN_PAGE_TOUR_ID = "main-page";
 
 export const mainPageTour: TourConfig = {
   id: MAIN_PAGE_TOUR_ID,
-  version: 3,
+  version: 5,
   title: "راهنمای صفحه اصلی",
   route: "/player/home",
   steps: [
@@ -50,35 +50,19 @@ export const mainPageTour: TourConfig = {
       optional: true,
     },
     {
-      id: "game-room",
-      target: "game-room",
-      title: "اتاق‌های بازی",
+      id: "game-room-and-tournaments",
+      target: "game-room-and-tournaments",
+      title: "اتاق‌های بازی و تورنومنت‌ها",
       description:
-        "برای مشاهده اتاق‌ها و پیوستن به یک بازی، از این بخش وارد شوید.",
+        "برای مشاهده اتاق‌ها و پیوستن به بازی از بخش اتاق‌های بازی استفاده کنید. تورنومنت‌های فعال و آینده را هم در بخش تورنومنت‌ها ببینید و در آن‌ها شرکت کنید.",
       placement: "top",
     },
     {
-      id: "tournaments",
-      target: "tournaments",
-      title: "تورنومنت‌ها",
+      id: "leaderboard-and-account",
+      target: "leaderboard-and-account",
+      title: "بردها، رتبه‌ها و مدیریت حساب",
       description:
-        "تورنومنت‌های فعال و آینده را اینجا ببینید و در آن‌ها شرکت کنید.",
-      placement: "top",
-    },
-    {
-      id: "leaderboard",
-      target: "leaderboard",
-      title: "بردها و رتبه‌ها",
-      description:
-        "رتبه، عملکرد و جایگاه خود را در میان بازیکنان از این بخش دنبال کنید.",
-      placement: "top",
-    },
-    {
-      id: "account-management",
-      target: "account-management",
-      title: "مدیریت حساب",
-      description:
-        "از این بخش‌ها می‌توانید پروفایل، تنظیمات و گزارش‌های مالی حساب خود را مدیریت کنید.",
+        "رتبه و عملکرد خود را در بخش بردها و رتبه‌ها دنبال کنید. از بخش‌های پایین‌تر هم می‌توانید پروفایل، تنظیمات و گزارش‌های مالی حساب خود را مدیریت کنید.",
       placement: "top",
     },
     {

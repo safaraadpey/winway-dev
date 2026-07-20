@@ -5,17 +5,10 @@ export const GAME_ROOM_TOUR_ID = "game-room";
 
 export const gameRoomTour: TourConfig = {
   id: GAME_ROOM_TOUR_ID,
-  version: 2,
+  version: 3,
   title: "راهنمای اتاق بازی",
   route: "/player/gameroom",
   steps: [
-    {
-      id: "wallet-before-buy",
-      target: "player-balance",
-      title: "موجودی شما",
-      description: "قبل از خرید کارت، موجودی تومان خود را بررسی کنید.",
-      placement: "bottom",
-    },
     {
       id: "buy-cards",
       target: "game-room-buy-panel",

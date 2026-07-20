@@ -15,15 +15,14 @@ const MENU_LIVE_COUNT_BY_ID = {
   tournaments: "tournamentRegistrants",
 } as const;
 
-const PRIMARY_MENU_IDS = ["gameRoom", "tournaments", "leaderboard"] as const;
+const PLAY_MENU_IDS = ["gameRoom", "tournaments"] as const;
 const ACCOUNT_MENU_IDS = ["myProfile", "settings", "reports"] as const;
+const LEADERBOARD_MENU_ID = "leaderboard" as const;
 
 const TOUR_TARGET_BY_ENTRY_ID: Partial<
   Record<MenuEntryDefinition["id"], string>
 > = {
   gameRoom: "game-room",
-  tournaments: "tournaments",
-  leaderboard: "leaderboard",
   support: "support",
 };
 
@@ -40,8 +39,12 @@ const MainMenuScreen: React.FC = () => {
     console.log(`${label} clicked`);
   };
 
-  const primaryEntries = MENU_ENTRIES.filter((entry) =>
-    PRIMARY_MENU_IDS.includes(entry.id as (typeof PRIMARY_MENU_IDS)[number])
+  const gameRoomEntry = MENU_ENTRIES.find((entry) => entry.id === "gameRoom");
+  const tournamentsEntry = MENU_ENTRIES.find(
+    (entry) => entry.id === "tournaments"
+  );
+  const leaderboardEntry = MENU_ENTRIES.find(
+    (entry) => entry.id === LEADERBOARD_MENU_ID
   );
   const accountEntries = MENU_ENTRIES.filter((entry) =>
     ACCOUNT_MENU_IDS.includes(entry.id as (typeof ACCOUNT_MENU_IDS)[number])
@@ -80,12 +83,23 @@ const MainMenuScreen: React.FC = () => {
         </div>
         <div className={styles.menuScrollArea}>
           <div className={styles.menuList}>
-            {primaryEntries.map((entry) => renderMenuItem(entry))}
             <div
-              className={styles.accountManagementGroup}
-              data-tour-id="account-management"
+              className={styles.gameRoomTournamentsGroup}
+              data-tour-id="game-room-and-tournaments"
             >
-              {accountEntries.map((entry) => renderMenuItem(entry))}
+              {gameRoomEntry ? renderMenuItem(gameRoomEntry) : null}
+              {tournamentsEntry ? renderMenuItem(tournamentsEntry) : null}
+            </div>
+            <div
+              className={styles.leaderboardAccountGroup}
+              data-tour-id="leaderboard-and-account"
+            >
+              {leaderboardEntry
+                ? renderMenuItem(leaderboardEntry)
+                : null}
+              <div className={styles.accountManagementGroup}>
+                {accountEntries.map((entry) => renderMenuItem(entry))}
+              </div>
             </div>
           </div>
         </div>
