@@ -37,6 +37,30 @@
   padding: 0 0.25rem;
 }
 
+.whatsappLink {
+  text-decoration: none;
+}
+
+.whatsappRow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.whatsappIcon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  color: #25d366;
+}
+
+:global(html[data-theme="light"]) .whatsappIcon {
+  color: #128c7e;
+}
+
 :global(html[data-theme="light"]) .page {
   background: linear-gradient(180deg, #fdfbff 0%, #f5f0ff 52%, #ede9fe 100%);
 }

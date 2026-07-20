@@ -21,6 +21,9 @@ export const APP_SPLASH_OVERLAY_ID = "winway-app-splash";
 
 export const APP_SPLASH_START_MARK = "__WINWAY_SPLASH_START__";
 
+/** Matches app shell `max-w-[390px]` in root layout. */
+export const APP_SPLASH_MAX_WIDTH_PX = 390;
+
 export function getAppSplashCriticalCss(): string {
   return `
 html:not([data-splash-phase="done"]) {
@@ -36,13 +39,17 @@ html:not([data-splash-phase="done"]) #${APP_SPLASH_SHELL_ID} {
 }
 #${APP_SPLASH_OVERLAY_ID} {
   position: fixed;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  left: 50%;
   z-index: 2147483646;
   box-sizing: border-box;
   width: 100%;
+  max-width: ${APP_SPLASH_MAX_WIDTH_PX}px;
   height: 100dvh;
   min-height: 100dvh;
   margin: 0;
+  transform: translateX(-50%);
   padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
     env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
   border: 0;
