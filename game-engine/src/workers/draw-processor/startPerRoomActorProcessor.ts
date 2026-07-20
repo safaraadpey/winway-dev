@@ -54,7 +54,7 @@ export function startPerRoomActorProcessor(ctx: WorkerContext): () => void {
     onWorkRequeued: () => coordinatorRef.schedulePick("backlog"),
   });
 
-  let pollScheduler: ReturnType<typeof createAdaptivePollScheduler>;
+  let pollScheduler!: ReturnType<typeof createAdaptivePollScheduler>;
 
   const coordinator = createPickCoordinator({
     supabase,
@@ -70,12 +70,13 @@ export function startPerRoomActorProcessor(ctx: WorkerContext): () => void {
     coordinationStrict: config.coordinationStrict,
     engineReplicaCount: config.engineReplicaCount,
     onPollCycleComplete: (result) => {
-      if (result.totalPicked > 0) {
+      if (result.totalDispatched > 0) {
         pollScheduler.resetToFast();
         return;
       }
       pollScheduler.notifyPollCycle({
         totalPicked: result.totalPicked,
+        totalDispatched: result.totalDispatched,
         rpcAttemptedEmpty: result.rpcAttemptedEmpty,
         lockDeferred: result.lockDeferred,
       });
@@ -111,6 +112,13 @@ export function startPerRoomActorProcessor(ctx: WorkerContext): () => void {
     enabled: config.drawPickIdleBackoff,
     log,
     onPoll: () => requestPick("poll"),
+    onBackoffChange: ({ delayMs }) => {
+      log.info("[DrawPicker] backoff state", {
+        delayMs,
+        ...coordinator.getTelemetry().snapshot(),
+        ...pollScheduler.getDiagnostics(),
+      });
+    },
   });
 
   const unregisterWake = registerDrawProcessorWake((reason) => {

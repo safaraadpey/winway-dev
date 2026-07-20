@@ -26,6 +26,7 @@ import type { GameRedis } from "../../redis/types.js";
 import type { DrawProcessorWakeReason } from "../../runtime/draw-processor-wake.js";
 import { createPickQueueStateCache } from "./pickQueueStateCache.js";
 import type { RoomDrawActorPool } from "./roomDrawActorPool.js";
+import { PickPollTelemetry } from "./pickPollTelemetry.js";
 
 const FAST_WAKE = new Set<DrawProcessorWakeReason>(["enqueue", "realtime"]);
 const PICK_LOOP_HEARTBEAT_MS = 1000;
@@ -54,6 +55,7 @@ function deferAsync(
 export interface PickPollCycleResult {
   reason: DrawProcessorWakeReason;
   totalPicked: number;
+  totalDispatched: number;
   rpcAttemptedEmpty: boolean;
   lockDeferred: boolean;
 }
@@ -77,6 +79,7 @@ export interface PickCoordinatorOptions {
 export interface PickCoordinator {
   schedulePick(reason: DrawProcessorWakeReason): void;
   stop(): void;
+  getTelemetry(): PickPollTelemetry;
 }
 
 export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordinator {
@@ -95,6 +98,9 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
   let heartbeatInFlight = false;
   let redisLockDegraded = { value: false };
   let consecutiveLockSkips = 0;
+  const telemetry = new PickPollTelemetry();
+  let lastTelemetryLogMs = 0;
+  const TELEMETRY_LOG_INTERVAL_MS = 60_000;
 
   const queueCache = createPickQueueStateCache({
     repo: opts.repo,
@@ -128,6 +134,16 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
     ? setInterval(runPickLoopHeartbeat, PICK_LOOP_HEARTBEAT_MS)
     : null;
 
+  const maybeLogTelemetry = (backoffDelayMs?: number): void => {
+    const now = Date.now();
+    if (now - lastTelemetryLogMs < TELEMETRY_LOG_INTERVAL_MS) return;
+    lastTelemetryLogMs = now;
+    opts.log.info("[DrawPicker] poll telemetry", {
+      ...telemetry.snapshot(),
+      backoffDelayMs: backoffDelayMs ?? null,
+    });
+  };
+
   const schedulePick = (reason: DrawProcessorWakeReason): void => {
     if (stopped) return;
     pendingPick = true;
@@ -156,6 +172,7 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
 
     let roundsLeft = burstBudget;
     let totalPicked = 0;
+    let totalDispatched = 0;
     let cycleLockDeferred = false;
     let cycleRpcAttemptedEmpty = false;
 
@@ -163,10 +180,14 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
       while (!stopped) {
         pendingPick = false;
         const attempt = await attemptPick(cycleReason);
-        if (attempt.lockDeferred) cycleLockDeferred = true;
+        if (attempt.lockDeferred) {
+          cycleLockDeferred = true;
+          break;
+        }
         if (attempt.rpcAttemptedEmpty) cycleRpcAttemptedEmpty = true;
 
         const picked = attempt.picked;
+        totalDispatched += attempt.dispatched;
         if (picked > 0) {
           totalPicked += picked;
           queueCache.notePicked(picked);
@@ -201,11 +222,17 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
         opts.onPollCycleComplete?.({
           reason: cycleReason,
           totalPicked,
+          totalDispatched,
           rpcAttemptedEmpty: cycleRpcAttemptedEmpty,
           lockDeferred: cycleLockDeferred,
         });
+        maybeLogTelemetry();
       }
-      if ((pendingPick || queueCache.hasQueued()) && !stopped) {
+      if (
+        !cycleLockDeferred &&
+        (pendingPick || queueCache.hasQueued()) &&
+        !stopped
+      ) {
         void runPickLoop();
       }
     }
@@ -223,6 +250,7 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
     activeWakeReason: DrawProcessorWakeReason
   ): Promise<{
     picked: number;
+    dispatched: number;
     lockDeferred: boolean;
     rpcAttemptedEmpty: boolean;
   }> => {
@@ -237,6 +265,7 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
       }),
     };
 
+    telemetry.noteLockAttempt();
     const lock = await acquireLeaderLockWithTimeout({
       redis: opts.redis,
       lockKey,
@@ -251,7 +280,7 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
     });
 
     if (!lock.proceed) {
-      pendingPick = true;
+      telemetry.noteLockDeferred();
       consecutiveLockSkips += 1;
       if (FAST_WAKE.has(activeWakeReason)) {
         wakeReason = activeWakeReason;
@@ -264,15 +293,24 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
           consecutiveLockSkips,
           timedOut: lock.timedOut === true,
           wakeReason: activeWakeReason,
+          ...telemetry.snapshot(),
           hint:
-            "Another engine replica may hold the Redis draw-processor lock — run only one engine per DB.",
+            "Another replica holds the draw-picker lock; local poll backoff will apply.",
         });
       }
-      return { picked: 0, lockDeferred: true, rpcAttemptedEmpty: false };
+      return {
+        picked: 0,
+        dispatched: 0,
+        lockDeferred: true,
+        rpcAttemptedEmpty: false,
+      };
     }
 
     consecutiveLockSkips = 0;
     const lockHeld = lock.lockHeld;
+    if (lockHeld) {
+      telemetry.noteLockHeldPick();
+    }
     let pickStep: { result: DrawJob[]; timing: StepTiming } | null = null;
 
     pickInFlight = true;
@@ -307,7 +345,13 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
     );
 
     if (!pickStep || pickStep.result.length === 0) {
-      return { picked: 0, lockDeferred: false, rpcAttemptedEmpty: true };
+      telemetry.noteEmptyQueuePoll();
+      return {
+        picked: 0,
+        dispatched: 0,
+        lockDeferred: false,
+        rpcAttemptedEmpty: true,
+      };
     }
 
     const picked = pickStep.result;
@@ -320,6 +364,7 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
     if (jobs.length === 0) {
       return {
         picked: picked.length,
+        dispatched: 0,
         lockDeferred: false,
         rpcAttemptedEmpty: false,
       };
@@ -348,8 +393,11 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
       opts.pool.dispatch(job, pickContext);
     }
 
+    telemetry.noteSuccessfulWorkCycle();
+
     return {
       picked: picked.length,
+      dispatched: jobs.length,
       lockDeferred: false,
       rpcAttemptedEmpty: false,
     };
@@ -357,6 +405,7 @@ export function createPickCoordinator(opts: PickCoordinatorOptions): PickCoordin
 
   return {
     schedulePick,
+    getTelemetry: () => telemetry,
     stop: () => {
       stopped = true;
       if (heartbeatTimer) clearInterval(heartbeatTimer);

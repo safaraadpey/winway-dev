@@ -1,7 +1,13 @@
 import type { Logger } from "../../metrics/logger.js";
+import {
+  buildPickPollBackoffLadder,
+  shouldAdvancePickPollBackoff,
+  shouldResetPickPollFast,
+} from "./pickPollBackoff.js";
 
 export interface PollCycleOutcome {
   totalPicked: number;
+  totalDispatched?: number;
   rpcAttemptedEmpty: boolean;
   lockDeferred: boolean;
 }
@@ -11,6 +17,19 @@ export interface AdaptivePollSchedulerOptions {
   enabled: boolean;
   log: Logger;
   onPoll: () => void;
+  /** Optional telemetry hook when backoff level changes. */
+  onBackoffChange?: (args: {
+    delayMs: number;
+    emptyPollStreak: number;
+    reason: "fast-reset" | "idle-backoff";
+  }) => void;
+}
+
+export interface AdaptivePollSchedulerDiagnostics {
+  enabled: boolean;
+  currentDelayMs: number;
+  emptyPollStreak: number;
+  ladderMs: number[];
 }
 
 export interface AdaptivePollScheduler {
@@ -18,25 +37,13 @@ export interface AdaptivePollScheduler {
   notifyPollCycle(outcome: PollCycleOutcome): void;
   start(): void;
   stop(): void;
-}
-
-function buildLadder(baseMs: number): number[] {
-  const steps = [baseMs, 1000, 2000, 5000];
-  const seen = new Set<number>();
-  const ladder: number[] = [];
-  for (const ms of steps) {
-    if (!seen.has(ms)) {
-      seen.add(ms);
-      ladder.push(ms);
-    }
-  }
-  return ladder.sort((a, b) => a - b);
+  getDiagnostics(): AdaptivePollSchedulerDiagnostics;
 }
 
 export function createAdaptivePollScheduler(
   opts: AdaptivePollSchedulerOptions
 ): AdaptivePollScheduler {
-  const { baseIntervalMs, enabled, log, onPoll } = opts;
+  const { baseIntervalMs, enabled, log, onPoll, onBackoffChange } = opts;
 
   if (!enabled) {
     let interval: ReturnType<typeof setInterval> | null = null;
@@ -51,12 +58,18 @@ export function createAdaptivePollScheduler(
         if (interval) clearInterval(interval);
         interval = null;
       },
+      getDiagnostics: () => ({
+        enabled: false,
+        currentDelayMs: baseIntervalMs,
+        emptyPollStreak: 0,
+        ladderMs: [baseIntervalMs],
+      }),
     };
   }
 
-  const ladder = buildLadder(baseIntervalMs);
+  const ladder = buildPickPollBackoffLadder(baseIntervalMs);
   let emptyPollStreak = 0;
-  let currentDelayMs = ladder[0];
+  let currentDelayMs = ladder[0]!;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
 
@@ -72,11 +85,35 @@ export function createAdaptivePollScheduler(
   const applyFast = (): void => {
     const prev = currentDelayMs;
     emptyPollStreak = 0;
-    currentDelayMs = ladder[0];
+    currentDelayMs = ladder[0]!;
     if (prev !== currentDelayMs) {
-      log.info("[Scheduler] pick-poll-backoff", {
+      log.info("[DrawPicker] pick-poll-backoff", {
         delayMs: currentDelayMs,
         emptyPollStreak,
+        reason: "fast-reset",
+      });
+      onBackoffChange?.({
+        delayMs: currentDelayMs,
+        emptyPollStreak,
+        reason: "fast-reset",
+      });
+    }
+  };
+
+  const advanceBackoff = (): void => {
+    const prev = currentDelayMs;
+    emptyPollStreak = Math.min(emptyPollStreak + 1, ladder.length - 1);
+    currentDelayMs = ladder[emptyPollStreak]!;
+    if (prev !== currentDelayMs) {
+      log.info("[DrawPicker] pick-poll-backoff", {
+        delayMs: currentDelayMs,
+        emptyPollStreak,
+        reason: "idle-backoff",
+      });
+      onBackoffChange?.({
+        delayMs: currentDelayMs,
+        emptyPollStreak,
+        reason: "idle-backoff",
       });
     }
   };
@@ -87,30 +124,22 @@ export function createAdaptivePollScheduler(
       arm();
     },
     notifyPollCycle: (outcome) => {
-      if (outcome.totalPicked > 0) {
+      if (shouldResetPickPollFast(outcome)) {
         applyFast();
         arm();
         return;
       }
-      if (!outcome.rpcAttemptedEmpty) {
+      if (shouldAdvancePickPollBackoff(outcome)) {
+        advanceBackoff();
         arm();
         return;
-      }
-      const prev = currentDelayMs;
-      emptyPollStreak = Math.min(emptyPollStreak + 1, ladder.length - 1);
-      currentDelayMs = ladder[emptyPollStreak];
-      if (prev !== currentDelayMs) {
-        log.info("[Scheduler] pick-poll-backoff", {
-          delayMs: currentDelayMs,
-          emptyPollStreak,
-        });
       }
       arm();
     },
     start: () => {
       stopped = false;
       emptyPollStreak = 0;
-      currentDelayMs = ladder[0];
+      currentDelayMs = ladder[0]!;
       onPoll();
     },
     stop: () => {
@@ -118,5 +147,11 @@ export function createAdaptivePollScheduler(
       if (timer) clearTimeout(timer);
       timer = null;
     },
+    getDiagnostics: () => ({
+      enabled: true,
+      currentDelayMs,
+      emptyPollStreak,
+      ladderMs: [...ladder],
+    }),
   };
 }

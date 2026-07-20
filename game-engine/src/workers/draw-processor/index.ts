@@ -238,6 +238,7 @@ function startLegacyDrainProcessor(ctx: WorkerContext): () => void {
         if (pollLockDeferred) {
           pollScheduler.notifyPollCycle({
             totalPicked: 0,
+            totalDispatched: 0,
             rpcAttemptedEmpty: false,
             lockDeferred: true,
           });
@@ -247,6 +248,7 @@ function startLegacyDrainProcessor(ctx: WorkerContext): () => void {
           } else {
             pollScheduler.notifyPollCycle({
               totalPicked: 0,
+              totalDispatched: 0,
               rpcAttemptedEmpty: true,
               lockDeferred: false,
             });
