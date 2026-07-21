@@ -9,6 +9,8 @@ import { useTour } from "@/lib/contexts/TourContext";
 import SupportFaq from "@/components/support/SupportFaq";
 
 const WHATSAPP_SUPPORT_URL = "https://wa.me/14373355495";
+/** Temporarily hide WhatsApp support entry on support page. */
+const SHOW_WHATSAPP_SUPPORT_LINK = false;
 
 const supportLinks = [
   {
@@ -51,6 +53,7 @@ export default function SupportPage() {
               <span>{item.title}</span>
             </Link>
           ))}
+          {SHOW_WHATSAPP_SUPPORT_LINK ? (
           <a
             href={WHATSAPP_SUPPORT_URL}
             target="_blank"
@@ -73,6 +76,7 @@ export default function SupportPage() {
               <span>تماس با پشتیبانی</span>
             </span>
           </a>
+          ) : null}
           <button
             type="button"
             dir="rtl"
