@@ -198,6 +198,7 @@ async function loadMonthlyActivitySource(
     .from("commissions_log")
     .select(selectCols)
     .eq(filterCol, userId)
+    .eq("status", "settled")
     .gte("created_at", monthStart);
 
   const [resultsRes, manualRes, commRes] = await Promise.all([
@@ -609,6 +610,7 @@ async function calculateUserActivity(
         .from("commissions_log")
         .select("agent_amount, super_amount, admin_amount, commission_base")
         .eq("player_id", userId)
+        .eq("status", "settled")
         .gte("created_at", periodStart.toISOString());
 
       if (commissionError) {
@@ -632,6 +634,7 @@ async function calculateUserActivity(
         .from("commissions_log")
         .select("agent_amount, commission_base")
         .eq("agent_id", userId)
+        .eq("status", "settled")
         .gte("created_at", periodStart.toISOString());
 
       if (commissionError) {
@@ -651,6 +654,7 @@ async function calculateUserActivity(
         .from("commissions_log")
         .select("super_amount, commission_base")
         .eq("super_id", userId)
+        .eq("status", "settled")
         .gte("created_at", periodStart.toISOString());
 
       if (commissionError) {

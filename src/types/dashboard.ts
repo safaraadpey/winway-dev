@@ -18,7 +18,7 @@ export interface DashboardUserInfo {
 export interface FinancialSummary {
   period: DashboardPeriod;
   ticketsVolume: number; // مجموع مبلغ بلیت‌ها / فروش
-  /** مجموع مبلغی که کمیسیون از آن ساخته شده (commission_base) */
+  /** مجموع commission_base تیکت‌های settle‌شده (فقط کمیسیون پرداخت‌شده) */
   ticketsVolumeTotal: number;
   /** مجموع commission_base تورنومنت‌ها */
   tournamentTicketsVolumeTotal: number;

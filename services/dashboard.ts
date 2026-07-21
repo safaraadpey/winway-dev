@@ -288,12 +288,14 @@ export async function loadDashboardRangeSummary(params: {
           .from("commissions_log")
           .select("agent_amount, commission_base")
           .eq("agent_id", user.id)
+          .eq("status", "settled")
           .gte("created_at", fromIso)
           .lte("created_at", toIso)
       : supabase
           .from("commissions_log")
           .select("super_amount, commission_base")
           .eq("super_id", user.id)
+          .eq("status", "settled")
           .gte("created_at", fromIso)
           .lte("created_at", toIso);
 
@@ -683,11 +685,13 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
           .from("commissions_log")
           .select("agent_amount, commission_base, created_at")
           .eq("agent_id", user.id)
+          .eq("status", "settled")
           .gte("created_at", monthIso)
       : supabase
           .from("commissions_log")
           .select("super_amount, commission_base, created_at")
           .eq("super_id", user.id)
+          .eq("status", "settled")
           .gte("created_at", monthIso);
 
   const tournamentCommissionQuery =
@@ -803,7 +807,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
     );
   };
 
-  // "کانیات کل" (commission_base): for admin from server route; for agent/super from commissions_log.
+  // "کانیات کل" (commission_base): settled rows only (paid ticket commissions).
   const commissionBaseFor = (startIso: string) => {
     if (user.role === "admin") {
       if (startIso === dayIso) return adminCommissionMap?.total.day ?? 0;

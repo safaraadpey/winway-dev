@@ -81,6 +81,7 @@ export async function GET(request: NextRequest) {
     const { data: baseRows, error: baseErr } = await supabase
       .from("commissions_log")
       .select("commission_base, created_at")
+      .eq("status", "settled")
       .gte("created_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString());
 
     if (baseErr) {
