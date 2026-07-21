@@ -231,8 +231,27 @@ function makeHistoryCacheKey(params: { dateFilter: DateFilter; search: string; u
   return `${params.userId}|${params.dateFilter}|${q}`;
 }
 
+/** Panel cashdesk ledger only — excludes room join, settlement, commission, etc. */
+const PANEL_HISTORY_SOURCE_KINDS = ["manual_panel", "admin_panel_transfer"] as const;
+
+function isPanelCashdeskTransaction(row: {
+  source_kind?: string | null;
+  type?: string | null;
+}): boolean {
+  const kind = String(row.source_kind ?? "");
+  const type = String(row.type ?? "");
+  if (kind === "manual_panel") {
+    return type === "deposit" || type === "withdraw";
+  }
+  if (kind === "admin_panel_transfer") {
+    return type === "transfer_in" || type === "transfer_out";
+  }
+  return false;
+}
+
 /**
- * بارگذاری تاریخچه تراکنش‌های دستی (manual_panel)
+ * تاریخچه پیشخوان پنل: فقط واریز/برداشت دستی (manual_panel) و انتقال پنلی (admin_panel_transfer).
+ * تراکنش‌های بازی (room_join، settlement، کمیسیون و …) در این گزارش نیست.
  */
 export async function loadTransactionHistory(
   params: LoadTransactionHistoryParams = {}
@@ -395,77 +414,103 @@ export async function loadTransactionHistory(
       return empty;
     }
 
-    // گرفتن همه تراکنش‌ها
-    // باید تراکنش‌هایی که فرستنده (source_ref) یا گیرنده (user_id) در targetUserIds است را بگیریم
-    // اما Supabase query builder نمی‌تواند OR پیچیده را handle کند، پس باید از RPC استفاده کنیم
-    // یا اینکه دو query جداگانه بگیریم و merge کنیم
-    
-    // روش 1: گرفتن تراکنش‌هایی که گیرنده در scope است
-    let receiverQuery = supabase
-      .from("transactions")
-      .select("id, user_id, amount, type, created_at, description, source_kind, source_ref, meta")
-      .gte("created_at", dateFrom.toISOString())
-      .order("created_at", { ascending: false })
-      .limit(100);
+    const dateFromIso = dateFrom.toISOString();
 
-    if (!scopeAll) {
-      receiverQuery = receiverQuery.in("user_id", targetUserIds);
-    }
+    const panelSelect =
+      "id, user_id, amount, type, created_at, description, source_kind, source_ref, meta";
 
-    const { data: transactionsAsReceiver, error: error1 } = await receiverQuery;
+    let uniqueTransactions: any[];
 
-    // روش 2: گرفتن تراکنش‌هایی که فرستنده (source_ref) در scope است
-    let senderQuery = supabase
-      .from("transactions")
-      .select("id, user_id, amount, type, created_at, description, source_kind, source_ref, meta")
-      .gte("created_at", dateFrom.toISOString())
-      .order("created_at", { ascending: false })
-      .limit(100);
+    if (scopeAll) {
+      const { data, error } = await supabase
+        .from("transactions")
+        .select(panelSelect)
+        .in("source_kind", [...PANEL_HISTORY_SOURCE_KINDS])
+        .gte("created_at", dateFromIso)
+        .order("created_at", { ascending: false })
+        .limit(100);
 
-    if (!scopeAll) {
-      // source_ref column is text; PostgREST supports IN on text.
-      senderQuery = senderQuery.in("source_ref", targetUserIds);
-    }
+      if (error) {
+        console.error("[Wallet] loadTransactionHistory query error:", error);
+        throw new Error("خطا در بارگذاری تاریخچه تراکنش‌ها");
+      }
+      uniqueTransactions = data || [];
+    } else {
+      // روش 1: تراکنش‌هایی که user_id (طرف کیف پول) در scope است
+      let receiverQuery = supabase
+        .from("transactions")
+        .select(panelSelect)
+        .in("source_kind", [...PANEL_HISTORY_SOURCE_KINDS])
+        .gte("created_at", dateFromIso)
+        .order("created_at", { ascending: false })
+        .limit(100)
+        .in("user_id", targetUserIds);
 
-    let transactionsAsSender: any[] | null = [];
-    let error2: any = null;
-    if (!scopeAll) {
+      const { data: transactionsAsReceiver, error: error1 } = await receiverQuery;
+
+      // روش 2: تراکنش‌هایی که source_ref (عامل پنل / طرف مقابل) در scope است
+      let senderQuery = supabase
+        .from("transactions")
+        .select(panelSelect)
+        .in("source_kind", [...PANEL_HISTORY_SOURCE_KINDS])
+        .gte("created_at", dateFromIso)
+        .order("created_at", { ascending: false })
+        .limit(100)
+        .in("source_ref", targetUserIds);
+
       const senderRes = await senderQuery;
-      transactionsAsSender = senderRes.data;
-      error2 = senderRes.error;
+      const transactionsAsSender = senderRes.data;
+      const error2 = senderRes.error;
+
+      if (error1 || error2) {
+        console.error("[Wallet] loadTransactionHistory query error:", error1 || error2);
+        throw new Error("خطا در بارگذاری تاریخچه تراکنش‌ها");
+      }
+
+      const allTransactions = [
+        ...(transactionsAsReceiver || []),
+        ...(transactionsAsSender || []),
+      ];
+
+      uniqueTransactions = Array.from(
+        new Map(allTransactions.map((t: any) => [t.id, t])).values()
+      );
+
+      uniqueTransactions.sort(
+        (a: any, b: any) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
     }
 
-    if (error1 || error2) {
-      console.error("loadTransactionHistory query error:", error1 || error2);
-      throw new Error("خطا در بارگذاری تاریخچه تراکنش‌ها");
-    }
-
-    // merge کردن و حذف duplicates
-    const allTransactions = [
-      ...(transactionsAsReceiver || []),
-      ...(transactionsAsSender || [])
-    ];
-    
-    // حذف duplicates بر اساس id
-    const uniqueTransactions = Array.from(
-      new Map(allTransactions.map((t: any) => [t.id, t])).values()
-    );
-    
-    // sort بر اساس created_at
-    uniqueTransactions.sort((a: any, b: any) => 
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
+    const panelTransactions = uniqueTransactions.filter((t: any) => isPanelCashdeskTransaction(t));
     
     const targetUserSet = new Set(targetUserIds);
-    const filteredTransactions = uniqueTransactions.filter((t: any) => {
-      if (t.source_kind === "admin_panel_transfer" && t.meta?.actor_id && t.meta?.target_id) {
-        const actorInScope = targetUserSet.has(String(t.meta.actor_id));
-        const targetInScope = targetUserSet.has(String(t.meta.target_id));
-        if (actorInScope && targetInScope && t.type === "transfer_in") {
-          // when both sides are in scope, keep only transfer_out to avoid duplicate rows
-          return false;
+    const filteredTransactions = panelTransactions.filter((t: any) => {
+      if (!scopeAll) {
+        if (t.source_kind === "admin_panel_transfer" && t.meta?.actor_id && t.meta?.target_id) {
+          const actorId = String(t.meta.actor_id);
+          const targetId = String(t.meta.target_id);
+          const inScope =
+            targetUserSet.has(t.user_id) ||
+            targetUserSet.has(actorId) ||
+            targetUserSet.has(targetId) ||
+            (t.source_ref && targetUserSet.has(String(t.source_ref)));
+          if (!inScope) return false;
+
+          const actorInScope = targetUserSet.has(actorId);
+          const targetInScope = targetUserSet.has(targetId);
+          if (actorInScope && targetInScope && t.type === "transfer_in") {
+            return false;
+          }
+          return true;
         }
+
+        const inScope =
+          targetUserSet.has(t.user_id) ||
+          (t.source_ref && targetUserSet.has(String(t.source_ref)));
+        return inScope;
       }
+
       return true;
     });
 
@@ -519,7 +564,7 @@ export async function loadTransactionHistory(
 
     const allUserIds = Array.from(
       new Set([...actorIds, ...targetIds, ...metaActorIds, ...metaTargetIds])
-    );
+    ).filter((id) => /^[0-9a-fA-F-]{36}$/.test(id));
 
     const { data: users, error: usersError } = await supabase
       .from("users")
