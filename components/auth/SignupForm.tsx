@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { supabase } from "@/lib/supabaseClient";
 import { usernameToEmail, validateUsername } from "@/lib/auth-helpers";
@@ -24,6 +24,7 @@ const logoSrc = getLogoImagePath(DEFAULT_THEME, "logo");
  */
 export default function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [referralCode, setReferralCode] = useState("");
@@ -31,6 +32,13 @@ export default function SignupForm() {
   
   // پسورد به صورت پیش‌فرض visible است
   const [showPassword] = useState(true);
+
+  useEffect(() => {
+    const refFromUrl = searchParams.get("ref");
+    if (refFromUrl?.trim()) {
+      setReferralCode(refFromUrl.trim().toUpperCase());
+    }
+  }, [searchParams]);
 
   /**
    * هندل کردن submit فرم ثبت‌نام

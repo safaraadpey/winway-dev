@@ -16,6 +16,7 @@ import AdminDashboardReportSkeleton from "@/components/admin/AdminDashboardRepor
 import type { DashboardPeriod, DashboardData } from "@/src/types/dashboard";
 import type { AdminPermissions } from "@/src/types/admins";
 import InstallAppButton from "@/components/InstallAppButton";
+import ReferralRegistrationLink from "@/components/admin/ReferralRegistrationLink";
 
 const PERIOD_LABELS: Record<DashboardPeriod, string> = {
   day: "روز",
@@ -265,22 +266,27 @@ export default function AdminDashboardPage() {
           </div>
 
           {isAdmin && (
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <div className="w-full h-12 rounded-xl bg-[#1f1f1f] border border-gray-700 text-gray-100 flex items-center px-4">
-                  {reportLoading && !data?.user ? (
-                    <div className="h-4 w-20 rounded bg-gray-800 animate-pulse" />
-                  ) : (
-                    <span className="text-base font-mono">{data?.user?.referralCode || ""}</span>
-                  )}
+            <div className="rounded-xl border border-gray-700 bg-[#151515] p-3 space-y-2 mb-3">
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <div className="w-full h-12 rounded-xl bg-[#1f1f1f] border border-gray-700 text-gray-100 flex items-center px-4">
+                    {reportLoading && !data?.user ? (
+                      <div className="h-4 w-20 rounded bg-gray-800 animate-pulse" />
+                    ) : (
+                      <span className="text-base font-mono">{data?.user?.referralCode || ""}</span>
+                    )}
+                  </div>
                 </div>
+                <button
+                  onClick={() => router.push("/admin/settings")}
+                  className="px-4 h-12 rounded-xl bg-teal-700 text-white text-sm font-semibold shadow-md hover:bg-teal-600 active:bg-teal-800 whitespace-nowrap"
+                >
+                  {hasReferralCode ? "تغییر کد معرف" : "ثبت کد معرف"}
+                </button>
               </div>
-              <button
-                onClick={() => router.push("/admin/settings")}
-                className="px-4 h-12 rounded-xl bg-teal-700 text-white text-sm font-semibold shadow-md hover:bg-teal-600 active:bg-teal-800 whitespace-nowrap"
-              >
-                {hasReferralCode ? "تغییر کد معرف" : "ثبت کد معرف"}
-              </button>
+              {data?.user?.referralCode ? (
+                <ReferralRegistrationLink referralCode={data.user.referralCode} />
+              ) : null}
             </div>
           )}
         </div>

@@ -7,6 +7,7 @@ import { loadDashboardData, loadDashboardRangeSummary } from "@/services/dashboa
 import { hardExitFromCurrentPanel } from "@/lib/auth/hardExit";
 import type { DashboardPeriod, DashboardData } from "@/src/types/dashboard";
 import ShamsiDateInput from "@/components/common/ShamsiDateInput";
+import ReferralRegistrationLink from "@/components/admin/ReferralRegistrationLink";
 
 const PERIOD_LABELS: Record<DashboardPeriod, string> = {
   day: "روز",
@@ -122,24 +123,26 @@ export default function AgentDashboardPage() {
             </button>
           </div>
 
-          {/* ردیف کد معرف ساده (بدون دراپ‌داون) */}
-          <div className="flex gap-3">
-            {/* نمایش کد فعلی */}
-            <div className="flex-1">
-              <div className="w-full h-12 rounded-xl bg-[#1f1f1f] border border-gray-700 text-gray-100 flex items-center px-4">
-                <span className="text-base font-mono">
-                  {data?.user?.referralCode || ""}
-                </span>
+          {/* ردیف کد معرف و لینک ثبت‌نام */}
+          <div className="rounded-xl border border-gray-700 bg-[#151515] p-3 space-y-2 mb-3">
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <div className="w-full h-12 rounded-xl bg-[#1f1f1f] border border-gray-700 text-gray-100 flex items-center px-4">
+                  <span className="text-base font-mono">
+                    {data?.user?.referralCode || ""}
+                  </span>
+                </div>
               </div>
+              <button
+                onClick={() => router.push("/agent/settings")}
+                className="px-4 h-12 rounded-xl bg-teal-700 text-white text-sm font-semibold shadow-md hover:bg-teal-600 active:bg-teal-800 whitespace-nowrap"
+              >
+                {hasReferralCode ? "تغییر کد معرف" : "ثبت کد معرف"}
+              </button>
             </div>
-
-            {/* دکمه ثبت/تغییر کد معرف */}
-            <button
-              onClick={() => router.push("/agent/settings")}
-              className="px-4 h-12 rounded-xl bg-teal-700 text-white text-sm font-semibold shadow-md hover:bg-teal-600 active:bg-teal-800 whitespace-nowrap"
-            >
-              {hasReferralCode ? "تغییر کد معرف" : "ثبت کد معرف"}
-            </button>
+            {data?.user?.referralCode ? (
+              <ReferralRegistrationLink referralCode={data.user.referralCode} />
+            ) : null}
           </div>
         </div>
 
