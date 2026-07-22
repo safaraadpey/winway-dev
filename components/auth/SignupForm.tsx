@@ -29,6 +29,7 @@ export default function SignupForm() {
   const [password, setPassword] = useState("");
   const [referralCode, setReferralCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [referralErrorHint, setReferralErrorHint] = useState<string | null>(null);
   
   // پسورد به صورت پیش‌فرض visible است
   const [showPassword] = useState(true);
@@ -62,37 +63,39 @@ export default function SignupForm() {
         return;
       }
 
-      // اعتبارسنجی referral code (اجباری)
+      // اعتبارسنجی referral code (اجباری) — authoritative server check
       if (!referralCode || referralCode.trim().length === 0) {
+        setReferralErrorHint("کد معرف الزامی است");
         toast.error("کد معرف الزامی است");
         setLoading(false);
         return;
       }
 
+      const validationRes = await fetch("/api/auth/validate-referral-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: referralCode }),
+      });
+
+      const validationBody = (await validationRes.json()) as {
+        valid?: boolean;
+        normalizedCode?: string;
+        message?: string;
+      };
+
+      if (!validationRes.ok || !validationBody.valid || !validationBody.normalizedCode) {
+        const message =
+          validationBody.message || "کد معرف معتبر نیست. لطفاً کد صحیح را وارد کنید";
+        setReferralErrorHint(message);
+        toast.error(message);
+        setLoading(false);
+        return;
+      }
+
+      const trimmedReferralCode = validationBody.normalizedCode;
+
       // ساخت ایمیل از username
       const email = usernameToEmail(username);
-      
-      // بررسی معتبر بودن referral code در دیتابیس
-      const trimmedReferralCode = referralCode.trim().toUpperCase();
-      const { data: referrer, error: refError } = await supabase
-        .from('users')
-        .select('id, role, status')
-        .eq('referral_code', trimmedReferralCode)
-        .eq('status', 'active')
-        .single();
-      
-      if (refError || !referrer) {
-        toast.error("کد معرف معتبر نیست. لطفاً کد صحیح را وارد کنید");
-        setLoading(false);
-        return;
-      }
-      
-      // بررسی اینکه referrer می‌تواند معرف باشد (player نمی‌تواند معرف باشد)
-      if (referrer.role === 'player') {
-        toast.error("کد معرف متعلق به player است. فقط agent، super یا admin می‌توانند معرف باشند");
-        setLoading(false);
-        return;
-      }
 
       // ثبت‌نام
       const { data, error: signUpError } = await supabase.auth.signUp({
@@ -108,15 +111,26 @@ export default function SignupForm() {
       });
 
       if (signUpError) {
-        // اگر خطای "User already registered" بود
-        if (signUpError.message.includes("already registered") || signUpError.message.includes("already exists")) {
+        if (
+          signUpError.message.includes("already registered") ||
+          signUpError.message.includes("already exists")
+        ) {
           toast.error("این نام کاربری قبلاً ثبت شده است. لطفاً از صفحه ورود استفاده کنید");
+        } else if (
+          signUpError.message.includes("کد معرف") ||
+          signUpError.message.toLowerCase().includes("referral")
+        ) {
+          const message = "کد معرف معتبر نیست. لطفاً کد صحیح را وارد کنید";
+          setReferralErrorHint(message);
+          toast.error(message);
         } else {
           toast.error(signUpError.message || "خطایی در ثبت‌نام رخ داد");
         }
         setLoading(false);
         return;
       }
+
+      setReferralErrorHint(null);
 
       if (data.user) {
         toast.success("ثبت‌نام موفق! در حال ورود...");
@@ -224,15 +238,22 @@ export default function SignupForm() {
                 type="text"
                 required
                 value={referralCode}
-                onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                onChange={(e) => {
+                  setReferralCode(e.target.value.toUpperCase());
+                  if (referralErrorHint) setReferralErrorHint(null);
+                }}
                 className={`${styles.input} ${styles.latinInput} ${styles.uppercaseInput}`}
                 placeholder="کد معرف خود را وارد کنید"
                 disabled={loading}
               />
             </div>
-            <p className={styles.helperText}>
-              ثبت‌نام بدون کد معرف امکان‌پذیر نیست
-            </p>
+            {referralErrorHint ? (
+              <p className={styles.errorHint}>{referralErrorHint}</p>
+            ) : (
+              <p className={styles.helperText}>
+                ثبت‌نام بدون کد معرف امکان‌پذیر نیست
+              </p>
+            )}
           </div>
 
           {/* Submit Button */}

@@ -145,6 +145,13 @@
   line-height: 1.4;
 }
 
+.errorHint {
+  margin-top: 0.25rem;
+  font-size: 13px;
+  color: #f87171;
+  line-height: 1.4;
+}
+
 .submitButton {
   width: 220px;
   height: 54px;
