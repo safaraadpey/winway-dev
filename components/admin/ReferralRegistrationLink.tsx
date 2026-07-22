@@ -42,16 +42,16 @@ export default function ReferralRegistrationLink({
       <div className="text-gray-400 text-xs mb-2">لینک ثبت نام و تنظیم کد معرف</div>
       <div className="flex items-center gap-2">
         <div
-          className="flex-1 min-w-0 h-10 rounded-lg bg-[#1f1f1f] border border-gray-700 flex items-center px-3 text-sm font-mono truncate dir-ltr text-left"
+          className="flex-1 min-w-0 h-10 rounded-lg bg-[#1f1f1f] border border-gray-700 flex items-center px-3 font-mono truncate dir-ltr text-left"
           title={fullLink || undefined}
         >
           {normalizedCode ? (
             <>
-              <span className="text-gray-500">/register?ref=</span>
-              <span className="text-green-400 font-semibold">{normalizedCode}</span>
+              <span className="text-[10px] text-gray-500 leading-none">/register?ref=</span>
+              <span className="text-sm text-green-400 font-semibold">{normalizedCode}</span>
             </>
           ) : (
-            <span className="text-gray-500">کد معرف ثبت نشده</span>
+            <span className="text-sm text-gray-500">کد معرف ثبت نشده</span>
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
