@@ -6,6 +6,7 @@ import { HeaderVisibilityProvider, useHeaderVisibility } from "@/lib/contexts/He
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import DingHeader from "@/components/DingHeader";
 import EntryBannerModal from "@/components/EntryBannerModal";
+import ReferralCodeRequiredModal from "@/components/agent/ReferralCodeRequiredModal";
 import ClientAuthGuard from "@/components/auth/ClientAuthGuard";
 
 function AgentLayoutContent({
@@ -29,6 +30,7 @@ function AgentLayoutContent({
         />
       )}
       {children}
+      <ReferralCodeRequiredModal />
       <EntryBannerModal visibleOnPaths={["/agent/dashboard"]} />
     </>
   );

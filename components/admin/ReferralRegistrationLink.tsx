@@ -39,7 +39,7 @@ export default function ReferralRegistrationLink({
 
   return (
     <div className="rounded-xl border border-gray-700 bg-[#151515] p-3 mb-3">
-      <div className="text-gray-400 text-xs mb-2">لینک ثبت‌نام</div>
+      <div className="text-gray-400 text-xs mb-2">لینک ثبت نام و تنظیم کد معرف</div>
       <div className="flex items-center gap-2">
         <div
           className="flex-1 min-w-0 h-10 rounded-lg bg-[#1f1f1f] border border-gray-700 flex items-center px-3 text-sm font-mono truncate dir-ltr text-left"
@@ -70,7 +70,7 @@ export default function ReferralRegistrationLink({
             onClick={() => router.push(settingsPath)}
             className="px-3 h-10 rounded-lg bg-teal-700 text-white text-xs font-semibold hover:bg-teal-600 active:bg-teal-800 whitespace-nowrap"
           >
-            {hasReferralCode ? "تغییر کد معرف" : "ثبت کد معرف"}
+            {hasReferralCode ? "تغییر کد" : "ثبت کد معرف"}
           </button>
         </div>
       </div>
