@@ -123,27 +123,11 @@ export default function AgentDashboardPage() {
             </button>
           </div>
 
-          {/* ردیف کد معرف و لینک ثبت‌نام */}
-          <div className="rounded-xl border border-gray-700 bg-[#151515] p-3 space-y-2 mb-3">
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <div className="w-full h-12 rounded-xl bg-[#1f1f1f] border border-gray-700 text-gray-100 flex items-center px-4">
-                  <span className="text-base font-mono">
-                    {data?.user?.referralCode || ""}
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={() => router.push("/agent/settings")}
-                className="px-4 h-12 rounded-xl bg-teal-700 text-white text-sm font-semibold shadow-md hover:bg-teal-600 active:bg-teal-800 whitespace-nowrap"
-              >
-                {hasReferralCode ? "تغییر کد معرف" : "ثبت کد معرف"}
-              </button>
-            </div>
-            {data?.user?.referralCode ? (
-              <ReferralRegistrationLink referralCode={data.user.referralCode} />
-            ) : null}
-          </div>
+          <ReferralRegistrationLink
+            referralCode={data?.user?.referralCode}
+            settingsPath="/agent/settings"
+            hasReferralCode={hasReferralCode}
+          />
         </div>
 
         {/* تب‌های بازه زمانی و کارت آمار مالی */}
