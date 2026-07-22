@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import toast from "react-hot-toast";
 import { useSession } from "@/lib/contexts/SessionContext";
 import { clearDashboardCache, loadDashboardUserInfo } from "@/services/dashboard";
+import { publishReferralCodeUpdated } from "@/lib/referral/referralCodeEvents";
 import {
   checkReferralCodeAvailable,
   updateReferralCode,
@@ -100,6 +101,7 @@ export default function ReferralCodeRequiredModal() {
       }
 
       clearDashboardCache();
+      publishReferralCodeUpdated(newCode);
       setShow(false);
       setNewCode("");
       toast.success("کد معرف با موفقیت ثبت شد");

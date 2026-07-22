@@ -8,6 +8,7 @@ import { hardExitFromCurrentPanel } from "@/lib/auth/hardExit";
 import type { DashboardPeriod, DashboardData } from "@/src/types/dashboard";
 import ShamsiDateInput from "@/components/common/ShamsiDateInput";
 import ReferralRegistrationLink from "@/components/admin/ReferralRegistrationLink";
+import { useReferralCodeDashboardSync } from "@/lib/referral/useReferralCodeDashboardSync";
 
 const PERIOD_LABELS: Record<DashboardPeriod, string> = {
   day: "روز",
@@ -38,6 +39,8 @@ export default function AgentDashboardPage() {
     setShowBackButton(false);
     setOnBackClick(null);
   }, [setShowHeader, setShowBackButton, setOnBackClick]);
+
+  useReferralCodeDashboardSync(setData);
 
   useEffect(() => {
     async function fetchData() {

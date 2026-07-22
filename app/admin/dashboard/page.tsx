@@ -17,6 +17,7 @@ import type { DashboardPeriod, DashboardData } from "@/src/types/dashboard";
 import type { AdminPermissions } from "@/src/types/admins";
 import InstallAppButton from "@/components/InstallAppButton";
 import ReferralRegistrationLink from "@/components/admin/ReferralRegistrationLink";
+import { useReferralCodeDashboardSync } from "@/lib/referral/useReferralCodeDashboardSync";
 
 const PERIOD_LABELS: Record<DashboardPeriod, string> = {
   day: "روز",
@@ -53,6 +54,8 @@ export default function AdminDashboardPage() {
     setShowBackButton(false);
     setOnBackClick(null);
   }, [setShowHeader, setShowBackButton, setOnBackClick]);
+
+  useReferralCodeDashboardSync(setData);
 
   useEffect(() => {
     let cancelled = false;
