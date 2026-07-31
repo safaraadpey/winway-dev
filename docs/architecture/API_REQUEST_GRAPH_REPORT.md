@@ -50,13 +50,13 @@ Winway uses a **three-tier hybrid architecture**:
 | POST | `/api/player/cancel-waiting-room` | User JWT | Supabase RPC `fn_cancel_waiting_room` | Cancel waiting room |
 | GET | `/api/player/runtime/global-registration-lock` | User JWT | Supabase `app_runtime_flags` | Global registration lock (player) |
 
-#### Player — Lobby (3)
+#### Player — Lobby (1)
 
 | Method | Path | Auth | Data Backend | Purpose |
 |--------|------|------|--------------|---------|
 | GET | `/api/player/lobby-snapshot` | User JWT | Supabase (aggregated) | Combined lobby room groups + online count |
-| GET | `/api/player/lobby-room-groups` | User JWT | Supabase | Template-grouped room stats |
-| GET | `/api/player/lobby-online-count` | User JWT | Supabase view `v_lobby_online_players` | Online player count |
+
+> **Wave 2A (2026-07-31):** `/api/player/lobby-room-groups` and `/api/player/lobby-online-count` were removed (logic lives in `lobby-snapshot` only).
 
 #### Player — Tournament (4)
 
@@ -91,14 +91,15 @@ Winway uses a **three-tier hybrid architecture**:
 | POST | `/api/admin/admins/set-sub-role` | Admin JWT | Supabase | Change admin sub-role |
 | POST | `/api/admin/admins/toggle-status` | Admin JWT | Supabase | Enable/disable admin |
 
-#### Admin — Dashboard / Reports (4)
+#### Admin — Dashboard / Reports (3)
 
 | Method | Path | Auth | Data Backend | Purpose |
 |--------|------|------|--------------|---------|
 | GET | `/api/admin/dashboard/snapshot` | Admin JWT | Supabase | Dashboard financial snapshot |
-| GET | `/api/admin/dashboard/commission-summary` | Admin JWT | Supabase RPC | Commission totals |
 | GET | `/api/admin/games/report` | Admin JWT | Supabase RPC `fn_admin_games_report` | Games report |
 | GET | `/api/admin/tournaments/report` | Admin JWT | Supabase | Tournament report |
+
+> **Wave 2A (2026-07-31):** `/api/admin/dashboard/commission-summary` removed; use `snapshot` (and agent dashboard RPC helpers in `services/dashboard.ts` where applicable).
 
 #### Admin — Card Pool (5)
 
@@ -248,19 +249,21 @@ Workers are gated by `SCHEDULER_ENABLED` and `GAME_ENGINE_ROLES`. Business logic
 
 #### Next.js → Railway proxy mapping
 
-| Next.js route | Railway endpoint | Status |
+| Next.js client (when flag on) | Railway endpoint | Status |
 |---------------|------------------|--------|
-| *(none)* | — | **NOT CONNECTED** |
+| `joinOrCreateRoom` via `lib/gameEngineClient.ts` | `POST /v1/rooms/join` | **IMPLEMENTED** (feature-flagged) |
+| Gameroom / room state | `GET /v1/gameroom` | **IMPLEMENTED** (feature-flagged; Vercel fallback) |
+| Live-room snapshot | `GET /v1/live-room` | **IMPLEMENTED** (feature-flagged; Vercel fallback) |
+| Lobby | `GET /v1/lobby` | **IMPLEMENTED** (feature-flagged) |
 
-Planned (from `docs/migration/api-migration-plan.md`):
+Feature flags (in application code — see `lib/gameEngine/config.ts`, `services/rooms.ts`, lobby page):
 
-| Future client call | Railway endpoint | Replaces |
-|--------------------|------------------|----------|
-| `joinOrCreateRoom()` | `POST /v1/rooms/join` | `fn_join_or_create_room` |
-| Room state read | `GET /v1/rooms/:id/state` | Direct Supabase reads |
-| Lobby read | `GET /v1/lobby` | Lobby snapshot RPCs |
+| Env var | Role |
+|---------|------|
+| `NEXT_PUBLIC_USE_GAME_ENGINE` | When `"true"` **and** URL set → browser prefers Railway `/v1/*` |
+| `NEXT_PUBLIC_GAME_ENGINE_URL` | Railway base URL |
 
-Env vars `RAILWAY_URL`, `GAME_ENGINE_URL`, `NEXT_PUBLIC_GAME_ENGINE_URL`, `NEXT_PUBLIC_USE_GAME_ENGINE` — **documented only, not referenced in application code**.
+Legacy Vercel `/api/player/*` and Supabase `fn_join_or_create_room` remain as flag-off / fallback paths.
 
 ```mermaid
 flowchart LR
@@ -396,7 +399,7 @@ sequenceDiagram
   participant R as Railway game-engine
   participant S as Supabase PostgreSQL
 
-  Note over B,R: Requires NEXT_PUBLIC_USE_GAME_ENGINE=true<br/>and NEXT_PUBLIC_GAME_ENGINE_URL (NOT IN CODE YET)
+  Note over B,R: Requires NEXT_PUBLIC_USE_GAME_ENGINE=true<br/>and NEXT_PUBLIC_GAME_ENGINE_URL (implemented in lib/gameEngine/config.ts)
 
   B->>R: POST /v1/rooms/join
   R->>R: verifyUser(JWT)
@@ -527,15 +530,14 @@ Risk = **(frequency × latency sensitivity × business criticality × Vercel hop
 
 ### 7.1 Immediate (High Impact)
 
-1. **Enable Browser → Railway for join (already designed)**  
-   - Flip `GAME_ENGINE_API=true` on Railway.  
-   - Implement feature flag in `services/rooms.ts` per `docs/migration/api-migration-plan.md`.  
-   - Removes financial RPC from browser direct path; JWT verified at engine.
+1. **Browser → Railway for join / lobby / gameroom / live-room**  
+   - **Done in code** behind `NEXT_PUBLIC_USE_GAME_ENGINE` + `NEXT_PUBLIC_GAME_ENGINE_URL` (`lib/gameEngineClient.ts`, `services/rooms.ts`).  
+   - Requires Railway `GAME_ENGINE_API=true` and correct CORS.  
+   - Flag-off / failure still uses Vercel or Supabase join RPC (rollback).
 
-2. **Move high-frequency snapshot reads off Vercel**  
-   - Add engine endpoints (or extend `/v1/rooms/:id/state`) for gameroom + live-room equivalents with Redis short-TTL cache.  
-   - Point `fetchGameRoomView` / `fetchLiveRoomSnapshot` at `NEXT_PUBLIC_GAME_ENGINE_URL` when flag enabled.  
-   - **Benefit:** Eliminates R1/R2/R7 serverless PG connection churn.
+2. **Keep high-frequency snapshot reads on Railway when flag is on**  
+   - Engine `/v1/gameroom` and `/v1/live-room` already exist; Vercel routes remain fallback.  
+   - **Benefit when flag on:** Reduces R1/R2/R7 serverless PG connection churn.
 
 3. **Keep Realtime-first, tighten poll fallbacks**  
    - Live room already watchdog-polls only when stale — verify Realtime health before adding new poll paths.  

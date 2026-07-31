@@ -240,7 +240,7 @@ Applies when **`NEXT_PUBLIC_USE_GAME_ENGINE=true`** and engine is reachable.
 - `POST /api/me/ping-presence`
 - `GET /api/me/ding-balance`
 
-**Player (cold):** `lobby-room-groups`, `lobby-online-count` (if called)
+**Player (cold):** lobby data via `lobby-snapshot` (standalone `lobby-room-groups` / `lobby-online-count` removed Wave 2A)
 
 **Admin (19 routes):** wallet, users, dashboard, reports, card-pool, runtime, admins
 

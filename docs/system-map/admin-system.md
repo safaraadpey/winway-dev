@@ -56,7 +56,8 @@ client. Base allowed roles for most routes: `admin`, `super`, `agent`.
 | `wallet/adjust` | POST | service client | RPC `fn_wallet_apply_delta` per user | `wallet_adjust_bulk` |
 | `games/report` | GET | admin/super/agent | RPC `fn_admin_games_report` + tables | — |
 | `tournaments/report` | GET | admin/super/agent | direct table queries (no RPC) | — |
-| `dashboard/commission-summary` | GET | `role='admin'` | `users`, `transactions`, `commissions_log` (**not used by frontend**) | — |
+| `dashboard/snapshot` | GET | Admin panel | Aggregated dashboard loaders | — |
+| ~~`dashboard/commission-summary`~~ | — | **Removed Wave 2A (2026-07-31)** | Was unused by frontend; use `snapshot` | — |
 | `runtime/global-registration-lock` | GET/POST | `role='admin'` | `app_runtime_flags` UPSERT/SELECT | `enable_/disable_global_registration_lock` |
 | `card-pool/{generate,status,active,history,download}` | GET/POST | `role='admin'` | `card_pools`, `card_pool_cards`, RPC `fn_generate_card_pool` | `generate_card_pool` |
 

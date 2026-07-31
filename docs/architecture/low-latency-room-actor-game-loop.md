@@ -1,14 +1,19 @@
 # Low-Latency Room-Actor Game Loop Architecture
 
-> **Status (2026-06):** Rollout complete. Production uses **actor-only** live draws
-> in `GAME_RUNTIME=engine`. See [ADR 0001](../adr/0001-actor-only-live-draw-loop.md).
+> **Status (2026-06):** Rollout complete. Live draws in `GAME_RUNTIME=engine` are
+> **actor-only**. See [ADR 0001](../adr/0001-actor-only-live-draw-loop.md).
+>
+> **Docs note (2026-07-31):** `ROOM_LOOP_MODE` / `loopMode.ts` were **removed**.
+> Do not configure `ROOM_LOOP_MODE`. Canonical control is `GAME_RUNTIME=engine`
+> plus `room-loop` in `GAME_ENGINE_ROLES`. On DEV, Railway owns the runtime;
+> `bingo_heartbeat` / `bingo_draw_worker_*` are mutex-disabled
+> (`docs/runbooks/dev-game-cron-mutex-apply.md`).
 
 > هدف: رساندن latency هر قرعه به کمتر از 3 ثانیه، با حفظ ترتیب قرعه‌ها،
 > idempotency، recovery، provably-fair بودن قرعه، و atomic بودن مسیر مالی.
 >
-> این سند معماری هدف را برای تبدیل موتور فعلی از
-> `scheduler -> draw_jobs -> pick -> actor` به مدل
-> `room-actor-driven game loop` توضیح می‌دهد.
+> بخش‌های زیر که هنوز از `ROOM_LOOP_MODE` نام می‌برند **تاریخی** هستند؛
+> وضعیت جاری = actor-only بدون آن env.
 
 ## 1. خلاصه تصمیم
 
@@ -379,27 +384,20 @@ type EngineRole =
   | "room-loop";
 ```
 
-### 6.3 حالت runtime پیشنهادی
+### 6.3 حالت runtime (فعلی)
 
-دو مسیر ممکن:
+Canonical:
 
 ```text
 GAME_RUNTIME=engine
-GAME_ENGINE_ROLES=room-loop,tournament-orchestrator,...
+GAME_ENGINE_ROLES=scheduler,draw-processor,room-loop,tournament-orchestrator,...
+SCHEDULER_ENABLED=true
 ```
 
-یا یک flag مستقل:
-
-```text
-ROOM_LOOP_MODE=actor
-```
-
-برای rollback بهتر است flag جدا داشته باشیم:
-
-| Flag | معنی |
-| --- | --- |
-| `ROOM_LOOP_MODE=scheduler_queue` | مسیر فعلی |
-| `ROOM_LOOP_MODE=actor` | room actor owns clock |
+`ROOM_LOOP_MODE` **حذف شده** (نگاه کنید ADR 0001). مسیر live draw فقط از طریق
+`room-loop` + `runOneDrawCycle` است. برای rollback اضطراری از
+`GAME_RUNTIME=hybrid|legacy_db` و/یا RESTORE cron (runbook) استفاده کنید — نه
+`ROOM_LOOP_MODE`.
 
 ### 6.4 RoomLoopManager
 
@@ -757,13 +755,15 @@ processed_at set
 
 Rollback باید کمتر از 15 دقیقه باشد.
 
-مراحل:
+مراحل (بدون `ROOM_LOOP_MODE` — منسوخ است):
 
-1. `ROOM_LOOP_MODE=scheduler_queue`
-2. stop room-loop role
+1. Idle یا متوقف کردن workers بازی روی Railway (`SCHEDULER_ENABLED=false` یا حذف
+   `room-loop` / `scheduler` / `draw-processor` از roles)
+2. در صورت نیاز `GAME_RUNTIME=hybrid` یا `legacy_db`
 3. clear expired leases یا ignore leases در مسیر قدیمی
-4. re-enable current scheduler/draw-processor
-5. اگر لازم بود DB cron fallback روشن شود
+4. در صورت نیاز RESTORE `bingo_heartbeat` / `bingo_draw_worker_*` فقط طبق
+   `docs/runbooks/dev-game-cron-mutex-apply.md` (نه اجرای کورکورانه کل اسکریپت‌ها)
+5. تأیید تک‌مالکی بودن clock قبل از ترافیک
 
 DB schema جدید rollback فوری نمی‌خواهد؛ می‌تواند inert بماند.
 

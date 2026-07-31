@@ -1,5 +1,12 @@
 # تحلیل Function `bingo_draw_worker` (pg_cron Jobs - Workerهای موازی)
 
+> **Superseded (DEV mutex / Wave 2A docs sync — 2026-07-31):** جداول و وضعیت‌های
+> «✅ Active» برای `bingo_draw_worker_*` زیر **تاریخچهٔ pre-mutex** هستند. روی
+> Final Pre-Launch DEV (`yqnptpreowkimopxicfz`) این jobها unschedule شده‌اند؛
+> مالک runtime بازی Railway است. توابع SQL و اسکریپت‌های RESTORE عمداً حفظ
+> می‌شوند (rollback path). این سند را به‌عنوان inventory فعلی cron نخوانید.
+> ر.ک. `docs/runbooks/dev-game-cron-mutex-apply.md`.
+
 **تاریخ تحلیل:** $(date)  
 **Job Names:** `bingo_draw_worker_1`, `bingo_draw_worker_2`, `bingo_draw_worker_3`  
 **Function:** `public.fn_process_draw_jobs_batch_worker(p_worker_id, p_total_workers)`

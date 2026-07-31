@@ -5,6 +5,12 @@
 **Phase:** 1 — Architecture mapping and attack surface only (no fixes applied)  
 **Date:** 2026-07-21  
 
+> **Superseded notes (Wave 2A — 2026-07-31):** Root Next.js no longer depends on
+> `@upstash/redis` / `ioredis` (engine package still does). Orphan routes
+> `lobby-room-groups`, `lobby-online-count`, and `dashboard/commission-summary`
+> were removed. Historical tables below may still mention them. Hybrid /
+> `GAME_RUNTIME` rollback paths were **not** removed.
+
 **Related audits:** [Phase 2 — Secrets & deployment](./PHASE2_SECRETS_INFRA_DEPLOYMENT.md) · [Phase 3 — Auth, RLS & authorization](./PHASE3_AUTH_RLS_AUTHORIZATION.md) · [Phase 4 — Wallet & financial](./PHASE4_WALLET_DING_FINANCIAL.md) · [Phase 5 — Game engine & concurrency](./PHASE5_GAME_ENGINE_REDIS_CONCURRENCY.md)
 
 ---
@@ -146,8 +152,6 @@ flowchart TB
 | `/api/me/ding-balance` | GET | Ding balance | Bearer | Self via service read | — | Read | Low |
 | `/api/me/ping-presence` | POST | Presence ping | Bearer | `fn_ping_presence` as user JWT | — | Presence | Low |
 | `/api/player/lobby-snapshot` | GET | Lobby aggregate | Bearer | Read | query | Read | Low |
-| `/api/player/lobby-room-groups` | GET | Room groups | Bearer | Read | — | Read | Low |
-| `/api/player/lobby-online-count` | GET | Online count | Bearer | Read view | — | Read | Low |
 | `/api/player/gameroom` | GET | Game room view | Bearer | Service role read + PG | `roomId`/`templateId` | Read (+ debug RPCs) | Med–High |
 | `/api/player/live-room` | GET | Live snapshot / cards | Bearer | Service role | `roomId`, `scope` | Read | Med |
 | `/api/player/room-results` | GET | Winners + **room seed** | **Optional** Bearer | Service role | `roomId` | Read | **High** |
@@ -167,7 +171,6 @@ flowchart TB
 | `/api/admin/users/nicknames` | GET | Nicknames | Bearer | admin/super/agent | ids | Read | Med |
 | `/api/admin/admins/*` | POST | Admin sub-role / status | Bearer | Manager checks | admin ids | Admins | High |
 | `/api/admin/dashboard/snapshot` | GET | Dashboard | Bearer + panel gate | Admin panel only | — | Read | Med |
-| `/api/admin/dashboard/commission-summary` | GET | Commission | Bearer | Admin checks in route | — | Read | Med |
 | `/api/admin/games/report` | GET | Games report | Bearer | admin/super/agent | date range | Read | Med |
 | `/api/admin/tournaments/report` | GET | Tournament report | Bearer | Scoped by role | filters | Read | Med |
 | `/api/admin/runtime/global-registration-lock` | GET/PATCH | Global lock | Bearer | admin only | lock flags | Runtime | High |

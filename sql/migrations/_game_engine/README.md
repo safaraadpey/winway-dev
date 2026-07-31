@@ -18,3 +18,10 @@ See: [docs/roadmap/GAME_ENGINE_MIGRATION.md](../../docs/roadmap/GAME_ENGINE_MIGR
 
 - `YYYYMMDD_game_engine_cutover_disable_db_cron.sql`
 - `YYYYMMDD_game_engine_cutover_rollback.sql`
+
+## DEV mutex (manual apply — not top-level chain)
+
+- `20260731150036_dev_mutex_disable_legacy_game_crons.sql` — unschedule `bingo_heartbeat` + `bingo_draw_worker_1..3` on DEV only (`yqnptpreowkimopxicfz`).
+- Aborts with `RAISE EXCEPTION` if more than 4 matching `cron.job` rows exist (before any unschedule).
+- Apply via: [docs/runbooks/dev-game-cron-mutex-apply.md](../../../docs/runbooks/dev-game-cron-mutex-apply.md)
+- **Do not** promote to top-level `sql/migrations/` until Production ownership is approved.

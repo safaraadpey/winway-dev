@@ -16,9 +16,9 @@ type LobbyRoomGroup = {
 };
 
 export type LobbySnapshotResponse = {
-  // same shape as /api/player/lobby-room-groups
+  // formerly /api/player/lobby-room-groups (removed Wave 2A)
   roomGroups: { groups: LobbyRoomGroup[] };
-  // same shape as /api/player/lobby-online-count
+  // formerly /api/player/lobby-online-count (removed Wave 2A)
   onlineCount: { onlinePlayers: number };
 };
 
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
 
     const supabase = createServiceClient();
 
-    // ---- roomGroups (copied from /lobby-room-groups) ----
+    // ---- roomGroups ----
 
     // 1) Active templates (exclude inactive)
     const { data: templates, error: templatesError } = await supabase
@@ -232,7 +232,7 @@ export async function GET(request: Request) {
       (a, b) => a.price - b.price
     );
 
-    // ---- onlineCount (copied from /lobby-online-count; best-effort) ----
+    // ---- onlineCount (best-effort) ----
     let onlinePlayers = 0;
     try {
       const { data, error } = await supabase

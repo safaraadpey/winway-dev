@@ -1,5 +1,10 @@
 # تحلیل عملکرد `bingo_draw_worker` در سناریوی سنگین
 
+> **Superseded (DEV mutex / Wave 2A docs sync — 2026-07-31):** این تحلیل بار
+> workerهای pg_cron را توصیف می‌کند؛ روی DEV فعلی `bingo_draw_worker_*`
+> unschedule شده‌اند و draw drain متعلق به Railway `draw-processor` است.
+> محتوا برای تاریخچه / rollback نگه داشته شده است.
+
 **تاریخ تحلیل:** $(date)  
 **سناریو:** سنگین‌ترین اتاق بازی
 

@@ -1,5 +1,10 @@
 # گزارش بررسی معماری Draw System در دیتابیس
 
+> **Superseded (DEV mutex / Wave 2A docs sync — 2026-07-31):** هر جا این گزارش
+> `bingo_draw_worker_*` یا cron بازی را «Active / canonical» نشان می‌دهد، مربوط
+> به زمان بررسی تاریخی است. روی DEV فعلی آن cronها mutex-disabled هستند؛
+> Railway مالک runtime است. hybrid/`legacy_db` و SQL rollback حفظ شده‌اند.
+
 **تاریخ بررسی:** $(date)  
 **مستند مرجع:** `bingo_draw_architecture.md`
 

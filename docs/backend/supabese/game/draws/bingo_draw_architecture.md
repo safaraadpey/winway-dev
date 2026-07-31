@@ -1,5 +1,12 @@
 # سیستم قرعه‌کشی Bingo و صف جاب‌ها (Draw Queue Architecture)
 
+> **Superseded note (DEV mutex / Wave 2A docs sync — 2026-07-31):** شرح زیر
+> معماری **DB-side** draw queue و workerهای pg_cron را به‌عنوان طراحی تاریخی /
+> rollback نگه می‌دارد. روی Final Pre-Launch DEV، `bingo_draw_worker_*` و
+> `bingo_heartbeat` unschedule شده‌اند؛ runtime بازی روی Railway است. این سند
+> hybrid/legacy را «حذف‌شده» معرفی نمی‌کند — pathهای rollback عمداً باقی‌اند.
+> ر.ک. `docs/system-map/game-engine-reality.md`.
+
 این سند، معماری کامل سیستم قرعه‌کشی، تولید Draw، ساخت Job، و اجرای Draw Worker را توضیح می‌دهد. این گردش‌کار در دیتابیس به‌صورت ایمن، قطعی (Deterministic) و بدون هم‌پوشانی طراحی شده است.
 
 ---
