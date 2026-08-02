@@ -1,6 +1,6 @@
 # Local Game Engine Rollout
 
-Operational steps to bring `game-engine/` online against the **clone** project
+Operational steps to bring `apps/game-engine/` online against the **clone** project
 (`gtwgatewbagklpmxdlsj`) while keeping DB cron as rollback.
 
 ## Prerequisites
@@ -13,14 +13,14 @@ Operational steps to bring `game-engine/` online against the **clone** project
 
 ```powershell
 # From repo root
-cd game-engine
+cd apps/game-engine
 npm install
 npm run typecheck
 
 # Phase 0 — engine idle, DB authoritative
 $env:GAME_RUNTIME='legacy_db'
 $env:GAME_ENGINE_ROLES='draw-processor'
-..\scripts\sync-game-engine-env.ps1
+..\..\scripts\sync-game-engine-env.ps1
 npm run dev
 # curl http://localhost:8080/health
 
@@ -28,7 +28,7 @@ npm run dev
 # In Supabase SQL: run scripts/game-engine-cron-draw-workers.sql (DISABLE section)
 $env:GAME_RUNTIME='hybrid'
 $env:GAME_ENGINE_ROLES='draw-processor'
-..\scripts\sync-game-engine-env.ps1
+..\..\scripts\sync-game-engine-env.ps1
 npm run dev
 
 # Phase 2 — engine owns heartbeat (disable bingo_heartbeat cron first!)
@@ -36,7 +36,7 @@ npm run dev
 # Or migration: sql/migrations/20260602120000_game_engine_phase2_disable_heartbeat_cron.sql
 $env:GAME_RUNTIME='hybrid'
 $env:GAME_ENGINE_ROLES='scheduler,draw-processor'
-..\scripts\sync-game-engine-env.ps1
+..\..\scripts\sync-game-engine-env.ps1
 npm run dev
 # Logs should show room-scheduler ticks (fn_heartbeat_tick) + draw-processor batches
 
@@ -45,7 +45,7 @@ npm run dev
 # In Supabase SQL: run scripts/game-engine-cron-tournament.sql (DISABLE section)
 $env:GAME_RUNTIME='hybrid'
 $env:GAME_ENGINE_ROLES='scheduler,draw-processor,tournament-orchestrator'
-..\scripts\sync-game-engine-env.ps1
+..\..\scripts\sync-game-engine-env.ps1
 npm run dev
 # Logs: tournament-orchestrator + tournament tick when due tournaments exist
 ```
@@ -63,7 +63,7 @@ npm run dev
 
 ## Rollback (< 5 min)
 
-1. Stop `game-engine` (Ctrl+C).
+1. Stop `apps/game-engine` (Ctrl+C).
 2. `GAME_RUNTIME=legacy_db` in `.env` or stop running engine.
 3. Run **RESTORE** section in `scripts/game-engine-cron-draw-workers.sql` (and heartbeat if phase 2 was applied).
 4. Play one room cycle — confirm draws process via cron.

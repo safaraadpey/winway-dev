@@ -23,6 +23,6 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "game-engine"]
+  "exclude": ["node_modules", "apps/game-engine"]
 }
 

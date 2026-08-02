@@ -4,6 +4,7 @@
 /node_modules
 /.pnp
 .pnp.js
+apps/game-engine/node_modules
 
 # testing
 /coverage
@@ -14,23 +15,25 @@
 
 # production
 /build
+apps/game-engine/dist
 
 # misc
 .DS_Store
 *.pem
 
-# debug
+# debug / package manager logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.cursor/*.log
 
 # local env files
 .env*.local
 .env
-game-engine/.env
-game-engine/.env.*
-!game-engine/.env.example
-!game-engine/.env.develop.local.example
+apps/game-engine/.env
+apps/game-engine/.env.*
+!apps/game-engine/.env.example
+!apps/game-engine/.env.develop.local.example
 
 # vercel
 .vercel
@@ -39,3 +42,18 @@ game-engine/.env.*
 *.tsbuildinfo
 next-env.d.ts
 
+# P4.1 — temporary workspace, scratch payloads, build/debug output
+.tmp/
+.tmp-*
+/tmp/
+logs/
+build.log
+build.err
+build.debug.log
+*.err
+
+# local MCP / migration scratch payloads (never commit)
+.tmp-*.json
+.tmp-*.txt
+.tmp-*.bin
+.tmp-*.js

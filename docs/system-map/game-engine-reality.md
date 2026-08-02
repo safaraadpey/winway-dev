@@ -50,7 +50,7 @@ live engine, with the Node service idle under `GAME_RUNTIME=legacy_db`. That mod
 is **obsolete for DEV** after the Railway cutover + mutex. Keep rollback scripts
 (`scripts/game-engine-cron-*.sql`) for emergency restore only.
 
-## Node `game-engine` service (`game-engine/src`) — DEV live runtime
+## Node `game-engine` service (`apps/game-engine/src`) — DEV live runtime
 
 Standalone TypeScript service on Railway. Configured on DEV approximately as:
 

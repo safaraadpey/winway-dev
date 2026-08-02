@@ -35,11 +35,11 @@ Console markers:
 
 | File | Change |
 |------|--------|
-| `game-engine/src/http/lobby-snapshot.ts` | **New** — lobby snapshot builder (matches `/api/player/lobby-snapshot`) |
-| `game-engine/src/http/gameroom-view.ts` | **New** — `GameRoomView` builder (matches `/api/player/gameroom`, Supabase-only) |
-| `game-engine/src/http/cors.ts` | **New** — CORS for browser → engine calls |
-| `game-engine/src/http/commands.ts` | `getLobby()` returns snapshot; added `getGameRoomView()` |
-| `game-engine/src/http/server.ts` | Added `GET /v1/gameroom`, CORS preflight |
+| `apps/game-engine/src/http/lobby-snapshot.ts` | **New** — lobby snapshot builder (matches `/api/player/lobby-snapshot`) |
+| `apps/game-engine/src/http/gameroom-view.ts` | **New** — `GameRoomView` builder (matches `/api/player/gameroom`, Supabase-only) |
+| `apps/game-engine/src/http/cors.ts` | **New** — CORS for browser → engine calls |
+| `apps/game-engine/src/http/commands.ts` | `getLobby()` returns snapshot; added `getGameRoomView()` |
+| `apps/game-engine/src/http/server.ts` | Added `GET /v1/gameroom`, CORS preflight |
 
 ### Not changed (by design)
 
@@ -123,7 +123,7 @@ GAME_ENGINE_CORS_ORIGINS=http://localhost:3000,https://dingmoney.org
 ### 1. Start Game Engine with API enabled
 
 ```bash
-cd game-engine
+cd apps/game-engine
 GAME_ENGINE_API=true \
 GAME_ENGINE_HTTP_PORT=8080 \
 SUPABASE_URL=... \

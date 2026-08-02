@@ -59,7 +59,7 @@ The DB trigger path is **disabled** to avoid double-credit:
 1. Room actor / draw loop inserts draws row + draw_jobs row
 2. Game engine: processEngineDrawJob
       → applyMarksAndEvaluateWithState (marks + winner eval in memory)
-      → prepareDingCreditsFromState (game-engine/src/domain/ding)
+      → prepareDingCreditsFromState (apps/game-engine/src/domain/ding)
       → finalizeEngineDrawJob RPC
 3. rpc_finalize_engine_draw_job (single transaction):
       → persist marks + results
@@ -73,11 +73,11 @@ The DB trigger path is **disabled** to avoid double-credit:
 
 | File | Role |
 | --- | --- |
-| `game-engine/src/domain/draw/processEngineDrawJob.ts` | Orchestrates mark/eval/ding/finalize |
-| `game-engine/src/domain/ding/index.ts` | `prepareDingCreditsFromState`, DB fallback `aggregateDingForDraw` |
-| `game-engine/src/core/ding.ts` | Port of aggregation rules (`computeDingCredits`, `resolveDingPerCard`) |
-| `game-engine/src/state/room-state.ts` | `countDingMatchedByUser` — **reserved tickets only**, from marks |
-| `game-engine/src/repositories/index.ts` | `applyDingCreditsForDraw` → `rpc_apply_ding_credits_for_draw` |
+| `apps/game-engine/src/domain/draw/processEngineDrawJob.ts` | Orchestrates mark/eval/ding/finalize |
+| `apps/game-engine/src/domain/ding/index.ts` | `prepareDingCreditsFromState`, DB fallback `aggregateDingForDraw` |
+| `apps/game-engine/src/core/ding.ts` | Port of aggregation rules (`computeDingCredits`, `resolveDingPerCard`) |
+| `apps/game-engine/src/state/room-state.ts` | `countDingMatchedByUser` — **reserved tickets only**, from marks |
+| `apps/game-engine/src/repositories/index.ts` | `applyDingCreditsForDraw` → `rpc_apply_ding_credits_for_draw` |
 
 ### Timing
 

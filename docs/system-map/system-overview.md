@@ -20,7 +20,7 @@ A real-time **Housie/90-ball Bingo** platform ("DingMoney / winway") with:
 | --- | --- | --- |
 | Web app | Next.js 14 (`app/`, `components/`, `lib/`, `services/`, `src/`) | Player, agent, and admin UIs + API routes. Talks to Supabase and optionally Railway Game Engine (`NEXT_PUBLIC_USE_GAME_ENGINE`). |
 | Database | Supabase Postgres | **System of record** for ALL game/financial state. Holds business logic in PL/pgSQL across `public`, `game_core`, `game_finance`, `game_pool`, `tournament` schemas. |
-| Railway Game Engine | `game-engine/` (TypeScript) on Railway | **Canonical runtime authority in DEV** (`GAME_RUNTIME=engine`): waiting-room promote, live draw loop (`room-loop`), draw-job drain, tournament tick, dev-player workers. |
+| Railway Game Engine | `apps/game-engine/` (TypeScript) on Railway | **Canonical runtime authority in DEV** (`GAME_RUNTIME=engine`): waiting-room promote, live draw loop (`room-loop`), draw-job drain, tournament tick, dev-player workers. |
 | Scheduler (maintenance) | `pg_cron` jobs | **Maintenance authority** on DEV: janitor sweep, card-pool step, partitions, retention. Game-clock crons (`bingo_heartbeat`, `bingo_draw_worker_*`) are **mutex-disabled on DEV**. |
 | Edge functions | Supabase Edge | Deployed stubs exist historically; **not** the live game runtime. Dev-player work runs on the engine when roles are enabled. |
 | Redis (optional) | ioredis / Upstash REST | Used by the **Game Engine** for leader locks / multi-replica coordination — not by Next.js lobby cache. |

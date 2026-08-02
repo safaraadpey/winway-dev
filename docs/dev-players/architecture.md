@@ -69,7 +69,7 @@
 مسیر کد:
 
 ```
-game-engine/src/
+apps/game-engine/src/
   domain/dev-players/
     buildScheduleBatch.ts    ← scheduler entry (delegates to manager)
     runDevPlayerManager.ts   ← Dev Player Manager (random cycle + one join/tick)
@@ -136,7 +136,7 @@ game-engine/src/
 ## راه‌اندازی engine
 
 ```bash
-cd game-engine
+cd apps/game-engine
 cp .env.example .env
 # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 GAME_ENGINE_ROLES=dev-player-scheduler,dev-player-processor

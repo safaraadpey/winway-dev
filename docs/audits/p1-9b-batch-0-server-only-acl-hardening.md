@@ -88,12 +88,12 @@ Exact signatures (target ACL = `postgres` + `service_role` only):
 
 | Function group | Repository callers | App/browser callers | Nested / DB |
 |----------------|--------------------|----------------------|-------------|
-| `rpc_claim/renew/release/find_claimable` | `game-engine/src/repositories/index.ts` | **none** | none required for clients |
+| `rpc_claim/renew/release/find_claimable` | `apps/game-engine/src/repositories/index.ts` | **none** | none required for clients |
 | `rpc_insert_draw*`, `rpc_has_earlier*` | same repo | **none** | none |
 | `rpc_pick_draw_jobs` | `pickDrawJobs.ts` / draw workers | **none** | quarantined batch workers (already service_role-only) |
 | `rpc_apply_marks*`, `rpc_finalize*`, `rpc_apply_ding*` | draw processor / finalize path | **none** | finalize → ding credits |
 | `fn_evaluate_room_after_draw` | `processDrawBatch.ts`, `reconcileWinners.ts` | **none** | may call settle |
-| `fn_finish_room_and_settle` | `game-engine/src/finance/index.ts` | **none** | evaluate / janitor / payout shims (DEFINER → postgres) |
+| `fn_finish_room_and_settle` | `apps/game-engine/src/finance/index.ts` | **none** | evaluate / janitor / payout shims (DEFINER → postgres) |
 | `fn_record/distribute_ticket_commission` | `finance/index.ts` | **none** | settle / ticket triggers (DEFINER) |
 | `fn_janitor_repair_unsettled_finished` | `janitorRepair.ts` | **none** | calls settle as DEFINER |
 

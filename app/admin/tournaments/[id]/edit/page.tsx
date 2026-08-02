@@ -110,20 +110,34 @@ export default function AdminTournamentEditPage() {
       },
     };
 
-    const { error, data } = await supabase.rpc("fn_admin_update_tournament", {
-      p_tournament_id: tournamentId,
-      p_patch: patch,
-    });
-
-    setSubmitting(false);
-
-    if (error) {
-      setError(error.message || "خطا در ذخیره تغییرات");
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) {
+      setSubmitting(false);
+      setError("احراز هویت لازم است");
       return;
     }
 
-    if (data) {
-      setInitialValues(mapRowToValues(data));
+    const response = await fetch(`/api/admin/tournaments/${tournamentId}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ patch }),
+    });
+    const result = await response.json().catch(() => null);
+    setSubmitting(false);
+
+    if (!response.ok) {
+      setError(result?.message || "خطا در ذخیره تغییرات");
+      return;
+    }
+
+    if (result?.data) {
+      setInitialValues(mapRowToValues(result.data));
     }
     router.push("/admin/tournaments");
   };
@@ -160,12 +174,26 @@ export default function AdminTournamentEditPage() {
     if (!tournamentId || !canDelete) return;
     setDeleting(true);
     setError(null);
-    const { error } = await supabase.rpc("fn_admin_delete_tournament", {
-      p_tournament_id: tournamentId,
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) {
+      setDeleting(false);
+      setError("احراز هویت لازم است");
+      return;
+    }
+
+    const response = await fetch(`/api/admin/tournaments/${tournamentId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
     });
+    const result = await response.json().catch(() => null);
     setDeleting(false);
-    if (error) {
-      setError(error.message || "خطا در حذف تورنومنت");
+    if (!response.ok) {
+      setError(result?.message || "خطا در حذف تورنومنت");
       return;
     }
     router.push("/admin/tournaments");

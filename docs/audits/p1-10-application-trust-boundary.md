@@ -1,4 +1,4 @@
-﻿# P1.10 - Application RPC Trust Boundary Audit (Read Only)
+# P1.10 - Application RPC Trust Boundary Audit (Read Only)
 
 > **Date:** 2026-07-31  
 > **Project:** `yqnptpreowkimopxicfz` (`winway_dev`)  
@@ -46,7 +46,7 @@ Defer MEDIUM (51), all HYBRID, and all UNSAFE until remediation.
 1. Live catalog via Supabase MCP (`pg_proc` in `public`, `game_core`, `game_finance`, `tournament`, `game_pool`, `load_test`, `monitor`), excluding Batch 0 OIDs and extension-owned procs.
 2. ACL: `proacl` + `aclexplode` EXECUTE grantees.
 3. Body auth heuristics: `auth.uid`, `auth.role`/`auth.jwt`, JWT `current_setting`, admin/role assert keywords, raise unauthorized.
-4. Callers: repository `.rpc(` scan (`app/`, `lib/`, `services/`, `src/`, `game-engine/`, scripts); live `cron.job`; live triggers; nested SQL hints from prior audits.
+4. Callers: repository `.rpc(` scan (`app/`, `lib/`, `services/`, `src/`, `apps/game-engine/`, scripts); live `cron.job`; live triggers; nested SQL hints from prior audits.
 5. Classification: exactly one of CLIENT / SERVER / HYBRID / UNSAFE.
 6. Batch 1 candidate: SERVER_RPC with broad EXECUTE and no requirement for authenticated PostgREST (evidence-based).
 

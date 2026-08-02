@@ -1,10 +1,10 @@
-# Sync game-engine/.env from winway/.env.local (clone / main Supabase).
-# Does not commit secrets — .env is gitignored in game-engine/.
+# Sync apps/game-engine/.env from winway/.env.local (clone / main Supabase).
+# Does not commit secrets — .env is gitignored in apps/game-engine/.
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent
 $localEnv = Join-Path $root ".env.local"
-$engineEnv = Join-Path $root "game-engine\.env"
+$engineEnv = Join-Path $root "apps\game-engine\.env"
 
 if (-not (Test-Path $localEnv)) {
   Write-Error "Missing $localEnv"

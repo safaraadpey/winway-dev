@@ -5,7 +5,7 @@
 **Date:** 2026-07-21  
 **Status:** Read-only; no code, config, or data changes.
 
-**Sources:** `game-engine/` (Railway workers + optional HTTP API), PostgreSQL RPCs in `supabase/schema.sql` and `winway/sql/migrations/`, player paths in `services/`, `app/api/`.  
+**Sources:** `apps/game-engine/` (Railway workers + optional HTTP API), PostgreSQL RPCs in `supabase/schema.sql` and `winway/sql/migrations/`, player paths in `services/`, `app/api/`.  
 **Related:** [Phase 1](./PHASE1_ARCHITECTURE_ATTACK_SURFACE_AUDIT.md) · [Phase 2](./PHASE2_SECRETS_INFRA_DEPLOYMENT.md) · [Phase 3](./PHASE3_AUTH_RLS_AUTHORIZATION.md) · [Phase 4](./PHASE4_WALLET_DING_FINANCIAL.md)
 
 ---
@@ -33,7 +33,7 @@ The **authoritative game loop** is intended to run on the **game engine** (when 
 | `hybrid` | DB via `fn_heartbeat_tick` from engine scheduler | Same RPC | May still run for `draw_jobs` backlog |
 | `engine` | **Room-loop actor** (`runOneDrawCycle`) + optional **draw-processor** for non-actor rooms | `manageWaitingRooms` in TS | Picks `draw_jobs`; **filters out** `playing` actor-owned rooms |
 
-Configured in `game-engine/src/config/env.ts`; roles via `GAME_ENGINE_ROLES` (comma-separated: `scheduler`, `draw-processor`, `room-loop`, …).
+Configured in `apps/game-engine/src/config/env.ts`; roles via `GAME_ENGINE_ROLES` (comma-separated: `scheduler`, `draw-processor`, `room-loop`, …).
 
 ---
 
@@ -301,15 +301,15 @@ sequenceDiagram
 
 | Path | Topic |
 |------|--------|
-| `game-engine/src/index.ts` | Worker startup, Redis connect |
-| `game-engine/src/workers/draw-processor/pickCoordinator.ts` | Pick lock, dispatch |
-| `game-engine/src/workers/draw-processor/adaptivePollScheduler.ts` | Poll backoff |
-| `game-engine/src/workers/room-loop/runDrawCycle.ts` | Authoritative draw cycle |
-| `game-engine/src/domain/draw/processEngineDrawJob.ts` | Finalize + settle |
-| `game-engine/src/domain/draw/filterActorOwnedDrawJobs.ts` | Actor vs processor split |
-| `game-engine/src/redis/leaderLock.ts` | Degraded multi-replica behavior |
-| `game-engine/src/http/commands.ts` | Client command surface |
-| `game-engine/src/core/rng.ts` | Provably-fair pick |
+| `apps/game-engine/src/index.ts` | Worker startup, Redis connect |
+| `apps/game-engine/src/workers/draw-processor/pickCoordinator.ts` | Pick lock, dispatch |
+| `apps/game-engine/src/workers/draw-processor/adaptivePollScheduler.ts` | Poll backoff |
+| `apps/game-engine/src/workers/room-loop/runDrawCycle.ts` | Authoritative draw cycle |
+| `apps/game-engine/src/domain/draw/processEngineDrawJob.ts` | Finalize + settle |
+| `apps/game-engine/src/domain/draw/filterActorOwnedDrawJobs.ts` | Actor vs processor split |
+| `apps/game-engine/src/redis/leaderLock.ts` | Degraded multi-replica behavior |
+| `apps/game-engine/src/http/commands.ts` | Client command surface |
+| `apps/game-engine/src/core/rng.ts` | Provably-fair pick |
 | `sql/migrations/20260720120000_engine_lease_epoch_fencing.sql` | Finalize lease fence |
 
 ---

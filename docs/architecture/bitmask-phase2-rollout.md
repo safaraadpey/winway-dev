@@ -9,9 +9,9 @@
 
 | Module | Path | Role |
 |--------|------|------|
-| Dual-mode validator | `game-engine/src/runtime/dual-mode-validator.ts` | Strict parity checks |
-| Mismatch reporter | `game-engine/src/runtime/mismatch-reporter.ts` | Structured logs + rate stats |
-| Engine policy | `game-engine/src/runtime/marking-engine-policy.ts` | Blocks bitmask authority by default |
+| Dual-mode validator | `apps/game-engine/src/runtime/dual-mode-validator.ts` | Strict parity checks |
+| Mismatch reporter | `apps/game-engine/src/runtime/mismatch-reporter.ts` | Structured logs + rate stats |
+| Engine policy | `apps/game-engine/src/runtime/marking-engine-policy.ts` | Blocks bitmask authority by default |
 | Wiring | `evaluateDraw.ts`, `draw-processor/index.ts` | Shadow traffic in live draws |
 
 **No new DB tables. No Redis changes. No new abstractions beyond these modules.**
@@ -201,12 +201,12 @@ Redeploy draw-processor — no DB migration rollback needed.
 ## 10. Files Changed (Phase 2)
 
 ```
-game-engine/src/runtime/dual-mode-validator.ts
-game-engine/src/runtime/mismatch-reporter.ts
-game-engine/src/runtime/marking-engine-policy.ts
-game-engine/src/runtime/marking-engine.ts          (refactored)
-game-engine/src/domain/draw/evaluateDraw.ts        (reporter wiring)
-game-engine/src/workers/draw-processor/index.ts    (batch summary)
-game-engine/src/config/env.ts                      (safety flags)
+apps/game-engine/src/runtime/dual-mode-validator.ts
+apps/game-engine/src/runtime/mismatch-reporter.ts
+apps/game-engine/src/runtime/marking-engine-policy.ts
+apps/game-engine/src/runtime/marking-engine.ts          (refactored)
+apps/game-engine/src/domain/draw/evaluateDraw.ts        (reporter wiring)
+apps/game-engine/src/workers/draw-processor/index.ts    (batch summary)
+apps/game-engine/src/config/env.ts                      (safety flags)
 docs/architecture/bitmask-phase2-rollout.md
 ```

@@ -20,13 +20,13 @@ When the flag is on, `fetchLiveRoomSnapshot()` calls Railway first; on error, ti
 
 | File | Change |
 |------|--------|
-| `game-engine/src/db/pg.ts` | **New** — `pg` pool from `DATABASE_URL` |
-| `game-engine/src/http/live-room-snapshot-pg.ts` | **New** — PG loaders + card builders (mirrors `lib/liveRoomSnapshotPg.ts`) |
-| `game-engine/src/http/live-room-view.ts` | **New** — full snapshot builder (mirrors `app/api/player/live-room/route.ts`) |
-| `game-engine/src/http/commands.ts` | Added `getLiveRoom()` |
-| `game-engine/src/http/server.ts` | Added `GET /v1/live-room` |
-| `game-engine/src/index.ts` | Logs `databaseUrl: configured|missing` at startup |
-| `game-engine/package.json` | Added `pg`, `@types/pg` |
+| `apps/game-engine/src/db/pg.ts` | **New** — `pg` pool from `DATABASE_URL` |
+| `apps/game-engine/src/http/live-room-snapshot-pg.ts` | **New** — PG loaders + card builders (mirrors `lib/liveRoomSnapshotPg.ts`) |
+| `apps/game-engine/src/http/live-room-view.ts` | **New** — full snapshot builder (mirrors `app/api/player/live-room/route.ts`) |
+| `apps/game-engine/src/http/commands.ts` | Added `getLiveRoom()` |
+| `apps/game-engine/src/http/server.ts` | Added `GET /v1/live-room` |
+| `apps/game-engine/src/index.ts` | Logs `databaseUrl: configured|missing` at startup |
+| `apps/game-engine/package.json` | Added `pg`, `@types/pg` |
 
 ### Frontend (Next.js)
 

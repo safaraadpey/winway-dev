@@ -94,7 +94,7 @@ very large balances are introduced, switch `core/money` to a decimal library
 4. **Commission reconciliation**: compare `computeTicketCommission` to
    `commissions_log` rows (`agent_amount`, `super_amount`, `admin_amount`,
    `amount_to_pool`).
-5. **Build gate**: `npm run typecheck` / `npm run build` in `game-engine/`
+5. **Build gate**: `npm run typecheck` / `npm run build` in `apps/game-engine/`
    (passing as of this change).
 
 ## 7. Status

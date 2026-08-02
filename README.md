@@ -36,9 +36,10 @@ DATABASE_URL=postgresql://...
 GAME_ENGINE_CORS_ORIGINS=https://dingmoney.org,http://localhost:3000
 ```
 
-4. در Supabase SQL Editor، فایل `supabase-schema.sql` را اجرا کنید
+4. در Supabase SQL Editor، فایل `docs/archive/supabase-schema.sql` را اجرا کنید
+   (برای محیط‌های جدید ترجیحاً از `sql/migrations/` استفاده کنید)
 
-برای راهنمای کامل، فایل `supabase-setup.md` را مطالعه کنید.
+برای راهنمای کامل، فایل `docs/archive/supabase-setup.md` را مطالعه کنید.
 
 ### 3. اجرای سرور توسعه
 
@@ -66,7 +67,9 @@ npm run dev
 
 ## فایل‌های راهنما
 
-- `supabase-setup.md` - راهنمای کامل تنظیم Supabase
-- `supabase-schema.sql` - Schema دیتابیس
-- `SETUP_GUIDE.md` - راهنمای اولیه پروژه
+- `docs/archive/supabase-setup.md` - راهنمای کامل تنظیم Supabase (legacy)
+- `docs/archive/supabase-schema.sql` - Schema دیتابیس (legacy snapshot)
+- `docs/archive/SETUP_GUIDE.md` - راهنمای اولیه پروژه
+- `sql/migrations/` - canonical SQL migrations
+- `docs/architecture/` - repository architecture (P4.x)
 

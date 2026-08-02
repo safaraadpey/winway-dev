@@ -46,7 +46,7 @@ read/report.
 
 ## 2. Engine command API (implemented)
 
-`game-engine/src/http/server.ts` (+ `auth.ts`, `commands.ts`). Enabled via
+`apps/game-engine/src/http/server.ts` (+ `auth.ts`, `commands.ts`). Enabled via
 `GAME_ENGINE_API=true`; serves `/health` and:
 
 | Method · Path | Auth | Underlying DB |

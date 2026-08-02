@@ -72,7 +72,7 @@
 
 ```
 winway/
-├── game-engine/                 ← سرویس جدید (Node 20 + TypeScript)
+├── apps/game-engine/            ← سرویس orchestration (Node 20 + TypeScript; P4.2 path)
 │   ├── src/
 │   │   ├── config/              env, GAME_RUNTIME, roles
 │   │   ├── db/                  Supabase admin client
@@ -157,7 +157,7 @@ winway/
 
 | # | تغییر | اولویت | مسیر |
 |---|--------|--------|------|
-| B1 | اسکلت سرویس + Docker + health | ✅ انجام شد | `game-engine/` |
+| B1 | اسکلت سرویس + Docker + health | ✅ انجام شد | `apps/game-engine/` |
 | B2 | draw-processor: pick jobs → marks → evaluate → done | **P0** | `workers/draw-processor` |
 | B3 | غیرفعال `pg_cron` draw worker هنگام `GAME_RUNTIME≠legacy_db` | **P0** | migration + deploy doc |
 | B4 | room-scheduler: waiting→playing + insert draw + backpressure | **P1** | `workers/room-scheduler` |
@@ -166,7 +166,7 @@ winway/
 | B7 | `commands/joinOrCreateRoom` — orchestration + RPC مالی | **P2** | `commands/` |
 | B8 | `commands/seatTournamentTable` — بدون impersonation | **P2** | `domain/tournament` |
 | B9 | migrate `applyMarks` + `evaluateWin` به TS | **P3** | `domain/draw` |
-| B10 | HTTP API داخلی (اختیاری): `/commands/*` برای Next proxy | **P2** | `game-engine/src/http/` (آینده) |
+| B10 | HTTP API داخلی (اختیاری): `/commands/*` برای Next proxy | **P2** | `apps/game-engine/src/http/` (آینده) |
 | B11 | ۲–۳ replica + `WORKER_ROLE` split | **P1** | Docker/K8s/Railway |
 | B12 | Redis leader lock روی scheduler/draw/tick | **P1** | `src/redis/locks.ts` |
 | B13 | lobby snapshot cache در Redis (Next یا engine) | **P1** | TTL کوتاه |
@@ -281,7 +281,7 @@ Legend: **MOVE** → engine | **WRAP** → RPC نازک بماند | **KEEP** �
 
 ### فاز 0 — Foundation (هفته ۱)
 
-- [x] ساختار `game-engine/` + README
+- [x] ساختار `apps/game-engine/` + README
 - [ ] Baseline metrics روی staging/prod
 - [ ] Migration **A1–A4** (امنیت tournament + REVOKE)
 - [ ] deploy draw optimization SQL اگر نشده
@@ -375,7 +375,7 @@ Legend: **MOVE** → engine | **WRAP** → RPC نازک بماند | **KEEP** �
 
 ### game-engine (`.env`)
 
-See `game-engine/.env.example`
+See `apps/game-engine/.env.example`
 
 ```env
 REDIS_URL=rediss://default:xxx@xxx.upstash.io:6379
@@ -402,7 +402,7 @@ GAME_RUNTIME=legacy_db
 # SELECT status, count(*) FROM draw_jobs GROUP BY status;
 
 # dev engine
-cd game-engine && npm install && npm run dev
+cd apps/game-engine && npm install && npm run dev
 ```
 
 ---

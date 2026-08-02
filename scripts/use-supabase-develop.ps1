@@ -16,11 +16,11 @@ if (Test-Path $local) {
 Copy-Item $develop $local -Force
 Write-Host "Active: .env.local -> Supabase develop (ovclbgxtpxyzlcmwbviw)"
 
-$engineDevelop = Join-Path $Root "game-engine\.env.develop.local"
-$engineEnv = Join-Path $Root "game-engine\.env"
+$engineDevelop = Join-Path $Root "apps\game-engine\.env.develop.local"
+$engineEnv = Join-Path $Root "apps\game-engine\.env"
 if (Test-Path $engineDevelop) {
   Copy-Item $engineDevelop $engineEnv -Force
-  Write-Host "Active: game-engine/.env -> develop"
+  Write-Host "Active: apps/game-engine/.env -> develop"
 }
 
-Write-Host "Restart npm run dev and game-engine to pick up changes."
+Write-Host "Restart npm run dev and apps/game-engine to pick up changes."

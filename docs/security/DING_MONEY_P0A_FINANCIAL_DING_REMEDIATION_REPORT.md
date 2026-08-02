@@ -27,10 +27,10 @@ P0-A applied **one privilege/RLS migration** on main that removes direct **PUBLI
 | Caller | RPC / path | Role |
 |--------|------------|------|
 | `app/api/admin/wallet/adjust/route.ts` | `public.fn_wallet_apply_delta` | **service_role** |
-| `game-engine/src/finance/index.ts` | `fn_wallet_apply_delta`, `fn_finish_room_and_settle`, commission RPCs | **service_role** |
-| `game-engine/src/repositories/index.ts` | `rpc_apply_ding_credits_for_draw`, `rpc_finalize_engine_draw_job` (17-arg) | **service_role** |
-| `game-engine/src/domain/draw/processDrawBatch.ts`, `reconcileWinners.ts` | `fn_evaluate_room_after_draw` | **service_role** |
-| `game-engine/src/domain/room/janitorRepair.ts` | `fn_janitor_repair_unsettled_finished` | **service_role** |
+| `apps/game-engine/src/finance/index.ts` | `fn_wallet_apply_delta`, `fn_finish_room_and_settle`, commission RPCs | **service_role** |
+| `apps/game-engine/src/repositories/index.ts` | `rpc_apply_ding_credits_for_draw`, `rpc_finalize_engine_draw_job` (17-arg) | **service_role** |
+| `apps/game-engine/src/domain/draw/processDrawBatch.ts`, `reconcileWinners.ts` | `fn_evaluate_room_after_draw` | **service_role** |
+| `apps/game-engine/src/domain/room/janitorRepair.ts` | `fn_janitor_repair_unsettled_finished` | **service_role** |
 | Join/cancel/tournament | `fn_join_or_create_room`, `fn_cancel_waiting_room`, `fn_tournament_wallet_hold` / `release` | **authenticated** (DEFINER); hold/release **not** revoked |
 
 **Excluded from revocation (authenticated EXECUTE retained):**

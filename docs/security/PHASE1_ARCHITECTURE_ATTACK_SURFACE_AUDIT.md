@@ -22,7 +22,7 @@ This audit was performed **read-only**: no code, configuration, migrations, or p
 Sources verified from the repository:
 
 - Next.js / PWA (`app/`, `lib/`, `services/`)
-- Game Engine (`game-engine/`)
+- Game Engine (`apps/game-engine/`)
 - Supabase Auth, Realtime, PostgREST RPC surface (`schema.sql` in workspace `supabase`)
 
 Assumed deployment (from code comments and env): **Vercel** (Next.js), **Railway** (game engine), **Supabase** (Auth + Postgres + Realtime), **Upstash Redis** (engine coordination).
@@ -37,15 +37,15 @@ Assumed deployment (from code comments and env): **Vercel** (Next.js), **Railway
 |--------|------------|------|
 | **Player / admin / agent / dev UI** | Next.js 14 App Router PWA (`app/`, `components/`, `src/screens/`) | Fixed ~390px mobile UI; cookie-backed Supabase Auth |
 | **API gateway (app-owned)** | Next.js Route Handlers (`app/api/**/route.ts`, 39 routes) | Snapshots, admin ops, dev-panel; heavy use of `SUPABASE_SERVICE_ROLE_KEY` + direct `pg` |
-| **Game engine** | Node package `game-engine/` (Railway per code comments) | Background workers + optional HTTP command API |
+| **Game engine** | Node package `apps/game-engine/` (Railway per code comments) | Background workers + optional HTTP command API |
 | **Database** | Supabase-hosted PostgreSQL | Source of truth; business logic largely in `SECURITY DEFINER` RPCs |
 | **Supabase product layer** | Auth, Realtime, PostgREST RPC, Storage | Browser uses anon key + JWT; engine/API use service role |
 | **Redis** | Upstash (`@upstash/redis`, `ioredis` in app + engine) | Leader locks, room/engine coordination (engine); not used for wallet truth |
-| **Direct PostgreSQL** | `lib/pg.ts` (`DATABASE_URL`), `game-engine/src/db/pg.ts` | PG-first snapshots (gameroom, live-room, card pool) bypassing RLS |
+| **Direct PostgreSQL** | `lib/pg.ts` (`DATABASE_URL`), `apps/game-engine/src/db/pg.ts` | PG-first snapshots (gameroom, live-room, card pool) bypassing RLS |
 
 ### Game engine workers (in-process, not HTTP)
 
-From `game-engine/src/index.ts` and `game-engine/src/config/env.ts`:
+From `apps/game-engine/src/index.ts` and `apps/game-engine/src/config/env.ts`:
 
 - **draw-processor** — pick/process draw jobs, marks, settlement hooks
 - **room-scheduler** — waiting-room promotion, `fn_heartbeat_tick`
@@ -136,7 +136,7 @@ flowchart TB
 
 1. **Browser ↔ Supabase PostgREST** — Any `GRANT EXECUTE` to `anon`/`authenticated` is callable with the public anon key (+ optional user JWT).
 2. **Browser ↔ `/api/*`** — App-layer auth; many handlers then use **service role** (RLS bypass).
-3. **Browser ↔ Game Engine** — JWT verified in `game-engine/src/http/auth.ts`; CORS from `GAME_ENGINE_CORS_ORIGINS` (default `*`).
+3. **Browser ↔ Game Engine** — JWT verified in `apps/game-engine/src/http/auth.ts`; CORS from `GAME_ENGINE_CORS_ORIGINS` (default `*`).
 4. **Service role key** — Next server, game engine; must never ship to the browser (only `NEXT_PUBLIC_*` in client bundles).
 
 ---
@@ -181,7 +181,7 @@ flowchart TB
 | `/api/dev-panel/dev-players/[userId]` | * | Dev player config | dev_panel | path `userId` | body | Dev players | High |
 | `/api/dev-panel/dev-player-finance` | GET | Dev finance summary | dev_panel | — | — | Read | Med |
 
-### 2. Game Engine HTTP (`game-engine/src/http/server.ts`)
+### 2. Game Engine HTTP (`apps/game-engine/src/http/server.ts`)
 
 | Path | Auth | Purpose | Risk |
 |------|------|---------|------|
@@ -353,7 +353,7 @@ Severity: **CRITICAL** | **HIGH** | **MEDIUM** | **LOW** | **INFORMATIONAL**
 
 #### F-HIGH-7 — Game Engine CORS default `*`
 
-- **File:** `game-engine/src/http/cors.ts`
+- **File:** `apps/game-engine/src/http/cors.ts`
 - **Impact:** Any origin can invoke API from a browser context (still needs Bearer; relevant with XSS/token theft).
 
 ---
@@ -427,7 +427,7 @@ README only; no separate deployable service in repo.
 5. **Agent vs super vs admin matrix** — Every `/api/admin/*` route vs intended hierarchy (wallet, set-role, card-pool).
 6. **Realtime publication filters** — Leakage without RLS on subscribed tables.
 7. **Supabase Auth** — Signup policy, email confirm, rate limits, recovery abuse.
-8. **Redis key layout** (`game-engine/src/redis/keysV2.ts`) — Impact if Redis compromised.
+8. **Redis key layout** (`apps/game-engine/src/redis/keysV2.ts`) — Impact if Redis compromised.
 9. **Engine multi-replica** — `COORDINATION_STRICT`, lock degradation (`redisLockDegraded`).
 10. **Deployed configuration** — Vercel/Railway env: `GAME_ENGINE_API`, CORS, `DATABASE_URL` on Vercel.
 11. **Client bundle** — No service role or `DATABASE_URL` in public env.

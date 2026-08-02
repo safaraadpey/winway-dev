@@ -41,7 +41,7 @@ READY_FOR_ACL_LOCKDOWN
 | HTTP `/health` | `200` `{"ok":true,"service":"game-engine","redis":"disabled"}` | — | — | — |
 | Runtime logs | Continuous **`room-loop heartbeat`** + **`[DrawPicker] poll`**; `shadowDecisions=0`; **no** `fn_heartbeat_tick` errors/calls observed | — | Confirms engine actors, not hybrid DB clock | — |
 
-**Sources:** `railway variables` (linked service `winway-dev`), `railway logs` (2026-07-31), `GET /health`, `game-engine/src/config/env.ts`, `game-engine/src/runtime.ts`.
+**Sources:** `railway variables` (linked service `winway-dev`), `railway logs` (2026-07-31), `GET /health`, `apps/game-engine/src/config/env.ts`, `apps/game-engine/src/runtime.ts`.
 
 **Code path (hybrid still wired):**
 

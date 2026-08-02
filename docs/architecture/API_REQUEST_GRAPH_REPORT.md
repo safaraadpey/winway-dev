@@ -2,7 +2,7 @@
 
 > Generated: 2026-07-05  
 > Scope: Full codebase analysis (`winway` monorepo)  
-> Method: Static analysis of `app/api/**`, `game-engine/**`, client hooks/screens, and `services/*`. No runtime traffic captured.
+> Method: Static analysis of `app/api/**`, `apps/game-engine/**`, client hooks/screens, and `services/*`. No runtime traffic captured.
 
 ---
 
@@ -218,9 +218,9 @@ flowchart TB
 
 ### 3.1 Game Engine Service
 
-**Location:** `game-engine/`  
-**Entry:** `game-engine/src/index.ts`  
-**Deploy:** Docker (`game-engine/Dockerfile`, EXPOSE 8080) — Railway implied, no `railway.toml` in repo  
+**Location:** `apps/game-engine/`  
+**Entry:** `apps/game-engine/src/index.ts`  
+**Deploy:** Docker (`apps/game-engine/Dockerfile`, EXPOSE 8080) — Railway implied, no `railway.toml` in repo  
 **HTTP framework:** Raw Node.js `http.createServer` (no Express/Fastify/Hono)
 
 #### HTTP Endpoints

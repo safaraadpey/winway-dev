@@ -66,8 +66,8 @@
 | `NEXT_PUBLIC_SUPABASE_URL` | String | required | Many: `lib/supabase/env.ts:1`, `lib/supabaseServer.ts`, routes, scripts | N/A — infra | App broken if missing | Supabase project | Core config | Critical if missing | **C** |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Secret | required | Same as above | N/A | Auth/SDK fail | Supabase | Core config | Critical | **C** |
 | `SUPABASE_SERVICE_ROLE_KEY` | Secret | required (server) | `lib/supabaseServer.ts:13,327`; admin routes; seed scripts; engine via `SUPABASE_SERVICE_ROLE_KEY` | Server privileged path | Server routes fail | Never expose to browser | Core | Critical | **C** |
-| `SUPABASE_URL` | String | required (engine) | `game-engine/src/config/env.ts:136` via `requireEnv` | Engine Supabase client | Engine throws on boot | Engine-only name (not `NEXT_PUBLIC_*`) | Core for engine | Critical | **C** |
-| `DATABASE_URL` | Secret URI | unset → PG pool null | Next: `lib/pg.ts:9-14`; Engine: `game-engine/src/db/pg.ts:4`; logged presence in `game-engine/src/index.ts:122` | Direct PG snapshots / engine PG | Supabase SDK fallback | Vercel + Railway | **Both read paths live** | High for correctness | **C** — keep (PostgREST incident history) |
+| `SUPABASE_URL` | String | required (engine) | `apps/game-engine/src/config/env.ts:136` via `requireEnv` | Engine Supabase client | Engine throws on boot | Engine-only name (not `NEXT_PUBLIC_*`) | Core for engine | Critical | **C** |
+| `DATABASE_URL` | Secret URI | unset → PG pool null | Next: `lib/pg.ts:9-14`; Engine: `apps/game-engine/src/db/pg.ts:4`; logged presence in `apps/game-engine/src/index.ts:122` | Direct PG snapshots / engine PG | Supabase SDK fallback | Vercel + Railway | **Both read paths live** | High for correctness | **C** — keep (PostgREST incident history) |
 | `MAIN_APP_HOST` | String | `dingmoney.org` | `middleware.ts:22` | Host-based portal routing | Defaults | Middleware | Topology | Medium misconfig | **C** |
 | `ADMIN_APP_HOST` | String | `admin.dingmoney.org` | `middleware.ts:23`; `app/layout.tsx:81` | Admin host / PWA | Defaults | Middleware + layout | Topology | Medium | **C** |
 | `NEXT_PUBLIC_MAIN_HOST` | String | `dingmoney.org` | `lib/auth/portalHosts.ts:7` | Client host checks | Defaults | Auth/portal | Topology | Medium | **C** |
@@ -77,12 +77,12 @@
 | `UPSTASH_REDIS_REST_URL` | Secret URL | null | Engine: `env.ts:139`; `redis/client.ts`; examples comment in Next `.env*` | Redis locks / coordination | Single-instance mode | Pair with token | **Not read by Next.ts** | Medium (engine multi-replica) | **C** for engine; Next example claim is stale (**A** for Next docs only) |
 | `UPSTASH_REDIS_REST_TOKEN` | Secret | null | Same | Same | Same | Same | Same | Same | Same |
 | `REDIS_URL` | Secret URL | null | `env.ts:138`; preferred protocol URL | ioredis path | Fall back to REST or none | Multi-replica | Engine | Medium–High | **C** |
-| `GAME_RUNTIME` | Enum | parse → `legacy_db` | `game-engine/src/config/env.ts:124-126,142`; `runtime.ts:13-25`; all workers | See Runtime Selectors | Cron-owned when `legacy_db` | Roles + SCHEDULER + cron mutex | **All 3 modes executable** | **Critical** misconfig | **C/D** — architecture decision |
+| `GAME_RUNTIME` | Enum | parse → `legacy_db` | `apps/game-engine/src/config/env.ts:124-126,142`; `runtime.ts:13-25`; all workers | See Runtime Selectors | Cron-owned when `legacy_db` | Roles + SCHEDULER + cron mutex | **All 3 modes executable** | **Critical** misconfig | **C/D** — architecture decision |
 | `GAME_ENGINE_ROLES` | CSV Enum | empty set | `env.ts:101-116,141` | Which workers start | Role absent → that worker not started | `SCHEDULER_ENABLED` | Operational | High | **C** |
 | `SCHEDULER_ENABLED` | Boolean kill switch | unset → false | `env.ts:224`; `index.ts` worker gate | Tick workers run | API/health only | All scheduled roles | Default safe-off | Critical if wrong | **C** — keep |
 | `GAME_ENGINE_API` | Boolean | unset → false | `env.ts:144`; `index.ts:139-144` | Mount `/v1/*` | Health-only HTTP | Needed for Next engine flag | **نیازمند بررسی** prod | High | **C** |
 | `GAME_ENGINE_HTTP_PORT` | Number | `8080` | `env.ts:143` | Listen port | — | Docker EXPOSE 8080 | Config | Low | **C** |
-| `GAME_ENGINE_CORS_ORIGINS` | String CSV | `*` (cors.ts) | `game-engine/src/http/cors.ts:8` | Allowed browser origins | Default `*` insecure for prod | Browser ENGINE_PATH | **نیازمند بررسی** prod | High security | **C** |
+| `GAME_ENGINE_CORS_ORIGINS` | String CSV | `*` (cors.ts) | `apps/game-engine/src/http/cors.ts:8` | Allowed browser origins | Default `*` insecure for prod | Browser ENGINE_PATH | **نیازمند بررسی** prod | High security | **C** |
 | `ENABLE_SHADOW_PARITY` | Boolean debug | unset → false | `env.ts:218`; room-loop / `roomLoopManager` / `shadowCycle.ts` | Observe-only shadow in hybrid | No shadow | `GAME_RUNTIME=hybrid` + room-loop | Debug leftover | Medium if on in prod | **C** debug / **B** if retiring |
 | `COORDINATION_STRICT` | Boolean safety | unset → false | `env.ts:227`; `startupGate.ts` | Fail-closed without Redis | Soft-warn multi-replica | Redis + replica count | Scale gate | High if scaling | **C** |
 | `ENGINE_REPLICA_COUNT` | Number | `1` | `env.ts:228` | Startup warnings | — | Coordination | Ops | Medium | **C** |
@@ -179,8 +179,8 @@ false → full cards from live-room API; IDB inert
 
 ### `GAME_RUNTIME` (`legacy_db` | `hybrid` | `engine`)
 
-**Parse:** `game-engine/src/config/env.ts:124-126` — unknown/missing → **`legacy_db`**.  
-**Helpers:** `game-engine/src/runtime.ts:13-25`.
+**Parse:** `apps/game-engine/src/config/env.ts:124-126` — unknown/missing → **`legacy_db`**.  
+**Helpers:** `apps/game-engine/src/runtime.ts:13-25`.
 
 | Mode | `isIdle` | `drivesLoops` | `executesBusinessLogic` |
 |------|----------|---------------|-------------------------|
@@ -202,7 +202,7 @@ false → full cards from live-room API; IDB inert
 
 ```text
 ENV GAME_RUNTIME + GAME_ENGINE_ROLES + SCHEDULER_ENABLED
-→ loadConfig() (game-engine/src/config/env.ts)
+→ loadConfig() (apps/game-engine/src/config/env.ts)
 → index.ts startScheduledWorkers
 → room-scheduler / draw-processor / room-loop / tournament-orchestrator
 → Redis leader locks (optional/strict)
@@ -252,7 +252,7 @@ ENV GAME_RUNTIME + GAME_ENGINE_ROLES + SCHEDULER_ENABLED
 
 | Item | Observation | Confidence | Action now |
 |------|-------------|------------|------------|
-| Root `@upstash/redis` dependency | Only imported in `game-engine/src/redis/client.ts`; Next app does not import | High | Do not delete package without checking workspace install model — **B** |
+| Root `@upstash/redis` dependency | Only imported in `apps/game-engine/src/redis/client.ts`; Next app does not import | High | Do not delete package without checking workspace install model — **B** |
 | Next Upstash env for «lobby cache» | Documented in `.env.local.example` but no Next `.ts` reader | High | Docs/example cleanup candidate — **A** |
 | `ROOM_LOOP_MODE` code | Gone | High | Docs cleanup — **A** |
 | Raise-deprecated RPCs | Installed; no TS callers | High for TS; **نیازمند بررسی** for SQL/cron callers | **A/B** |
@@ -329,8 +329,8 @@ Tournament tick cron: absent on DEV.
 | Production values unknown | `NEXT_PUBLIC_USE_GAME_ENGINE`, `GAME_RUNTIME`, `SCHEDULER_ENABLED`, `GAME_ENGINE_API`, CORS, cron active set |
 | `.env.local.example` incomplete vs README | Missing `NEXT_PUBLIC_USE_GAME_ENGINE`, `NEXT_PUBLIC_GAME_ENGINE_URL`, `NEXT_PUBLIC_USE_CARD_POOL_CACHE`, host vars partially present |
 | `.env.develop.local.example` | Has `ACTIVE_GAMES_SOURCE`; comments Upstash/DATABASE_URL; no game-engine Next flags |
-| `game-engine/.env.example` | Defaults `GAME_RUNTIME=engine`, `SCHEDULER_ENABLED=false` |
-| `game-engine/.env.develop.local.example` | `GAME_RUNTIME=legacy_db`, limited roles, scheduler off |
+| `apps/game-engine/.env.example` | Defaults `GAME_RUNTIME=engine`, `SCHEDULER_ENABLED=false` |
+| `apps/game-engine/.env.develop.local.example` | `GAME_RUNTIME=legacy_db`, limited roles, scheduler off |
 | README structure section | Paths like `app/(protected)/lobby` look **stale** vs current `app/player/...` |
 | Docs contradictions | `API_REQUEST_GRAPH_REPORT.md` claims engine Next flags «not in code yet» — **false today**; `system-overview.md` / `game-engine-reality.md` still say engine dormant/`legacy_db` — may be outdated vs ADR intent |
 | Dockerfile | Sets `NODE_ENV=production` only; all other env expected at runtime |
@@ -463,10 +463,10 @@ Tournament tick cron: absent on DEV.
 |------|-------|
 | Next flags | `lib/gameEngine/config.ts`, `lib/cardPool/config.ts`, `lib/contexts/ActiveGamesContext.tsx` |
 | Path shim | `lib/gameEngineClient.ts`, `services/rooms.ts`, `app/player/lobby/page.tsx` |
-| Engine config | `game-engine/src/config/env.ts`, `game-engine/src/runtime.ts`, `game-engine/src/index.ts` |
-| Workers | `game-engine/src/workers/**` |
-| PG access | `lib/pg.ts`, `game-engine/src/db/pg.ts` |
-| Env examples | `.env.local.example`, `.env.develop.local.example`, `game-engine/.env.example`, `game-engine/.env.develop.local.example` |
+| Engine config | `apps/game-engine/src/config/env.ts`, `apps/game-engine/src/runtime.ts`, `apps/game-engine/src/index.ts` |
+| Workers | `apps/game-engine/src/workers/**` |
+| PG access | `lib/pg.ts`, `apps/game-engine/src/db/pg.ts` |
+| Env examples | `.env.local.example`, `.env.develop.local.example`, `apps/game-engine/.env.example`, `apps/game-engine/.env.develop.local.example` |
 | Cron scripts | `scripts/game-engine-cron-*.sql`, `scripts/dev-schedule-worker-cron.sql` |
 | ADR | `docs/adr/0001-actor-only-live-draw-loop.md` |
 

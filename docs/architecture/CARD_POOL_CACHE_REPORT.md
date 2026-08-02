@@ -18,7 +18,7 @@
 | `lib/gameResultsDedupe.ts` pattern | Versioned storage key naming (`winway_card_pool_v1`) |
 | `lib/auth/hardExit.ts` | Clears in-memory cache on player hard exit |
 | `app/api/player/live-room/route.ts` | Extended response (additive fields only) |
-| `game-engine/src/http/live-room-view.ts` | Engine parity for `card_pool` + `pool_card_id` |
+| `apps/game-engine/src/http/live-room-view.ts` | Engine parity for `card_pool` + `pool_card_id` |
 | `services/rooms.ts` | `fetchLiveRoomSnapshot` orchestration hook |
 | `src/screens/LiveRoomScreen.tsx` | Draws-only fallback poll when cache is warm |
 

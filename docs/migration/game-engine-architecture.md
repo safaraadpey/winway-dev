@@ -7,7 +7,7 @@
 
 ## 1. Where the engine lives
 
-The engine is the existing standalone service at `game-engine/` (Node 20 +
+The engine is the existing standalone service at `apps/game-engine/` (Node 20 +
 TypeScript, ESM). This implementation fleshes out the previously-scaffolded
 service rather than introducing a new project, consistent with the team's
 existing plan in `docs/roadmap/GAME_ENGINE_MIGRATION.md`.
@@ -33,7 +33,7 @@ Helpers: `src/runtime.ts` (`isIdle`, `drivesLoops`, `executesBusinessLogic`).
 ## 3. Layered design
 
 ```
-game-engine/src/
+apps/game-engine/src/
 ├── core/            ← PURE business rules (no I/O), faithful SQL ports
 │   ├── money.ts         CEIL / ROUND(…,2) matching Postgres numeric
 │   ├── rng.ts           provably-fair sha256 number/card ordering

@@ -17,12 +17,27 @@ export default function AdminTournamentCreatePage() {
   }, [router, setOnBackClick, setShowBackButton, setShowHeader]);
 
   const handleSubmit = async (values: TournamentFormValues) => {
-    const { error } = await supabase.rpc("fn_admin_create_tournament", {
-      p_payload: values,
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) {
+      alert("احراز هویت لازم است");
+      return;
+    }
+
+    const response = await fetch("/api/admin/tournaments", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ payload: values }),
     });
 
-    if (error) {
-      alert(error.message || "خطا در ایجاد تورنومنت");
+    const result = await response.json().catch(() => null);
+    if (!response.ok) {
+      alert(result?.message || "خطا در ایجاد تورنومنت");
       return;
     }
     router.push("/admin/tournaments");
@@ -37,4 +52,3 @@ export default function AdminTournamentCreatePage() {
     </div>
   );
 }
-

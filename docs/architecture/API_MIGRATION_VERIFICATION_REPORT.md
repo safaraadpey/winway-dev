@@ -605,10 +605,10 @@ Secondary quick win: wire **`useMenuLiveCounts`** to `getLobby()` when the flag 
 | Feature flag gating | Yes | `lib/gameEngine/config.ts` |
 | `[ENGINE_PATH]` logs | Yes | `lib/gameEngineClient.ts` |
 | `[LEGACY_PATH]` logs | Yes | `services/rooms.ts`, `app/player/lobby/page.tsx` |
-| Engine `/v1/lobby` | Yes | `game-engine/src/http/server.ts` |
-| Engine `/v1/gameroom` | Yes | `game-engine/src/http/server.ts` |
-| Engine `/v1/rooms/join` | Yes | `game-engine/src/http/server.ts` |
-| CORS for browser | Yes | `game-engine/src/http/cors.ts` |
+| Engine `/v1/lobby` | Yes | `apps/game-engine/src/http/server.ts` |
+| Engine `/v1/gameroom` | Yes | `apps/game-engine/src/http/server.ts` |
+| Engine `/v1/rooms/join` | Yes | `apps/game-engine/src/http/server.ts` |
+| CORS for browser | Yes | `apps/game-engine/src/http/cors.ts` |
 | Vercel routes removed | **No** (by design) | all `app/api/**` intact |
 | Production flag enabled | **UNKNOWN** | not in repo |
 
