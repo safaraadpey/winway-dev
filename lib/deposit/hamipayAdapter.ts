@@ -1,10 +1,17 @@
 /**
  * Server-only HamiPay adapter.
  * Produces create/status results only — never credits wallet.
+ *
+ * Outbound create-payment body must match the known-working Postman contract:
+ * {
+ *   customerName, customerPhone, amount, merchantOrderId, description, returnUrl
+ * }
+ * Headers: Content-Type, X-Api-Key, Idempotency-Key (header only, never in body)
  */
 
 import { createHash } from "crypto";
 import type { VerificationEvidence } from "@/lib/deposit/types";
+import { parseEnvFlag } from "@/lib/deposit/env";
 
 export type HamiPayCreateInput = {
   depositId: string;
@@ -16,6 +23,7 @@ export type HamiPayCreateInput = {
     userId: string;
     username?: string | null;
     email?: string | null;
+    phone?: string | null;
   };
 };
 
@@ -34,6 +42,8 @@ export type HamiPayStatusResult = {
   rawRedacted: Record<string, unknown>;
 };
 
+const DEFAULT_DESCRIPTION = "شارژ کیف پول DingMoney";
+
 function requireConfig(): { apiKey: string; baseUrl: string } {
   const apiKey = process.env.HAMIPAY_API_KEY || "";
   const baseUrl = (process.env.HAMIPAY_API_BASE_URL || "").replace(/\/$/, "");
@@ -47,7 +57,7 @@ function requireConfig(): { apiKey: string; baseUrl: string } {
 }
 
 function isMockMode(): boolean {
-  return process.env.HAMIPAY_MOCK === "true";
+  return parseEnvFlag(process.env.HAMIPAY_MOCK);
 }
 
 function redact(obj: Record<string, unknown>): Record<string, unknown> {
@@ -58,7 +68,8 @@ function redact(obj: Record<string, unknown>): Record<string, unknown> {
       lower.includes("key") ||
       lower.includes("secret") ||
       lower.includes("token") ||
-      lower.includes("authorization")
+      lower.includes("authorization") ||
+      lower.includes("phone")
     ) {
       clone[key] = "[redacted]";
     }
@@ -79,7 +90,6 @@ function pickString(obj: Record<string, unknown>, keys: string[]): string | null
     if (typeof v === "string" && v.trim()) return v.trim();
     if (typeof v === "number" && Number.isFinite(v)) return String(v);
   }
-  // nested data
   const data = obj.data;
   if (data && typeof data === "object") {
     return pickString(data as Record<string, unknown>, keys);
@@ -120,18 +130,40 @@ function mapStatus(raw: string | null): HamiPayStatusResult["status"] {
 }
 
 /**
- * Convert wallet toman amount to provider units (rial by default).
+ * Convert wallet toman amount to provider units.
+ * Default: toman (matches working Postman amount scale).
+ * Set HAMIPAY_AMOUNT_UNIT=rial to send toman*10.
  */
 export function tomanToProviderAmount(toman: number): number {
-  const unit = (process.env.HAMIPAY_AMOUNT_UNIT || "rial").toLowerCase();
-  if (unit === "toman") return toman;
-  return toman * 10; // rial
+  const unit = (process.env.HAMIPAY_AMOUNT_UNIT || "toman").toLowerCase();
+  if (unit === "rial") return toman * 10;
+  return toman;
 }
 
 export function providerAmountToToman(providerAmount: number): number {
-  const unit = (process.env.HAMIPAY_AMOUNT_UNIT || "rial").toLowerCase();
-  if (unit === "toman") return Math.floor(providerAmount);
-  return Math.floor(providerAmount / 10);
+  const unit = (process.env.HAMIPAY_AMOUNT_UNIT || "toman").toLowerCase();
+  if (unit === "rial") return Math.floor(providerAmount / 10);
+  return Math.floor(providerAmount);
+}
+
+function resolveCustomerName(customer: HamiPayCreateInput["customer"]): string {
+  const name =
+    (customer.username && customer.username.trim()) ||
+    (customer.email && customer.email.split("@")[0]) ||
+    "DingMoney User";
+  return name.slice(0, 120);
+}
+
+function resolveCustomerPhone(customer: HamiPayCreateInput["customer"]): string {
+  const fromInput = (customer.phone || "").replace(/\D/g, "");
+  if (fromInput.length >= 10) return fromInput.slice(0, 15);
+  const fromEnv = (process.env.HAMIPAY_DEFAULT_CUSTOMER_PHONE || "").replace(
+    /\D/g,
+    ""
+  );
+  if (fromEnv.length >= 10) return fromEnv.slice(0, 15);
+  // HamiPay Postman contract requires customerPhone; use a stable non-secret placeholder
+  return "09000000000";
 }
 
 export async function hamipayCreatePayment(
@@ -140,6 +172,7 @@ export async function hamipayCreatePayment(
   if (isMockMode()) {
     const providerPaymentId = `mock_pay_${input.depositId.replace(/-/g, "").slice(0, 16)}`;
     const origin =
+      process.env.HAMIPAY_RETURN_BASE_URL ||
       process.env.NEXT_PUBLIC_APP_ORIGIN ||
       process.env.NEXT_PUBLIC_ADMIN_ORIGIN ||
       "http://localhost:3000";
@@ -159,23 +192,38 @@ export async function hamipayCreatePayment(
   const path = process.env.HAMIPAY_CREATE_PATH || "/v1/payments";
   const url = `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
 
+  const description = (
+    process.env.HAMIPAY_PAYMENT_DESCRIPTION || DEFAULT_DESCRIPTION
+  ).trim();
+  if (!description) {
+    throw new Error("hamipay_description_empty");
+  }
+
+  // Exact Postman contract field names (flat body — no nested customer object)
   const body = {
+    customerName: resolveCustomerName(input.customer),
+    customerPhone: resolveCustomerPhone(input.customer),
     amount: input.amountProviderUnits,
-    currency: input.currency,
     merchantOrderId: input.merchantOrderId,
+    description,
     returnUrl: input.returnUrl,
-    customer: {
-      id: input.customer.userId,
-      username: input.customer.username || undefined,
-      email: input.customer.email || undefined,
-    },
-    description: "DingMoney wallet deposit",
   };
 
-  console.log("[DepositAdapter:hamipay] create started", {
-    depositId: input.depositId,
-    merchantOrderId: input.merchantOrderId,
-    amountProviderUnits: input.amountProviderUnits,
+  const headerNames = ["Content-Type", "X-Api-Key", "Idempotency-Key"];
+  console.log("[DepositAdapter:hamipay] outbound create diagnostic", {
+    url,
+    headerNames,
+    hasApiKey: Boolean(apiKey),
+    hasIdempotencyKey: Boolean(input.depositId),
+    idempotencyKeyEqualsDepositId: input.depositId === input.merchantOrderId,
+    bodyFieldNames: Object.keys(body),
+    amount: body.amount,
+    amountUnit: (process.env.HAMIPAY_AMOUNT_UNIT || "toman").toLowerCase(),
+    merchantOrderId: body.merchantOrderId,
+    descriptionLength: body.description.length,
+    returnUrl: body.returnUrl,
+    hasCustomerName: Boolean(body.customerName),
+    hasCustomerPhone: Boolean(body.customerPhone),
   });
 
   const res = await fetch(url, {
@@ -188,13 +236,21 @@ export async function hamipayCreatePayment(
     body: JSON.stringify(body),
   });
 
-  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  const rawText = await res.text();
+  let json: Record<string, unknown> = {};
+  try {
+    json = rawText ? (JSON.parse(rawText) as Record<string, unknown>) : {};
+  } catch {
+    json = { nonJsonBody: rawText.slice(0, 500) };
+  }
   const redacted = redact(json);
 
   if (!res.ok) {
-    console.error("[DepositAdapter:hamipay] create failed", {
+    console.error("[DepositAdapter:hamipay] create failed — provider response", {
       status: res.status,
+      statusText: res.statusText,
       body: redacted,
+      rawBodyPreview: rawText.slice(0, 800),
     });
     throw new Error(`hamipay_create_failed:${res.status}`);
   }
@@ -214,13 +270,19 @@ export async function hamipayCreatePayment(
   ]);
 
   if (!providerPaymentId || !paymentUrl) {
-    console.error("[DepositAdapter:hamipay] create missing fields", redacted);
+    console.error("[DepositAdapter:hamipay] create missing fields", {
+      status: res.status,
+      body: redacted,
+      hasProviderPaymentId: Boolean(providerPaymentId),
+      hasPaymentUrl: Boolean(paymentUrl),
+    });
     throw new Error("hamipay_create_invalid_response");
   }
 
   console.log("[DepositAdapter:hamipay] create ok", {
     depositId: input.depositId,
     providerPaymentId,
+    hasPaymentUrl: true,
   });
 
   return { providerPaymentId, paymentUrl, rawRedacted: redacted };
@@ -259,6 +321,9 @@ export async function hamipayGetPaymentStatus(opts: {
 
   console.log("[DepositAdapter:hamipay] status started", {
     providerPaymentId: opts.providerPaymentId,
+    url,
+    headerNames: ["X-Api-Key", "Accept"],
+    hasApiKey: Boolean(apiKey),
   });
 
   const res = await fetch(url, {
@@ -269,13 +334,21 @@ export async function hamipayGetPaymentStatus(opts: {
     },
   });
 
-  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  const rawText = await res.text();
+  let json: Record<string, unknown> = {};
+  try {
+    json = rawText ? (JSON.parse(rawText) as Record<string, unknown>) : {};
+  } catch {
+    json = { nonJsonBody: rawText.slice(0, 500) };
+  }
   const redacted = redact(json);
 
   if (!res.ok) {
-    console.error("[DepositAdapter:hamipay] status failed", {
+    console.error("[DepositAdapter:hamipay] status failed — provider response", {
       status: res.status,
+      statusText: res.statusText,
       body: redacted,
+      rawBodyPreview: rawText.slice(0, 800),
     });
     throw new Error(`hamipay_status_failed:${res.status}`);
   }

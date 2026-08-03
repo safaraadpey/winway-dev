@@ -63,6 +63,48 @@ export async function loadDepositIntent(
   return rows[0] || null;
 }
 
+/** Resolve deposit after clean returnUrl (no depositId query) via merchantOrderId. */
+export async function loadDepositIntentByMerchantOrderId(
+  db: Queryable,
+  merchantOrderId: string
+): Promise<DepositIntentRow | null> {
+  const rows = await q<DepositIntentRow>(
+    db,
+    `SELECT id, user_id, amount_expected, currency, status, provider, channel,
+            provider_intent_ref, payment_url, merchant_order_id, environment,
+            metadata, expires_at
+     FROM deposit.intents
+     WHERE merchant_order_id = $1
+     LIMIT 1`,
+    [merchantOrderId]
+  );
+  return rows[0] || null;
+}
+
+/**
+ * Latest non-terminal HamiPay intent for the authenticated user.
+ * Used when HamiPay returns to /payment/callback without depositId.
+ */
+export async function findLatestPendingHamiPayDeposit(
+  db: Queryable,
+  userId: string
+): Promise<DepositIntentRow | null> {
+  const rows = await q<DepositIntentRow>(
+    db,
+    `SELECT id, user_id, amount_expected, currency, status, provider, channel,
+            provider_intent_ref, payment_url, merchant_order_id, environment,
+            metadata, expires_at
+     FROM deposit.intents
+     WHERE user_id = $1
+       AND provider = 'hamipay'
+       AND status IN ('pending', 'created', 'observed', 'verifying', 'confirmed')
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [userId]
+  );
+  return rows[0] || null;
+}
+
 export async function createHamiPayDepositIntent(
   db: Queryable,
   input: {

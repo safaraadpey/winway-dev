@@ -5,15 +5,22 @@ import {
   getDepositEnvDiagnostics,
   isDepositHttpIngressAllowed,
 } from "@/lib/deposit/flag";
-import { verifyAndCreditHamiPayDeposit } from "@/lib/deposit/hamipayFlow";
+import {
+  findLatestPendingHamiPayDeposit,
+  loadDepositIntentByMerchantOrderId,
+  verifyAndCreditHamiPayDeposit,
+} from "@/lib/deposit/hamipayFlow";
 import { takeRateLimitToken } from "@/lib/deposit/rateLimit";
 
 export const runtime = "nodejs";
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 /**
  * POST /api/player/deposit/verify
- * Body: { depositId: string }
- * Never trusts amount/status/user_id from query/body beyond local depositId.
+ * Body: { depositId?: string, merchantOrderId?: string, resolveLatest?: boolean }
+ * Never trusts amount/status/user_id from query/body beyond local deposit id resolution.
  */
 export async function POST(request: Request) {
   const user = await getUserFromRequest(request);
@@ -64,9 +71,13 @@ export async function POST(request: Request) {
   }
 
   let depositId = "";
+  let merchantOrderId = "";
+  let resolveLatest = false;
   try {
     const body = await request.json();
     depositId = String(body?.depositId || "").trim();
+    merchantOrderId = String(body?.merchantOrderId || "").trim();
+    resolveLatest = Boolean(body?.resolveLatest);
   } catch {
     return NextResponse.json(
       { error: "invalid_json", message: "درخواست نامعتبر است." },
@@ -74,12 +85,33 @@ export async function POST(request: Request) {
     );
   }
 
-  if (
-    !depositId ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      depositId
-    )
-  ) {
+  if (!depositId && merchantOrderId) {
+    const byOrder = await loadDepositIntentByMerchantOrderId(
+      pgPool,
+      merchantOrderId
+    );
+    if (byOrder && byOrder.user_id === user.id) {
+      depositId = byOrder.id;
+      console.log("[Deposit] verify resolved merchantOrderId", {
+        userId: user.id,
+        depositId,
+      });
+    }
+  }
+
+  if (!depositId && resolveLatest) {
+    const latest = await findLatestPendingHamiPayDeposit(pgPool, user.id);
+    if (latest) {
+      depositId = latest.id;
+      console.log("[Deposit] verify resolved latest pending", {
+        userId: user.id,
+        depositId,
+        status: latest.status,
+      });
+    }
+  }
+
+  if (!depositId || !UUID_RE.test(depositId)) {
     return NextResponse.json(
       { error: "invalid_deposit_id", message: "شناسه پرداخت نامعتبر است." },
       { status: 400 }

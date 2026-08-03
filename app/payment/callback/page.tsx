@@ -18,18 +18,18 @@ function PaymentCallbackContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const depositId = (searchParams.get("depositId") || "").trim();
+  const merchantOrderId = (
+    searchParams.get("merchantOrderId") ||
+    searchParams.get("merchant_order_id") ||
+    searchParams.get("orderId") ||
+    ""
+  ).trim();
 
   const [ui, setUi] = useState<UiState>("checking");
   const [message, setMessage] = useState("در حال بررسی نتیجه پرداخت...");
   const [busy, setBusy] = useState(false);
 
   const verify = useCallback(async () => {
-    if (!depositId) {
-      setUi("missing");
-      setMessage("شناسه پرداخت یافت نشد.");
-      return;
-    }
-
     setBusy(true);
     setUi("checking");
     setMessage("در حال بررسی نتیجه پرداخت...");
@@ -44,15 +44,31 @@ function PaymentCallbackContent() {
         return;
       }
 
+      const payload: Record<string, unknown> = {};
+      if (depositId) {
+        payload.depositId = depositId;
+      } else if (merchantOrderId) {
+        payload.merchantOrderId = merchantOrderId;
+      } else {
+        // Clean returnUrl (Postman contract) — recover via latest pending intent
+        payload.resolveLatest = true;
+      }
+
       const res = await fetch("/api/player/deposit/verify", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ depositId }),
+        body: JSON.stringify(payload),
       });
       const body = await res.json().catch(() => ({}));
+
+      if (res.status === 400 && body.error === "invalid_deposit_id") {
+        setUi("missing");
+        setMessage("شناسه پرداخت یافت نشد.");
+        return;
+      }
 
       const nextUi = (body.ui as UiState) || "verification_error";
       setUi(nextUi);
@@ -69,7 +85,7 @@ function PaymentCallbackContent() {
     } finally {
       setBusy(false);
     }
-  }, [depositId]);
+  }, [depositId, merchantOrderId]);
 
   useEffect(() => {
     void verify();

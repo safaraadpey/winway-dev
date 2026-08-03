@@ -161,7 +161,12 @@ export async function POST(request: Request) {
       paymentUrl: result.paymentUrl,
     });
   } catch (err) {
-    console.error("[Deposit] create API failed", err);
+    const message = err instanceof Error ? err.message : String(err);
+    // Provider validation detail is logged server-side only (browser stays generic).
+    console.error("[Deposit] create API failed", {
+      userId: user.id,
+      error: message,
+    });
     return NextResponse.json(
       {
         error: "failed_to_create",

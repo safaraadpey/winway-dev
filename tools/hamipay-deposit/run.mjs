@@ -39,14 +39,14 @@ function assert(cond, name, detail = "") {
   }
 }
 
-function tomanToProviderAmount(toman, unit = "rial") {
-  return unit === "toman" ? toman : toman * 10;
+function tomanToProviderAmount(toman, unit = "toman") {
+  return unit === "rial" ? toman * 10 : toman;
 }
 
-function providerAmountToToman(providerAmount, unit = "rial") {
-  return unit === "toman"
-    ? Math.floor(providerAmount)
-    : Math.floor(providerAmount / 10);
+function providerAmountToToman(providerAmount, unit = "toman") {
+  return unit === "rial"
+    ? Math.floor(providerAmount / 10)
+    : Math.floor(providerAmount);
 }
 
 async function pickPlayer() {
@@ -130,7 +130,11 @@ async function passAndCredit(intentId, payId, amountToman) {
 async function run() {
   console.log("[test:hamipay-deposit] start");
 
-  // unit helpers
+  // unit helpers (default toman matches Postman)
+  assert(
+    tomanToProviderAmount(10000) === 10000,
+    "default toman→provider identity"
+  );
   assert(
     tomanToProviderAmount(10000, "rial") === 100000,
     "toman→rial conversion"

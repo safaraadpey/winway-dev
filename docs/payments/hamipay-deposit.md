@@ -16,10 +16,17 @@ HAMIPAY_CREATE_PATH=/v1/payments
 HAMIPAY_STATUS_PATH=/v1/payments/{paymentId}
 
 # Provider amount unit for create/status payloads
-# rial = wallet_toman * 10 (default); toman = same as wallet unit
-HAMIPAY_AMOUNT_UNIT=rial
+# toman = same as wallet unit (default, matches working Postman)
+# rial = wallet_toman * 10
+HAMIPAY_AMOUNT_UNIT=toman
 
-# Return URL base (no trailing slash)
+# Optional override for description (default: شارژ کیف پول DingMoney)
+# HAMIPAY_PAYMENT_DESCRIPTION=شارژ کیف پول DingMoney
+
+# Optional customerPhone if profile has none
+# HAMIPAY_DEFAULT_CUSTOMER_PHONE=09xxxxxxxxx
+
+# Return URL base (no trailing slash) — callback has NO query string
 # production: https://dingmoney.org
 # development: https://dev.dingmoney.org
 HAMIPAY_RETURN_BASE_URL=https://dev.dingmoney.org
@@ -40,17 +47,21 @@ HAMIPAY_MOCK=true
 HAMIPAY_MOCK_STATUS=paid
 ```
 
-Return URLs used:
+Return URLs used (match Postman allowlist):
 
-- production: `https://dingmoney.org/payment/callback?depositId=<uuid>`
-- development: `https://dev.dingmoney.org/payment/callback?depositId=<uuid>`
+- production: `https://dingmoney.org/payment/callback`
+- development: `https://dev.dingmoney.org/payment/callback`
+
+Outbound create body (Postman contract): `customerName`, `customerPhone`, `amount`,
+`merchantOrderId`, `description`, `returnUrl`. Headers: `Content-Type`, `X-Api-Key`,
+`Idempotency-Key` (= depositId; never in body).
 
 ## Flow
 
 1. Buy Rial UI → `POST /api/player/deposit/create` `{ amountRial }`
 2. Server creates `deposit.intents` (hamipay / fiat_gateway), calls HamiPay with Idempotency-Key=depositId
 3. Browser redirects to `paymentUrl` (wallet untouched)
-4. Return → `/payment/callback` shows «در حال بررسی…» → `POST /api/player/deposit/verify` `{ depositId }`
+4. Return → `/payment/callback` → verify with `depositId` if present, else `merchantOrderId`, else `resolveLatest`
 5. Server polls HamiPay, binds amount/merchantOrderId/paymentId/environment, then:
    `fn_record_attempt` → `fn_begin_verification` → `fn_pass_verification` → `fn_post_credit` → `fn_wallet_apply_delta`
 6. Cron `POST /api/cron/deposit-reconcile` (Bearer CRON_SECRET) re-verifies stuck pending deposits

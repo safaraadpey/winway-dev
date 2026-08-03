@@ -54,12 +54,15 @@ export function validateDepositAmountToman(amount: number): {
   return { ok: true, amount };
 }
 
-export function resolvePaymentReturnUrl(depositId: string): string {
+export function resolvePaymentReturnUrl(_depositId: string): string {
   const base =
     process.env.HAMIPAY_RETURN_BASE_URL ||
     process.env.NEXT_PUBLIC_APP_ORIGIN ||
     process.env.NEXT_PUBLIC_ADMIN_ORIGIN ||
     "http://localhost:3000";
   const trimmed = base.replace(/\/$/, "");
-  return `${trimmed}/payment/callback?depositId=${encodeURIComponent(depositId)}`;
+  // Match working Postman returnUrl exactly (no query string).
+  // depositId is recovered on callback via session → latest pending intent
+  // or optional provider redirect params (merchantOrderId).
+  return `${trimmed}/payment/callback`;
 }

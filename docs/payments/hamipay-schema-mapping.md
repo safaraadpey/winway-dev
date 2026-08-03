@@ -32,7 +32,7 @@ We do **not** invent a second wallet credit mechanism.
 
 - Wallet SoR + Deposit Domain: **toman-scale** amounts under currency code `IRR`.
 - BuyRial UI input is labeled **ریال**; convert with `floor(rial/10)` before create-intent.
-- HamiPay requests send amount in provider unit (`HAMIPAY_AMOUNT_UNIT=rial|toman`, default `rial` = toman×10).
+- HamiPay requests send amount in provider unit (`HAMIPAY_AMOUNT_UNIT=toman|rial`, default `toman` = wallet unit; `rial` = toman×10).
 - Verification converts provider amount back to wallet toman before `fn_pass_verification`.
 
 ## Missing before this work
