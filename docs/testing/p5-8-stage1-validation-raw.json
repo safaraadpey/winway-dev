@@ -1,0 +1,105 @@
+{
+  "overall": "PASS",
+  "modes": {
+    "legacy": {
+      "status": "PASS",
+      "totalCount": 37,
+      "itemCount": 37,
+      "sample": {
+        "sessionId": "a9b43335-f5b6-43cc-9269-8d6e9659b754",
+        "status": "cancelled",
+        "participantCount": 0,
+        "amountTotal": 0
+      },
+      "errors": []
+    },
+    "compare": {
+      "status": "PASS",
+      "responseSource": "legacy",
+      "mismatchCount": 0,
+      "summary": {
+        "missingOnPlatform": 0,
+        "missingOnLegacy": 0,
+        "statusMismatches": 0,
+        "participantCountMismatches": 0,
+        "amountMismatches": 0,
+        "timestampMismatches": 0,
+        "participantDetailMismatches": 0
+      },
+      "details": null
+    },
+    "platform": {
+      "status": "PASS",
+      "totalCount": 37,
+      "itemCount": 37,
+      "provenanceSessions": 37,
+      "provenanceParticipants": 69,
+      "servedFrom": [
+        "platform.game_sessions",
+        "platform.session_participants"
+      ],
+      "matchLegacy": true,
+      "sample": {
+        "sessionId": "a9b43335-f5b6-43cc-9269-8d6e9659b754",
+        "status": "cancelled",
+        "participantCount": 0,
+        "amountTotal": 0
+      },
+      "errors": []
+    }
+  },
+  "shadow": {
+    "status": "PASS",
+    "participantRecon": {
+      "dlq": 0,
+      "missing": 0,
+      "duplicate": 0,
+      "generated_at": "2026-08-03T11:06:19.036317+00:00",
+      "pending_outbox": 0,
+      "amount_mismatch": 0,
+      "max_retry_count": 1,
+      "status_mismatch": 0,
+      "sessions_checked": 77,
+      "timestamp_mismatch": 0,
+      "participants_checked": 94,
+      "platform_participants": 115,
+      "bingo_participant_keys": 94
+    },
+    "outbox": {
+      "pending": 0,
+      "dead": 0,
+      "processed": 320
+    },
+    "sessionCoverage": {
+      "rooms": 77,
+      "sessions": 77,
+      "rooms_missing_session": 0
+    }
+  },
+  "impact": {
+    "status": "PASS",
+    "walletWrites": 0,
+    "tournamentWrites": 0,
+    "settlementWrites": 0,
+    "note": "Validation SELECT-only; Stage 1 route is admin read report only"
+  },
+  "performanceMs": {
+    "legacy": 2426,
+    "platform": 709,
+    "compare": 1
+  },
+  "platformReportsLogs": [
+    "[PlatformReports] compare {\"mismatchCount\":0,\"rowCountMatch\":true,\"legacyTotal\":37,\"platformTotal\":37,\"missingOnPlatform\":[],\"missingOnLegacy\":[],\"statusMismatches\":[],\"participantCountMismatches\":[],\"amountMismatches\":[],\"timestampMismatches\":[],\"participantDetailMismatches\":[]}"
+  ],
+  "rollback": {
+    "status": "PASS",
+    "action": "PLATFORM_REPORTS_SOURCE=legacy",
+    "verified": true,
+    "note": "Flag flip restores Legacy serve path without deploy/SQL"
+  },
+  "regression": {},
+  "codePath": {
+    "status": "PASS",
+    "endpoint": "/api/admin/platform-sessions/report"
+  }
+}

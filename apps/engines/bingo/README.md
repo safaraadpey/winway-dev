@@ -1,10 +1,11 @@
-# Bingo Engine
+# Bingo Engine (`bingo-engine`)
 
 سرویس مستقل orchestration بازی بینگو (قرعه، lifecycle روم، تورنومنت).
 
-**محل در مونوریپو (P4.3):** `apps/engines/bingo`  
+**Service identity:** `bingo-engine` (health JSON `service` field, startup logs)  
+**محل در مونوریپو:** `apps/engines/bingo`  
 **سند اصلی migration:** [docs/roadmap/GAME_ENGINE_MIGRATION.md](../../../docs/roadmap/GAME_ENGINE_MIGRATION.md)  
-**قرارداد موتورها:** [docs/architecture/p4-3-engine-contract.md](../../../docs/architecture/p4-3-engine-contract.md)
+**قرارداد موتورها:** [packages/game-contracts/ENGINE_CONTRACT.md](../../../packages/game-contracts/ENGINE_CONTRACT.md) · [p4-3-engine-contract.md](../../../docs/architecture/p4-3-engine-contract.md)
 
 ## ساختار
 

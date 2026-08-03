@@ -27,7 +27,7 @@ export function startHealthServer(
       res.end(
         JSON.stringify({
           ok: readyOk,
-          service: "game-engine",
+          service: "bingo-engine",
           endpoint: req.url,
           redis: redisOk === null ? "disabled" : redisOk ? "up" : "down",
           readiness,
@@ -43,7 +43,7 @@ export function startHealthServer(
     if (err.code === "EADDRINUSE") {
       log.warn("health server port already in use; draw-processor continues", {
         port,
-        hint: "Stop the other game-engine instance or change GAME_ENGINE_HTTP_PORT",
+        hint: "Stop the other bingo-engine instance or change GAME_ENGINE_HTTP_PORT",
       });
       return;
     }

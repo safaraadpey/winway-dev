@@ -61,7 +61,7 @@ These are **logical** operations. Names need not match 1:1 in code today; Bingo 
 
 **Bingo today:**
 
-- `GET /health` — liveness (`service: "game-engine"` JSON; keep stable for probes).
+- `GET /health` — liveness (`service: "bingo-engine"` JSON as of P4.4).
 - `GET /ready` — coordination-aware readiness when wired.
 
 **Rules:**

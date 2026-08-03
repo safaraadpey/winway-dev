@@ -113,7 +113,7 @@ async function main(): Promise<void> {
     registry,
   });
 
-  log.info("game-engine starting", {
+  log.info("bingo-engine starting", {
     engineId: identity.engineId,
     roles: [...config.roles],
     runtime: config.runtime,
@@ -175,7 +175,7 @@ async function main(): Promise<void> {
     if (config.schedulerEnabled) {
       log.warn("no GAME_ENGINE_ROLES enabled; nothing to run");
     } else if ([...config.roles].some((role) => SCHEDULED_ROLES.has(role))) {
-      log.info("game-engine running without scheduled workers (API/health only)");
+      log.info("bingo-engine running without scheduled workers (API/health only)");
     } else {
       log.warn("no GAME_ENGINE_ROLES enabled; nothing to run");
     }
@@ -201,6 +201,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error("[game-engine] fatal", err);
+  console.error("[bingo-engine] fatal", err);
   process.exit(1);
 });

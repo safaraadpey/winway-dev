@@ -1,8 +1,8 @@
 {
-  "name": "@dingmoney/game-engine",
+  "name": "@dingmoney/bingo-engine",
   "version": "0.1.0",
   "private": true,
-  "description": "Standalone game orchestration service (draw, room lifecycle, tournament tick)",
+  "description": "Bingo game orchestration service (draw, room lifecycle, tournament tick)",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",

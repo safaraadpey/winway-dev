@@ -83,7 +83,7 @@ export function startApiServer(port: number, ctx: ApiServerContext): http.Server
         status: okState ? 200 : 503,
         body: {
           ok: okState,
-          service: "game-engine",
+          service: "bingo-engine",
           redis: redisOk === null ? "disabled" : redisOk ? "up" : "down",
         },
       });

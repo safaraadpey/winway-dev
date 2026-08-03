@@ -2,12 +2,16 @@
   "name": "dingmoney-bingo",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:supabase": "node scripts/test-connection.js"
+    "test:supabase": "node scripts/test-connection.js",
+    "test:shadow": "node tools/shadow-regression/src/run.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
