@@ -123,6 +123,14 @@ export async function POST(request: Request) {
         [submissionId, session.user.id]
       );
 
+      await pgPool.query(
+        `UPDATE public.users
+         SET kyc_verified = true,
+             updated_at = now()
+         WHERE id = $1`,
+        [row.user_id]
+      );
+
       await logAdminAction(
         supabase,
         session.user.id,
@@ -160,6 +168,14 @@ export async function POST(request: Request) {
            updated_at = now()
        WHERE id = $1 AND status = 'pending_review'`,
       [submissionId, session.user.id, reasonLabel, reasonCode]
+    );
+
+    await pgPool.query(
+      `UPDATE public.users
+       SET kyc_verified = false,
+           updated_at = now()
+       WHERE id = $1`,
+      [row.user_id]
     );
 
     await logAdminAction(

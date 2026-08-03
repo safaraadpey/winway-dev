@@ -68,6 +68,7 @@ export default function KycResultModal({ visibleOnPaths }: KycResultModalProps) 
     setAcking(true);
     try {
       await acknowledgeKycNotification(notification.submissionId);
+      window.dispatchEvent(new Event("kycVerifiedUpdated"));
     } catch (err) {
       console.error("[KYC] Ack failed", err);
     } finally {

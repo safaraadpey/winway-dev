@@ -64,7 +64,9 @@
 }
 
 .sectionLabel {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   font-size: 1rem;
   font-weight: 600;
   color: var(--player-text-primary, #ffffff);
@@ -309,6 +311,13 @@
   font-size: 0.875rem;
   color: var(--player-text-primary, #ffffff);
   font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.kycBadgeInline {
+  vertical-align: middle;
 }
 
 /* Password Section */

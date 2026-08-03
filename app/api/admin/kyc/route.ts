@@ -12,14 +12,15 @@ type ListRow = {
   kyc_code: string;
   declaration_text: string;
   image_mime_type: string;
-  image_base64: string;
+  image_base64: string | null;
   created_at: string;
+  status: "pending_review" | "approved";
   agent_username: string | null;
   super_username: string | null;
 };
 
 /**
- * GET /api/admin/kyc — pending KYC submissions for admin review.
+ * GET /api/admin/kyc — pending reviews + approved submissions that still have image bytes.
  */
 export async function GET(request: Request) {
   try {
@@ -49,8 +50,12 @@ export async function GET(request: Request) {
          k.kyc_code,
          k.declaration_text,
          k.image_mime_type,
-         encode(k.image_data, 'base64') AS image_base64,
+         CASE
+           WHEN k.image_data IS NULL THEN NULL
+           ELSE encode(k.image_data, 'base64')
+         END AS image_base64,
          k.created_at,
+         k.status,
          agent_u.username AS agent_username,
          super_u.username AS super_username
        FROM public.kyc_submissions k
@@ -59,22 +64,29 @@ export async function GET(request: Request) {
        LEFT JOIN public.users agent_u ON agent_u.id = pa.agent_id
        LEFT JOIN public.users super_u ON super_u.id = pa.super_id
        WHERE k.status = 'pending_review'
-       ORDER BY k.created_at ASC
+          OR (k.status = 'approved' AND k.image_data IS NOT NULL)
+       ORDER BY
+         CASE WHEN k.status = 'pending_review' THEN 0 ELSE 1 END,
+         k.created_at ASC
        LIMIT 100`
     );
 
-    const items: AdminKycListItem[] = result.rows.map((row) => ({
-      id: row.id,
-      userId: row.user_id,
-      username: row.username,
-      kycCode: row.kyc_code,
-      agentUsername: row.agent_username,
-      superUsername: row.super_username,
-      imageMimeType: row.image_mime_type,
-      imageDataUrl: `data:${row.image_mime_type};base64,${row.image_base64}`,
-      createdAt: row.created_at,
-      declarationText: row.declaration_text,
-    }));
+    const items: AdminKycListItem[] = result.rows
+      .filter((row) => row.image_base64)
+      .map((row) => ({
+        id: row.id,
+        userId: row.user_id,
+        username: row.username,
+        kycCode: row.kyc_code,
+        agentUsername: row.agent_username,
+        superUsername: row.super_username,
+        imageMimeType: row.image_mime_type,
+        imageDataUrl: `data:${row.image_mime_type};base64,${row.image_base64}`,
+        createdAt: row.created_at,
+        declarationText: row.declaration_text,
+        status: row.status,
+        hasImage: true,
+      }));
 
     console.log("[KYC] Admin list source=postgresql", { count: items.length });
 

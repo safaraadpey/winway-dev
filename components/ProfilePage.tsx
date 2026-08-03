@@ -70,6 +70,7 @@ const AVAILABLE_AVATAR_IDS = ['001', '002', '003', '004', '005', '006', '007', '
 import type { ProfileInfo } from "@/src/types/profile";
 import toast from "react-hot-toast";
 import Link from "next/link";
+import KycVerifiedBadge from "@/components/KycVerifiedBadge";
 import styles from "./ProfilePage.module.css";
 
 export default function ProfilePage() {
@@ -478,6 +479,9 @@ export default function ProfilePage() {
           <div className={styles.section}>
             <label htmlFor="displayName" className={styles.sectionLabel}>
               انتخاب نام داخل بازی
+              {profile.kycVerified ? (
+                <KycVerifiedBadge className={styles.kycBadgeInline} size={16} />
+              ) : null}
             </label>
             <div className={styles.inputGroup}>
               <input
@@ -519,7 +523,12 @@ export default function ProfilePage() {
           <div className={styles.infoGroup}>
             <div className={styles.infoItem}>
               <span className={styles.infoLabel}>نام کاربری:</span>
-              <span className={styles.infoValue}>{profile.username}</span>
+              <span className={styles.infoValue}>
+                {profile.username}
+                {profile.kycVerified ? (
+                  <KycVerifiedBadge className={styles.kycBadgeInline} size={14} />
+                ) : null}
+              </span>
             </div>
             <div className={styles.infoItem}>
               <span className={styles.infoLabel}>ایمیل:</span>

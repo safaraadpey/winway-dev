@@ -147,9 +147,14 @@
   line-height: 19px;
   display: flex;
   align-items: center;
+  gap: 4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.kycBadge {
+  margin-inline-start: 2px;
 }
 
 .balanceCapsule {

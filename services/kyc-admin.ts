@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import type {
   AdminKycListResponse,
+  AdminKycPurgeImageRequest,
   AdminKycReviewRequest,
 } from "@/src/types/kyc";
 
@@ -46,6 +47,22 @@ export async function reviewAdminKyc(
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(body?.message || body?.error || "KYC_ADMIN_REVIEW_FAILED");
+  }
+  return body;
+}
+
+export async function purgeAdminKycImage(
+  payload: AdminKycPurgeImageRequest
+): Promise<{ ok: true; purged: boolean; message: string }> {
+  const headers = await authHeaders();
+  const res = await fetch("/api/admin/kyc/purge-image", {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body?.message || body?.error || "KYC_PURGE_FAILED");
   }
   return body;
 }

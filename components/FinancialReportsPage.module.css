@@ -49,6 +49,43 @@
   text-align: center;
 }
 
+.headerActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.headerActionButton {
+  min-height: 48px;
+  padding: 0.875rem 1rem;
+  border-radius: 0.75rem;
+  border: none;
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.15s, background-color 0.15s;
+}
+
+.headerActionButton:active {
+  transform: scale(0.98);
+}
+
+.headerActionBuy {
+  background-color: var(--player-accent, #00d4aa);
+  color: #0e0e0f;
+}
+
+.headerActionWithdraw {
+  background-color: transparent;
+  color: var(--player-text-primary, #ffffff);
+  border: 1px solid var(--player-border, rgba(64, 64, 64, 0.8));
+}
+
+.headerActionWithdraw:hover {
+  border-color: var(--player-accent, #00d4aa);
+}
+
 /* Period Tabs */
 .periodTabs {
   display: flex;

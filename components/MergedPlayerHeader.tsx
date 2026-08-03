@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import { getLogoImagePath } from "@/lib/theme/logoImageFiles";
+import KycVerifiedBadge from "@/components/KycVerifiedBadge";
 import styles from "./MergedPlayerHeader.module.css";
 
 import dingCoinIcon from "@/src/assets/icons/ding-coin.png";
@@ -93,6 +94,7 @@ export default function MergedPlayerHeader({
 
   const [playerName, setPlayerName] = useState<string>("اسم بازیکن");
   const [avatarId, setAvatarId] = useState<string>("001");
+  const [kycVerified, setKycVerified] = useState(false);
   const [playerLoading, setPlayerLoading] = useState<boolean>(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isRefreshingBalances, setIsRefreshingBalances] = useState(false);
@@ -132,7 +134,7 @@ export default function MergedPlayerHeader({
 
         const { data: dbUser } = await supabase
           .from("users")
-          .select("username")
+          .select("username, kyc_verified")
           .eq("id", user.id)
           .single();
 
@@ -145,6 +147,8 @@ export default function MergedPlayerHeader({
         } else {
           setPlayerName("کاربر");
         }
+
+        setKycVerified(Boolean(dbUser?.kyc_verified));
 
         if (profile?.metadata && typeof profile.metadata === "object") {
           const metadata = profile.metadata as any;
@@ -179,9 +183,11 @@ export default function MergedPlayerHeader({
     const handleProfileUpdate = () => setRefreshKey((prev) => prev + 1);
     window.addEventListener("profileDisplayNameUpdated", handleProfileUpdate);
     window.addEventListener("profileAvatarUpdated", handleProfileUpdate);
+    window.addEventListener("kycVerifiedUpdated", handleProfileUpdate);
     return () => {
       window.removeEventListener("profileDisplayNameUpdated", handleProfileUpdate);
       window.removeEventListener("profileAvatarUpdated", handleProfileUpdate);
+      window.removeEventListener("kycVerifiedUpdated", handleProfileUpdate);
     };
   }, []);
 
@@ -288,7 +294,12 @@ export default function MergedPlayerHeader({
           <div className={styles.avatarContainer}>
             <Image src={getAvatarImage()} alt="Player Avatar" className={styles.avatar} width={32} height={32} />
           </div>
-          <div className={styles.playerName}>{playerLoading ? "..." : playerName}</div>
+          <div className={styles.playerName}>
+            {playerLoading ? "..." : playerName}
+            {!playerLoading && kycVerified ? (
+              <KycVerifiedBadge className={styles.kycBadge} size={14} />
+            ) : null}
+          </div>
         </div>
 
         <div className={styles.brandLogoWrap}>

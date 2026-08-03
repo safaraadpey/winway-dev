@@ -14,6 +14,7 @@
     "test:shadow": "node tools/shadow-regression/src/run.mjs",
     "test:finance-integrity": "node tools/finance-integrity/run.mjs",
     "test:deposit-domain": "node tools/deposit-domain/run.mjs",
+    "test:hamipay-deposit": "node tools/hamipay-deposit/run.mjs",
     "test:auth-form-security": "node tools/auth-form-security/run.mjs"
   },
   "dependencies": {

@@ -9,6 +9,7 @@ export interface ProfileInfo {
   avatarUrl: string | null; // از user_profiles.avatar_url (برای آواتارهای آپلود شده)
   avatarId: string | null; // از user_profiles.metadata.avatar_id (برای آواتارهای داخلی)
   email: string;
+  kycVerified: boolean;
 }
 
 export interface ProfileUpdateData {

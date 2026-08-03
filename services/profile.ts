@@ -64,7 +64,7 @@ export async function loadProfile(): Promise<ProfileInfo | null> {
     // خواندن اطلاعات از جدول users
     const { data: dbUser, error: dbError } = await supabase
       .from("users")
-      .select("id, username, email")
+      .select("id, username, email, kyc_verified")
       .eq("id", user.id)
       .single();
 
@@ -121,6 +121,7 @@ export async function loadProfile(): Promise<ProfileInfo | null> {
       avatarUrl,
       avatarId: avatarId || "001", // پیش‌فرض
       email: dbUser?.email || user.email || "",
+      kycVerified: Boolean(dbUser?.kyc_verified),
     };
   } catch (error) {
     console.error("Error in loadProfile:", error);

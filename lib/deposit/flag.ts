@@ -1,6 +1,13 @@
-/** Deposit Domain feature flags (P6.5). Default: disabled. */
+/** Deposit Domain feature flags (P6.5). Default: disabled unless live HamiPay configured. */
+
+import {
+  getDepositEnvDiagnostics,
+  parseEnvFlag,
+  resolveDepositCreateAllowed,
+} from "@/lib/deposit/env";
+
 export function isDepositDomainEnabled(): boolean {
-  return process.env.DEPOSIT_DOMAIN_ENABLED === "true";
+  return parseEnvFlag(process.env.DEPOSIT_DOMAIN_ENABLED);
 }
 
 /**
@@ -9,15 +16,24 @@ export function isDepositDomainEnabled(): boolean {
  */
 export function isDepositDomainTestMode(): boolean {
   return (
-    process.env.DEPOSIT_DOMAIN_TEST_MODE === "true" ||
+    parseEnvFlag(process.env.DEPOSIT_DOMAIN_TEST_MODE) ||
     process.env.NODE_ENV === "test"
   );
+}
+
+/**
+ * Whether player deposit create/verify HTTP routes may proceed.
+ */
+export function isDepositHttpIngressAllowed(): boolean {
+  return resolveDepositCreateAllowed().allowed;
 }
 
 export function assertDepositIngressAllowed(opts?: {
   testHarness?: boolean;
 }): void {
-  if (isDepositDomainEnabled()) return;
+  if (isDepositHttpIngressAllowed()) return;
   if (opts?.testHarness && isDepositDomainTestMode()) return;
   throw new Error("deposit_domain_disabled");
 }
+
+export { getDepositEnvDiagnostics, resolveDepositCreateAllowed };

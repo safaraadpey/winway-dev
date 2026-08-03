@@ -4,3 +4,6 @@ export * from "@/lib/deposit/fakeAdapter";
 export * from "@/lib/deposit/service";
 export * from "@/lib/deposit/credit";
 export * from "@/lib/deposit/reconcile";
+export * from "@/lib/deposit/hamipayAdapter";
+export * from "@/lib/deposit/hamipayFlow";
+export * from "@/lib/deposit/limits";

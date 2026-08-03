@@ -1,0 +1,59 @@
+.container {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: #0e0e0f;
+}
+
+.card {
+  width: 100%;
+  max-width: 390px;
+  border-radius: 1rem;
+  border: 1px solid rgba(64, 64, 64, 0.6);
+  background: rgba(26, 26, 26, 0.95);
+  padding: 1.5rem 1.25rem;
+  text-align: center;
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 0.75rem;
+}
+
+.message {
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: #d1d5db;
+  margin-bottom: 1.25rem;
+}
+
+.primaryButton,
+.secondaryButton {
+  width: 100%;
+  min-height: 48px;
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.primaryButton {
+  border: none;
+  background: #00d4aa;
+  color: #0e0e0f;
+}
+
+.primaryButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.secondaryButton {
+  border: 1px solid rgba(64, 64, 64, 0.9);
+  background: transparent;
+  color: #fff;
+}

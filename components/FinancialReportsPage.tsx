@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { loadFinancialReports } from "@/services/financial-reports";
 import type {
@@ -24,6 +25,7 @@ const TRANSACTION_FILTER_LABELS: Record<TransactionFilter, string> = {
 };
 
 export default function FinancialReportsPage() {
+  const router = useRouter();
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
   const [data, setData] = useState<FinancialReportsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -296,7 +298,22 @@ export default function FinancialReportsPage() {
   return (
     <div className={styles.container}>
       <div className={styles.pageHeader}>
-        <h1 className={styles.title}>گزارشات مالی</h1>
+        <div className={styles.headerActions} role="group" aria-label="عملیات مالی">
+          <button
+            type="button"
+            className={`${styles.headerActionButton} ${styles.headerActionBuy}`}
+            onClick={() => router.push("/player/wallet?action=buy")}
+          >
+            خرید
+          </button>
+          <button
+            type="button"
+            className={`${styles.headerActionButton} ${styles.headerActionWithdraw}`}
+            onClick={() => router.push("/player/wallet?action=withdraw")}
+          >
+            برداشت
+          </button>
+        </div>
 
         <div className={styles.periodTabs}>
           {(["day", "week", "month"] as ReportPeriod[]).map((period) => (

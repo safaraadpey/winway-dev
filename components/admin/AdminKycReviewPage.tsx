@@ -8,9 +8,25 @@ import {
 } from "@/lib/kyc/retryReasons";
 import {
   fetchAdminKycQueue,
+  purgeAdminKycImage,
   reviewAdminKyc,
 } from "@/services/kyc-admin";
 import type { AdminKycListItem } from "@/src/types/kyc";
+
+function extensionForMime(mime: string): string {
+  if (mime.includes("png")) return "png";
+  if (mime.includes("webp")) return "webp";
+  return "jpg";
+}
+
+function downloadDataUrl(dataUrl: string, filename: string) {
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
 
 export default function AdminKycReviewPage() {
   const [items, setItems] = useState<AdminKycListItem[]>([]);
@@ -19,6 +35,10 @@ export default function AdminKycReviewPage() {
   const [retryTarget, setRetryTarget] = useState<AdminKycListItem | null>(null);
   const [selectedReason, setSelectedReason] =
     useState<KycRetryReasonCode | null>(null);
+  const [purgeConfirm, setPurgeConfirm] = useState<{
+    item: AdminKycListItem;
+    mode: "after_download" | "delete_only";
+  } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -43,7 +63,11 @@ export default function AdminKycReviewPage() {
     try {
       await reviewAdminKyc({ submissionId: item.id, action: "approve" });
       toast.success("احراز هویت تأیید شد");
-      setItems((prev) => prev.filter((x) => x.id !== item.id));
+      setItems((prev) =>
+        prev.map((x) =>
+          x.id === item.id ? { ...x, status: "approved" as const } : x
+        )
+      );
     } catch (err) {
       console.error("[KYC] Approve failed", err);
       toast.error(
@@ -77,6 +101,34 @@ export default function AdminKycReviewPage() {
       toast.error(
         err instanceof Error ? err.message : "ثبت تکرار احراز هویت ناموفق بود"
       );
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDownloadAndDelete = (item: AdminKycListItem) => {
+    const ext = extensionForMime(item.imageMimeType);
+    const filename = `kyc-${item.username}-${item.kycCode}.${ext}`;
+    downloadDataUrl(item.imageDataUrl, filename);
+    setPurgeConfirm({ item, mode: "after_download" });
+  };
+
+  const handleDeleteOnly = (item: AdminKycListItem) => {
+    setPurgeConfirm({ item, mode: "delete_only" });
+  };
+
+  const confirmPurge = async () => {
+    if (!purgeConfirm || busyId) return;
+    const { item } = purgeConfirm;
+    setBusyId(item.id);
+    try {
+      await purgeAdminKycImage({ submissionId: item.id });
+      toast.success("تصویر حذف شد؛ سابقه احراز هویت باقی ماند");
+      setItems((prev) => prev.filter((x) => x.id !== item.id));
+      setPurgeConfirm(null);
+    } catch (err) {
+      console.error("[KYC] Purge failed", err);
+      toast.error(err instanceof Error ? err.message : "حذف تصویر ناموفق بود");
     } finally {
       setBusyId(null);
     }
@@ -131,25 +183,51 @@ export default function AdminKycReviewPage() {
                     <span className="text-gray-400">سوپر بالاسری</span>
                     <span>{item.superUsername || "—"}</span>
                   </div>
+                  {item.status === "approved" ? (
+                    <p className="pt-1 text-teal-400 text-xs font-semibold">
+                      تأیید شده — تصویر را دانلود یا حذف کنید
+                    </p>
+                  ) : null}
 
-                  <div className="grid grid-cols-2 gap-2 pt-3">
-                    <button
-                      type="button"
-                      disabled={busyId === item.id}
-                      onClick={() => void handleApprove(item)}
-                      className="rounded-xl bg-teal-500 text-black font-bold py-3 disabled:opacity-50"
-                    >
-                      تأیید احراز هویت
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busyId === item.id}
-                      onClick={() => openRetryModal(item)}
-                      className="rounded-xl border border-amber-500/60 text-amber-300 font-bold py-3 disabled:opacity-50"
-                    >
-                      تکرار احراز هویت
-                    </button>
-                  </div>
+                  {item.status === "pending_review" ? (
+                    <div className="grid grid-cols-2 gap-2 pt-3">
+                      <button
+                        type="button"
+                        disabled={busyId === item.id}
+                        onClick={() => void handleApprove(item)}
+                        className="rounded-xl bg-teal-500 text-black font-bold py-3 disabled:opacity-50"
+                      >
+                        تأیید احراز هویت
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyId === item.id}
+                        onClick={() => openRetryModal(item)}
+                        className="rounded-xl border border-amber-500/60 text-amber-300 font-bold py-3 disabled:opacity-50"
+                      >
+                        تکرار احراز هویت
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2 pt-3">
+                      <button
+                        type="button"
+                        disabled={busyId === item.id}
+                        onClick={() => handleDownloadAndDelete(item)}
+                        className="rounded-xl bg-teal-500 text-black font-bold py-3 disabled:opacity-50"
+                      >
+                        دانلود و حذف تصویر
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyId === item.id}
+                        onClick={() => handleDeleteOnly(item)}
+                        className="rounded-xl border border-red-500/60 text-red-300 font-bold py-3 disabled:opacity-50"
+                      >
+                        حذف تصویر
+                      </button>
+                    </div>
+                  )}
                 </div>
               </article>
             ))}
@@ -203,6 +281,42 @@ export default function AdminKycReviewPage() {
                 onClick={() => void confirmRetry()}
               >
                 ثبت
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {purgeConfirm ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-[#0b1120] border border-gray-700 p-5">
+            <h2 className="text-lg font-bold mb-2 text-center">حذف تصویر</h2>
+            <p className="text-sm text-gray-300 text-center leading-6 mb-4">
+              {purgeConfirm.mode === "after_download"
+                ? "تصویر دانلود شد. آیا از دیتابیس هم حذف شود؟ سابقه احراز هویت بازیکن باقی می‌ماند."
+                : "تصویر بدون دانلود از دیتابیس حذف شود؟ سابقه احراز هویت بازیکن باقی می‌ماند."}
+            </p>
+            <p className="text-xs text-gray-500 text-center mb-4">
+              کاربر: {purgeConfirm.item.username} —{" "}
+              <span className="numeric-text numeric-text--12" dir="ltr">
+                {purgeConfirm.item.kycCode}
+              </span>
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                className="rounded-xl border border-gray-600 py-3"
+                onClick={() => setPurgeConfirm(null)}
+              >
+                انصراف
+              </button>
+              <button
+                type="button"
+                disabled={busyId === purgeConfirm.item.id}
+                className="rounded-xl bg-red-500 text-black font-bold py-3 disabled:opacity-50"
+                onClick={() => void confirmPurge()}
+              >
+                تأیید حذف
               </button>
             </div>
           </div>

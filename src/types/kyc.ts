@@ -65,6 +65,8 @@ export interface AdminKycListItem {
   imageMimeType: string;
   createdAt: string;
   declarationText: string;
+  status: "pending_review" | "approved";
+  hasImage: boolean;
 }
 
 export interface AdminKycListResponse {
@@ -75,4 +77,8 @@ export interface AdminKycReviewRequest {
   submissionId: string;
   action: "approve" | "retry";
   reasonCode?: KycRetryReasonCode;
+}
+
+export interface AdminKycPurgeImageRequest {
+  submissionId: string;
 }
