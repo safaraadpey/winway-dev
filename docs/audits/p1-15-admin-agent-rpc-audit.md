@@ -27,7 +27,7 @@ RPCs that are **admin / super / agent panel–relevant** (by name, finance panel
 
 1. Live `pg_proc` / `proacl` / `has_function_privilege` (Supabase MCP)  
 2. Live `pg_get_functiondef` role gates  
-3. Repo `.rpc(` scan (`app/`, `lib/`, `services/`, `apps/game-engine/`)  
+3. Repo `.rpc(` scan (`app/`, `lib/`, `services/`, `apps/engines/bingo/`)  
 4. P1.13/P1.14 outcomes for tournament create/update/delete
 
 ---

@@ -66,10 +66,10 @@ No triggers and no cron jobs reference `fn_wallet_apply_delta` by name (live `pg
 | Caller | Kind | DB role used | How role obtained | Evidence |
 |--------|------|--------------|-------------------|----------|
 | `app/api/admin/wallet/adjust/route.ts` | Next.js Admin API | **service_role** | `getAdminContextOrThrow` → `createServiceClient()` | Lines 19–20, 102–114: `supabase.rpc("fn_wallet_apply_delta", …)` |
-| `apps/game-engine/src/finance/index.ts` → `walletApplyDelta()` | Railway adapter | **service_role** | `createSupabaseAdmin` uses `supabaseServiceRoleKey` | `finance/index.ts` 38–54; `db/supabase-admin.ts` |
+| `apps/engines/bingo/src/finance/index.ts` → `walletApplyDelta()` | Railway adapter | **service_role** | `createSupabaseAdmin` uses `supabaseServiceRoleKey` | `finance/index.ts` 38–54; `db/supabase-admin.ts` |
 | `services/transactions.ts` | Browser | **does not call RPC** | `fetch("/api/admin/wallet/adjust")` | HTTP to API only |
 
-**Dead / unused direct adapter:** `walletApplyDelta()` is **exported but never imported/called** elsewhere in `apps/game-engine` (only definition site). Live settle path uses `finishRoomAndSettle` → `fn_finish_room_and_settle`, which nests `apply_delta` in SQL.
+**Dead / unused direct adapter:** `walletApplyDelta()` is **exported but never imported/called** elsewhere in `apps/engines/bingo` (only definition site). Live settle path uses `finishRoomAndSettle` → `fn_finish_room_and_settle`, which nests `apply_delta` in SQL.
 
 **Not found in repo (TS/JS):**
 
@@ -196,9 +196,9 @@ These do **not** establish a legitimate need to keep `authenticated` EXECUTE.
 | `app/api/admin/wallet/adjust/route.ts` | Only live Next direct `.rpc("fn_wallet_apply_delta")` — service_role |
 | `lib/supabaseServer.ts` `getAdminContextOrThrow` | Confirms service client for adjust |
 | `services/transactions.ts` | Browser → HTTP adjust API only |
-| `apps/game-engine/src/finance/index.ts` | `walletApplyDelta` adapter (unused); `finishRoomAndSettle` used |
-| `apps/game-engine/src/finance/settleRoom.ts` | Calls settle RPC, not apply_delta |
-| `apps/game-engine/src/db/supabase-admin.ts` | Service role key |
+| `apps/engines/bingo/src/finance/index.ts` | `walletApplyDelta` adapter (unused); `finishRoomAndSettle` used |
+| `apps/engines/bingo/src/finance/settleRoom.ts` | Calls settle RPC, not apply_delta |
+| `apps/engines/bingo/src/db/supabase-admin.ts` | Service role key |
 | Live `pg_proc` / schema ACL | Nested parents DEFINER; `game_finance` USAGE restricted |
 
 ---

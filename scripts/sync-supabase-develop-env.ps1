@@ -1,4 +1,4 @@
-# Writes .env.develop.local and apps/game-engine/.env.develop.local from Supabase develop branch.
+# Writes .env.develop.local and apps/engines/bingo/.env.develop.local from Supabase develop branch.
 # Requires: supabase CLI logged in. Does not overwrite prod .env.local.
 
 $ErrorActionPreference = "Stop"
@@ -29,7 +29,7 @@ LOG_LEVEL=info
 "@
 
 $nextPath = Join-Path $Root ".env.develop.local"
-$enginePath = Join-Path $Root "apps\game-engine\.env.develop.local"
+$enginePath = Join-Path $Root "apps\engines\bingo\.env.develop.local"
 
 Set-Content -Path $nextPath -Value $nextEnv -Encoding utf8
 Set-Content -Path $enginePath -Value $engineEnv -Encoding utf8
@@ -38,4 +38,4 @@ Write-Host "Wrote $nextPath"
 Write-Host "Wrote $enginePath"
 Write-Host ""
 Write-Host "Next.js with develop DB: copy .env.develop.local -> .env.local (or use dotenv-cli)"
-Write-Host "Game engine: cd apps/game-engine; copy .env.develop.local .env"
+Write-Host "Game engine: cd apps/engines/bingo; copy .env.develop.local .env"

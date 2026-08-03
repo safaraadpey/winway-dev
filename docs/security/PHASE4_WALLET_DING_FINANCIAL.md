@@ -129,7 +129,7 @@
 
 | Operation | Module |
 |-----------|--------|
-| Join / system join | `apps/game-engine/src/http/commands.ts` |
+| Join / system join | `apps/engines/bingo/src/http/commands.ts` |
 | Draw finalize + ding | `repositories/index.ts` → `rpc_finalize_engine_draw_job` |
 | Settlement | `finance/finishRoomAndSettle` → `fn_finish_room_and_settle` |
 | Wallet delta | `finance/walletApplyDelta` → `fn_wallet_apply_delta` |
@@ -259,7 +259,7 @@ CLIENT (PWA / panel / engine worker)
 | `sql/migrations/20250610140000_rpc_apply_ding_credits_for_draw.sql` | Ding batch credit |
 | `app/api/admin/wallet/adjust/route.ts` | Service-role adjust |
 | `app/api/admin/wallet/transfer/route.ts` | User-scoped transfer |
-| `apps/game-engine/src/finance/index.ts` | Engine ledger adapter |
+| `apps/engines/bingo/src/finance/index.ts` | Engine ledger adapter |
 | `services/rooms.ts` | Player join RPC |
 | `src/screens/TournamentRoomScreen.tsx` | Hold + entry upsert |
 | `lib/hooks/useBalances.ts` | Balances + optimistic Ding |

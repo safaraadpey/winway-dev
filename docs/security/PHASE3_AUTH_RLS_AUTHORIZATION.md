@@ -25,7 +25,7 @@
 | API routes (admin) | Bearer JWT + **role read via service role** | `getAdminSessionOrThrow` / `getAdminContextOrThrow` |
 | Wallet transfer API | Bearer JWT + **user-scoped** RPC (`createUserClientFromAccessToken`) | `app/api/admin/wallet/transfer/route.ts` |
 | Wallet adjust API | Bearer JWT gate + **service role** RPC | `app/api/admin/wallet/adjust/route.ts` |
-| Game Engine | Bearer JWT verified with service client | `apps/game-engine/src/http/auth.ts` |
+| Game Engine | Bearer JWT verified with service client | `apps/engines/bingo/src/http/auth.ts` |
 
 **Login/signup:** Username → synthetic email `@dingmoney.org` (`lib/auth-helpers.ts`).  
 `LoginForm` / `SignupForm` use `signInWithPassword` / `signUp` (`components/auth/LoginForm.tsx`, `SignupForm.tsx`).

@@ -1,6 +1,6 @@
 # P4.0 — Migration Roadmap
 
-> **P4.2 path note:** After P4.2 the engine lives at `apps/game-engine/`. This P4.0 document is a **point-in-time** snapshot; bare `game-engine/` paths below describe the pre-move layout (unless the sentence already discusses the target `apps/game-engine/`).
+> **P4.2 path note:** After P4.2 the engine lives at `apps/engines/bingo/`. This P4.0 document is a **point-in-time** snapshot; bare `game-engine/` paths below describe the pre-move layout (unless the sentence already discusses the target `apps/engines/bingo/`).
 
 > Phase-by-phase plan to reach [p4-0-target-architecture.md](./p4-0-target-architecture.md).  
 > **Every phase must preserve application behavior.**  
@@ -76,7 +76,7 @@ Related:
 | | |
 |--|--|
 | **Objective** | Engine lives under `apps/` without logic changes |
-| **Folders affected** | `game-engine/` → `apps/game-engine/`; docs links; `scripts/sync-game-engine-env.ps1` paths; Dockerfile context |
+| **Folders affected** | `game-engine/` → `apps/engines/bingo/`; docs links; `scripts/sync-game-engine-env.ps1` paths; Dockerfile context |
 | **Risk** | **High** — Railway build root / watch path must update in lockstep |
 | **Rollback** | Move directory back; restore Railway root to `game-engine/`; redeploy previous image |
 | **Validation** | Local: `cd game-engine && npm run build && npm start` → `/health` 200; Railway staging deploy; `SCHEDULER_ENABLED` unchanged; web still talks to staging URL; no Next import of engine source |

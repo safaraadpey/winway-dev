@@ -14,7 +14,7 @@
 | Area | Assessment |
 |------|------------|
 | **Service role / DB URL in client bundle** | No imports of `lib/supabaseServer` or `lib/pg` from client components found; server secrets use non-`NEXT_PUBLIC_` names. |
-| **`.env` in git** | Real `.env.local` / `apps/game-engine/.env` are **gitignored**; only `*.example` files are tracked. |
+| **`.env` in git** | Real `.env.local` / `apps/engines/bingo/.env` are **gitignored**; only `*.example` files are tracked. |
 | **Tracked credential-like content** | No JWT (`eyJ…`) strings found in tracked files via `git grep`. Historical commits touch `service_role` in **SQL/migrations**, not live keys (sampled). |
 | **HTTP hardening (Next.js)** | `next.config.mjs` is empty — **no** CSP, security headers, or source-map policy in repo. |
 | **CI/CD in repo** | **No** `.github/workflows` present; deployment isolation depends on Vercel/Railway dashboard config (**not verifiable from repo alone**). |
@@ -29,16 +29,16 @@
 | Variable | Used in | Purpose |
 |----------|---------|---------|
 | `SUPABASE_SERVICE_ROLE_KEY` | `lib/supabaseServer.ts`, API routes, game-engine | Bypass RLS; admin/service RPCs |
-| `DATABASE_URL` | `lib/pg.ts`, `apps/game-engine/src/db/pg.ts` | Direct PostgreSQL |
-| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | `apps/game-engine/src/config/env.ts`, `redis/client.ts` | Redis REST (engine) |
+| `DATABASE_URL` | `lib/pg.ts`, `apps/engines/bingo/src/db/pg.ts` | Direct PostgreSQL |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | `apps/engines/bingo/src/config/env.ts`, `redis/client.ts` | Redis REST (engine) |
 | `REDIS_URL` | game-engine | Redis protocol (ioredis / Upstash) |
 | `MAIN_APP_HOST` / `ADMIN_APP_HOST` | `middleware.ts` | Host-based redirect (server) |
-| `GAME_ENGINE_CORS_ORIGINS` | `apps/game-engine/src/http/cors.ts` | Engine CORS allowlist |
+| `GAME_ENGINE_CORS_ORIGINS` | `apps/engines/bingo/src/http/cors.ts` | Engine CORS allowlist |
 | `GAME_ENGINE_API` | game-engine `env.ts` | Enable `/v1` command API |
 | `GAME_ENGINE_ROLES`, `SCHEDULER_ENABLED`, worker tuning | game-engine | Process roles |
 | `SUPABASE_URL` | game-engine (non-public name) | Engine Supabase URL (parallel to Next `NEXT_PUBLIC_*`) |
 
-**Documentation:** `.env.local.example`, `.env.develop.local.example`, `apps/game-engine/.env.example`, `README.md`, `docs/incidents/2026-06-16-supabase-postgrest-partial-read.md`.
+**Documentation:** `.env.local.example`, `.env.develop.local.example`, `apps/engines/bingo/.env.example`, `README.md`, `docs/incidents/2026-06-16-supabase-postgrest-partial-read.md`.
 
 **Not found in repository:** `JWT_SECRET`, webhook signing secrets, `CRON_SECRET`, `VERCEL_*` env usage in code, Railway API tokens, Stripe/payment API keys.
 
@@ -105,9 +105,9 @@ If this module were ever imported from a Client Component, the build would fail 
 From `.gitignore`:
 
 - `.env*.local`, `.env`
-- `apps/game-engine/.env`, `apps/game-engine/.env.*` (with exceptions for `!.env.example` and `!.env.develop.local.example`)
+- `apps/engines/bingo/.env`, `apps/engines/bingo/.env.*` (with exceptions for `!.env.example` and `!.env.develop.local.example`)
 
-Local files present on disk (e.g. `.env.local`, `apps/game-engine/.env`) are **ignored** — not audited for contents (avoid reading secrets into the report).
+Local files present on disk (e.g. `.env.local`, `apps/engines/bingo/.env`) are **ignored** — not audited for contents (avoid reading secrets into the report).
 
 ### 3.2 Tracked examples
 
@@ -115,11 +115,11 @@ Local files present on disk (e.g. `.env.local`, `apps/game-engine/.env`) are **i
 |------|--------|
 | `.env.local.example` | Placeholders only |
 | `.env.develop.local.example` | **Real develop project URL** `https://ovclbgxtpxyzlcmwbviw.supabase.co` + ref in comment — not a secret key, but **environment fingerprint** |
-| `apps/game-engine/.env.example` | Empty placeholders; documents Redis/scheduler |
+| `apps/engines/bingo/.env.example` | Empty placeholders; documents Redis/scheduler |
 
 ### 3.3 Repository history (limited check)
 
-- `git ls-files` for `.env.local` / `apps/game-engine/.env`: **not tracked**.
+- `git ls-files` for `.env.local` / `apps/engines/bingo/.env`: **not tracked**.
 - `git grep eyJhbGci` on tracked files: **no matches**.
 - `git log --all -S "service_role"`: commits reference **SQL/migrations** and `.tmp` migration payloads, not live JWT keys (spot-check).
 
@@ -155,8 +155,8 @@ Local files present on disk (e.g. `.env.local`, `apps/game-engine/.env`) are **i
 | **Railway (game-engine)** | Comments, `engineIdentity.ts` (`RAILWAY_REPLICA_ID`), `Dockerfile` | Env at deploy time; not in repo |
 | **Supabase** | Client + service role + optional `DATABASE_URL` | Anon public; service role server-only |
 | **Upstash Redis** | game-engine only | `REDIS_URL` or REST URL+token — server only |
-| **Docker** | `apps/game-engine/Dockerfile` | Multi-stage build; **no** `COPY .env` |
-| **docker-compose** | `apps/game-engine/docker-compose.multi-replica.yml` | Local `redis://redis:6379` only |
+| **Docker** | `apps/engines/bingo/Dockerfile` | Multi-stage build; **no** `COPY .env` |
+| **docker-compose** | `apps/engines/bingo/docker-compose.multi-replica.yml` | Local `redis://redis:6379` only |
 | **CI/CD** | **No** `.github/workflows` | N/A in repo |
 
 ### P2-MED-2 — PostgreSQL TLS verification disabled
@@ -167,7 +167,7 @@ Local files present on disk (e.g. `.env.local`, `apps/game-engine/.env`) are **i
 
 ### P2-INFO-2 — Engine logs config presence, not values
 
-- **File:** `apps/game-engine/src/index.ts` — logs `databaseUrl: "configured" | "missing"` (not the URL string).
+- **File:** `apps/engines/bingo/src/index.ts` — logs `databaseUrl: "configured" | "missing"` (not the URL string).
 
 ---
 
@@ -177,7 +177,7 @@ Local files present on disk (e.g. `.env.local`, `apps/game-engine/.env`) are **i
 
 | Surface | Config | Default / risk |
 |---------|--------|----------------|
-| Game Engine | `apps/game-engine/src/http/cors.ts` | If `GAME_ENGINE_CORS_ORIGINS` unset or `*`, **`Access-Control-Allow-Origin: *`** |
+| Game Engine | `apps/engines/bingo/src/http/cors.ts` | If `GAME_ENGINE_CORS_ORIGINS` unset or `*`, **`Access-Control-Allow-Origin: *`** |
 | Next.js API | No explicit CORS middleware in repo | Same-origin browser calls; third-party sites cannot read responses without CORS headers (same-origin policy for reads) |
 | Supabase | Hosted | Supabase project settings (**not in repo**) |
 
@@ -200,7 +200,7 @@ Local files present on disk (e.g. `.env.local`, `apps/game-engine/.env`) are **i
 ### 6.4 Source maps
 
 - Next.js: no `productionBrowserSourceMaps` in config → Next default (**typically off** in production).
-- **game-engine:** `apps/game-engine/tsconfig.json` — `"sourceMap": true` for **compiled Node output** on Railway (not shipped to browsers) — **LOW** if dist/maps not published publicly.
+- **game-engine:** `apps/engines/bingo/tsconfig.json` — `"sourceMap": true` for **compiled Node output** on Railway (not shipped to browsers) — **LOW** if dist/maps not published publicly.
 
 ---
 
@@ -252,7 +252,7 @@ Many routes return `err.message` from Supabase/Postgres to clients (e.g. admin d
 | `NODE_ENV` gates | PWA debug, net trace, some layouts | Partial |
 | Vercel Preview env | Not in repo | **Unknown** — if Preview uses **production** `SUPABASE_SERVICE_ROLE_KEY` or `DATABASE_URL`, preview URLs become high-risk |
 | Host split admin/player | `middleware.ts` + env hosts | Reduces admin UI on main host; **not** API isolation |
-| `SCHEDULER_ENABLED` default false in engine example | `apps/game-engine/.env.example` | Reduces accidental prod ticks locally |
+| `SCHEDULER_ENABLED` default false in engine example | `apps/engines/bingo/.env.example` | Reduces accidental prod ticks locally |
 
 **P2-HIGH-3 — Preview deployment misconfiguration (operational)**
 
@@ -282,7 +282,7 @@ Many routes return `err.message` from Supabase/Postgres to clients (e.g. admin d
 | ID | Severity | Title | Location | Exploitability |
 |----|----------|-------|----------|----------------|
 | P2-HIGH-1 | HIGH | Hardcoded seed password `123456` + service-role seed script in git | `scripts/seed-winway-old-list-users.cjs` | Run against wrong env → mass accounts with known password |
-| P2-HIGH-2 | HIGH | Game Engine CORS defaults to `*` | `apps/game-engine/src/http/cors.ts` | Amplifies XSS impact against `/v1/*` with stolen JWT |
+| P2-HIGH-2 | HIGH | Game Engine CORS defaults to `*` | `apps/engines/bingo/src/http/cors.ts` | Amplifies XSS impact against `/v1/*` with stolen JWT |
 | P2-HIGH-3 | HIGH | Preview/prod env isolation not enforceable from repo | Vercel/Railway config | Preview URL + prod secrets = full admin/API compromise |
 | P2-MED-1 | MEDIUM | Dev script pattern calling `exec_sql` with anon | `scripts/list-tables.ts` | Reflects dangerous RPC if granted in DB |
 | P2-MED-2 | MEDIUM | `DATABASE_URL` TLS `rejectUnauthorized: false` | `lib/pg.ts` | MITM on DB connection |
@@ -331,7 +331,7 @@ When adding env vars, only these patterns appear in client code today:
 
 - `.gitignore`, `.env*.example`, `next.config.mjs`, `middleware.ts`, `package.json`
 - `lib/supabaseServer.ts`, `lib/pg.ts`, `lib/supabase/env.ts`, `lib/gameEngine/config.ts`
-- `apps/game-engine/Dockerfile`, `apps/game-engine/.env.example`, `apps/game-engine/src/http/cors.ts`, `apps/game-engine/src/config/env.ts`
+- `apps/engines/bingo/Dockerfile`, `apps/engines/bingo/.env.example`, `apps/engines/bingo/src/http/cors.ts`, `apps/engines/bingo/src/config/env.ts`
 - `scripts/seed-winway-old-list-users.cjs`, `scripts/list-tables.ts`
 - `app/api/admin/wallet/adjust/route.ts`, `app/(settings)/test-connection/page.tsx`
 - Git: `git ls-files`, `git grep eyJhbGci`, `git check-ignore`

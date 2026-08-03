@@ -1,6 +1,6 @@
 # P4.0 — Target Architecture
 
-> **P4.2 path note:** After P4.2 the engine lives at `apps/game-engine/`. This P4.0 document is a **point-in-time** snapshot; bare `game-engine/` paths below describe the pre-move layout (unless the sentence already discusses the target `apps/game-engine/`).
+> **P4.2 path note:** After P4.2 the engine lives at `apps/engines/bingo/`. This P4.0 document is a **point-in-time** snapshot; bare `game-engine/` paths below describe the pre-move layout (unless the sentence already discusses the target `apps/engines/bingo/`).
 
 > Proposed **final repository structure** after folder migration.  
 > **No files are moved in P4.0.** This document is the destination map.  
@@ -103,7 +103,7 @@ winway-dev/
 | Root `package.json` / lockfile | `apps/web/package.json` | Root may become workspace |
 | Root `tsconfig.json` | `apps/web/tsconfig.json` | |
 | Root `.env*.example` | `apps/web/` | |
-| `apps/game-engine/` | `apps/game-engine/` | Dockerfile build context updates |
+| `apps/engines/bingo/` | `apps/engines/bingo/` | Dockerfile build context updates |
 | `packages/game-contracts/` | `packages/shared-types/` (rename/expand) | Keep README intent |
 | `sql/` | `infrastructure/sql/` | |
 | `supabase/` | `infrastructure/supabase/` | Strip `.temp` from VCS |
@@ -134,15 +134,15 @@ winway-dev/
 
 Surfaces remain: player, admin, agent, dev-panel, API BFF.
 
-### 3.2 `apps/game-engine` — Engine
+### 3.2 `apps/engines/bingo` — Engine
 
 | Field | Target |
 |-------|--------|
-| Entrypoint | `apps/game-engine/src/index.ts` |
+| Entrypoint | `apps/engines/bingo/src/index.ts` |
 | Runtime | Node 20 |
-| package.json | `apps/game-engine/package.json` |
+| package.json | `apps/engines/bingo/package.json` |
 | Build / start | `tsc` → `node dist/index.js` |
-| Deploy | Railway — root/watch path `apps/game-engine` (phase-gated) |
+| Deploy | Railway — root/watch path `apps/engines/bingo` (phase-gated) |
 
 ### 3.3 Shared packages
 
@@ -167,7 +167,7 @@ apps/web
    ├──► packages/shared-db          (server routes only)
    └──► packages/shared-snapshots   (server routes only)
               ▲
-apps/game-engine ──────────────────┘
+apps/engines/bingo ──────────────────┘
 
 Both apps ──► Supabase Postgres
 Engine ─────► Upstash Redis
@@ -176,8 +176,8 @@ Web ────────► Engine HTTP (/v1/*)
 
 **Forbidden after migration:**
 
-- `apps/web` importing `apps/game-engine` source
-- `apps/game-engine` importing `apps/web` source
+- `apps/web` importing `apps/engines/bingo` source
+- `apps/engines/bingo` importing `apps/web` source
 - Client components importing `shared-db` / `shared-snapshots`
 - Packages importing either app
 
@@ -190,7 +190,7 @@ Vercel (Root Directory: apps/web)
    │
    │  NEXT_PUBLIC_GAME_ENGINE_URL
    ▼
-Railway (Root Directory: apps/game-engine)
+Railway (Root Directory: apps/engines/bingo)
    │
    ├── DATABASE_URL / SUPABASE_*
    └── REDIS_URL
@@ -229,8 +229,8 @@ Hosts unchanged:
 ```
 apps/web/.env.local.example
 apps/web/.env.develop.local.example
-apps/game-engine/.env.example
-apps/game-engine/.env.develop.local.example
+apps/engines/bingo/.env.example
+apps/engines/bingo/.env.develop.local.example
 
 # Platform secrets remain in Vercel / Railway dashboards — not in git
 ```
@@ -245,7 +245,7 @@ Root may keep a short `README` pointer; no production secrets at repo root.
 TODAY                              TARGET
 ─────                              ──────
 / (Next + clutter)          →      apps/web/
-game-engine/                →      apps/game-engine/
+game-engine/                →      apps/engines/bingo/
 packages/game-contracts/    →      packages/shared-types/ (+ siblings)
 sql/ + supabase/            →      infrastructure/
 scripts/ + root junk        →      tools/ (+ delete temps)

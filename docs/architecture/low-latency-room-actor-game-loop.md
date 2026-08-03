@@ -355,7 +355,7 @@ ON public.draw_jobs(room_id, status, draw_number);
 ### 6.1 ساختار جدید فایل‌ها
 
 ```text
-apps/game-engine/src/
+apps/engines/bingo/src/
   workers/
     room-loop/
       index.ts                 # starts room loop manager

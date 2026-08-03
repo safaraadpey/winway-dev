@@ -1,6 +1,6 @@
 # P4.0 — Current Repository Audit
 
-> **P4.2 path note:** After P4.2 the engine lives at `apps/game-engine/`. This P4.0 document is a **point-in-time** snapshot; bare `game-engine/` paths below describe the pre-move layout (unless the sentence already discusses the target `apps/game-engine/`).
+> **P4.2 path note:** After P4.2 the engine lives at `apps/engines/bingo/`. This P4.0 document is a **point-in-time** snapshot; bare `game-engine/` paths below describe the pre-move layout (unless the sentence already discusses the target `apps/engines/bingo/`).
 
 > **Phase:** P4.0 Repository Architecture Audit  
 > **Mode:** READ-ONLY (no moves, renames, code edits, deploy changes)  
@@ -187,7 +187,7 @@ Web → Shared (conceptual) → Engine → Supabase/Postgres → Railway/Vercel
 
 | From → To | Allowed today? | Notes |
 |-----------|----------------|-------|
-| Next → `apps/game-engine/` source | **Forbidden / unused** | No imports; HTTP client only |
+| Next → `apps/engines/bingo/` source | **Forbidden / unused** | No imports; HTTP client only |
 | `game-engine` → Next (`app/`, `lib/`, …) | **Forbidden / unused** | Clean isolation |
 | `app` → `lib`, `services`, `components`, `src` | Yes | Primary graph |
 | `services` → `lib`, `src/types` | Yes | |
@@ -250,7 +250,7 @@ Do **not** move in P4.0. Candidates for later extraction:
 | Supabase CLI config | `supabase/config.toml` | `infrastructure/supabase/` |
 | Partial Supabase migrations | `supabase/migrations/` (3) | Merge policy into canonical SQL or document as CLI-only |
 | Config-push staging | `.supabase-config-push/` | Remove after documenting CLI workflow, or `tools/supabase-config-push/` |
-| Railway Dockerfile | `game-engine/Dockerfile` | Stay with `apps/game-engine/` |
+| Railway Dockerfile | `game-engine/Dockerfile` | Stay with `apps/engines/bingo/` |
 | Multi-replica compose | `game-engine/docker-compose.multi-replica.yml` | Stay with engine or `infrastructure/docker/` |
 | Ops scripts | `scripts/` | `tools/scripts/` |
 | Cron SQL (legacy/pg_cron) | `scripts/game-engine-cron-*.sql` | `infrastructure/sql/cron/` or archive |

@@ -43,7 +43,7 @@ Row 3: bits 10–14
 ## 2. TypeScript Modules
 
 ```
-apps/game-engine/src/
+apps/engines/bingo/src/
   core/
     bitmask/           # mark, masks, winEvaluation, layout
     card-registry/     # global singleton, DB + fallback loader
@@ -156,7 +156,7 @@ Business rules preserved:
 Run benchmark:
 
 ```bash
-cd apps/game-engine
+cd apps/engines/bingo
 npm run benchmark:marking
 ```
 
@@ -174,7 +174,7 @@ With 500 cards and ~3 cards per number globally, typical draw touches ~3×(ticke
 ## 9. Folder Structure (target)
 
 ```
-apps/game-engine/src/
+apps/engines/bingo/src/
   core/bitmask/
   core/card-registry/
   runtime/room-assignments.ts

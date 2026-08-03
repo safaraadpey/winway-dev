@@ -45,7 +45,7 @@ ENGINE_REPLICA_COUNT=1 or Redis/coord safe  ✅ (replica=1)
 
 ## Workers That Actually Start
 
-With `SCHEDULER_ENABLED=true` and the roles above, `game-engine` starts these workers (`apps/game-engine/src/index.ts` + role handlers). Behavior under `GAME_RUNTIME=engine`:
+With `SCHEDULER_ENABLED=true` and the roles above, `game-engine` starts these workers (`apps/engines/bingo/src/index.ts` + role handlers). Behavior under `GAME_RUNTIME=engine`:
 
 | Role | Starts? | What it owns in `engine` mode | Idle / alternate modes |
 |------|---------|-------------------------------|------------------------|

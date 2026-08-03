@@ -1,6 +1,6 @@
 # P4.0 — Current Repository Map
 
-> **P4.2 path note:** After P4.2 the engine lives at `apps/game-engine/`. This P4.0 document is a **point-in-time** snapshot; bare `game-engine/` paths below describe the pre-move layout (unless the sentence already discusses the target `apps/game-engine/`).
+> **P4.2 path note:** After P4.2 the engine lives at `apps/engines/bingo/`. This P4.0 document is a **point-in-time** snapshot; bare `game-engine/` paths below describe the pre-move layout (unless the sentence already discusses the target `apps/engines/bingo/`).
 
 > Snapshot of the repository **as it exists today**.  
 > No proposed moves. See [p4-0-target-architecture.md](./p4-0-target-architecture.md) for target.

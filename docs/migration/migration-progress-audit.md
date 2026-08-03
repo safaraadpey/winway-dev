@@ -3,7 +3,7 @@
 > Final progress audit of the Game Engine migration. Source of truth: existing
 > migration artifacts (`game-engine-architecture.md`, `function-mapping.md`,
 > `api-migration-plan.md`, `compatibility-report.md`, `migration-checklist.md`),
-> the implemented `apps/game-engine/src/**` code, and the verified DB inventory in
+> the implemented `apps/engines/bingo/src/**` code, and the verified DB inventory in
 > `docs/system-map/*`.
 >
 > This is an audit only — no architecture change, no re-evaluation of completed

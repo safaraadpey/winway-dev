@@ -9,7 +9,7 @@
 
 ## Summary
 
-Root temporary MCP/build artifacts were **deleted**. A permanent local scratch dir **`.tmp/`** was created (gitignored). Developer-only notebooks, ad-hoc SQL, and one-off scripts were moved under **`tools/`**. Root planning/legacy setup docs were moved to **`docs/archive/`**. Operational scripts remain in **`scripts/`**. Canonical SQL under **`sql/`** was not relocated. **`package.json`**, **`apps/game-engine/`**, Next app layout, Railway, and Vercel assumptions are unchanged.
+Root temporary MCP/build artifacts were **deleted**. A permanent local scratch dir **`.tmp/`** was created (gitignored). Developer-only notebooks, ad-hoc SQL, and one-off scripts were moved under **`tools/`**. Root planning/legacy setup docs were moved to **`docs/archive/`**. Operational scripts remain in **`scripts/`**. Canonical SQL under **`sql/`** was not relocated. **`package.json`**, **`apps/engines/bingo/`**, Next app layout, Railway, and Vercel assumptions are unchanged.
 
 ---
 
@@ -194,7 +194,7 @@ Existing ignores retained (`.next/`, `node_modules`, `.env*.local`, `*.tsbuildin
 | Item | Status |
 |------|--------|
 | `app/`, `components/`, `lib/`, `services/`, `src/`, `public/` | Unmoved |
-| `apps/game-engine/` | Unmoved (Railway Dockerfile path unchanged) |
+| `apps/engines/bingo/` | Unmoved (Railway Dockerfile path unchanged) |
 | Root `package.json` / lockfile | Unchanged |
 | Workspace tooling | Not introduced |
 | Railway / Vercel / Supabase project config | Unchanged |
@@ -209,7 +209,7 @@ Existing ignores retained (`.next/`, `node_modules`, `.env*.local`, `*.tsbuildin
 |-------|--------|
 | `npm install` (repo root) | **PASS** (exit 0; pre-existing EBADENGINE warnings for Node 20 vs some supabase-js engine hints) |
 | `npm run build` (Next.js) | **PASS** (exit 0) |
-| Railway build assumptions | **Unchanged** — `apps/game-engine/Dockerfile` still at `apps/game-engine/`; working directory still `apps/game-engine/` |
+| Railway build assumptions | **Unchanged** — `apps/engines/bingo/Dockerfile` still at `apps/engines/bingo/`; working directory still `apps/engines/bingo/` |
 | Vercel assumptions | **Unchanged** — Next root still repo root (`package.json`, `app/`, `next.config.mjs`, `middleware.ts`) |
 | Runtime differences | **None intended** — hygiene + path moves of non-runtime assets only |
 

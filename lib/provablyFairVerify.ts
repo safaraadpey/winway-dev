@@ -1,6 +1,6 @@
 /**
  * Client-safe provably-fair draw verification (Web Crypto).
- * Mirrors apps/game-engine/src/core/rng.ts and provablyFairDrawSpec.ts.
+ * Mirrors apps/engines/bingo/src/core/rng.ts and provablyFairDrawSpec.ts.
  */
 
 export type DrawVerificationInput = {

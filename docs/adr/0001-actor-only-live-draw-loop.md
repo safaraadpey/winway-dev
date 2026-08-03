@@ -104,7 +104,7 @@ Shadow mode compared actor RNG predictions against scheduler-inserted draws duri
 ## Verification
 
 ```bash
-cd apps/game-engine && npm test
+cd apps/engines/bingo && npm test
 ```
 
 Manual QA: see plan checklist in [`remove_scheduler_queue_mode` plan] — roles, promotion, lease, draw cadence, no `room-scheduler live`, skip logs from draw-processor.

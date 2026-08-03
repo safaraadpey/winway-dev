@@ -6,7 +6,7 @@
 
 ## Phase 0 — Foundation (no behavior change)
 
-- [x] Engine service structure (`apps/game-engine/`) + health.
+- [x] Engine service structure (`apps/engines/bingo/`) + health.
 - [x] Pure business-logic core (`src/core/*`) ported from verified SQL.
 - [x] Domain orchestrators (`room`, `draw`, `ding`, `tournament`).
 - [x] Repositories for game-data tables.

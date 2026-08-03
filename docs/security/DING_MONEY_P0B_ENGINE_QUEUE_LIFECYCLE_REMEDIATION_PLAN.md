@@ -108,17 +108,17 @@ flowchart TB
 
 | RPC | Primary callers | Role | File(s) |
 |-----|-----------------|------|---------|
-| `public.fn_heartbeat_tick` | Room scheduler (`hybrid`); pg_cron | service_role / postgres | `apps/game-engine/src/workers/room-scheduler/index.ts`; `scripts/game-engine-cron-heartbeat.sql` |
-| `public.rpc_pick_draw_jobs(integer)` | Draw processor | service_role | `apps/game-engine/src/domain/draw/pickDrawJobs.ts` → `pickCoordinator.ts`, `processDrawBatch*.ts` |
+| `public.fn_heartbeat_tick` | Room scheduler (`hybrid`); pg_cron | service_role / postgres | `apps/engines/bingo/src/workers/room-scheduler/index.ts`; `scripts/game-engine-cron-heartbeat.sql` |
+| `public.rpc_pick_draw_jobs(integer)` | Draw processor | service_role | `apps/engines/bingo/src/domain/draw/pickDrawJobs.ts` → `pickCoordinator.ts`, `processDrawBatch*.ts` |
 | `game_core.rpc_pick_draw_jobs` | Legacy batch workers | postgres (cron) | `public.fn_process_draw_jobs_batch_worker` body |
 | `public.fn_process_draw_jobs_batch*` | pg_cron only | postgres | `scripts/game-engine-cron-draw-workers.sql` |
 | `public.rpc_requeue_failed_draw_jobs` | *(none in TS)* | — | Live wrapper only |
 | `game_core.fn_requeue_failed_draw_jobs` | `fn_janitor_sweep` | DB internal | Janitor sweep body |
-| `game_core.fn_manage_waiting_rooms` | `fn_heartbeat_tick`; TS `manageWaitingRooms` | service_role / postgres | `apps/game-engine/src/domain/room/index.ts` |
-| `game_core.fn_manage_room_live_actions` | `fn_heartbeat_tick`; TS `runOneDrawCycle` | service_role / postgres | `apps/game-engine/src/domain/room-loop/runDrawCycle.ts` |
-| `public.rpc_apply_marks_for_draw` | Hybrid batch path | service_role | `apps/game-engine/src/domain/draw/processDrawBatch.ts` |
-| `public.rpc_claim_game_room` etc. | Room-loop | service_role | `apps/game-engine/src/repositories/index.ts` |
-| `public.fn_janitor_repair_unsettled_finished` | Engine janitor tick | service_role | `apps/game-engine/src/domain/room/janitorRepair.ts` |
+| `game_core.fn_manage_waiting_rooms` | `fn_heartbeat_tick`; TS `manageWaitingRooms` | service_role / postgres | `apps/engines/bingo/src/domain/room/index.ts` |
+| `game_core.fn_manage_room_live_actions` | `fn_heartbeat_tick`; TS `runOneDrawCycle` | service_role / postgres | `apps/engines/bingo/src/domain/room-loop/runDrawCycle.ts` |
+| `public.rpc_apply_marks_for_draw` | Hybrid batch path | service_role | `apps/engines/bingo/src/domain/draw/processDrawBatch.ts` |
+| `public.rpc_claim_game_room` etc. | Room-loop | service_role | `apps/engines/bingo/src/repositories/index.ts` |
+| `public.fn_janitor_repair_unsettled_finished` | Engine janitor tick | service_role | `apps/engines/bingo/src/domain/room/janitorRepair.ts` |
 | `game_core.fn_janitor_sweep` | pg_cron job 14 | postgres | Cron only |
 | Stale job requeue (engine) | **Table UPDATE**, not RPC | service_role | `GameRepo.requeueStaleProcessingJobs`, `requeueDrawJobsById` |
 
@@ -322,7 +322,7 @@ COMMIT;
 | `app/api/player/runtime/global-registration-lock/route.ts` | SELECT |
 | `app/api/admin/runtime/global-registration-lock/route.ts` | SELECT, UPSERT |
 | `app/api/player/gameroom/route.ts` | SELECT (embedded in snapshot) |
-| `apps/game-engine/src/http/gameroom-view.ts` | SELECT |
+| `apps/engines/bingo/src/http/gameroom-view.ts` | SELECT |
 
 **No browser/PWA direct table access.**
 

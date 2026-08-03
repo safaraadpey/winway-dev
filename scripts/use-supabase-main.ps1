@@ -10,4 +10,4 @@ if (-not (Test-Path $backup)) {
 
 Copy-Item $backup $local -Force
 Write-Host "Restored .env.local from .env.local.main-backup (main / ayybcrihxgtukwyeuoks)"
-Write-Host "Update apps/game-engine/.env manually if needed."
+Write-Host "Update apps/engines/bingo/.env manually if needed."

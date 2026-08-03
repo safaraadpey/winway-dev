@@ -1,9 +1,10 @@
-# P4.2 — Move Game Engine to `apps/game-engine`
+# P4.2 — Move Game Engine to `apps/engines/bingo`
 
 > **Phase:** P4.2 Engine path migration  
 > **Date:** 2026-08-03  
-> **Status:** Local move + validation complete — **ready for Railway Root Directory cutover**  
-> **Not done in this phase:** commit, push, Railway dashboard change, deploy, Vercel changes
+> **Status:** Completed (path was `apps/game-engine`).  
+> **Superseded path (P4.3):** engine now lives at `apps/engines/bingo` — see [p4-3-multi-engine-foundation.md](./p4-3-multi-engine-foundation.md).  
+> **Not done in P4.2 itself:** (historical) commit/push were out of band; Railway cutover for P4.2 used `apps/game-engine`.
 
 Related: [p4-0-migration-roadmap.md](./p4-0-migration-roadmap.md) · [p4-1-root-cleanup.md](./p4-1-root-cleanup.md)
 
@@ -13,7 +14,7 @@ Related: [p4-0-migration-roadmap.md](./p4-0-migration-roadmap.md) · [p4-1-root-
 
 | Item | Result |
 |------|--------|
-| Move | `git mv game-engine` → `apps/game-engine` (**195 tracked renames**) |
+| Move | `git mv game-engine` → `apps/engines/bingo` (**195 tracked renames**) |
 | Engine internals | Unchanged (package.json, lockfile, tsconfig, Dockerfile, src tree, env names, roles, `/health`) |
 | Next.js / Vercel | **Unchanged** — still builds from repository root |
 | npm workspaces / shared packages | **Not introduced** |
@@ -27,7 +28,7 @@ Related: [p4-0-migration-roadmap.md](./p4-0-migration-roadmap.md) · [p4-1-root-
 Entire former `game-engine/` tree (Git history preserved via `git mv`):
 
 ```
-game-engine/  →  apps/game-engine/
+game-engine/  →  apps/engines/bingo/
 ```
 
 Includes (non-exhaustive):
@@ -50,19 +51,19 @@ Old path `game-engine/` no longer exists on disk.
 
 | File | Change |
 |------|--------|
-| `.gitignore` | `game-engine/{node_modules,dist,.env*}` → `apps/game-engine/…` |
-| `tsconfig.json` | `exclude`: `game-engine` → `apps/game-engine` |
-| `scripts/sync-game-engine-env.ps1` | Writes `apps/game-engine/.env` |
-| `scripts/sync-supabase-develop-env.ps1` | Writes `apps/game-engine/.env.develop.local`; `cd apps/game-engine` |
-| `scripts/use-supabase-develop.ps1` | Copies engine develop env under `apps/game-engine/` |
+| `.gitignore` | `game-engine/{node_modules,dist,.env*}` → `apps/engines/bingo/…` |
+| `tsconfig.json` | `exclude`: `game-engine` → `apps/engines/bingo` |
+| `scripts/sync-game-engine-env.ps1` | Writes `apps/engines/bingo/.env` |
+| `scripts/sync-supabase-develop-env.ps1` | Writes `apps/engines/bingo/.env.develop.local`; `cd apps/engines/bingo` |
+| `scripts/use-supabase-develop.ps1` | Copies engine develop env under `apps/engines/bingo/` |
 | `scripts/use-supabase-main.ps1` | Message path updated |
-| `apps/game-engine/README.md` | Tree path, `cd apps/game-engine`, relative links `../../docs`, `../../scripts` |
-| `.env.local.example` | Comment → `apps/game-engine/.env.example` |
+| `apps/engines/bingo/README.md` | Tree path, `cd apps/engines/bingo`, relative links `../../docs`, `../../scripts` |
+| `.env.local.example` | Comment → `apps/engines/bingo/.env.example` |
 | `.env.develop.local.example` | Comment path updated |
 | `lib/provablyFairDrawSpec.ts` | Comment path |
 | `lib/provablyFairVerify.ts` | Comment path |
 | `docs/migration/local-game-engine-rollout.md` | Operational `cd` / script relative paths |
-| `docs/migration/*`, `docs/roadmap/GAME_ENGINE_MIGRATION.md`, `docs/system-map/*`, `docs/security/*`, `docs/architecture/API_*`, audits | File-path citations → `apps/game-engine/…` |
+| `docs/migration/*`, `docs/roadmap/GAME_ENGINE_MIGRATION.md`, `docs/system-map/*`, `docs/security/*`, `docs/architecture/API_*`, audits | File-path citations → `apps/engines/bingo/…` |
 | `docs/architecture/p4-0-*.md` | Banner added: P4.0 remains a pre-move snapshot where bare `game-engine/` appears |
 
 ### Not present / unchanged
@@ -81,7 +82,7 @@ Old path `game-engine/` no longer exists on disk.
 
 | Kind | Examples | Classification |
 |------|----------|----------------|
-| New filesystem path | `apps/game-engine/…` | **corrected** |
+| New filesystem path | `apps/engines/bingo/…` | **corrected** |
 | Package name | `@dingmoney/game-engine` | **intentional** |
 | Redis key prefix | `ding:game-engine` | **intentional** |
 | Health `service` string | `"game-engine"` | **intentional** |
@@ -104,7 +105,7 @@ No **stale/blocking** operational script or build path remains at the old root `
 | Lockfile | Same `package-lock.json` (moved) |
 | `tsconfig.json` | Same |
 | `Dockerfile` multi-stage + `EXPOSE 8080` + `CMD ["node","dist/index.js"]` | Same (build context = service root) |
-| Source structure | Same under `apps/game-engine/src` |
+| Source structure | Same under `apps/engines/bingo/src` |
 | Env variable **names** | Same |
 | `GET /health`, `GET /ready`, `/v1/*` | Same |
 | `GAME_ENGINE_ROLES` / `SCHEDULER_ENABLED` / `GAME_RUNTIME` | Same |
@@ -117,20 +118,20 @@ Prepare these changes in Railway **after** the git commit/push of this move (sta
 
 | Setting | Old value | New value |
 |---------|-----------|-----------|
-| **Root Directory** | `game-engine` (or empty/`/` if previously set that way — confirm in UI) | `apps/game-engine` |
+| **Root Directory** | `game-engine` (or empty/`/` if previously set that way — confirm in UI) | `apps/engines/bingo` |
 | **Dockerfile path** | `Dockerfile` (relative to root directory) | `Dockerfile` (still relative to new root — **no filename change**) |
 | **Config file** | none in repo (`railway.toml` / `railway.json` absent) | still none |
 | **Build command** | Dockerfile `RUN npm ci` + `npm run build` (or Railway Docker builder default) | **unchanged** |
 | **Start / start command** | `node dist/index.js` (`CMD` in Dockerfile) | **unchanged** |
-| **Watch paths / monorepo** | N/A or old folder | Ensure watch/build root is `apps/game-engine` |
+| **Watch paths / monorepo** | N/A or old folder | Ensure watch/build root is `apps/engines/bingo` |
 | **Env variables** | existing `SUPABASE_*`, `DATABASE_URL`, `GAME_ENGINE_*`, Redis, etc. | **do not rename or change values** |
 | **Public URL / custom domain** | existing `*.up.railway.app` | unchanged |
 | **Replicas / roles** | existing | unchanged for this cutover |
 
 ### Suggested cutover order
 
-1. Merge/push code with `apps/game-engine`.
-2. Staging Railway: set Root Directory → `apps/game-engine` → redeploy.
+1. Merge/push code with `apps/engines/bingo`.
+2. Staging Railway: set Root Directory → `apps/engines/bingo` → redeploy.
 3. Confirm `GET /health` and `GET /ready`.
 4. Smoke lobby / live-room / draw tick as appropriate for env.
 5. Production Railway: same Root Directory change → redeploy.
@@ -162,12 +163,12 @@ Prepare these changes in Railway **after** the git commit/push of this move (sta
 
 | Check | Result |
 |-------|--------|
-| `cd apps/game-engine && npm install` | **PASS** (exit 0) |
+| `cd apps/engines/bingo && npm install` | **PASS** (exit 0) |
 | `npm run typecheck` | **PASS** (exit 0) |
 | `npm run build` | **PASS** (exit 0); `dist/index.js` present |
 | `npm test` | **PASS** — 87 tests, 0 fail |
 | Start command | Confirmed `"start": "node dist/index.js"` |
-| Docker build (`docker build -t … ./apps/game-engine`) | **NOT RUN** — Docker Desktop engine pipe unavailable (`dockerDesktopLinuxEngine` not running). Dockerfile inspected: self-contained; context must be `apps/game-engine` |
+| Docker build (`docker build -t … ./apps/engines/bingo`) | **NOT RUN** — Docker Desktop engine pipe unavailable (`dockerDesktopLinuxEngine` not running). Dockerfile inspected: self-contained; context must be `apps/engines/bingo` |
 | Next imports of engine source | **None** (no `from '…game-engine…'`) |
 | Root `npm install` | **PASS** (exit 0) |
 | Root `npm run build` | **PASS** (exit 0) |
@@ -177,7 +178,7 @@ Prepare these changes in Railway **after** the git commit/push of this move (sta
 ```powershell
 # From repo root — sync engine .env then run engine
 .\scripts\sync-game-engine-env.ps1
-cd apps/game-engine
+cd apps/engines/bingo
 npm install
 npm run typecheck
 npm run build
@@ -191,7 +192,7 @@ npm run build
 
 ### Git snapshot (local, uncommitted)
 
-- `git status`: includes `R game-engine/… -> apps/game-engine/…` renames plus prior P4.1 hygiene and unrelated WIP
+- `git status`: includes `R game-engine/… -> apps/engines/bingo/…` renames plus prior P4.1 hygiene and unrelated WIP
 - `git diff --stat`: large; includes renames + doc/script path updates (and earlier P4.1 deletions if still uncommitted)
 
 ---
@@ -201,7 +202,7 @@ npm run build
 Before commit:
 
 ```powershell
-git mv apps/game-engine game-engine
+git mv apps/engines/bingo game-engine
 # revert path edits in .gitignore, tsconfig.json, scripts/*.ps1, docs, etc.
 ```
 
@@ -230,4 +231,4 @@ git revert <p4.2-commit>
 
 ## Cutover readiness
 
-Local filesystem and operational references point at `apps/game-engine`. Engine build/typecheck/tests and root Next build pass. Railway dashboard Root Directory update is the remaining production cutover step (staging first).
+Local filesystem and operational references point at `apps/engines/bingo`. Engine build/typecheck/tests and root Next build pass. Railway dashboard Root Directory update is the remaining production cutover step (staging first).

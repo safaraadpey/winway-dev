@@ -1,13 +1,15 @@
-# Game Engine
+# Bingo Engine
 
-سرویس مستقل orchestration بازی (قرعه، lifecycle روم، تورنومنت).
+سرویس مستقل orchestration بازی بینگو (قرعه، lifecycle روم، تورنومنت).
 
-**سند اصلی migration:** [docs/roadmap/GAME_ENGINE_MIGRATION.md](../../docs/roadmap/GAME_ENGINE_MIGRATION.md)
+**محل در مونوریپو (P4.3):** `apps/engines/bingo`  
+**سند اصلی migration:** [docs/roadmap/GAME_ENGINE_MIGRATION.md](../../../docs/roadmap/GAME_ENGINE_MIGRATION.md)  
+**قرارداد موتورها:** [docs/architecture/p4-3-engine-contract.md](../../../docs/architecture/p4-3-engine-contract.md)
 
 ## ساختار
 
 ```
-apps/game-engine/
+apps/engines/bingo/
   src/
     config/          env و feature flags
     db/              Supabase admin client
@@ -31,21 +33,21 @@ REDIS_URL=rediss://default:...@....upstash.io:6379
 بدون `REDIS_URL` / `UPSTASH_REDIS_REST_*` هم engine بالا می‌آید (تک‌replica / local dev).  
 با `COORDINATION_STRICT=true` یا `ENGINE_REPLICA_COUNT>1`، workerهای global بدون Redis tick نمی‌زنند (fail-closed).
 
-Runbook: [docs/runbooks/horizontal-scaling-deploy-gate.md](../../docs/runbooks/horizontal-scaling-deploy-gate.md)
+Runbook: [docs/runbooks/horizontal-scaling-deploy-gate.md](../../../docs/runbooks/horizontal-scaling-deploy-gate.md)
 
 `GET /health` → liveness · `GET /ready` → coordination-aware readiness
 
 
 ```powershell
 # From repo root (uses .env.local for clone Supabase)
-..\..\scripts\sync-game-engine-env.ps1   # optional: $env:GAME_RUNTIME='hybrid' first
-cd apps/game-engine
+.\scripts\sync-game-engine-env.ps1   # optional: $env:GAME_RUNTIME='hybrid' first
+cd apps/engines/bingo
 npm install
 npm run dev
 curl http://localhost:8080/health
 ```
 
-See [docs/migration/local-game-engine-rollout.md](../../docs/migration/local-game-engine-rollout.md).
+See [docs/migration/local-game-engine-rollout.md](../../../docs/migration/local-game-engine-rollout.md).
 
 ## نقش‌ها (GAME_ENGINE_ROLES)
 

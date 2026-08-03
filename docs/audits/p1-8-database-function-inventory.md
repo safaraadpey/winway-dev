@@ -37,7 +37,7 @@ Audited **205** non-extension functions across application schemas (`public` 97,
 1. **Live catalog (Supabase MCP `execute_sql`)** — `pg_proc` + `pg_namespace` excluding `pg_catalog`, `information_schema`, and extension-owned procs (via dependency filter used in prior catalog pull). Captured: schema, name, identity args, owner, language, security mode, `proacl`, `has_function_privilege` for anon/authenticated/service_role.
 2. **Cron** — `cron.job` (4 active maintenance jobs; no bingo/orchestrator jobs).
 3. **Triggers** — `pg_trigger` → function mapping for app schemas.
-4. **Repository callers** — ripgrep of `.rpc("…")` / `.rpc('…')` across `apps/game-engine/`, `app/`, `lib/`, `services/`, `src/`, scripts.
+4. **Repository callers** — ripgrep of `.rpc("…")` / `.rpc('…')` across `apps/engines/bingo/`, `app/`, `lib/`, `services/`, `src/`, scripts.
 5. **Quarantine re-verify** — ACL + definition heads for the five P1.7 functions; body of `fn_heartbeat_tick` confirms nested calls to the two `game_core.fn_manage_*` functions.
 6. **Classification** — single primary class A–I per function using the rules in the task brief; prefer G over H when any gate is unmet.
 7. **Deliverables** — one CSV row per function (required columns); this Markdown report.

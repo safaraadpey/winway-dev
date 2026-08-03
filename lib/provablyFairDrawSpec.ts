@@ -1,6 +1,6 @@
 /**
  * Provably-fair draw verification payload — matches game_core.fn_manage_room_live_actions
- * and apps/game-engine/src/core/rng.ts (SHA256 ordering, not HMAC/clientSeed/nonce).
+ * and apps/engines/bingo/src/core/rng.ts (SHA256 ordering, not HMAC/clientSeed/nonce).
  */
 
 import { createHash } from "node:crypto";

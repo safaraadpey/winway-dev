@@ -61,7 +61,7 @@ No `bingo_heartbeat`, no `bingo_draw_worker_*`.
 | ACL (live DEV) | PUBLIC + anon + authenticated + service_role **EXECUTE** |
 | Active cron | **none** |
 | DB callers (body search) | none other than itself as entrypoint |
-| Repo runtime | **A — hybrid only:** `apps/game-engine/src/workers/room-scheduler/index.ts` → `supabase.rpc("fn_heartbeat_tick")` when `GAME_RUNTIME` is not `engine`/`legacy_db` idle path |
+| Repo runtime | **A — hybrid only:** `apps/engines/bingo/src/workers/room-scheduler/index.ts` → `supabase.rpc("fn_heartbeat_tick")` when `GAME_RUNTIME` is not `engine`/`legacy_db` idle path |
 | Repo rollback | `scripts/game-engine-cron-heartbeat.sql`; migrations history |
 | Generated types | not required for classification |
 | Docs | many audits/runbooks |
@@ -272,7 +272,7 @@ Must update/remove: hybrid branch in `room-scheduler`, RESTORE scripts, docs. **
 
 - MCP `execute_sql` on `user-supabase_dev` / project `yqnptpreowkimopxicfz`
 - Catalogs: `pg_proc`, `pg_trigger`, `cron.job`, ACLs (`proacl`), body `pg_get_functiondef` substring search
-- Repo: `apps/game-engine/`, `app/`, `scripts/`, `sql/`, `docs/`, `src/types/supabase.ts`
+- Repo: `apps/engines/bingo/`, `app/`, `scripts/`, `sql/`, `docs/`, `src/types/supabase.ts`
 - Distinctions enforced: scheduler ownership ≠ “all SQL is legacy”; Railway still depends on many DB RPCs
 
 ---

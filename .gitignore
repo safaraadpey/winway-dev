@@ -4,7 +4,7 @@
 /node_modules
 /.pnp
 .pnp.js
-apps/game-engine/node_modules
+apps/engines/bingo/node_modules
 
 # testing
 /coverage
@@ -15,7 +15,7 @@ apps/game-engine/node_modules
 
 # production
 /build
-apps/game-engine/dist
+apps/engines/bingo/dist
 
 # misc
 .DS_Store
@@ -30,10 +30,10 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
-apps/game-engine/.env
-apps/game-engine/.env.*
-!apps/game-engine/.env.example
-!apps/game-engine/.env.develop.local.example
+apps/engines/bingo/.env
+apps/engines/bingo/.env.*
+!apps/engines/bingo/.env.example
+!apps/engines/bingo/.env.develop.local.example
 
 # vercel
 .vercel
