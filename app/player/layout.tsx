@@ -7,6 +7,7 @@ import { ActiveGamesProvider } from "@/lib/contexts/ActiveGamesContext";
 import { ActiveGamesOrchestratorProvider } from "@/lib/activeGames/ActiveGamesOrchestratorProvider";
 import PlayerLayoutClient from "./PlayerLayoutClient";
 import EntryBannerModal from "@/components/EntryBannerModal";
+import KycResultModal from "@/components/KycResultModal";
 
 /**
  * Layout برای بخش پلیر
@@ -34,6 +35,7 @@ export default function PlayerLayout({
           <ActiveGamesProvider>
             <PlayerLayoutClient>{children}</PlayerLayoutClient>
             <EntryBannerModal visibleOnPaths={["/player/home"]} />
+            <KycResultModal visibleOnPaths={["/player/home"]} />
           </ActiveGamesProvider>
         </ActiveGamesOrchestratorProvider>
       </HeaderVisibilityProvider>

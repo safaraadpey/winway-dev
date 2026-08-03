@@ -16,6 +16,7 @@ type PendingRow = {
   declaration_text: string;
   created_at: string;
   rejection_reason: string | null;
+  rejection_reason_code: string | null;
 };
 
 async function resolveDisplayName(userId: string): Promise<string> {
@@ -132,7 +133,7 @@ export async function GET(request: Request) {
     const payload = buildServerKycPayload(user.id, displayName);
 
     const latest = await pgPool.query<PendingRow>(
-      `SELECT id, status, kyc_code, declaration_text, created_at, rejection_reason
+      `SELECT id, status, kyc_code, declaration_text, created_at, rejection_reason, rejection_reason_code
        FROM public.kyc_submissions
        WHERE user_id = $1
        ORDER BY created_at DESC
@@ -148,6 +149,7 @@ export async function GET(request: Request) {
         declarationText: payload.fullText,
         submittedAt: null,
         rejectionReason: null,
+        rejectionReasonCode: null,
         displayName,
       });
     }
@@ -167,6 +169,7 @@ export async function GET(request: Request) {
           : payload.fullText,
       submittedAt: row.created_at,
       rejectionReason: row.rejection_reason,
+      rejectionReasonCode: row.rejection_reason_code,
       displayName,
     });
   } catch (err) {

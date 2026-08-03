@@ -1,5 +1,7 @@
 // Types for player KYC identity verification
 
+import type { KycRetryReasonCode } from "@/lib/kyc/retryReasons";
+
 export type KycSubmissionStatus =
   | "pending_review"
   | "approved"
@@ -24,6 +26,7 @@ export interface KycStatusResponse {
   declarationText: string | null;
   submittedAt: string | null;
   rejectionReason: string | null;
+  rejectionReasonCode: string | null;
   displayName: string;
 }
 
@@ -41,4 +44,35 @@ export interface KycSubmitResponse {
   status: "pending_review";
   submissionId: string;
   message: string;
+}
+
+export interface KycNotificationResponse {
+  hasNotification: boolean;
+  submissionId: string | null;
+  kind: "approved" | "rejected" | null;
+  rejectionReasonCode: KycRetryReasonCode | string | null;
+  rejectionReasonLabel: string | null;
+}
+
+export interface AdminKycListItem {
+  id: string;
+  userId: string;
+  username: string;
+  kycCode: string;
+  agentUsername: string | null;
+  superUsername: string | null;
+  imageDataUrl: string;
+  imageMimeType: string;
+  createdAt: string;
+  declarationText: string;
+}
+
+export interface AdminKycListResponse {
+  items: AdminKycListItem[];
+}
+
+export interface AdminKycReviewRequest {
+  submissionId: string;
+  action: "approve" | "retry";
+  reasonCode?: KycRetryReasonCode;
 }

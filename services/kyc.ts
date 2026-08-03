@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 import type {
+  KycNotificationResponse,
   KycStatusResponse,
   KycSubmitRequest,
   KycSubmitResponse,
@@ -59,4 +60,33 @@ export async function submitKyc(
   }
 
   return body;
+}
+
+export async function fetchKycNotification(): Promise<KycNotificationResponse> {
+  const headers = await authHeaders();
+  const res = await fetch("/api/player/kyc/notification", {
+    method: "GET",
+    headers,
+    cache: "no-store",
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body?.message || body?.error || "KYC_NOTIFICATION_FAILED");
+  }
+  return body;
+}
+
+export async function acknowledgeKycNotification(
+  submissionId: string
+): Promise<void> {
+  const headers = await authHeaders();
+  const res = await fetch("/api/player/kyc/notification", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ submissionId }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.message || body?.error || "KYC_ACK_FAILED");
+  }
 }
