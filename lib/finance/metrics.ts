@@ -2,9 +2,7 @@
  * In-process finance integrity metrics (P6.4).
  * Exposed via /api/admin/finance/metrics — not a durable TSDB.
  */
-type CounterMap = Record<string, number>;
-
-const counters: CounterMap = {
+const counters = {
   wallet_drift: 0,
   ledger_drift: 0,
   duplicate_transfer_attempts: 0,
@@ -13,14 +11,17 @@ const counters: CounterMap = {
   partial_bulk_failure: 0,
 };
 
-export function financeMetricInc(
-  name: keyof typeof counters,
-  by = 1
-): void {
+export type FinanceMetricName = keyof typeof counters;
+
+export type FinanceMetricsSnapshot = {
+  [K in FinanceMetricName]: number;
+} & { updatedAt: string };
+
+export function financeMetricInc(name: FinanceMetricName, by = 1): void {
   counters[name] = (counters[name] || 0) + by;
 }
 
-export function financeMetricsSnapshot(): CounterMap & { updatedAt: string } {
+export function financeMetricsSnapshot(): FinanceMetricsSnapshot {
   return { ...counters, updatedAt: new Date().toISOString() };
 }
 
