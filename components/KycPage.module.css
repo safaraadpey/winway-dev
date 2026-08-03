@@ -1,0 +1,227 @@
+.container {
+  min-height: 100%;
+  background-color: var(--player-page-overlay, rgba(14, 14, 15, 0.55));
+  padding: 1rem;
+  padding-bottom: 2rem;
+}
+
+.content {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: var(--player-text-primary, #ffffff);
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+.subtitle {
+  font-size: 0.8125rem;
+  color: var(--player-text-muted, #9ca3af);
+  text-align: center;
+  margin-bottom: 1.25rem;
+  line-height: 1.5;
+}
+
+.guideImageWrap {
+  width: 100%;
+  margin-bottom: 1rem;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid var(--player-border, rgba(64, 64, 64, 0.5));
+  background: #fff;
+}
+
+.guideImage {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.instructionBox {
+  background-color: var(--player-surface, rgba(26, 26, 26, 0.75));
+  border-radius: 0.75rem;
+  padding: 1rem 1.125rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--player-border, rgba(64, 64, 64, 0.5));
+}
+
+.instructionTitle {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--player-accent, #00d4aa);
+  margin-bottom: 0.5rem;
+}
+
+.instructionBody {
+  font-size: 0.8125rem;
+  color: var(--player-text-primary, #ffffff);
+  line-height: 1.7;
+  margin: 0;
+}
+
+.declarationBox {
+  background-color: var(--player-surface-elevated, #2d2d2d);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+  border: 1px dashed var(--player-accent, #00d4aa);
+}
+
+.declarationLabel {
+  font-size: 0.75rem;
+  color: var(--player-text-muted, #9ca3af);
+  margin-bottom: 0.5rem;
+}
+
+.declarationText {
+  font-family: Vazirmatn, sans-serif;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--player-text-primary, #ffffff);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  direction: rtl;
+}
+
+.declarationCode {
+  composes: numeric-text numeric-text--14 from global;
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #fcd34d;
+  direction: ltr;
+  text-align: left;
+}
+
+.primaryButton,
+.secondaryButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 0.875rem 1rem;
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.15s, background-color 0.15s;
+}
+
+.primaryButton {
+  background-color: var(--player-accent, #00d4aa);
+  color: #0e0e0f;
+  margin-bottom: 0.75rem;
+}
+
+.primaryButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.secondaryButton {
+  background-color: transparent;
+  color: var(--player-text-primary, #ffffff);
+  border: 1px solid var(--player-border, rgba(64, 64, 64, 0.8));
+}
+
+.cameraStage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: #000;
+  margin-bottom: 1rem;
+  border: 1px solid var(--player-border, rgba(64, 64, 64, 0.5));
+}
+
+.video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.previewImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.countdownOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.countdownNumber {
+  composes: numeric-text numeric-text--36 from global;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.statusCard {
+  background-color: var(--player-surface, rgba(26, 26, 26, 0.75));
+  border-radius: 0.75rem;
+  padding: 1.5rem 1.25rem;
+  border: 1px solid var(--player-border, rgba(64, 64, 64, 0.5));
+  text-align: center;
+}
+
+.statusIcon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 1rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 212, 170, 0.15);
+  color: var(--player-accent, #00d4aa);
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.statusTitle {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--player-text-primary, #ffffff);
+  margin-bottom: 0.5rem;
+}
+
+.statusMessage {
+  font-size: 0.875rem;
+  color: var(--player-text-muted, #9ca3af);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.errorBanner {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+  border-radius: 0.625rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.loading {
+  text-align: center;
+  color: var(--player-text-muted, #9ca3af);
+  padding: 2rem 1rem;
+}
+
+.hiddenCanvas {
+  display: none;
+}

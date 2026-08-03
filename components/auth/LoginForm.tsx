@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { supabase } from "@/lib/supabaseClient";
 import { usernameToEmail, validateUsername } from "@/lib/auth-helpers";
@@ -10,6 +10,7 @@ import styles from "./LoginForm.module.css";
 import { getLogoImagePath } from "@/lib/theme/logoImageFiles";
 import { DEFAULT_THEME } from "@/lib/theme/types";
 import AdminPortalRequiredScreen from "@/components/auth/AdminPortalRequiredScreen";
+import { AUTH_FORM_FALLBACK_PATH } from "@/lib/auth/formFallback";
 import { getAdminHost, isMainHost, isNonPlayerRole } from "@/lib/auth/portalHosts";
 import { signOutInBackground } from "@/lib/auth/signOutInBackground";
 
@@ -27,12 +28,19 @@ const logoSrc = getLogoImagePath(DEFAULT_THEME, "logo");
  */
 export default function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const [adminPortalRequired, setAdminPortalRequired] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("auth_fallback") !== "1") return;
+    toast.error("ورود از این روش در دسترس نیست. لطفاً دوباره تلاش کنید.");
+    router.replace("/login", { scroll: false });
+  }, [searchParams, router]);
 
   /**
    * هندل کردن submit فرم
@@ -135,7 +143,12 @@ export default function LoginForm() {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className={styles.form}>
+        <form
+          method="post"
+          action={AUTH_FORM_FALLBACK_PATH}
+          onSubmit={handleSubmit}
+          className={styles.form}
+        >
           {/* Username Input */}
           <div className={styles.inputGroup}>
             <label htmlFor="username" className={styles.label}>

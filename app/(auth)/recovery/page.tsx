@@ -4,6 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 import styles from "./auth.module.css";
+import { AUTH_FORM_FALLBACK_PATH } from "@/lib/auth/formFallback";
 
 export default function RecoveryPage() {
   const [email, setEmail] = useState("");
@@ -22,9 +23,9 @@ export default function RecoveryPage() {
       const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/login`,
       });
-      
+
       if (recoveryError) throw recoveryError;
-      
+
       setSuccess(true);
     } catch (err: any) {
       setError(err.message || "خطایی رخ داد. لطفاً دوباره تلاش کنید.");
@@ -37,8 +38,13 @@ export default function RecoveryPage() {
     <div className={styles.loginContainer}>
       <div className={styles.formWrapper}>
         <h1 className={styles.logo}>dingmoney</h1>
-        
-        <form onSubmit={handleSubmit} className={styles.form}>
+
+        <form
+          method="post"
+          action={AUTH_FORM_FALLBACK_PATH}
+          onSubmit={handleSubmit}
+          className={styles.form}
+        >
           <input
             id="email"
             name="email"
@@ -51,14 +57,13 @@ export default function RecoveryPage() {
             placeholder="user name"
           />
 
-          {error && (
-            <div className={styles.errorMessage}>
-              {error}
-            </div>
-          )}
+          {error && <div className={styles.errorMessage}>{error}</div>}
 
           {success && (
-            <div className={styles.errorMessage} style={{ backgroundColor: "#d1fae5", color: "#065f46" }}>
+            <div
+              className={styles.errorMessage}
+              style={{ backgroundColor: "#d1fae5", color: "#065f46" }}
+            >
               لینک بازیابی رمز عبور به ایمیل شما ارسال شد.
             </div>
           )}
@@ -85,4 +90,3 @@ export default function RecoveryPage() {
     </div>
   );
 }
-

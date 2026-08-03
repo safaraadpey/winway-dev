@@ -11,7 +11,10 @@
     "start": "next start",
     "lint": "next lint",
     "test:supabase": "node scripts/test-connection.js",
-    "test:shadow": "node tools/shadow-regression/src/run.mjs"
+    "test:shadow": "node tools/shadow-regression/src/run.mjs",
+    "test:finance-integrity": "node tools/finance-integrity/run.mjs",
+    "test:deposit-domain": "node tools/deposit-domain/run.mjs",
+    "test:auth-form-security": "node tools/auth-form-security/run.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

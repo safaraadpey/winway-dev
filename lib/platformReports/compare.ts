@@ -8,6 +8,7 @@ export type SessionsReportDiff = {
   platformItemCount: number;
   missingOnPlatform: string[];
   missingOnLegacy: string[];
+  gameSlugMismatches: Array<{ sessionId: string; legacy: string; platform: string }>;
   statusMismatches: Array<{ sessionId: string; legacy: string; platform: string }>;
   participantCountMismatches: Array<{
     sessionId: string;
@@ -48,6 +49,7 @@ export function compareSessionsReports(
 
   const missingOnPlatform: string[] = [];
   const missingOnLegacy: string[] = [];
+  const gameSlugMismatches: SessionsReportDiff["gameSlugMismatches"] = [];
   const statusMismatches: SessionsReportDiff["statusMismatches"] = [];
   const participantCountMismatches: SessionsReportDiff["participantCountMismatches"] = [];
   const amountMismatches: SessionsReportDiff["amountMismatches"] = [];
@@ -65,6 +67,13 @@ export function compareSessionsReports(
     const P = platformById.get(id);
     if (!P) continue;
 
+    if ((L.gameSlug || "bingo") !== (P.gameSlug || "bingo")) {
+      gameSlugMismatches.push({
+        sessionId: id,
+        legacy: L.gameSlug || "bingo",
+        platform: P.gameSlug || "bingo",
+      });
+    }
     if (L.status !== P.status) {
       statusMismatches.push({ sessionId: id, legacy: L.status, platform: P.status });
     }
@@ -114,6 +123,7 @@ export function compareSessionsReports(
     (legacy.items.length !== platform.items.length ? 1 : 0) +
     missingOnPlatform.length +
     missingOnLegacy.length +
+    gameSlugMismatches.length +
     statusMismatches.length +
     participantCountMismatches.length +
     amountMismatches.length +
@@ -130,6 +140,7 @@ export function compareSessionsReports(
     platformItemCount: platform.items.length,
     missingOnPlatform,
     missingOnLegacy,
+    gameSlugMismatches,
     statusMismatches,
     participantCountMismatches,
     amountMismatches,
@@ -205,6 +216,85 @@ export function logSessionsReportDiff(diff: SessionsReportDiff): void {
       platformTotal: diff.platformTotal,
       missingOnPlatform: diff.missingOnPlatform.slice(0, 20),
       missingOnLegacy: diff.missingOnLegacy.slice(0, 20),
+      gameSlugMismatches: diff.gameSlugMismatches.slice(0, 20),
+      statusMismatches: diff.statusMismatches.slice(0, 20),
+      participantCountMismatches: diff.participantCountMismatches.slice(0, 20),
+      amountMismatches: diff.amountMismatches.slice(0, 20),
+      timestampMismatches: diff.timestampMismatches.slice(0, 20),
+      participantDetailMismatches: diff.participantDetailMismatches.slice(0, 40),
+    })
+  );
+}
+
+export type SessionsAnalyticsDiff = {
+  mismatchCount: number;
+  sessionCountMatch: boolean;
+  participantCountMatch: boolean;
+  amountMatch: boolean;
+  byStatusMismatches: Array<{ status: string; legacy: number; platform: number }>;
+  legacy: { sessionCount: number; participantCount: number; amountTotal: number };
+  platform: { sessionCount: number; participantCount: number; amountTotal: number };
+};
+
+export function compareSessionsAnalytics(
+  legacy: import("./types").SessionsAnalyticsResult,
+  platform: import("./types").SessionsAnalyticsResult
+): SessionsAnalyticsDiff {
+  const statuses = new Set([
+    ...Object.keys(legacy.byStatus || {}),
+    ...Object.keys(platform.byStatus || {}),
+  ]);
+  const byStatusMismatches: SessionsAnalyticsDiff["byStatusMismatches"] = [];
+  for (const status of statuses) {
+    const lv = legacy.byStatus[status] || 0;
+    const pv = platform.byStatus[status] || 0;
+    if (lv !== pv) byStatusMismatches.push({ status, legacy: lv, platform: pv });
+  }
+
+  const sessionCountMatch = legacy.sessionCount === platform.sessionCount;
+  const participantCountMatch = legacy.participantCount === platform.participantCount;
+  const amountMatch = Math.abs(legacy.amountTotal - platform.amountTotal) <= 0.009;
+
+  const mismatchCount =
+    (sessionCountMatch ? 0 : 1) +
+    (participantCountMatch ? 0 : 1) +
+    (amountMatch ? 0 : 1) +
+    byStatusMismatches.length;
+
+  return {
+    mismatchCount,
+    sessionCountMatch,
+    participantCountMatch,
+    amountMatch,
+    byStatusMismatches,
+    legacy: {
+      sessionCount: legacy.sessionCount,
+      participantCount: legacy.participantCount,
+      amountTotal: legacy.amountTotal,
+    },
+    platform: {
+      sessionCount: platform.sessionCount,
+      participantCount: platform.participantCount,
+      amountTotal: platform.amountTotal,
+    },
+  };
+}
+
+export function logSessionsAnalyticsDiff(diff: SessionsAnalyticsDiff): void {
+  console.log("[PlatformHistory] analytics compare", JSON.stringify(diff));
+}
+
+export function logSessionsHistoryDiff(diff: SessionsReportDiff): void {
+  console.log(
+    "[PlatformHistory] history compare",
+    JSON.stringify({
+      mismatchCount: diff.mismatchCount,
+      rowCountMatch: diff.rowCountMatch,
+      legacyTotal: diff.legacyTotal,
+      platformTotal: diff.platformTotal,
+      missingOnPlatform: diff.missingOnPlatform.slice(0, 20),
+      missingOnLegacy: diff.missingOnLegacy.slice(0, 20),
+      gameSlugMismatches: diff.gameSlugMismatches.slice(0, 20),
       statusMismatches: diff.statusMismatches.slice(0, 20),
       participantCountMismatches: diff.participantCountMismatches.slice(0, 20),
       amountMismatches: diff.amountMismatches.slice(0, 20),

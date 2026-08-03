@@ -1,51 +1,60 @@
 import { pgPool } from "@/lib/pg";
-import type { SessionParticipantReportRow, SessionReportRow, SessionsReportResult } from "./types";
+import type {
+  SessionParticipantReportRow,
+  SessionReportRow,
+  SessionsAnalyticsResult,
+  SessionsReportResult,
+} from "./types";
+import type { SessionsQueryArgs } from "./legacySessionsReport";
 
 /**
  * Platform-native sessions report (game_sessions + session_participants).
  * Requires DATABASE_URL (platform schema not exposed on PostgREST).
  */
-export async function fetchPlatformSessionsReport(args: {
-  from: Date;
-  to: Date;
-  page: number;
-  pageSize: number;
-}): Promise<SessionsReportResult> {
+export async function fetchPlatformSessionsReport(
+  args: SessionsQueryArgs
+): Promise<SessionsReportResult> {
   if (!pgPool) {
     throw new Error("DATABASE_URL not configured; cannot read platform.*");
   }
 
-  const { from, to, page, pageSize } = args;
+  const { from, to, page, pageSize, statuses } = args;
   const offset = (page - 1) * pageSize;
+  const statusFilter = statuses?.length ? statuses : null;
 
   const countRes = await pgPool.query<{ count: string }>(
     `SELECT count(*)::text AS count
      FROM platform.game_sessions gs
      WHERE gs.correlation_key LIKE 'bingo.room:%'
        AND gs.created_at >= $1::timestamptz
-       AND gs.created_at <= $2::timestamptz`,
-    [from.toISOString(), to.toISOString()]
+       AND gs.created_at <= $2::timestamptz
+       AND ($3::text[] IS NULL OR gs.status = ANY($3::text[]))`,
+    [from.toISOString(), to.toISOString(), statusFilter]
   );
   const totalCount = Number(countRes.rows[0]?.count || 0);
 
   const sessionsRes = await pgPool.query<{
     id: string;
     status: string;
+    game_slug: string;
     created_at: string;
     started_at: string | null;
     finished_at: string | null;
     settled_at: string | null;
     participant_count: number;
   }>(
-    `SELECT gs.id, gs.status, gs.created_at, gs.started_at, gs.finished_at, gs.settled_at,
+    `SELECT gs.id, gs.status, g.code AS game_slug,
+            gs.created_at, gs.started_at, gs.finished_at, gs.settled_at,
             gs.participant_count
      FROM platform.game_sessions gs
+     JOIN platform.games g ON g.id = gs.game_id
      WHERE gs.correlation_key LIKE 'bingo.room:%'
        AND gs.created_at >= $1::timestamptz
        AND gs.created_at <= $2::timestamptz
+       AND ($3::text[] IS NULL OR gs.status = ANY($3::text[]))
      ORDER BY gs.created_at DESC
-     LIMIT $3 OFFSET $4`,
-    [from.toISOString(), to.toISOString(), pageSize, offset]
+     LIMIT $4 OFFSET $5`,
+    [from.toISOString(), to.toISOString(), statusFilter, pageSize, offset]
   );
 
   const sessionIds = sessionsRes.rows.map((r) => r.id);
@@ -88,11 +97,11 @@ export async function fetchPlatformSessionsReport(args: {
   const items: SessionReportRow[] = sessionsRes.rows.map((s) => {
     const participants = participantsBySession.get(s.id) || [];
     const amountTotal = participants.reduce((sum, p) => sum + p.amountTotal, 0);
-    // Legacy contract: cancelled sessions expose no lifecycle timestamps in the admin report.
-    // Stored platform.game_sessions columns are left unchanged (P5.9 projection-only).
+    // P5.9: cancelled sessions expose no lifecycle timestamps in the admin report.
     const isCancelled = s.status === "cancelled";
     return {
       sessionId: s.id,
+      gameSlug: s.game_slug || "bingo",
       status: s.status,
       createdAt: s.created_at,
       startedAt: isCancelled ? null : s.started_at,
@@ -110,5 +119,70 @@ export async function fetchPlatformSessionsReport(args: {
     page,
     pageSize,
     source: "platform",
+  };
+}
+
+/**
+ * Platform analytics aggregates (non-financial shell only).
+ * Uses game_sessions + session_participants; does not read prize/commission lines.
+ */
+export async function fetchPlatformSessionsAnalytics(args: {
+  from: Date;
+  to: Date;
+  statuses?: string[];
+}): Promise<SessionsAnalyticsResult> {
+  if (!pgPool) {
+    throw new Error("DATABASE_URL not configured; cannot read platform.*");
+  }
+
+  const statusFilter = args.statuses?.length ? args.statuses : null;
+
+  const statusRes = await pgPool.query<{ status: string; n: string }>(
+    `SELECT gs.status, count(*)::text AS n
+     FROM platform.game_sessions gs
+     WHERE gs.correlation_key LIKE 'bingo.room:%'
+       AND gs.created_at >= $1::timestamptz
+       AND gs.created_at <= $2::timestamptz
+       AND ($3::text[] IS NULL OR gs.status = ANY($3::text[]))
+     GROUP BY gs.status`,
+    [args.from.toISOString(), args.to.toISOString(), statusFilter]
+  );
+
+  const byStatus: Record<string, number> = {};
+  let sessionCount = 0;
+  for (const row of statusRes.rows) {
+    const n = Number(row.n || 0);
+    byStatus[row.status] = n;
+    sessionCount += n;
+  }
+
+  const partRes = await pgPool.query<{
+    participant_count: string;
+    amount_total: string;
+  }>(
+    `SELECT
+       coalesce(sum(gs.participant_count), 0)::text AS participant_count,
+       coalesce(sum(p.amount_total), 0)::text AS amount_total
+     FROM platform.game_sessions gs
+     LEFT JOIN LATERAL (
+       SELECT coalesce(sum(sp.amount_total), 0) AS amount_total
+       FROM platform.session_participants sp
+       WHERE sp.session_id = gs.id
+     ) p ON true
+     WHERE gs.correlation_key LIKE 'bingo.room:%'
+       AND gs.created_at >= $1::timestamptz
+       AND gs.created_at <= $2::timestamptz
+       AND ($3::text[] IS NULL OR gs.status = ANY($3::text[]))`,
+    [args.from.toISOString(), args.to.toISOString(), statusFilter]
+  );
+
+  return {
+    source: "platform",
+    from: args.from.toISOString(),
+    to: args.to.toISOString(),
+    sessionCount,
+    participantCount: Number(partRes.rows[0]?.participant_count || 0),
+    amountTotal: Number(Number(partRes.rows[0]?.amount_total || 0).toFixed(2)),
+    byStatus,
   };
 }

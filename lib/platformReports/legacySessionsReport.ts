@@ -1,9 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { platformStatusesToBingoRoomStatuses } from "./config";
 import {
   mapBingoRoomLifecycle,
   mapTicketParticipantStatus,
   type SessionParticipantReportRow,
   type SessionReportRow,
+  type SessionsAnalyticsResult,
   type SessionsReportResult,
 } from "./types";
 
@@ -26,24 +28,39 @@ type TicketRow = {
   updated_at: string;
 };
 
+export type SessionsQueryArgs = {
+  from: Date;
+  to: Date;
+  page: number;
+  pageSize: number;
+  /** Platform lifecycle statuses to include. Omit = all. */
+  statuses?: string[];
+};
+
 /**
  * Legacy Bingo-equivalent sessions report (rooms + tickets).
- * Shape matches Platform projection for Stage 1 compare.
+ * Shape matches Platform projection for Stage 1/2 compare.
  */
 export async function fetchLegacySessionsReport(
   supabase: SupabaseClient,
-  args: { from: Date; to: Date; page: number; pageSize: number }
+  args: SessionsQueryArgs
 ): Promise<SessionsReportResult> {
-  const { from, to, page, pageSize } = args;
+  const { from, to, page, pageSize, statuses } = args;
   const fromIso = from.toISOString();
   const toIso = to.toISOString();
+  const bingoStatuses = statuses?.length
+    ? platformStatusesToBingoRoomStatuses(statuses)
+    : null;
 
-  const { count, error: countError } = await supabase
+  let countQuery = supabase
     .from("rooms")
     .select("id", { count: "exact", head: true })
     .gte("created_at", fromIso)
     .lte("created_at", toIso);
-
+  if (bingoStatuses?.length) {
+    countQuery = countQuery.in("status", bingoStatuses);
+  }
+  const { count, error: countError } = await countQuery;
   if (countError) {
     throw new Error(countError.message || "legacy rooms count failed");
   }
@@ -51,14 +68,18 @@ export async function fetchLegacySessionsReport(
   const totalCount = Number(count || 0);
   const offset = (page - 1) * pageSize;
 
-  const { data: roomRows, error: roomsError } = await supabase
+  let roomsQuery = supabase
     .from("rooms")
     .select("id, status, engine_owner_id, created_at, updated_at, waiting_started_at")
     .gte("created_at", fromIso)
     .lte("created_at", toIso)
     .order("created_at", { ascending: false })
     .range(offset, offset + pageSize - 1);
+  if (bingoStatuses?.length) {
+    roomsQuery = roomsQuery.in("status", bingoStatuses);
+  }
 
+  const { data: roomRows, error: roomsError } = await roomsQuery;
   if (roomsError) {
     throw new Error(roomsError.message || "legacy rooms fetch failed");
   }
@@ -86,39 +107,9 @@ export async function fetchLegacySessionsReport(
     }
   }
 
-  const items: SessionReportRow[] = rooms.map((room) => {
-    const status = mapBingoRoomLifecycle(room.status, room.engine_owner_id);
-    const participants = aggregateParticipants(ticketsByRoom.get(room.id) || []);
-    const amountTotal = participants.reduce((s, p) => s + p.amountTotal, 0);
-    const activeCount = participants.filter((p) =>
-      p.status === "joined" || p.status === "active"
-    ).length;
-
-    const startedAt =
-      status === "running" ||
-      status === "finished" ||
-      status === "settled" ||
-      status === "archived"
-        ? room.waiting_started_at || room.created_at
-        : null;
-    const finishedAt =
-      status === "finished" || status === "settled" || status === "archived"
-        ? room.updated_at
-        : null;
-    const settledAt = status === "settled" ? room.updated_at : null;
-
-    return {
-      sessionId: room.id,
-      status,
-      createdAt: room.created_at,
-      startedAt,
-      finishedAt,
-      settledAt,
-      participantCount: activeCount,
-      amountTotal: Number(amountTotal.toFixed(2)),
-      participants,
-    };
-  });
+  const items: SessionReportRow[] = rooms
+    .map((room) => buildLegacySessionRow(room, ticketsByRoom.get(room.id) || []))
+    .filter((row) => !statuses?.length || statuses.includes(row.status));
 
   return {
     items,
@@ -126,6 +117,92 @@ export async function fetchLegacySessionsReport(
     page,
     pageSize,
     source: "legacy",
+  };
+}
+
+/**
+ * Aggregate analytics over the period (no pagination).
+ * Non-financial: session counts, participant shells, entry spend totals.
+ */
+export async function fetchLegacySessionsAnalytics(
+  supabase: SupabaseClient,
+  args: { from: Date; to: Date; statuses?: string[] }
+): Promise<SessionsAnalyticsResult> {
+  const pageSize = 500;
+  let page = 1;
+  let totalFetched = 0;
+  let totalCount = Infinity;
+  const byStatus: Record<string, number> = {};
+  let participantCount = 0;
+  let amountTotal = 0;
+
+  while (totalFetched < totalCount) {
+    const batch = await fetchLegacySessionsReport(supabase, {
+      from: args.from,
+      to: args.to,
+      page,
+      pageSize,
+      statuses: args.statuses,
+    });
+    totalCount = batch.totalCount;
+    totalFetched += batch.items.length;
+    if (batch.items.length === 0) break;
+
+    for (const row of batch.items) {
+      byStatus[row.status] = (byStatus[row.status] || 0) + 1;
+      participantCount += row.participantCount;
+      amountTotal += row.amountTotal;
+    }
+    page += 1;
+    if (page > 50) break; // safety
+  }
+
+  return {
+    source: "legacy",
+    from: args.from.toISOString(),
+    to: args.to.toISOString(),
+    sessionCount: totalCount === Infinity ? 0 : totalCount,
+    participantCount,
+    amountTotal: Number(amountTotal.toFixed(2)),
+    byStatus,
+  };
+}
+
+function buildLegacySessionRow(
+  room: RoomRow,
+  tickets: TicketRow[]
+): SessionReportRow {
+  const status = mapBingoRoomLifecycle(room.status, room.engine_owner_id);
+  const participants = aggregateParticipants(tickets);
+  const amountTotal = participants.reduce((s, p) => s + p.amountTotal, 0);
+  const activeCount = participants.filter(
+    (p) => p.status === "joined" || p.status === "active"
+  ).length;
+
+  const startedAt =
+    status === "running" ||
+    status === "finished" ||
+    status === "settled" ||
+    status === "archived"
+      ? room.waiting_started_at || room.created_at
+      : null;
+  const finishedAt =
+    status === "finished" || status === "settled" || status === "archived"
+      ? room.updated_at
+      : null;
+  const settledAt = status === "settled" ? room.updated_at : null;
+
+  return {
+    sessionId: room.id,
+    gameSlug: "bingo",
+    status,
+    createdAt: room.created_at,
+    startedAt,
+    finishedAt,
+    settledAt,
+    participantCount: activeCount,
+    amountTotal: Number(amountTotal.toFixed(2)),
+    participants,
   };
 }
 

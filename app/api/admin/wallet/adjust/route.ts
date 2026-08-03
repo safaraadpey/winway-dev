@@ -1,10 +1,10 @@
 /**
- * API Route: واریز/برداشت دستی موجودی کیف پول
- *
- * این route برای عملیات حساس واریز/برداشت دستی استفاده می‌شود.
- * با معماری جدید مالی و ادمین هم‌راستا شده است.
+ * API Route: manual wallet deposit/withdraw via fn_wallet_apply_delta
  *
  * POST /api/admin/wallet/adjust
+ *
+ * P6.4 Strategy B — per-item TX + mandatory idempotencyKey + structured results.
+ * Does NOT implement Deposit Domain (manual_panel remains treasury injection path).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -13,22 +13,66 @@ import type {
   BulkAdjustRequest,
   TransactionAction,
 } from "@/src/types/transactions";
+import { financeMetricInc } from "@/lib/finance/metrics";
+
+type ItemResult = {
+  userId: string;
+  idempotencyKey: string;
+  success: boolean;
+  transactionId?: unknown;
+  replayed?: boolean;
+  error?: string;
+  code?: string;
+};
+
+function mapAdjustError(message: string): { error: string; code: string } {
+  const msgLower = (message || "").toLowerCase();
+  if (
+    msgLower.includes("permission denied") ||
+    msgLower.includes("permission_denied")
+  ) {
+    return {
+      error: "شما دسترسی لازم برای این عملیات را ندارید",
+      code: "permission_denied",
+    };
+  }
+  if (
+    msgLower.includes("insufficient funds") ||
+    msgLower.includes("insufficient_funds")
+  ) {
+    return { error: "موجودی کافی نیست", code: "insufficient_funds" };
+  }
+  if (msgLower.includes("not found") || msgLower.includes("not_found")) {
+    return { error: "کاربر یا کیف پول پیدا نشد", code: "not_found" };
+  }
+  if (msgLower.includes("zero amount")) {
+    return { error: "مبلغ نمی‌تواند صفر باشد", code: "zero_amount" };
+  }
+  if (msgLower.includes("idempotency_payload_mismatch")) {
+    return {
+      error: "کلید یکتایی با مبلغ/کاربر/نوع متفاوت قبلاً ثبت شده است",
+      code: "idempotency_payload_mismatch",
+    };
+  }
+  return {
+    error: message || "خطا در انجام تراکنش",
+    code: "transaction_failed",
+  };
+}
 
 export async function POST(request: NextRequest) {
   try {
-    // 1) گرفتن context ادمین (session + service client با service_role)
     const { session, supabase } = await getAdminContextOrThrow(request);
     const adminId = session.user.id;
     const adminRole = session.adminUser?.role ?? session.role;
 
-    console.log("[wallet/adjust] Admin user ID:", adminId, "role:", adminRole);
+    console.log("[Wallet] adjust start", { adminId, role: adminRole });
 
-    // 2) خواندن body
     let body: BulkAdjustRequest;
     try {
       body = await request.json();
     } catch (parseError) {
-      console.error("[wallet/adjust] JSON parse error:", parseError);
+      console.error("[Wallet] adjust JSON parse error:", parseError);
       return NextResponse.json(
         {
           ok: false,
@@ -39,15 +83,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { userIds, amount, action, currency = "IRR", description } = body;
-    console.log("[wallet/adjust] Request body:", {
-      userIds: userIds?.length,
+    const {
+      userIds,
+      idempotencyKeys,
       amount,
       action,
-      currency,
-    });
+      currency = "IRR",
+      description,
+    } = body;
 
-    // 3) Validation
     if (!userIds || userIds.length === 0) {
       return NextResponse.json(
         {
@@ -57,6 +101,47 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 }
       );
+    }
+
+    if (
+      !Array.isArray(idempotencyKeys) ||
+      idempotencyKeys.length !== userIds.length
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "invalid_payload",
+          message:
+            "برای هر کاربر باید یک idempotencyKey ارسال شود (طول آرایه برابر userIds).",
+        },
+        { status: 400 }
+      );
+    }
+
+    const seen = new Set<string>();
+    for (const key of idempotencyKeys) {
+      const trimmed = String(key || "").trim();
+      if (!trimmed) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "invalid_payload",
+            message: "idempotencyKey خالی مجاز نیست.",
+          },
+          { status: 400 }
+        );
+      }
+      if (seen.has(trimmed)) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "invalid_payload",
+            message: "idempotencyKey تکراری در یک درخواست مجاز نیست.",
+          },
+          { status: 400 }
+        );
+      }
+      seen.add(trimmed);
     }
 
     if (!amount || amount <= 0) {
@@ -81,136 +166,126 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4) اجرای عملیات مالی با هسته مالی fn_wallet_apply_delta (wrapper عمومی)
-    console.log(
-      "[wallet/adjust] Executing wallet adjustments for",
-      userIds.length,
-      "users"
-    );
+    const results: ItemResult[] = [];
 
-    const results: {
-      userId: string;
-      success: boolean;
-      transactionId?: unknown;
-      error?: string;
-    }[] = [];
-
-    for (const userId of userIds) {
+    for (let i = 0; i < userIds.length; i++) {
+      const userId = userIds[i];
+      const idempotencyKey = String(idempotencyKeys[i]).trim();
       const amountDelta = action === "deposit" ? amount : -amount;
 
-      // فراخوانی wrapper: public.fn_wallet_apply_delta
+      const { data: existingTx } = await supabase
+        .from("transactions")
+        .select("id")
+        .eq("idempotency_key", idempotencyKey)
+        .maybeSingle();
+
       const { data, error } = await supabase.rpc("fn_wallet_apply_delta", {
         p_user_id: userId,
         p_currency: currency,
         p_amount_delta: amountDelta,
         p_transaction_type: action as TransactionAction,
         p_source_kind: "manual_panel",
-        p_source_ref: adminId, // ادمینی که این عملیات را انجام می‌دهد
+        p_source_ref: adminId,
         p_description:
           description ||
           `Manual ${action} by ${adminRole ?? "admin_panel"}`,
         p_meta: {},
         p_allow_negative: false,
+        p_idempotency_key: idempotencyKey,
       });
 
       if (error) {
-        console.error(
-          "[wallet/adjust] fn_wallet_apply_delta error for user",
-          userId,
-          ":",
-          error
-        );
-
-        let errorMessage = error.message || "خطا در انجام تراکنش";
-        const msgLower = errorMessage.toLowerCase();
-
-        // نگاشت پیام‌های دیتابیس به پیام‌های فارسی قابل‌فهم
-        if (
-          msgLower.includes("permission denied") ||
-          msgLower.includes("permission_denied")
-        ) {
-          errorMessage = "شما دسترسی لازم برای این عملیات را ندارید";
-        } else if (
-          msgLower.includes("insufficient funds") ||
-          msgLower.includes("insufficient_funds")
-        ) {
-          errorMessage = "موجودی کافی نیست";
-        } else if (
-          msgLower.includes("not found") ||
-          msgLower.includes("not_found")
-        ) {
-          errorMessage = "کاربر یا کیف پول پیدا نشد";
-        } else if (msgLower.includes("zero amount")) {
-          errorMessage = "مبلغ نمی‌تواند صفر باشد";
+        const mapped = mapAdjustError(error.message || "");
+        if (mapped.code === "idempotency_payload_mismatch") {
+          financeMetricInc("duplicate_apply_delta_attempts");
         }
-
-        results.push({ userId, success: false, error: errorMessage });
-      } else {
-        console.log(
-          "[wallet/adjust] Success for user",
+        console.error("[Wallet] adjust item failed", {
           userId,
-          "transaction ID:",
-          data
-        );
-        results.push({ userId, success: true, transactionId: data });
+          idempotencyKey,
+          message: error.message,
+        });
+        results.push({
+          userId,
+          idempotencyKey,
+          success: false,
+          error: mapped.error,
+          code: mapped.code,
+        });
+        continue;
       }
-    }
 
-    // 5) بررسی نتایج – اگر حتی یک خطا باشد، fail می‌کنیم
-    const failures = results.filter((r) => !r.success);
-    if (failures.length > 0) {
-      const firstFailure = failures[0];
-      console.error("[wallet/adjust] Transaction failures:", failures.length);
-      console.error("[wallet/adjust] First failure:", firstFailure);
-
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "transaction_failed",
-          message:
-            firstFailure.error ||
-            "خطا در انجام تراکنش برای یک یا چند کاربر.",
-        },
-        { status: 500 }
+      const replayed = Boolean(
+        existingTx?.id && String(existingTx.id) === String(data)
       );
+      if (replayed) {
+        financeMetricInc("duplicate_apply_delta_attempts");
+      }
+
+      console.log("[Wallet] adjust item ok", {
+        userId,
+        transactionId: data,
+        replayed,
+      });
+      results.push({
+        userId,
+        idempotencyKey,
+        success: true,
+        transactionId: data,
+        replayed,
+      });
     }
 
-    console.log("[wallet/adjust] All transactions successful");
+    const successCount = results.filter((r) => r.success).length;
+    const failureCount = results.length - successCount;
+    const partial = successCount > 0 && failureCount > 0;
 
-    // 6) ثبت در admin_audit_log (اگر خورد زمین، عملیات اصلی fail نمی‌شود)
+    if (partial) {
+      financeMetricInc("partial_bulk_failure");
+    }
+
     try {
       await logAdminAction(
         supabase,
         adminId,
         "wallet_adjust_bulk",
         "wallets",
-        null, // bulk operation
+        null,
         {
           userIds,
+          idempotencyKeys,
           amount,
           action,
           currency,
           description,
-          transactionCount: results.length,
+          successCount,
+          failureCount,
+          partial,
         },
         request
       );
-      console.log("[wallet/adjust] Audit log recorded");
     } catch (auditError: any) {
-      console.error("[wallet/adjust] Failed to log audit:", auditError);
+      console.error("[Wallet] adjust audit failed:", auditError);
     }
 
-    // 7) پاسخ موفق
-    return NextResponse.json(
-      {
-        ok: true,
-        message: "تراکنش با موفقیت انجام شد.",
-        transactionCount: results.length,
-      },
-      { status: 200 }
-    );
+    const payload = {
+      ok: failureCount === 0,
+      partial,
+      successCount,
+      failureCount,
+      results,
+      message:
+        failureCount === 0
+          ? "تراکنش با موفقیت انجام شد."
+          : partial
+            ? "برخی تراکنش‌ها موفق و برخی ناموفق بودند. نتایج را بررسی کنید."
+            : results.find((r) => !r.success)?.error ||
+              "خطا در انجام تراکنش.",
+    };
+
+    const status = failureCount === 0 ? 200 : partial ? 207 : 500;
+    return NextResponse.json(payload, { status });
   } catch (err: any) {
-    console.error("[wallet/adjust] Unexpected error:", err);
+    console.error("[Wallet] adjust unexpected:", err);
 
     let errorMessage = "خطای غیرمنتظره در انجام تراکنش";
     if (err?.message) {

@@ -1,0 +1,38 @@
+{
+  "overall": "FAIL",
+  "targetHost": "https://dev.dingmoney.org",
+  "vercelProject": "winway-dev",
+  "vercelEnv": "Production",
+  "deployment": "winway-7psqp46uh-kiam-studios-projects.vercel.app",
+  "flag": {
+    "PLATFORM_REPORTS_SOURCE": "platform",
+    "confirmedVia": "vercel env pull --environment=production --project winway-dev",
+    "winwayWwwHasFlag": false
+  },
+  "endpoint": {
+    "url": "GET https://dev.dingmoney.org/api/admin/platform-sessions/report?period=month",
+    "auth": "Bearer admin/super (magiclink verify)",
+    "unauthStatus": 401,
+    "httpStatus": 503,
+    "ok": false,
+    "reportsSource": null,
+    "error": "platform_unavailable",
+    "message": "خواندن Platform ممکن نیست. برای ادامه، PLATFORM_REPORTS_SOURCE=legacy تنظیم کنید."
+  },
+  "runtimeLogEvidence": {
+    "line": "[PlatformReports] platform mode failed; refusing silent Bingo swap: getaddrinfo ENOTFOUND db.yqnptpreowkimopxicfz.supabase.co",
+    "time": "14:56:28.65",
+    "host": "dev.dingmoney.org"
+  },
+  "checks": {
+    "envFlagPlatform": "PASS",
+    "http200": "FAIL",
+    "responseSourcePlatform": "FAIL",
+    "dataParity": "FAIL (no payload)",
+    "noPlatformReportsErrors": "FAIL",
+    "noFallbackToLegacy": "PASS (503 refused silent Bingo swap)",
+    "walletTournamentLobbyLiveSettlementImpact": "PASS (GET-only validation; no writes)"
+  },
+  "rootCause": "Vercel Production DATABASE_URL host db.*.supabase.co is not resolvable from the deployment (ENOTFOUND). Flag correctly selects platform mode; platform PG read fails; route correctly returns 503 without legacy fallback.",
+  "blocker": "Fix Production DATABASE_URL to a reachable host (e.g. Supabase pooler) and redeploy/restart — out of scope for this validation (no code/SQL changes)."
+}

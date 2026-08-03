@@ -9,6 +9,7 @@ import toast from "react-hot-toast";
 import styles from "./SignupForm.module.css";
 import { getLogoImagePath } from "@/lib/theme/logoImageFiles";
 import { DEFAULT_THEME } from "@/lib/theme/types";
+import { AUTH_FORM_FALLBACK_PATH } from "@/lib/auth/formFallback";
 
 const logoSrc = getLogoImagePath(DEFAULT_THEME, "logo");
 
@@ -177,7 +178,12 @@ export default function SignupForm() {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className={styles.form}>
+        <form
+          method="post"
+          action={AUTH_FORM_FALLBACK_PATH}
+          onSubmit={handleSubmit}
+          className={styles.form}
+        >
           {/* Username Input */}
           <div className={styles.inputGroup}>
             <label htmlFor="username" className={styles.label}>

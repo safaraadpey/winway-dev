@@ -1,0 +1,81 @@
+{
+  "overall": "PASS",
+  "target": "https://dev.dingmoney.org",
+  "vercelProject": "winway-dev",
+  "vercelEnv": "Production",
+  "databaseUrl": {
+    "host": "aws-1-eu-west-2.pooler.supabase.com",
+    "usingPooler": true,
+    "doubledPrefixDefect": false,
+    "wellFormed": true,
+    "redacted": "postgresql://postgres.yqnptpreowkimopxicfz:***@aws-1-eu-west-2.pooler.supabase.com:5432/postgres"
+  },
+  "flag": "platform",
+  "httpStatus": 200,
+  "latencyMs": 2159,
+  "reportsSource": "platform",
+  "totalCount": 37,
+  "itemCount": 37,
+  "apiError": null,
+  "apiDetail": null,
+  "mismatchCount": 0,
+  "mismatches": [],
+  "sample": {
+    "sessionId": "a9b43335-f5b6-43cc-9269-8d6e9659b754",
+    "status": "cancelled",
+    "participantCount": 0,
+    "amountTotal": 0,
+    "startedAt": null,
+    "finishedAt": null,
+    "settledAt": null
+  },
+  "checks": {
+    "envFlagPlatform": true,
+    "envUsesPoolerHost": true,
+    "envDatabaseUrlWellFormed": true,
+    "http200": true,
+    "reportsSourcePlatform": true,
+    "sessionsReturned": true,
+    "no503": true,
+    "noPlatformUnavailable": true,
+    "noEnotfound": true,
+    "noLegacyFallback": true,
+    "parityVsLegacy": true,
+    "noRecentPlatformReportsFailures": true,
+    "shadowHealthy": true
+  },
+  "failingLayer": null,
+  "shadow": {
+    "participantRecon": {
+      "dlq": 0,
+      "missing": 0,
+      "duplicate": 0,
+      "generated_at": "2026-08-03T11:57:22.565537+00:00",
+      "pending_outbox": 0,
+      "amount_mismatch": 0,
+      "max_retry_count": 1,
+      "status_mismatch": 0,
+      "sessions_checked": 77,
+      "timestamp_mismatch": 0,
+      "participants_checked": 94,
+      "platform_participants": 115,
+      "bingo_participant_keys": 94
+    },
+    "coverage": {
+      "rooms": 77,
+      "sessions": 77,
+      "missing": 0,
+      "pending": 0,
+      "dead": 0
+    },
+    "healthy": true
+  },
+  "impact": {
+    "wallet": "unchanged (GET-only validation)",
+    "tournament": "unchanged (GET-only validation)",
+    "settlement": "unchanged (GET-only validation)"
+  },
+  "runtimeLogHits": [
+    "15:27:18.04  dev.dingmoney.org                                  info   ε GET /api/admin/platform-sessions/report   "
+  ]
+}

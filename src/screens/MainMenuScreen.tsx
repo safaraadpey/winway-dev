@@ -16,8 +16,9 @@ const MENU_LIVE_COUNT_BY_ID = {
 } as const;
 
 const PLAY_MENU_IDS = ["gameRoom", "tournaments"] as const;
-const ACCOUNT_MENU_IDS = ["myProfile", "settings", "reports"] as const;
+const ACCOUNT_MENU_IDS = ["myProfile", "settings"] as const;
 const LEADERBOARD_MENU_ID = "leaderboard" as const;
+const REPORTS_MENU_ID = "reports" as const;
 
 const TOUR_TARGET_BY_ENTRY_ID: Partial<
   Record<MenuEntryDefinition["id"], string>
@@ -42,6 +43,9 @@ const MainMenuScreen: React.FC = () => {
   const gameRoomEntry = MENU_ENTRIES.find((entry) => entry.id === "gameRoom");
   const tournamentsEntry = MENU_ENTRIES.find(
     (entry) => entry.id === "tournaments"
+  );
+  const reportsEntry = MENU_ENTRIES.find(
+    (entry) => entry.id === REPORTS_MENU_ID
   );
   const leaderboardEntry = MENU_ENTRIES.find(
     (entry) => entry.id === LEADERBOARD_MENU_ID
@@ -89,6 +93,7 @@ const MainMenuScreen: React.FC = () => {
             >
               {gameRoomEntry ? renderMenuItem(gameRoomEntry) : null}
               {tournamentsEntry ? renderMenuItem(tournamentsEntry) : null}
+              {reportsEntry ? renderMenuItem(reportsEntry) : null}
             </div>
             <div
               className={styles.leaderboardAccountGroup}

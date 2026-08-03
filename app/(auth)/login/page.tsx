@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import LoginForm from "@/components/auth/LoginForm";
 
 /**
@@ -7,6 +8,10 @@ import LoginForm from "@/components/auth/LoginForm";
  * از کامپوننت LoginForm استفاده می‌کند که سیستم username-based دارد
  */
 export default function LoginPage() {
-  return <LoginForm />;
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
 }
 

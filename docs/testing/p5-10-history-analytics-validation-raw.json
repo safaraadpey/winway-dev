@@ -1,0 +1,106 @@
+{
+  "overall": "PASS",
+  "flagDefault": "PLATFORM_HISTORY_SOURCE defaults to legacy (no Production switch)",
+  "paths": {
+    "history": {
+      "legacy": {
+        "status": "PASS",
+        "totalCount": 37,
+        "itemCount": 37
+      },
+      "compare": {
+        "status": "PASS",
+        "responseSource": "legacy",
+        "mismatchCount": 0,
+        "mismatches": [],
+        "logs": [
+          "[PlatformHistory] history compare {\"mismatchCount\":0,\"legacyTotal\":37,\"platformTotal\":37}",
+          "[PlatformHistory] analytics compare {\"mismatchCount\":0,\"legacy\":{\"sessionCount\":37,\"participantCount\":48,\"amountTotal\":675000,\"byStatus\":{\"cancelled\":31,\"settled\":6}},\"platform\":{\"sessionCount\":37,\"participantCount\":48,\"amountTotal\":675000,\"byStatus\":{\"cancelled\":31,\"settled\":6}}}"
+        ]
+      },
+      "platform": {
+        "status": "PASS",
+        "totalCount": 37,
+        "itemCount": 37,
+        "matchLegacy": true,
+        "sample": {
+          "sessionId": "a9b43335-f5b6-43cc-9269-8d6e9659b754",
+          "gameSlug": "bingo",
+          "status": "cancelled",
+          "createdAt": "2026-08-03T11:02:56.954Z",
+          "startedAt": null,
+          "finishedAt": null,
+          "settledAt": null,
+          "participantCount": 0,
+          "amountTotal": 0,
+          "participants": []
+        }
+      }
+    },
+    "analytics": {
+      "legacy": {
+        "status": "PASS",
+        "sessionCount": 37,
+        "participantCount": 48,
+        "amountTotal": 675000,
+        "byStatus": {
+          "cancelled": 31,
+          "settled": 6
+        }
+      },
+      "compare": {
+        "status": "PASS",
+        "responseSource": "legacy",
+        "mismatchCount": 0,
+        "mismatches": []
+      },
+      "platform": {
+        "status": "PASS",
+        "sessionCount": 37,
+        "participantCount": 48,
+        "amountTotal": 675000,
+        "byStatus": {
+          "cancelled": 31,
+          "settled": 6
+        },
+        "matchLegacy": true
+      }
+    }
+  },
+  "shadow": {
+    "status": "PASS",
+    "participantRecon": {
+      "dlq": 0,
+      "missing": 0,
+      "duplicate": 0,
+      "generated_at": "2026-08-03T12:10:59.346664+00:00",
+      "pending_outbox": 0,
+      "amount_mismatch": 0,
+      "max_retry_count": 1,
+      "status_mismatch": 0,
+      "sessions_checked": 77,
+      "timestamp_mismatch": 0,
+      "participants_checked": 94,
+      "platform_participants": 115,
+      "bingo_participant_keys": 94
+    },
+    "coverage": {
+      "rooms": 77,
+      "sessions": 77,
+      "missing": 0,
+      "pending": 0,
+      "dead": 0
+    }
+  },
+  "impact": {
+    "wallet": "untouched",
+    "tournament": "untouched",
+    "lobby": "untouched",
+    "live": "untouched",
+    "settlement": "untouched"
+  },
+  "platformHistoryLogs": [
+    "[PlatformHistory] history compare {\"mismatchCount\":0,\"legacyTotal\":37,\"platformTotal\":37}",
+    "[PlatformHistory] analytics compare {\"mismatchCount\":0,\"legacy\":{\"sessionCount\":37,\"participantCount\":48,\"amountTotal\":675000,\"byStatus\":{\"cancelled\":31,\"settled\":6}},\"platform\":{\"sessionCount\":37,\"participantCount\":48,\"amountTotal\":675000,\"byStatus\":{\"cancelled\":31,\"settled\":6}}}"
+  ]
+}

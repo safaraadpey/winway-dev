@@ -364,6 +364,13 @@ export default function ProfilePage() {
           <span className={styles.settingsLinkHint}>تم و سایر گزینه‌ها</span>
         </Link>
 
+        <Link href="/player/kyc" className={styles.settingsLink}>
+          <span className={styles.settingsLinkLabel}>احراز هویت</span>
+          <span className={styles.settingsLinkHint}>
+            تأیید هویت با کارت ملی و کارت بانکی
+          </span>
+        </Link>
+
         {/* بخش آواتار */}
         {!hideAvatarSection && (
           <div className={styles.section}>

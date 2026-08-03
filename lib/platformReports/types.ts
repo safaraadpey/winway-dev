@@ -10,6 +10,8 @@ export type SessionParticipantReportRow = {
 
 export type SessionReportRow = {
   sessionId: string;
+  /** Engine-agnostic game slug (legacy Bingo rooms → "bingo"). */
+  gameSlug: string;
   status: string;
   createdAt: string;
   startedAt: string | null;
@@ -18,6 +20,16 @@ export type SessionReportRow = {
   participantCount: number;
   amountTotal: number;
   participants: SessionParticipantReportRow[];
+};
+
+export type SessionsAnalyticsResult = {
+  source: "legacy" | "platform";
+  from: string;
+  to: string;
+  sessionCount: number;
+  participantCount: number;
+  amountTotal: number;
+  byStatus: Record<string, number>;
 };
 
 export type SessionsReportResult = {

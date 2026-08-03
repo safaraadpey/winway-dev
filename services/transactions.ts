@@ -5,6 +5,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import type {
   BulkAdjustRequest,
+  BulkMoneyResponse,
   BulkTransferRequest,
   TransactionAction,
   TransactionHistoryItem,
@@ -12,13 +13,20 @@ import type {
   DateFilter,
 } from "@/src/types/transactions";
 
+function newIdempotencyIds(count: number): string[] {
+  return Array.from({ length: count }, () => crypto.randomUUID());
+}
+
 /**
  * واریز/برداشت دستی موجودی کیف پول کاربران
- * 
+ *
  * این تابع از API route سروری استفاده می‌کند (نه فراخوانی مستقیم RPC).
  * API route از supabaseServer (service role) استفاده می‌کند.
+ * برای retry امن، همان idempotencyKeys را دوباره بفرستید.
  */
-export async function adjustWalletForUsersBulk(req: BulkAdjustRequest): Promise<void> {
+export async function adjustWalletForUsersBulk(
+  req: BulkAdjustRequest
+): Promise<BulkMoneyResponse> {
   const { userIds, amount, action, currency = "IRR", description } = req;
 
   if (!userIds || userIds.length === 0) {
@@ -33,21 +41,28 @@ export async function adjustWalletForUsersBulk(req: BulkAdjustRequest): Promise<
     throw new Error("نوع تراکنش نامعتبر است");
   }
 
-  // گرفتن session token برای ارسال به API route
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  const idempotencyKeys =
+    req.idempotencyKeys && req.idempotencyKeys.length === userIds.length
+      ? req.idempotencyKeys
+      : newIdempotencyIds(userIds.length);
+
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
   if (sessionError || !session) {
     throw new Error("خطا در احراز هویت - لطفاً دوباره وارد شوید");
   }
 
-  // فراخوانی API route
   const response = await fetch("/api/admin/wallet/adjust", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${session.access_token}`,
+      Authorization: `Bearer ${session.access_token}`,
     },
     body: JSON.stringify({
       userIds,
+      idempotencyKeys,
       amount,
       action,
       currency,
@@ -55,50 +70,30 @@ export async function adjustWalletForUsersBulk(req: BulkAdjustRequest): Promise<
     }),
   });
 
-  if (!response.ok) {
-    let errorData: any
-    try {
-      errorData = await response.json()
-    } catch (parseError) {
-      console.error('[adjustWalletForUsersBulk] Failed to parse error response:', parseError)
-      throw new Error(`خطا در ارتباط با سرور (کد: ${response.status})`)
-    }
-    
-    console.error('[adjustWalletForUsersBulk] API error response:', errorData)
-    
-    // بررسی فرمت جدید { ok: false, error, message }
-    if (errorData.ok === false) {
-      const errorMessage = errorData.message || errorData.error || "خطا در انجام تراکنش"
-      throw new Error(errorMessage)
-    }
-    
-    // فرمت قدیمی { error }
-    const errorMessage = errorData.error || errorData.message || `خطا در انجام تراکنش (کد: ${response.status})`
-    throw new Error(errorMessage)
+  let result: any;
+  try {
+    result = await response.json();
+  } catch (parseError) {
+    console.error(
+      "[adjustWalletForUsersBulk] Failed to parse response:",
+      parseError
+    );
+    throw new Error(`خطا در ارتباط با سرور (کد: ${response.status})`);
   }
 
-  let result: any
-  try {
-    result = await response.json()
-  } catch (parseError) {
-    console.error('[adjustWalletForUsersBulk] Failed to parse success response:', parseError)
-    throw new Error("خطا در خواندن پاسخ سرور")
+  if (!result?.results) {
+    const errorMessage =
+      result?.message ||
+      result?.error ||
+      `خطا در انجام تراکنش (کد: ${response.status})`;
+    throw new Error(errorMessage);
   }
-  
-  console.log('[adjustWalletForUsersBulk] API success response:', result)
-  
-  // بررسی فرمت جدید { ok: true } یا فرمت قدیمی { success: true }
-  if (result.ok === false || (result.success === false)) {
-    const errorMessage = result.message || result.error || "خطا در انجام تراکنش"
-    throw new Error(errorMessage)
+
+  if (!result.ok) {
+    throw new Error(result.message || result.error || "خطا در انجام تراکنش");
   }
-  
-  // اگر ok: true یا success: true باشد، موفق است
-  if (result.ok !== true && result.success !== true) {
-    console.warn('[adjustWalletForUsersBulk] Unexpected response format:', result)
-    // اگر هیچ خطایی نیست، احتمالاً موفق است
-    // اما برای اطمینان، بررسی می‌کنیم
-  }
+
+  return result as BulkMoneyResponse;
 }
 
 /**
@@ -108,7 +103,7 @@ export async function adjustWalletForUsersBulk(req: BulkAdjustRequest): Promise<
  */
 export async function transferWalletForUsersBulk(
   req: BulkTransferRequest
-): Promise<void> {
+): Promise<BulkMoneyResponse> {
   const { userIds, amount, action, currency = "IRR", description } = req;
 
   if (!userIds || userIds.length === 0) {
@@ -131,6 +126,11 @@ export async function transferWalletForUsersBulk(
     throw new Error("نوع تراکنش نامعتبر است");
   }
 
+  const clientRequestIds =
+    req.clientRequestIds && req.clientRequestIds.length === userIds.length
+      ? req.clientRequestIds
+      : newIdempotencyIds(userIds.length);
+
   const {
     data: { session },
     error: sessionError,
@@ -147,6 +147,7 @@ export async function transferWalletForUsersBulk(
     },
     body: JSON.stringify({
       userIds,
+      clientRequestIds,
       amount,
       action,
       currency: "IRR",
@@ -154,45 +155,30 @@ export async function transferWalletForUsersBulk(
     }),
   });
 
-  if (!response.ok) {
-    let errorData: any;
-    try {
-      errorData = await response.json();
-    } catch (parseError) {
-      console.error(
-        "[transferWalletForUsersBulk] Failed to parse error response:",
-        parseError
-      );
-      throw new Error(`خطا در ارتباط با سرور (کد: ${response.status})`);
-    }
-
-    console.error("[transferWalletForUsersBulk] API error response:", errorData);
-    if (errorData.ok === false) {
-      throw new Error(
-        errorData.message || errorData.error || "خطا در انجام انتقال"
-      );
-    }
-    throw new Error(
-      errorData.error ||
-        errorData.message ||
-        `خطا در انجام انتقال (کد: ${response.status})`
-    );
-  }
-
   let result: any;
   try {
     result = await response.json();
   } catch (parseError) {
     console.error(
-      "[transferWalletForUsersBulk] Failed to parse success response:",
+      "[transferWalletForUsersBulk] Failed to parse response:",
       parseError
     );
-    throw new Error("خطا در خواندن پاسخ سرور");
+    throw new Error(`خطا در ارتباط با سرور (کد: ${response.status})`);
   }
 
-  if (result.ok === false || result.success === false) {
+  if (!result?.results) {
+    throw new Error(
+      result?.message ||
+        result?.error ||
+        `خطا در انجام انتقال (کد: ${response.status})`
+    );
+  }
+
+  if (!result.ok) {
     throw new Error(result.message || result.error || "خطا در انجام انتقال");
   }
+
+  return result as BulkMoneyResponse;
 }
 
 // تبدیل UUID به ID ده‌رقمی
