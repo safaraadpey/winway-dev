@@ -1,0 +1,3 @@
+.buyOptionButton {
+  composes: root rootTall from "../../../components/PlayerActionButton.module.css";
+}

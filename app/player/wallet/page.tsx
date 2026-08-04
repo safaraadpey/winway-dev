@@ -3,6 +3,7 @@
 import React, { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
+import styles from "./WalletPage.module.css";
 
 function WalletPageContent() {
   const router = useRouter();
@@ -25,20 +26,17 @@ function WalletPageContent() {
     return (
       <div className="h-full overflow-y-auto p-4">
         <div className="mx-auto max-w-[600px]">
-          <h1 className="mb-5 text-center text-2xl font-bold text-[var(--player-text-primary,#fff)]">
-            خرید
-          </h1>
-          <div className="flex flex-col gap-3">
+          <div className="mt-[30px] flex flex-col gap-3">
             <button
               type="button"
-              className="min-h-[56px] w-full rounded-xl bg-[var(--player-accent,#00d4aa)] px-4 py-4 text-base font-extrabold text-[#0e0e0f] active:scale-[0.98] transition"
+              className={styles.buyOptionButton}
               onClick={() => router.push("/player/wallet/buy-rial")}
             >
               خرید ریالی
             </button>
             <button
               type="button"
-              className="min-h-[56px] w-full rounded-xl border border-[var(--player-border,rgba(64,64,64,0.8))] bg-[var(--player-surface,rgba(26,26,26,0.75))] px-4 py-4 text-base font-extrabold text-[var(--player-text-primary,#fff)] active:scale-[0.98] transition"
+              className={styles.buyOptionButton}
               onClick={() => router.push("/player/wallet/buy-dollar")}
             >
               خرید دلار/تتر

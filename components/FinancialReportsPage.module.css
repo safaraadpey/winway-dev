@@ -107,7 +107,8 @@
 
 .periodTab {
   flex: 1;
-  padding: 0.75rem 1rem;
+  min-height: 35px;
+  padding: 0.45rem 1rem;
   background-color: transparent;
   color: #ffffff;
   border-style: solid;

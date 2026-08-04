@@ -340,12 +340,6 @@ export default function FinancialReportsPage() {
               </button>
             ))}
           </div>
-          <h2 className={styles.sectionTitle}>
-            <span className={styles.sectionTitleIcon} aria-hidden="true">
-              📊
-            </span>
-            آمار مالی
-          </h2>
           <div className={styles.statsList}>
             <div className={styles.statsItem}>
               <span className={styles.statsLabel}>مجموع کارت خریده شده</span>

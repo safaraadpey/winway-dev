@@ -8,6 +8,7 @@ import {
   rialsToTomans,
 } from "@/lib/format/persianAmountWords";
 import { supabase } from "@/lib/supabaseClient";
+import buyCardButtonBg from "@/src/assets/logo/BuyCardBotton.png";
 import styles from "./BuyRialPage.module.css";
 
 function parseAmountDigits(raw: string): string {
@@ -141,6 +142,7 @@ export default function BuyRialPage() {
             className={styles.confirmButton}
             disabled={!canSubmit}
             onClick={() => void handleConfirm()}
+            style={{ backgroundImage: `url(${buyCardButtonBg.src})` }}
           >
             {connecting ? "در حال اتصال…" : "تأیید خرید"}
           </button>
