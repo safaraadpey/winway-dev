@@ -93,26 +93,34 @@ export async function listCryptoRateTiers(
 
 /**
  * Pick the most specific active tier for network + usd amount.
- * Match: minUsd <= amount <= maxUsd; prefer highest minUsd on overlap.
+ * Match: minUsd <= amount <= maxUsd (inclusive); prefer highest minUsd on overlap.
  */
 export function getTierMultiplier(
   tiers: CryptoRateTier[],
   network: CryptoNetwork,
   usdAmount: number
 ): CryptoRateTier {
-  const matches = tiers
-    .filter(
-      (t) =>
-        t.network === network &&
-        t.isActive &&
-        usdAmount >= t.minUsd &&
-        usdAmount <= t.maxUsd
-    )
+  if (!Number.isFinite(usdAmount) || usdAmount < 0) {
+    throw new Error(`no_tier_for_${network}`);
+  }
+
+  const forNetwork = tiers.filter((t) => t.network === network && t.isActive);
+  if (forNetwork.length === 0) {
+    throw new Error(`no_tier_for_${network}`);
+  }
+
+  const matches = forNetwork
+    .filter((t) => usdAmount >= t.minUsd && usdAmount <= t.maxUsd)
     .sort((a, b) => b.minUsd - a.minUsd);
 
   const tier = matches[0];
   if (!tier) {
-    throw new Error(`no_tier_for_${network}`);
+    // Keep no_tier_for_* prefix (API maps it); include range hint for ops logs.
+    const minBound = Math.min(...forNetwork.map((t) => t.minUsd));
+    const maxBound = Math.max(...forNetwork.map((t) => t.maxUsd));
+    throw new Error(
+      `no_tier_for_${network}:usd_out_of_range:${usdAmount}:allowed:${minBound}-${maxBound}`
+    );
   }
   return tier;
 }

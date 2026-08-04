@@ -2,7 +2,10 @@
  * Process observed on-chain transfers → PENDING → CONFIRMED + wallet credit.
  */
 import type { Pool } from "pg";
-import { quoteDepositToman } from "./cryptoPriceLock";
+import {
+  isSupportedDepositCurrency,
+  quoteDepositToman,
+} from "./cryptoPriceLock";
 import { creditCryptoDepositWallet } from "./cryptoCredit";
 import { notifyCryptoDepositConfirmed } from "./cryptoNotify";
 import { getCryptoConfirmationRules } from "./cryptoXpubSettings";
@@ -87,6 +90,21 @@ export async function processObservedDeposit(
       txHash,
       action: "skipped_duplicate",
       cryptoTxId: String(existing.id),
+    };
+  }
+
+  // Defense in depth: never quote/credit unsupported assets (e.g. TRC-10).
+  // Existing PENDING/CONFIRMED rows above are unchanged (idempotent path).
+  if (!isSupportedDepositCurrency(obs.currency)) {
+    console.log("[Payment] skip unsupported crypto deposit currency", {
+      txHash,
+      currency: obs.currency,
+      cryptoAmount: obs.cryptoAmount,
+    });
+    return {
+      txHash,
+      action: "failed",
+      error: `unsupported_currency:${obs.currency}`,
     };
   }
 

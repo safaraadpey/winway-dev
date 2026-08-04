@@ -1,5 +1,9 @@
 /**
- * TronGrid API scanner for TRX / TRC-10 / TRC-20 USDT.
+ * TronGrid API scanner for TRX / TRC-20 USDT.
+ *
+ * Native TRX (TransferContract) is supported.
+ * TRC-10 (TransferAssetContract) is intentionally ignored — raw units must not
+ * be priced as TRX (that produced no_tier_for_TRX on large asset amounts).
  */
 import { withExponentialBackoff } from "../cryptoRetry";
 import type { ObservedChainTx } from "./etherscan";
@@ -29,14 +33,60 @@ async function trongridGet(path: string): Promise<any> {
   );
 }
 
-function sunToTrx(sun: string | number): number {
+/** Convert sun (1e-6 TRX) → TRX. Returns 0 for non-positive / non-finite. */
+export function sunToTrx(sun: string | number): number {
   const n = Number(sun);
   if (!Number.isFinite(n) || n <= 0) return 0;
   return n / 1_000_000;
 }
 
 /**
- * TRX + TRC-10 incoming transfers.
+ * Parse one TronGrid account transaction into a deposit observation.
+ * Returns null for unsupported contract types (e.g. TRC-10 assets).
+ */
+export function observeTronNativeTransfer(
+  tx: any,
+  address: string
+): ObservedChainTx | null {
+  const ret = tx?.ret?.[0]?.contractRet;
+  const confirmed = Boolean(tx?.confirmed ?? true) && ret === "SUCCESS";
+  if (!confirmed && ret && ret !== "SUCCESS") return null;
+
+  const contract = tx?.raw_data?.contract?.[0];
+  const type = contract?.type;
+  const value = contract?.parameter?.value;
+
+  if (type === "TransferAssetContract") {
+    // Unsupported TRC-10 — do not observe (avoids raw-unit × TRX price blowups).
+    return null;
+  }
+
+  if (type !== "TransferContract") return null;
+
+  const amount = sunToTrx(value?.amount ?? 0);
+  if (amount <= 0) return null;
+
+  const txHash = String(tx.txID || tx.transaction_id || "");
+  if (!txHash) return null;
+
+  return {
+    network: "TRC20",
+    currency: "TRX",
+    txHash,
+    fromAddress: String(value?.owner_address || ""),
+    toAddress: address,
+    cryptoAmount: amount,
+    confirmations: confirmed ? 1 : 0,
+    confirmed,
+    blockTimestamp: tx.block_timestamp
+      ? Math.floor(Number(tx.block_timestamp) / 1000)
+      : undefined,
+    raw: tx,
+  };
+}
+
+/**
+ * TRX native incoming transfers only (TransferContract).
  */
 export async function scanTronNativeAndTrc10(
   address: string
@@ -46,57 +96,26 @@ export async function scanTronNativeAndTrc10(
   );
   const rows = Array.isArray(body?.data) ? body.data : [];
   const out: ObservedChainTx[] = [];
+  let skippedTrc10 = 0;
 
   for (const tx of rows) {
-    const ret = tx?.ret?.[0]?.contractRet;
-    const confirmed = Boolean(tx?.confirmed ?? true) && ret === "SUCCESS";
-    if (!confirmed && ret && ret !== "SUCCESS") continue;
-
-    const contract = tx?.raw_data?.contract?.[0];
-    const type = contract?.type;
-    const value = contract?.parameter?.value;
-
-    if (type === "TransferContract") {
-      const toHex = value?.to_address;
-      const amount = sunToTrx(value?.amount ?? 0);
-      if (amount <= 0) continue;
-      out.push({
-        network: "TRC20",
-        currency: "TRX",
-        txHash: String(tx.txID || tx.transaction_id || ""),
-        fromAddress: String(value?.owner_address || ""),
-        toAddress: address,
-        cryptoAmount: amount,
-        confirmations: confirmed ? 1 : 0,
-        confirmed,
-        blockTimestamp: tx.block_timestamp
-          ? Math.floor(Number(tx.block_timestamp) / 1000)
-          : undefined,
-        raw: tx,
-      });
-      void toHex;
-    } else if (type === "TransferAssetContract") {
-      const amount = Number(value?.amount ?? 0);
-      if (!Number.isFinite(amount) || amount <= 0) continue;
-      // TRC-10 amounts vary by asset decimals; store raw units as TRC10
-      out.push({
-        network: "TRC20",
-        currency: "TRC10",
-        txHash: String(tx.txID || tx.transaction_id || ""),
-        fromAddress: String(value?.owner_address || ""),
-        toAddress: address,
-        cryptoAmount: amount,
-        confirmations: confirmed ? 1 : 0,
-        confirmed,
-        blockTimestamp: tx.block_timestamp
-          ? Math.floor(Number(tx.block_timestamp) / 1000)
-          : undefined,
-        raw: tx,
-      });
+    const contractType = tx?.raw_data?.contract?.[0]?.type;
+    if (contractType === "TransferAssetContract") {
+      skippedTrc10 += 1;
+      continue;
     }
+    const obs = observeTronNativeTransfer(tx, address);
+    if (obs) out.push(obs);
   }
 
-  return out.filter((t) => t.txHash);
+  if (skippedTrc10 > 0) {
+    console.log("[Payment] skipped unsupported TRC-10 transfers", {
+      address,
+      skippedTrc10,
+    });
+  }
+
+  return out;
 }
 
 /**

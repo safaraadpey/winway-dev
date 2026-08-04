@@ -124,25 +124,46 @@ export async function getPriceLock(
 
 export type CryptoCurrency = "USDT" | "BNB" | "TRX" | "TRC10";
 
+/** Currencies we will quote and credit. TRC-10 tokens are observed but unsupported. */
+export const SUPPORTED_DEPOSIT_CURRENCIES = ["USDT", "BNB", "TRX"] as const;
+
+export type SupportedDepositCurrency =
+  (typeof SUPPORTED_DEPOSIT_CURRENCIES)[number];
+
+export function isSupportedDepositCurrency(
+  currency: string
+): currency is SupportedDepositCurrency {
+  return (SUPPORTED_DEPOSIT_CURRENCIES as readonly string[]).includes(currency);
+}
+
 export function cryptoAmountToUsd(
   currency: CryptoCurrency,
   amount: number,
   rates: LockedRates
 ): number {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("invalid_crypto_amount");
+  }
   if (currency === "USDT") return amount;
   if (currency === "BNB") return amount * rates.bnbUsdPrice;
-  if (currency === "TRX" || currency === "TRC10") {
-    return amount * rates.trxUsdPrice;
-  }
+  if (currency === "TRX") return amount * rates.trxUsdPrice;
+  // TRC-10 raw units must never be priced as native TRX (was causing no_tier_for_TRX).
   throw new Error(`unsupported_currency:${currency}`);
 }
 
-function networkForCurrency(
+/**
+ * Map observed chain network + currency → pricing tier network.
+ * Native TRX uses the TRX tier; TRC-20 USDT uses TRC20; BEP20 uses BEP20.
+ */
+export function tierNetworkForDeposit(
   network: "BEP20" | "TRC20",
   currency: CryptoCurrency
 ): CryptoNetwork {
+  if (!isSupportedDepositCurrency(currency)) {
+    throw new Error(`unsupported_currency:${currency}`);
+  }
   if (network === "BEP20") return "BEP20";
-  if (currency === "TRX" || currency === "TRC10") return "TRX";
+  if (currency === "TRX") return "TRX";
   return "TRC20";
 }
 
@@ -188,7 +209,7 @@ export async function quoteDepositToman(opts: {
     : await listCryptoRateTiers(opts.db, { activeOnly: true });
 
   const usdAmount = cryptoAmountToUsd(opts.currency, opts.cryptoAmount, rates);
-  const tierNetwork = networkForCurrency(opts.network, opts.currency);
+  const tierNetwork = tierNetworkForDeposit(opts.network, opts.currency);
   const tier = getTierMultiplier(tiers, tierNetwork, usdAmount);
 
   const baseToman = usdAmount * rates.usdtTomanPrice;
