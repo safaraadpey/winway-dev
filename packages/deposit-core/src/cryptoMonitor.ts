@@ -1,5 +1,5 @@
 /**
- * Orchestrates chain scans for one or many users.
+ * Orchestrates chain scans for Hot / Warm / Cold / Confirmation watches.
  */
 import type { Pool } from "pg";
 import { scanBep20Address } from "./cryptoScanners/etherscan";
@@ -8,7 +8,15 @@ import {
   processObservedDeposit,
   type ProcessResult,
 } from "./cryptoDepositProcessor";
-import { listActiveCryptoTargets } from "./cryptoActiveScan";
+import {
+  clearConfirmIfNoPending,
+  listColdScanTargets,
+  listConfirmWatchTargets,
+  listHotWatchTargets,
+  listWarmWatchTargets,
+  syncConfirmWatchFromPending,
+  type CryptoWatchTarget,
+} from "./cryptoWatch";
 
 export type ScanUserResult = {
   userId: string;
@@ -17,7 +25,30 @@ export type ScanUserResult = {
   observed: number;
   results: ProcessResult[];
   errors: string[];
+  tier?: string;
 };
+
+const DEFAULT_CONCURRENCY = 4;
+
+async function mapPool<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const workers = Array.from(
+    { length: Math.min(concurrency, Math.max(1, items.length)) },
+    async () => {
+      while (next < items.length) {
+        const i = next++;
+        out[i] = await fn(items[i]!);
+      }
+    }
+  );
+  await Promise.all(workers);
+  return out;
+}
 
 export async function scanUserAddresses(
   pool: Pool,
@@ -59,6 +90,7 @@ export async function scanUserAddresses(
       const message = err instanceof Error ? err.message : "process_failed";
       results.push({
         txHash: obs.txHash,
+        eventIndex: obs.eventIndex ?? 0,
         action: "failed",
         error: message,
       });
@@ -75,38 +107,121 @@ export async function scanUserAddresses(
   };
 }
 
-/** Layer 2 — active Redis set, every ~2 minutes */
-export async function runActiveCryptoScan(pool: Pool): Promise<{
-  targets: number;
-  scans: ScanUserResult[];
-}> {
-  const targets = await listActiveCryptoTargets();
-  console.log("[Payment] active crypto scan start", { count: targets.length });
-
-  const scans: ScanUserResult[] = [];
-  for (const t of targets) {
-    scans.push(
-      await scanUserAddresses(pool, {
-        userId: t.userId,
-        bep20Address: t.bep20Address,
-        trc20Address: t.trc20Address,
-        preferPriceLock: true,
-      })
-    );
+async function scanTargets(
+  pool: Pool,
+  targets: CryptoWatchTarget[],
+  opts: {
+    preferPriceLock: boolean;
+    label: string;
+    concurrency?: number;
   }
+): Promise<{ targets: number; scans: ScanUserResult[] }> {
+  const concurrency = opts.concurrency ?? DEFAULT_CONCURRENCY;
+  console.log(`[Payment] ${opts.label} scan start`, {
+    count: targets.length,
+    concurrency,
+  });
 
-  console.log("[Payment] active crypto scan done", {
+  const scans = await mapPool(targets, concurrency, async (t) => {
+    const scan = await scanUserAddresses(pool, {
+      userId: t.userId,
+      bep20Address: t.bep20Address,
+      trc20Address: t.trc20Address,
+      preferPriceLock: opts.preferPriceLock,
+    });
+    return { ...scan, tier: t.tier };
+  });
+
+  const confirmed = scans.reduce(
+    (n, s) => n + s.results.filter((r) => r.action === "confirmed").length,
+    0
+  );
+  console.log(`[Payment] ${opts.label} scan done`, {
     targets: targets.length,
-    confirmed: scans.reduce(
-      (n, s) => n + s.results.filter((r) => r.action === "confirmed").length,
-      0
-    ),
+    confirmed,
   });
 
   return { targets: targets.length, scans };
 }
 
-/** Layer 3 — all DB addresses, every ~6 hours (live rates, no price lock) */
+/** Confirmation Watch — pending txs until CONFIRMED/FAILED (every ~15s). */
+export async function runConfirmCryptoScan(pool: Pool): Promise<{
+  targets: number;
+  scans: ScanUserResult[];
+}> {
+  await syncConfirmWatchFromPending(pool);
+  const targets = await listConfirmWatchTargets();
+  const summary = await scanTargets(pool, targets, {
+    preferPriceLock: true,
+    label: "confirm",
+  });
+
+  for (const t of targets) {
+    await clearConfirmIfNoPending(pool, t.userId);
+  }
+
+  return summary;
+}
+
+/** Hot Watch — deposit-page activity (every ~15s). */
+export async function runHotCryptoScan(pool: Pool): Promise<{
+  targets: number;
+  scans: ScanUserResult[];
+}> {
+  const confirm = await listConfirmWatchTargets();
+  const exclude = new Set(confirm.map((t) => t.userId));
+  const targets = await listHotWatchTargets({ excludeUserIds: exclude });
+  return scanTargets(pool, targets, {
+    preferPriceLock: true,
+    label: "hot",
+  });
+}
+
+/** Warm Watch — online, not Hot/Confirm (every ~30s). */
+export async function runWarmCryptoScan(pool: Pool): Promise<{
+  targets: number;
+  scans: ScanUserResult[];
+}> {
+  const confirm = await listConfirmWatchTargets();
+  const hot = await listHotWatchTargets({
+    excludeUserIds: new Set(confirm.map((t) => t.userId)),
+  });
+  const exclude = new Set([
+    ...confirm.map((t) => t.userId),
+    ...hot.map((t) => t.userId),
+  ]);
+  const targets = await listWarmWatchTargets(pool, { excludeUserIds: exclude });
+  return scanTargets(pool, targets, {
+    preferPriceLock: true,
+    label: "warm",
+  });
+}
+
+/**
+ * Combined 15s tick: Confirmation first, then Hot (exclusive).
+ */
+export async function runHotAndConfirmCryptoScan(pool: Pool): Promise<{
+  confirm: { targets: number; scans: ScanUserResult[] };
+  hot: { targets: number; scans: ScanUserResult[] };
+}> {
+  const confirm = await runConfirmCryptoScan(pool);
+  const hot = await runHotCryptoScan(pool);
+  return { confirm, hot };
+}
+
+/** @deprecated use runHotCryptoScan / runHotAndConfirmCryptoScan */
+export async function runActiveCryptoScan(pool: Pool): Promise<{
+  targets: number;
+  scans: ScanUserResult[];
+}> {
+  const both = await runHotAndConfirmCryptoScan(pool);
+  return {
+    targets: both.confirm.targets + both.hot.targets,
+    scans: [...both.confirm.scans, ...both.hot.scans],
+  };
+}
+
+/** Cold Scan — allocated addresses not Confirm/Hot/Warm (every ~6h). */
 export async function runFullOfflineCryptoScan(
   pool: Pool,
   opts?: { limit?: number; offset?: number }
@@ -117,37 +232,37 @@ export async function runFullOfflineCryptoScan(
   const limit = opts?.limit ?? 200;
   const offset = opts?.offset ?? 0;
 
-  const { rows } = await pool.query(
-    `
-    SELECT user_id, bep20_address, trc20_address
-    FROM deposit.user_crypto_addresses
-    ORDER BY created_at ASC
-    LIMIT $1 OFFSET $2
-    `,
-    [limit, offset]
-  );
+  const confirm = await listConfirmWatchTargets();
+  const hot = await listHotWatchTargets({
+    excludeUserIds: new Set(confirm.map((t) => t.userId)),
+  });
+  const warm = await listWarmWatchTargets(pool, {
+    excludeUserIds: new Set([
+      ...confirm.map((t) => t.userId),
+      ...hot.map((t) => t.userId),
+    ]),
+  });
+  const exclude = new Set([
+    ...confirm.map((t) => t.userId),
+    ...hot.map((t) => t.userId),
+    ...warm.map((t) => t.userId),
+  ]);
 
-  console.log("[Payment] full offline crypto scan start", {
-    count: rows.length,
+  const targets = await listColdScanTargets(pool, {
     limit,
     offset,
+    excludeUserIds: exclude,
   });
 
-  const scans: ScanUserResult[] = [];
-  for (const r of rows) {
-    scans.push(
-      await scanUserAddresses(pool, {
-        userId: String(r.user_id),
-        bep20Address: String(r.bep20_address),
-        trc20Address: String(r.trc20_address),
-        preferPriceLock: false,
-      })
-    );
-  }
-
-  console.log("[Payment] full offline crypto scan done", {
-    targets: rows.length,
+  console.log("[Payment] full offline crypto scan start", {
+    count: targets.length,
+    limit,
+    offset,
+    excluded: exclude.size,
   });
 
-  return { targets: rows.length, scans };
+  return scanTargets(pool, targets, {
+    preferPriceLock: false,
+    label: "cold",
+  });
 }

@@ -24,9 +24,9 @@ async function authorize(request: Request): Promise<boolean> {
 /**
  * POST /api/cron/crypto-scan-active
  *
- * Optional manual/admin endpoint for Layer 2 active-address scan.
+ * Optional manual/admin endpoint for Hot + Confirmation scan.
  * Production auto-scan runs on Railway: apps/workers/crypto-deposit
- * (runActiveCryptoScan on CRYPTO_ACTIVE_SCAN_INTERVAL_MS).
+ * (runHotAndConfirmCryptoScan ~15s).
  *
  * Auth: Bearer CRON_SECRET or admin JWT.
  */

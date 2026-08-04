@@ -1,7 +1,11 @@
 /**
  * Etherscan API V2 scanner for BNB Smart Chain (chainid=56).
+ *
+ * Token transfers use official `logIndex` as event identity.
+ * Native BNB transfers have no log → eventIndex = 0.
  */
 import { withExponentialBackoff } from "../cryptoRetry";
+import { normalizeEventIndex } from "../cryptoDepositIdentity";
 import type { CryptoCurrency } from "../cryptoPriceLock";
 
 /** Official Binance-Peg USDT on BSC */
@@ -12,6 +16,8 @@ export type ObservedChainTx = {
   network: "BEP20" | "TRC20";
   currency: CryptoCurrency;
   txHash: string;
+  /** On-chain event identity within the transaction (TRON event_index / BEP20 logIndex). Native = 0. */
+  eventIndex: number;
   fromAddress: string;
   toAddress: string;
   cryptoAmount: number;
@@ -61,6 +67,7 @@ function toAmount(value: string, decimals: number): number {
 
 /**
  * Native BNB incoming transfers to address.
+ * No Transfer log → eventIndex = 0 (one value transfer per native tx).
  */
 export async function scanBscNativeTransfers(
   address: string
@@ -89,11 +96,11 @@ export async function scanBscNativeTransfers(
       network: "BEP20",
       currency: "BNB",
       txHash: String(tx.hash),
+      eventIndex: 0,
       fromAddress: String(tx.from || ""),
       toAddress: String(tx.to || ""),
       cryptoAmount: amount,
       confirmations: Number.isFinite(confirmations) ? confirmations : null,
-      // Final threshold applied in processor from admin settings
       confirmed: false,
       blockTimestamp: Number(tx.timeStamp) || undefined,
       raw: tx,
@@ -105,6 +112,7 @@ export async function scanBscNativeTransfers(
 
 /**
  * BEP-20 token transfers (USDT filtered by contract).
+ * Event identity: Etherscan `logIndex` (log position in the transaction/block log stream).
  */
 export async function scanBscTokenTransfers(
   address: string
@@ -131,16 +139,24 @@ export async function scanBscTokenTransfers(
     const amount = toAmount(String(tx.value ?? "0"), decimals);
     if (amount <= 0) continue;
 
+    const logIndexRaw = tx.logIndex ?? tx.logindex;
+    if (logIndexRaw == null || logIndexRaw === "") {
+      console.error("[Payment] BEP20 USDT transfer missing logIndex — skip", {
+        txHash: tx.hash,
+      });
+      continue;
+    }
+
     const confirmations = Number(tx.confirmations ?? 0);
     out.push({
       network: "BEP20",
       currency: "USDT",
       txHash: String(tx.hash),
+      eventIndex: normalizeEventIndex(logIndexRaw),
       fromAddress: String(tx.from || ""),
       toAddress: String(tx.to || ""),
       cryptoAmount: amount,
       confirmations: Number.isFinite(confirmations) ? confirmations : null,
-      // Final threshold applied in processor from admin settings
       confirmed: false,
       blockTimestamp: Number(tx.timeStamp) || undefined,
       raw: tx,

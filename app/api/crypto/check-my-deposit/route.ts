@@ -7,6 +7,7 @@ import {
 import {
   tryAcquireCheckCooldown,
   scanUserAddresses,
+  registerActiveCryptoAddresses,
   CRYPTO_TTL,
 } from "@dingmoney/deposit-core";
 
@@ -54,8 +55,13 @@ export async function POST(request: Request) {
   }
 
   try {
-    console.log("[Payment] check-my-deposit start", { userId: user.id });
     const addresses = await getOrGenerateUserAddresses(pgPool, user.id);
+    // Hot Watch: every check extends/starts 1h sliding window (or Confirm if PENDING).
+    await registerActiveCryptoAddresses({
+      userId: user.id,
+      bep20Address: addresses.bep20Address,
+      trc20Address: addresses.trc20Address,
+    });
     const scan = await scanUserAddresses(pgPool, {
       userId: user.id,
       bep20Address: addresses.bep20Address,

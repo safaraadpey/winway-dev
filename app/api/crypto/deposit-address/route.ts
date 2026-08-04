@@ -14,7 +14,7 @@ export const maxDuration = 30;
 
 /**
  * GET /api/crypto/deposit-address
- * Allocates HD addresses, registers 30m active scan, locks price 20m.
+ * Allocates HD addresses, touches Hot Watch (1h), locks price 20m.
  */
 export async function GET(request: Request) {
   const user = await getUserFromRequest(request);

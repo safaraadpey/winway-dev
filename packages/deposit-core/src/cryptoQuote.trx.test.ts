@@ -215,6 +215,7 @@ describe("failing Railway TRC-10 cases (regression)", () => {
     );
     assert.ok(obs);
     assert.equal(obs!.currency, "TRX");
+    assert.equal(obs!.eventIndex, 0);
     assert.equal(obs!.cryptoAmount, 31);
     const usd = cryptoAmountToUsd("TRX", obs!.cryptoAmount, RATES);
     assert.equal(getTierMultiplier(TIERS, "TRX", usd).id, "trx-0-1000");

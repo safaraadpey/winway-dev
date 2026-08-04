@@ -4,19 +4,36 @@
  */
 import { Redis } from "@upstash/redis";
 
+/** Legacy alias — Hot Watch set (same key for backward compatibility). */
 const ACTIVE_SET = "active_crypto_addresses";
+const HOT_SET = ACTIVE_SET;
+const WARM_SET = "crypto_watch:warm";
+const CONFIRM_SET = "crypto_watch:confirm";
 const PRICE_LOCK_PREFIX = "price_lock:";
 const CHECK_COOLDOWN_PREFIX = "crypto_check_cd:";
 
 export const CRYPTO_REDIS_KEYS = {
+  /** @deprecated use HOT_SET */
   ACTIVE_SET,
+  HOT_SET,
+  WARM_SET,
+  CONFIRM_SET,
   priceLock: (userId: string) => `${PRICE_LOCK_PREFIX}${userId}`,
   checkCooldown: (userId: string) => `${CHECK_COOLDOWN_PREFIX}${userId}`,
+  /** @deprecated use hotMeta */
   activeMeta: (userId: string) => `active_crypto_meta:${userId}`,
+  hotMeta: (userId: string) => `active_crypto_meta:${userId}`,
+  warmMeta: (userId: string) => `crypto_watch:warm_meta:${userId}`,
+  confirmMeta: (userId: string) => `crypto_watch:confirm_meta:${userId}`,
 } as const;
 
 export const CRYPTO_TTL = {
-  ACTIVE_ADDRESS_SEC: 1800,
+  /** Hot Watch: 1 hour sliding from last deposit activity */
+  HOT_WATCH_SEC: 3600,
+  /** @deprecated alias of HOT_WATCH_SEC */
+  ACTIVE_ADDRESS_SEC: 3600,
+  /** Safety TTL refreshed while PENDING remains */
+  CONFIRM_WATCH_SEC: 86_400,
   PRICE_LOCK_SEC: 1200,
   CHECK_COOLDOWN_SEC: 60,
 } as const;

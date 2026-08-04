@@ -8,6 +8,10 @@
 export {
   scanUserAddresses,
   runActiveCryptoScan,
+  runHotCryptoScan,
+  runWarmCryptoScan,
+  runConfirmCryptoScan,
+  runHotAndConfirmCryptoScan,
   runFullOfflineCryptoScan,
   type ScanUserResult,
 } from "./cryptoMonitor";
@@ -26,8 +30,22 @@ export {
   registerActiveCryptoAddresses,
   listActiveCryptoTargets,
   tryAcquireCheckCooldown,
+  touchHotWatch,
+  listHotWatchTargets,
   type ActiveCryptoTarget,
 } from "./cryptoActiveScan";
+
+export {
+  registerConfirmWatch,
+  unregisterConfirmWatch,
+  syncConfirmWatchFromPending,
+  listConfirmWatchTargets,
+  listWarmWatchTargets,
+  listColdScanTargets,
+  promoteUserToConfirmWatch,
+  clearConfirmIfNoPending,
+  type CryptoWatchTarget,
+} from "./cryptoWatch";
 
 export {
   getCryptoRedis,
@@ -92,6 +110,11 @@ export {
 export { withExponentialBackoff } from "./cryptoRetry";
 
 export {
+  cryptoDepositIdempotencyKey,
+  normalizeEventIndex,
+} from "./cryptoDepositIdentity";
+
+export {
   scanBep20Address,
   scanBscNativeTransfers,
   scanBscTokenTransfers,
@@ -105,5 +128,8 @@ export {
   scanTronTrc20,
   observeTronNativeTransfer,
   sunToTrx,
+  fetchTronTxEvents,
+  tronBase58ToHexAddress,
+  normalizeTronEventAddress,
   TRON_USDT_CONTRACT,
 } from "./cryptoScanners/trongrid";

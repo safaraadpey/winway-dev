@@ -1,5 +1,6 @@
 /**
  * Process observed on-chain transfers → PENDING → CONFIRMED + wallet credit.
+ * Deposit identity: (network, tx_hash, event_index).
  */
 import type { Pool } from "pg";
 import {
@@ -9,25 +10,37 @@ import {
 import { creditCryptoDepositWallet } from "./cryptoCredit";
 import { notifyCryptoDepositConfirmed } from "./cryptoNotify";
 import { getCryptoConfirmationRules } from "./cryptoXpubSettings";
+import { normalizeEventIndex } from "./cryptoDepositIdentity";
+import {
+  clearConfirmIfNoPending,
+  promoteUserToConfirmWatch,
+  syncConfirmWatchFromPending,
+} from "./cryptoWatch";
 import type { ObservedChainTx } from "./cryptoScanners/etherscan";
 
 export type ProcessResult = {
   txHash: string;
+  eventIndex: number;
   action: "skipped_duplicate" | "inserted_pending" | "confirmed" | "failed";
   cryptoTxId?: string;
   tomanAmount?: number;
   error?: string;
 };
 
-async function findByTxHash(pool: Pool, txHash: string) {
+async function findByDepositEvent(
+  pool: Pool,
+  opts: { network: string; txHash: string; eventIndex: number }
+) {
   const { rows } = await pool.query(
     `
-    SELECT id, status, user_id, toman_amount, network, currency, tx_hash
+    SELECT id, status, user_id, toman_amount, network, currency, tx_hash, event_index
     FROM deposit.crypto_transactions
-    WHERE tx_hash = $1
+    WHERE network = $1::deposit.crypto_tx_network
+      AND tx_hash = $2
+      AND event_index = $3
     LIMIT 1
     `,
-    [txHash]
+    [opts.network, opts.txHash, opts.eventIndex]
   );
   return rows[0] as Record<string, unknown> | undefined;
 }
@@ -39,7 +52,6 @@ function isConfirmed(
   if (obs.network === "BEP20") {
     return (obs.confirmations ?? 0) >= rules.bep20Confirmations;
   }
-  // Tron: TronGrid "confirmed" counts as 1 confirmation; honor admin threshold.
   const conf =
     obs.confirmations != null
       ? obs.confirmations
@@ -54,23 +66,33 @@ export async function processObservedDeposit(
   opts: {
     userId: string;
     observed: ObservedChainTx;
-    /** Use price lock when true (online check / active cron). Offline full scan should pass false. */
     preferPriceLock: boolean;
   }
 ): Promise<ProcessResult> {
   const { observed: obs, userId, preferPriceLock } = opts;
   const txHash = obs.txHash.trim();
+  const eventIndex = normalizeEventIndex(obs.eventIndex, 0);
   if (!txHash) {
-    return { txHash: "", action: "failed", error: "missing_tx_hash" };
+    return {
+      txHash: "",
+      eventIndex,
+      action: "failed",
+      error: "missing_tx_hash",
+    };
   }
 
   const rules = await getCryptoConfirmationRules(pool);
 
-  const existing = await findByTxHash(pool, txHash);
+  const existing = await findByDepositEvent(pool, {
+    network: obs.network,
+    txHash,
+    eventIndex,
+  });
   if (existing) {
     if (String(existing.status) === "CONFIRMED") {
       return {
         txHash,
+        eventIndex,
         action: "skipped_duplicate",
         cryptoTxId: String(existing.id),
       };
@@ -83,26 +105,28 @@ export async function processObservedDeposit(
         network: String(existing.network),
         currency: String(existing.currency),
         txHash,
+        eventIndex: normalizeEventIndex(existing.event_index, eventIndex),
         confirmations: obs.confirmations,
       });
     }
     return {
       txHash,
+      eventIndex,
       action: "skipped_duplicate",
       cryptoTxId: String(existing.id),
     };
   }
 
-  // Defense in depth: never quote/credit unsupported assets (e.g. TRC-10).
-  // Existing PENDING/CONFIRMED rows above are unchanged (idempotent path).
   if (!isSupportedDepositCurrency(obs.currency)) {
     console.log("[Payment] skip unsupported crypto deposit currency", {
       txHash,
+      eventIndex,
       currency: obs.currency,
       cryptoAmount: obs.cryptoAmount,
     });
     return {
       txHash,
+      eventIndex,
       action: "failed",
       error: `unsupported_currency:${obs.currency}`,
     };
@@ -120,8 +144,12 @@ export async function processObservedDeposit(
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "quote_failed";
-    console.error("[Payment] quote deposit toman failed", { txHash, message });
-    return { txHash, action: "failed", error: message };
+    console.error("[Payment] quote deposit toman failed", {
+      txHash,
+      eventIndex,
+      message,
+    });
+    return { txHash, eventIndex, action: "failed", error: message };
   }
 
   const client = await pool.connect();
@@ -132,15 +160,15 @@ export async function processObservedDeposit(
     const insert = await client.query(
       `
       INSERT INTO deposit.crypto_transactions (
-        user_id, network, currency, tx_hash, from_address, to_address,
+        user_id, network, currency, tx_hash, event_index, from_address, to_address,
         crypto_amount, toman_amount, status, confirmations,
         price_source, price_lock_used, meta, observed_at
       ) VALUES (
-        $1, $2::deposit.crypto_tx_network, $3, $4, $5, $6,
-        $7, $8, 'PENDING', $9,
-        $10, $11, $12::jsonb, now()
+        $1, $2::deposit.crypto_tx_network, $3, $4, $5, $6, $7,
+        $8, $9, 'PENDING', $10,
+        $11, $12, $13::jsonb, now()
       )
-      ON CONFLICT (tx_hash) DO NOTHING
+      ON CONFLICT (network, tx_hash, event_index) DO NOTHING
       RETURNING id
       `,
       [
@@ -148,6 +176,7 @@ export async function processObservedDeposit(
         obs.network,
         obs.currency,
         txHash,
+        eventIndex,
         obs.fromAddress || null,
         obs.toAddress,
         obs.cryptoAmount,
@@ -160,13 +189,14 @@ export async function processObservedDeposit(
           multiplier: quote.multiplier,
           bonusPercent: quote.bonusPercent,
           rates: quote.rates,
+          eventIndex,
         }),
       ]
     );
 
     if (!insert.rows[0]) {
       await client.query("ROLLBACK");
-      return { txHash, action: "skipped_duplicate" };
+      return { txHash, eventIndex, action: "skipped_duplicate" };
     }
 
     cryptoTxId = String(insert.rows[0].id);
@@ -174,6 +204,7 @@ export async function processObservedDeposit(
     console.log("[Payment] crypto tx PENDING inserted", {
       cryptoTxId,
       txHash,
+      eventIndex,
       tomanAmount: quote.tomanAmount,
       priceSource: quote.priceSource,
     });
@@ -184,9 +215,19 @@ export async function processObservedDeposit(
     client.release();
   }
 
+  void promoteUserToConfirmWatch(pool, userId).catch((err) => {
+    console.error("[Payment] confirm watch promote failed", {
+      userId,
+      txHash,
+      eventIndex,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
+
   if (!isConfirmed(obs, rules)) {
     return {
       txHash,
+      eventIndex,
       action: "inserted_pending",
       cryptoTxId,
       tomanAmount: quote.tomanAmount,
@@ -200,6 +241,7 @@ export async function processObservedDeposit(
     network: obs.network,
     currency: obs.currency,
     txHash,
+    eventIndex,
     confirmations: obs.confirmations,
   });
 }
@@ -213,6 +255,7 @@ async function confirmPendingTx(
     network: string;
     currency: string;
     txHash: string;
+    eventIndex: number;
     confirmations: number | null;
   }
 ): Promise<ProcessResult> {
@@ -222,7 +265,7 @@ async function confirmPendingTx(
 
     const locked = await client.query(
       `
-      SELECT id, status, toman_amount, wallet_tx_id
+      SELECT id, status, toman_amount, wallet_tx_id, event_index, network, tx_hash
       FROM deposit.crypto_transactions
       WHERE id = $1
       FOR UPDATE
@@ -232,12 +275,18 @@ async function confirmPendingTx(
     const row = locked.rows[0];
     if (!row) {
       await client.query("ROLLBACK");
-      return { txHash: opts.txHash, action: "failed", error: "not_found" };
+      return {
+        txHash: opts.txHash,
+        eventIndex: opts.eventIndex,
+        action: "failed",
+        error: "not_found",
+      };
     }
     if (row.status === "CONFIRMED") {
       await client.query("COMMIT");
       return {
         txHash: opts.txHash,
+        eventIndex: opts.eventIndex,
         action: "skipped_duplicate",
         cryptoTxId: opts.cryptoTxId,
         tomanAmount: Number(row.toman_amount),
@@ -247,16 +296,19 @@ async function confirmPendingTx(
       await client.query("ROLLBACK");
       return {
         txHash: opts.txHash,
+        eventIndex: opts.eventIndex,
         action: "failed",
         error: `bad_status:${row.status}`,
       };
     }
 
     const tomanAmount = Number(row.toman_amount);
+    const eventIndex = normalizeEventIndex(row.event_index, opts.eventIndex);
     const walletTxId = await creditCryptoDepositWallet(client, {
       userId: opts.userId,
       tomanAmount,
       txHash: opts.txHash,
+      eventIndex,
       cryptoTxId: opts.cryptoTxId,
       network: opts.network,
       currency: opts.currency,
@@ -280,6 +332,7 @@ async function confirmPendingTx(
     console.log("[Settlement] crypto deposit CONFIRMED", {
       cryptoTxId: opts.cryptoTxId,
       txHash: opts.txHash,
+      eventIndex,
       tomanAmount,
       walletTxId,
     });
@@ -293,8 +346,11 @@ async function confirmPendingTx(
       txHash: opts.txHash,
     });
 
+    void clearConfirmIfNoPending(pool, opts.userId).catch(() => undefined);
+
     return {
       txHash: opts.txHash,
+      eventIndex,
       action: "confirmed",
       cryptoTxId: opts.cryptoTxId,
       tomanAmount,
@@ -309,14 +365,5 @@ async function confirmPendingTx(
 }
 
 export async function recheckPendingConfirmations(pool: Pool): Promise<number> {
-  // Lightweight: pending rows older than a few minutes can be promoted when
-  // scanners report confirmed later via processObservedDeposit duplicate path.
-  const { rowCount } = await pool.query(
-    `
-    SELECT 1 FROM deposit.crypto_transactions
-    WHERE status = 'PENDING'
-    LIMIT 1
-    `
-  );
-  return rowCount ?? 0;
+  return syncConfirmWatchFromPending(pool);
 }

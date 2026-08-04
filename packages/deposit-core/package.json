@@ -15,7 +15,7 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "npm run typecheck",
-    "test": "node --import tsx --test src/cryptoQuote.trx.test.ts"
+    "test": "node --import tsx --test src/cryptoQuote.trx.test.ts src/cryptoMultiEvent.test.ts"
   },
   "engines": {
     "node": ">=20"

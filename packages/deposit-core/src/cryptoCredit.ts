@@ -1,8 +1,9 @@
 /**
  * Credit IRR wallet for confirmed crypto deposits via fn_wallet_apply_delta.
- * Idempotent on deposit:crypto:{tx_hash}.
+ * Idempotent on deposit:crypto:{network}:{txHash}:{eventIndex}.
  */
 import type { PoolClient } from "pg";
+import { cryptoDepositIdempotencyKey } from "./cryptoDepositIdentity";
 
 export async function creditCryptoDepositWallet(
   client: PoolClient,
@@ -10,12 +11,17 @@ export async function creditCryptoDepositWallet(
     userId: string;
     tomanAmount: number;
     txHash: string;
+    eventIndex: number;
     cryptoTxId: string;
     network: string;
     currency: string;
   }
 ): Promise<string> {
-  const idempotencyKey = `deposit:crypto:${opts.txHash}`;
+  const idempotencyKey = cryptoDepositIdempotencyKey({
+    network: opts.network,
+    txHash: opts.txHash,
+    eventIndex: opts.eventIndex,
+  });
 
   const { rows } = await client.query(
     `
@@ -41,6 +47,7 @@ export async function creditCryptoDepositWallet(
         network: opts.network,
         currency: opts.currency,
         tx_hash: opts.txHash,
+        event_index: opts.eventIndex,
         crypto_tx_id: opts.cryptoTxId,
       }),
       idempotencyKey,
@@ -52,7 +59,9 @@ export async function creditCryptoDepositWallet(
     userId: opts.userId,
     tomanAmount: opts.tomanAmount,
     txHash: opts.txHash,
+    eventIndex: opts.eventIndex,
     walletTxId,
+    idempotencyKey,
   });
   return walletTxId;
 }

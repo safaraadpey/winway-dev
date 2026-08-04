@@ -1,7 +1,7 @@
 /**
  * Crypto deposit scanner worker (Railway Nixpacks / Node).
  *
- * Runs lib/deposit/cryptoMonitor on intervals — no duplicated scan logic.
+ * Hot+Confirm ~15s · Warm ~30s · Cold ~6h — @dingmoney/deposit-core
  * Optional manual trigger remains on Vercel: /api/cron/crypto-scan-*.
  */
 import "dotenv/config";
@@ -20,7 +20,12 @@ function parsePositiveInt(raw: string | undefined, fallback: number): number {
   return Math.floor(n);
 }
 
-/** Match bingo-engine: Node 20 has no global WebSocket; supabase-js Realtime needs one. */
+/** Crash-recovery lock TTL: slightly above interval, never blocks the next tick after finally-del. */
+function crashLockTtlSec(intervalMs: number, envRaw: string | undefined): number {
+  const fallback = Math.max(30, Math.ceil((intervalMs / 1000) * 3));
+  return parsePositiveInt(envRaw, fallback);
+}
+
 async function ensureNodeWebSocket(): Promise<void> {
   if (typeof (globalThis as { WebSocket?: unknown }).WebSocket !== "undefined") {
     return;
@@ -32,7 +37,6 @@ async function ensureNodeWebSocket(): Promise<void> {
 async function main(): Promise<void> {
   await ensureNodeWebSocket();
 
-  // supabaseServer (notify path) expects these names — set before importing lib/deposit.
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_URL) {
     process.env.NEXT_PUBLIC_SUPABASE_URL = process.env.SUPABASE_URL;
   }
@@ -48,9 +52,16 @@ async function main(): Promise<void> {
   });
 
   const httpPort = parsePositiveInt(process.env.CRYPTO_DEPOSIT_HTTP_PORT, 8080);
-  const activeIntervalMs = parsePositiveInt(
-    process.env.CRYPTO_ACTIVE_SCAN_INTERVAL_MS,
-    120_000
+
+  // Prefer new env names; fall back to legacy CRYPTO_ACTIVE_SCAN_INTERVAL_MS.
+  const hotConfirmIntervalMs = parsePositiveInt(
+    process.env.CRYPTO_HOT_CONFIRM_SCAN_INTERVAL_MS ??
+      process.env.CRYPTO_ACTIVE_SCAN_INTERVAL_MS,
+    15_000
+  );
+  const warmIntervalMs = parsePositiveInt(
+    process.env.CRYPTO_WARM_SCAN_INTERVAL_MS,
+    30_000
   );
   const fullIntervalMs = parsePositiveInt(
     process.env.CRYPTO_FULL_SCAN_INTERVAL_MS,
@@ -60,9 +71,15 @@ async function main(): Promise<void> {
     500,
     parsePositiveInt(process.env.CRYPTO_FULL_SCAN_PAGE_SIZE, 200)
   );
-  const activeLockTtlSec = parsePositiveInt(
-    process.env.CRYPTO_ACTIVE_SCAN_LOCK_TTL_SEC,
-    Math.max(60, Math.ceil(activeIntervalMs / 1000) - 5)
+
+  const hotConfirmLockTtlSec = crashLockTtlSec(
+    hotConfirmIntervalMs,
+    process.env.CRYPTO_HOT_CONFIRM_SCAN_LOCK_TTL_SEC ??
+      process.env.CRYPTO_ACTIVE_SCAN_LOCK_TTL_SEC
+  );
+  const warmLockTtlSec = crashLockTtlSec(
+    warmIntervalMs,
+    process.env.CRYPTO_WARM_SCAN_LOCK_TTL_SEC
   );
   const fullLockTtlSec = parsePositiveInt(
     process.env.CRYPTO_FULL_SCAN_LOCK_TTL_SEC,
@@ -76,7 +93,8 @@ async function main(): Promise<void> {
         JSON.stringify({
           ok: true,
           service: "crypto-deposit-worker",
-          activeIntervalMs,
+          hotConfirmIntervalMs,
+          warmIntervalMs,
           fullIntervalMs,
         })
       );
@@ -94,10 +112,12 @@ async function main(): Promise<void> {
   });
 
   const stopScanners = startCryptoScanners(pool, {
-    activeIntervalMs,
+    hotConfirmIntervalMs,
+    warmIntervalMs,
     fullIntervalMs,
     fullPageSize,
-    activeLockTtlSec,
+    hotConfirmLockTtlSec,
+    warmLockTtlSec,
     fullLockTtlSec,
   });
 

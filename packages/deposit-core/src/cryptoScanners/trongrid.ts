@@ -1,11 +1,18 @@
 /**
  * TronGrid API scanner for TRX / TRC-20 USDT.
  *
- * Native TRX (TransferContract) is supported.
- * TRC-10 (TransferAssetContract) is intentionally ignored — raw units must not
- * be priced as TRX (that produced no_tier_for_TRX on large asset amounts).
+ * Native TRX (TransferContract): eventIndex = 0 (no event log).
+ * TRC-20 USDT: official `event_index` from GET /v1/transactions/{id}/events
+ *   (TronGrid V1 — "The event's index within the transaction's event log.").
+ * Account /transactions/trc20 is used only to discover candidate tx ids;
+ * event identity always comes from the events API.
+ *
+ * TRC-10 (TransferAssetContract) is intentionally ignored.
  */
+import bs58 from "bs58";
+import { sha256 } from "@noble/hashes/sha2.js";
 import { withExponentialBackoff } from "../cryptoRetry";
+import { normalizeEventIndex } from "../cryptoDepositIdentity";
 import type { ObservedChainTx } from "./etherscan";
 
 /** Official USDT TRC-20 */
@@ -41,6 +48,42 @@ export function sunToTrx(sun: string | number): number {
 }
 
 /**
+ * Tron base58check → 20-byte EVM-style hex (0x…), for matching TronGrid event `result.to`.
+ */
+export function tronBase58ToHexAddress(base58Addr: string): string | null {
+  try {
+    const decoded = bs58.decode(base58Addr);
+    if (decoded.length < 25) return null;
+    const payload = decoded.slice(0, decoded.length - 4);
+    const checksum = decoded.slice(decoded.length - 4);
+    const expected = sha256(sha256(payload)).slice(0, 4);
+    if (
+      checksum[0] !== expected[0] ||
+      checksum[1] !== expected[1] ||
+      checksum[2] !== expected[2] ||
+      checksum[3] !== expected[3]
+    ) {
+      return null;
+    }
+    // Tron payload: 0x41 + 20-byte address
+    if (payload[0] !== 0x41 || payload.length !== 21) return null;
+    const hex = Buffer.from(payload.slice(1)).toString("hex");
+    return `0x${hex}`.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/** Normalize TronGrid event address fields (may be 20 or 32-byte hex). */
+export function normalizeTronEventAddress(raw: unknown): string | null {
+  const s = String(raw || "").toLowerCase().replace(/^0x/, "");
+  if (!/^[0-9a-f]+$/.test(s)) return null;
+  const trimmed = s.length >= 40 ? s.slice(-40) : s;
+  if (trimmed.length !== 40) return null;
+  return `0x${trimmed}`;
+}
+
+/**
  * Parse one TronGrid account transaction into a deposit observation.
  * Returns null for unsupported contract types (e.g. TRC-10 assets).
  */
@@ -57,7 +100,6 @@ export function observeTronNativeTransfer(
   const value = contract?.parameter?.value;
 
   if (type === "TransferAssetContract") {
-    // Unsupported TRC-10 — do not observe (avoids raw-unit × TRX price blowups).
     return null;
   }
 
@@ -73,6 +115,7 @@ export function observeTronNativeTransfer(
     network: "TRC20",
     currency: "TRX",
     txHash,
+    eventIndex: 0,
     fromAddress: String(value?.owner_address || ""),
     toAddress: address,
     cryptoAmount: amount,
@@ -118,41 +161,105 @@ export async function scanTronNativeAndTrc10(
   return out;
 }
 
+type TronEventRow = {
+  event_index?: number;
+  event_name?: string;
+  contract_address?: string;
+  transaction_id?: string;
+  block_timestamp?: number;
+  result?: {
+    from?: string;
+    to?: string;
+    value?: string;
+  };
+};
+
 /**
- * TRC-20 token transfers (USDT).
+ * Official TronGrid events for one transaction.
+ * Docs: GET /v1/transactions/{transactionID}/events → data[].event_index
+ */
+export async function fetchTronTxEvents(
+  txHash: string
+): Promise<TronEventRow[]> {
+  const body = await trongridGet(
+    `/v1/transactions/${encodeURIComponent(txHash)}/events?only_confirmed=true`
+  );
+  return Array.isArray(body?.data) ? (body.data as TronEventRow[]) : [];
+}
+
+/**
+ * TRC-20 USDT transfers with stable event_index from TronGrid events API.
  */
 export async function scanTronTrc20(address: string): Promise<ObservedChainTx[]> {
   const body = await trongridGet(
     `/v1/accounts/${encodeURIComponent(address)}/transactions/trc20?only_confirmed=true&limit=20&contract_address=${TRON_USDT_CONTRACT}`
   );
   const rows = Array.isArray(body?.data) ? body.data : [];
+  const targetHex = tronBase58ToHexAddress(address);
+  if (!targetHex) {
+    console.error("[Payment] invalid TRON deposit address for event match", {
+      address,
+    });
+    return [];
+  }
+
+  const txIdList: string[] = [];
+  for (const tx of rows as Array<{ transaction_id?: string; txID?: string }>) {
+    const id = String(tx.transaction_id || tx.txID || "");
+    if (id) txIdList.push(id);
+  }
+  const txIds = [...new Set(txIdList)];
+
   const out: ObservedChainTx[] = [];
 
-  for (const tx of rows) {
-    if (String(tx.to || "") !== address) continue;
-    const tokenAddr = String(tx.token_info?.address || tx.contract_address || "");
-    if (tokenAddr && tokenAddr !== TRON_USDT_CONTRACT) continue;
+  for (const txHash of txIds) {
+    let events: TronEventRow[];
+    try {
+      events = await fetchTronTxEvents(txHash);
+    } catch (err) {
+      console.error("[Payment] TronGrid events fetch failed — skip tx", {
+        txHash,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      continue;
+    }
 
-    const decimals = Number(tx.token_info?.decimals ?? 6);
-    const rawVal = Number(tx.value ?? 0);
-    if (!Number.isFinite(rawVal) || rawVal <= 0) continue;
-    const amount = rawVal / 10 ** decimals;
+    for (const ev of events) {
+      if (String(ev.event_name || "") !== "Transfer") continue;
+      const contract = String(ev.contract_address || "");
+      if (contract && contract !== TRON_USDT_CONTRACT) continue;
 
-    const confirmed = true; // only_confirmed=true
-    out.push({
-      network: "TRC20",
-      currency: "USDT",
-      txHash: String(tx.transaction_id || tx.txID || ""),
-      fromAddress: String(tx.from || ""),
-      toAddress: String(tx.to || address),
-      cryptoAmount: amount,
-      confirmations: 1,
-      confirmed,
-      blockTimestamp: tx.block_timestamp
-        ? Math.floor(Number(tx.block_timestamp) / 1000)
-        : undefined,
-      raw: tx,
-    });
+      const toHex = normalizeTronEventAddress(ev.result?.to);
+      if (!toHex || toHex !== targetHex) continue;
+
+      const decimals = 6;
+      const rawVal = Number(ev.result?.value ?? 0);
+      if (!Number.isFinite(rawVal) || rawVal <= 0) continue;
+      const amount = rawVal / 10 ** decimals;
+
+      if (ev.event_index == null || !Number.isFinite(Number(ev.event_index))) {
+        console.error("[Payment] TRC20 Transfer missing event_index — skip", {
+          txHash,
+        });
+        continue;
+      }
+
+      out.push({
+        network: "TRC20",
+        currency: "USDT",
+        txHash: String(ev.transaction_id || txHash),
+        eventIndex: normalizeEventIndex(ev.event_index),
+        fromAddress: String(ev.result?.from || ""),
+        toAddress: address,
+        cryptoAmount: amount,
+        confirmations: 1,
+        confirmed: true,
+        blockTimestamp: ev.block_timestamp
+          ? Math.floor(Number(ev.block_timestamp) / 1000)
+          : undefined,
+        raw: ev,
+      });
+    }
   }
 
   return out.filter((t) => t.txHash);

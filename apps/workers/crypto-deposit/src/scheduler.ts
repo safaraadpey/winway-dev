@@ -1,24 +1,34 @@
 /**
- * Interval loops for crypto deposit scanning.
+ * Interval loops for crypto deposit scanning (Hot / Warm / Cold / Confirm).
  * Business logic: @dingmoney/deposit-core (do not duplicate).
  */
 import type { Pool } from "pg";
 import {
-  runActiveCryptoScan,
+  runHotAndConfirmCryptoScan,
+  runWarmCryptoScan,
   runFullOfflineCryptoScan,
   getCryptoRedis,
 } from "@dingmoney/deposit-core";
 
 const LOCK = {
-  active: "crypto_deposit:lock:active_scan",
-  full: "crypto_deposit:lock:full_scan",
+  hotConfirm: "crypto_deposit:lock:hot_confirm_scan",
+  warm: "crypto_deposit:lock:warm_scan",
+  cold: "crypto_deposit:lock:full_scan",
+  /** legacy — ignore if held by older worker builds */
+  activeLegacy: "crypto_deposit:lock:active_scan",
 } as const;
 
 export type CryptoScannerConfig = {
-  activeIntervalMs: number;
+  /** Confirmation + Hot (default 15s) */
+  hotConfirmIntervalMs: number;
+  /** Warm online (default 30s) */
+  warmIntervalMs: number;
+  /** Cold full (default 6h) */
   fullIntervalMs: number;
   fullPageSize: number;
-  activeLockTtlSec: number;
+  /** Crash-recovery TTLs only — locks are deleted in finally */
+  hotConfirmLockTtlSec: number;
+  warmLockTtlSec: number;
   fullLockTtlSec: number;
 };
 
@@ -47,6 +57,7 @@ async function withRedisLock(
     await fn();
     return "ran";
   } finally {
+    // Spec: release immediately after success or failure; TTL is crash-only.
     await redis.del(lockKey).catch(() => undefined);
   }
 }
@@ -74,21 +85,31 @@ async function runFullScanAllPages(
 }
 
 /**
- * Starts active (~2m) and full (~6h) scanners. Returns a stop function.
+ * Starts Hot+Confirm (~15s), Warm (~30s), Cold (~6h). Returns stop fn.
  */
 export function startCryptoScanners(
   pool: Pool,
   config: CryptoScannerConfig
 ): () => void {
   let stopped = false;
-  let activeTimer: ReturnType<typeof setTimeout> | null = null;
+  let hotTimer: ReturnType<typeof setTimeout> | null = null;
+  let warmTimer: ReturnType<typeof setTimeout> | null = null;
   let fullTimer: ReturnType<typeof setTimeout> | null = null;
-  let activeInFlight = false;
+  let hotInFlight = false;
+  let warmInFlight = false;
   let fullInFlight = false;
 
-  const scheduleActive = (): void => {
+  const scheduleHot = (): void => {
     if (stopped) return;
-    activeTimer = setTimeout(() => void runActiveTick(), config.activeIntervalMs);
+    hotTimer = setTimeout(
+      () => void runHotConfirmTick(),
+      config.hotConfirmIntervalMs
+    );
+  };
+
+  const scheduleWarm = (): void => {
+    if (stopped) return;
+    warmTimer = setTimeout(() => void runWarmTick(), config.warmIntervalMs);
   };
 
   const scheduleFull = (): void => {
@@ -96,32 +117,62 @@ export function startCryptoScanners(
     fullTimer = setTimeout(() => void runFullTick(), config.fullIntervalMs);
   };
 
-  const runActiveTick = async (): Promise<void> => {
-    if (stopped || activeInFlight) {
-      scheduleActive();
+  const runHotConfirmTick = async (): Promise<void> => {
+    if (stopped || hotInFlight) {
+      scheduleHot();
       return;
     }
-    activeInFlight = true;
+    hotInFlight = true;
     try {
       await withRedisLock(
-        LOCK.active,
-        config.activeLockTtlSec,
-        "active_scan",
+        LOCK.hotConfirm,
+        config.hotConfirmLockTtlSec,
+        "hot_confirm_scan",
         async () => {
-          console.log("[Payment] Railway active crypto scan tick");
-          const summary = await runActiveCryptoScan(pool);
-          console.log("[Payment] Railway active crypto scan tick done", {
+          console.log("[Payment] Railway hot+confirm crypto scan tick");
+          const summary = await runHotAndConfirmCryptoScan(pool);
+          console.log("[Payment] Railway hot+confirm crypto scan tick done", {
+            confirmTargets: summary.confirm.targets,
+            hotTargets: summary.hot.targets,
+          });
+        }
+      );
+    } catch (err) {
+      console.error("[Payment] Railway hot+confirm crypto scan failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      hotInFlight = false;
+      scheduleHot();
+    }
+  };
+
+  const runWarmTick = async (): Promise<void> => {
+    if (stopped || warmInFlight) {
+      scheduleWarm();
+      return;
+    }
+    warmInFlight = true;
+    try {
+      await withRedisLock(
+        LOCK.warm,
+        config.warmLockTtlSec,
+        "warm_scan",
+        async () => {
+          console.log("[Payment] Railway warm crypto scan tick");
+          const summary = await runWarmCryptoScan(pool);
+          console.log("[Payment] Railway warm crypto scan tick done", {
             targets: summary.targets,
           });
         }
       );
     } catch (err) {
-      console.error("[Payment] Railway active crypto scan failed", {
+      console.error("[Payment] Railway warm crypto scan failed", {
         error: err instanceof Error ? err.message : String(err),
       });
     } finally {
-      activeInFlight = false;
-      scheduleActive();
+      warmInFlight = false;
+      scheduleWarm();
     }
   };
 
@@ -133,17 +184,17 @@ export function startCryptoScanners(
     fullInFlight = true;
     try {
       await withRedisLock(
-        LOCK.full,
+        LOCK.cold,
         config.fullLockTtlSec,
-        "full_scan",
+        "cold_scan",
         async () => {
-          console.log("[Payment] Railway full offline crypto scan tick");
+          console.log("[Payment] Railway cold crypto scan tick");
           const summary = await runFullScanAllPages(pool, config.fullPageSize);
-          console.log("[Payment] Railway full offline crypto scan tick done", summary);
+          console.log("[Payment] Railway cold crypto scan tick done", summary);
         }
       );
     } catch (err) {
-      console.error("[Payment] Railway full offline crypto scan failed", {
+      console.error("[Payment] Railway cold crypto scan failed", {
         error: err instanceof Error ? err.message : String(err),
       });
     } finally {
@@ -153,21 +204,25 @@ export function startCryptoScanners(
   };
 
   console.log("[Payment] crypto scanners started", {
-    activeIntervalMs: config.activeIntervalMs,
+    hotConfirmIntervalMs: config.hotConfirmIntervalMs,
+    warmIntervalMs: config.warmIntervalMs,
     fullIntervalMs: config.fullIntervalMs,
     fullPageSize: config.fullPageSize,
   });
 
   void (async () => {
     await sleep(1500);
-    if (!stopped) void runActiveTick();
+    if (!stopped) void runHotConfirmTick();
+    await sleep(1500);
+    if (!stopped) void runWarmTick();
     await sleep(3000);
     if (!stopped) void runFullTick();
   })();
 
   return () => {
     stopped = true;
-    if (activeTimer) clearTimeout(activeTimer);
+    if (hotTimer) clearTimeout(hotTimer);
+    if (warmTimer) clearTimeout(warmTimer);
     if (fullTimer) clearTimeout(fullTimer);
   };
 }

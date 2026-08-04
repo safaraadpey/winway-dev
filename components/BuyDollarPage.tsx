@@ -179,7 +179,12 @@ export default function BuyDollarPage() {
 
   useEffect(() => {
     void loadDepositAddress();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- once on mount
+    // Keep Hot Watch alive while the deposit page stays open (~1h sliding TTL).
+    const keepHot = setInterval(() => {
+      void loadDepositAddress();
+    }, 20 * 60 * 1000);
+    return () => clearInterval(keepHot);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount keep-alive
   }, []);
 
   const handleConfirm = async () => {

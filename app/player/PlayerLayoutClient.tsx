@@ -8,6 +8,7 @@ import {
 import { usePathname } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
+import { useSession } from "@/lib/contexts/SessionContext";
 import { unlockAndPreloadOnUserGesture } from "@/lib/number-audio";
 import MergedPlayerHeader from "@/components/MergedPlayerHeader";
 import MyActiveGames from "@/components/MyActiveGames";
@@ -22,6 +23,7 @@ export default function PlayerLayoutClient({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const session = useSession();
   const { showHeader, showBackButton, onBackClick, balanceRefreshDisabled } =
     useHeaderVisibility();
   const {
@@ -78,6 +80,43 @@ export default function PlayerLayoutClient({
       window.removeEventListener(WALLET_PRIZE_CELEBRATE_EVENT, onPrizeCelebrate);
     };
   }, [triggerTomanCelebrate, scheduleWalletBalanceSync]);
+
+  // Presence ping for Warm crypto watch (online window ≈ 2 minutes).
+  useEffect(() => {
+    let stopped = false;
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    async function ping() {
+      try {
+        const token = session.accessToken;
+        if (!token || document.visibilityState === "hidden") return;
+        await fetch("/api/me/ping-presence", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch {
+        // silent — Warm Watch degrades gracefully
+      }
+    }
+
+    if (!session.authReady || !session.accessToken) return;
+
+    void ping();
+    interval = setInterval(() => {
+      if (!stopped) void ping();
+    }, 60_000);
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible" && !stopped) void ping();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      stopped = true;
+      if (interval) clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [session.authReady, session.accessToken, session.tokenVersion]);
 
   useEffect(() => {
     console.log('[PlayerLayoutClient] Balance updated:', {
