@@ -5,6 +5,7 @@
 /.pnp
 .pnp.js
 apps/engines/bingo/node_modules
+apps/workers/crypto-deposit/node_modules
 
 # testing
 /coverage

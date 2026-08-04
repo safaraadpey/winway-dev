@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { pgPool } from "@/lib/pg";
 import { getAdminContextOrThrow } from "@/lib/supabaseServer";
-import { runFullOfflineCryptoScan } from "@/lib/deposit/cryptoMonitor";
+import { runFullOfflineCryptoScan } from "@dingmoney/deposit-core";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,7 +23,13 @@ async function authorize(request: Request): Promise<boolean> {
 
 /**
  * POST /api/cron/crypto-scan-all
- * Layer 3 — every ~6 hours: scan all DB addresses with live rates.
+ *
+ * Optional manual/admin endpoint for Layer 3 offline scan (single page).
+ * Production auto-scan (paginated) runs on Railway: apps/workers/crypto-deposit
+ * (runFullOfflineCryptoScan on CRYPTO_FULL_SCAN_INTERVAL_MS).
+ *
+ * Auth: Bearer CRON_SECRET or admin JWT.
+ * Body optional: { limit?: number, offset?: number }
  */
 export async function POST(request: Request) {
   if (!(await authorize(request))) {
@@ -43,9 +49,9 @@ export async function POST(request: Request) {
     /* empty body ok */
   }
 
-  console.log("[Payment] cron crypto-scan-all started", { limit, offset });
+  console.log("[Payment] manual crypto-scan-all started", { limit, offset });
   const summary = await runFullOfflineCryptoScan(pgPool, { limit, offset });
-  console.log("[Payment] cron crypto-scan-all done", {
+  console.log("[Payment] manual crypto-scan-all done", {
     targets: summary.targets,
   });
 
@@ -59,7 +65,7 @@ export async function POST(request: Request) {
   });
 }
 
-/** Vercel Cron invokes GET */
+/** Same auth + handler as POST (manual trigger). */
 export async function GET(request: Request) {
   return POST(request);
 }

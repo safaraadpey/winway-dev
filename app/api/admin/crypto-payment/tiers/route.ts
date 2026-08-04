@@ -6,7 +6,7 @@ import {
   replaceCryptoRateTiers,
   type CryptoNetwork,
   type UpsertTierInput,
-} from "@/lib/deposit/cryptoInvoice";
+} from "@dingmoney/deposit-core";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

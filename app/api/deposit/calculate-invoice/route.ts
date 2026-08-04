@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { pgPool } from "@/lib/pg";
-import { calculateCryptoInvoice } from "@/lib/deposit/cryptoInvoice";
+import { calculateCryptoInvoice } from "@dingmoney/deposit-core";
 import { takeRateLimitToken } from "@/lib/deposit/rateLimit";
 
 export const runtime = "nodejs";

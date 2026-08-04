@@ -11,7 +11,7 @@ import {
   getCryptoXpubSettings,
   maskXpub,
   saveCryptoXpubSettings,
-} from "@/lib/deposit/cryptoXpubSettings";
+} from "@dingmoney/deposit-core";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

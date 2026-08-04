@@ -7,11 +7,12 @@ export * from "@/lib/deposit/reconcile";
 export * from "@/lib/deposit/hamipayAdapter";
 export * from "@/lib/deposit/hamipayFlow";
 export * from "@/lib/deposit/limits";
+export * from "@/lib/deposit/cryptoAddressAllocator";
+// Crypto runtime — single source @dingmoney/deposit-core (compat re-exports below)
 export * from "@/lib/deposit/cryptoPrices";
 export * from "@/lib/deposit/cryptoInvoice";
 export * from "@/lib/deposit/cryptoHdDerive";
 export * from "@/lib/deposit/cryptoXpubSettings";
-export * from "@/lib/deposit/cryptoAddressAllocator";
 export * from "@/lib/deposit/cryptoRedis";
 export * from "@/lib/deposit/cryptoRetry";
 export * from "@/lib/deposit/cryptoPriceLock";

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { pgPool } from "@/lib/pg";
 import { getAdminContextOrThrow } from "@/lib/supabaseServer";
-import { runActiveCryptoScan } from "@/lib/deposit/cryptoMonitor";
+import { runActiveCryptoScan } from "@dingmoney/deposit-core";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,7 +23,12 @@ async function authorize(request: Request): Promise<boolean> {
 
 /**
  * POST /api/cron/crypto-scan-active
- * Layer 2 — every ~2 minutes: scan Redis active_crypto_addresses.
+ *
+ * Optional manual/admin endpoint for Layer 2 active-address scan.
+ * Production auto-scan runs on Railway: apps/workers/crypto-deposit
+ * (runActiveCryptoScan on CRYPTO_ACTIVE_SCAN_INTERVAL_MS).
+ *
+ * Auth: Bearer CRON_SECRET or admin JWT.
  */
 export async function POST(request: Request) {
   if (!(await authorize(request))) {
@@ -33,9 +38,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "db_unavailable" }, { status: 503 });
   }
 
-  console.log("[Payment] cron crypto-scan-active started");
+  console.log("[Payment] manual crypto-scan-active started");
   const summary = await runActiveCryptoScan(pgPool);
-  console.log("[Payment] cron crypto-scan-active done", {
+  console.log("[Payment] manual crypto-scan-active done", {
     targets: summary.targets,
   });
 
@@ -49,7 +54,7 @@ export async function POST(request: Request) {
   });
 }
 
-/** Vercel Cron invokes GET */
+/** Same auth + handler as POST (manual trigger). */
 export async function GET(request: Request) {
   return POST(request);
 }

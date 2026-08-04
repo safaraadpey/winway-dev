@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/supabaseServer";
 import { pgPool } from "@/lib/pg";
 import { getOrGenerateUserAddresses } from "@/lib/deposit/cryptoAddressAllocator";
-import { registerActiveCryptoAddresses } from "@/lib/deposit/cryptoActiveScan";
-import { createAndStorePriceLock } from "@/lib/deposit/cryptoPriceLock";
+import {
+  registerActiveCryptoAddresses,
+  createAndStorePriceLock,
+} from "@dingmoney/deposit-core";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

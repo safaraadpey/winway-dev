@@ -2,8 +2,10 @@
  * Thread-safe per-user crypto deposit address allocation.
  */
 import type { Pool, PoolClient } from "pg";
-import { deriveUserCryptoAddresses } from "@/lib/deposit/cryptoHdDerive";
-import { getCryptoXpubSettings } from "@/lib/deposit/cryptoXpubSettings";
+import {
+  deriveUserCryptoAddresses,
+  getCryptoXpubSettings,
+} from "@dingmoney/deposit-core";
 
 /** Advisory lock key namespace for crypto address allocator */
 const ALLOCATOR_LOCK_KEY = 8347291;

@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/supabaseServer";
 import { pgPool } from "@/lib/pg";
-import { getOrGenerateUserAddresses } from "@/lib/deposit/cryptoAddressAllocator";
-import { tryAcquireCheckCooldown } from "@/lib/deposit/cryptoActiveScan";
-import { scanUserAddresses } from "@/lib/deposit/cryptoMonitor";
-import { CRYPTO_TTL } from "@/lib/deposit/cryptoRedis";
+import {
+  getOrGenerateUserAddresses,
+} from "@/lib/deposit/cryptoAddressAllocator";
+import {
+  tryAcquireCheckCooldown,
+  scanUserAddresses,
+  CRYPTO_TTL,
+} from "@dingmoney/deposit-core";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
