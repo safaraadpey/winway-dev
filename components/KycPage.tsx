@@ -13,7 +13,7 @@ import styles from "./KycPage.module.css";
 
 type Step = "instructions" | "camera" | "review" | "done";
 
-const COUNTDOWN_SECONDS = 3;
+const COUNTDOWN_SECONDS = 10;
 
 export default function KycPage() {
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();

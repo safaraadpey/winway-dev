@@ -52,38 +52,46 @@
 .headerActions {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
+  gap: 0.5rem;
   margin-bottom: 1rem;
 }
 
 .headerActionButton {
-  min-height: 48px;
-  padding: 0.875rem 1rem;
-  border-radius: 0.75rem;
-  border: none;
-  font-size: 1rem;
-  font-weight: 800;
+  flex: 1;
+  min-height: 59px;
+  padding: 0.875rem 0.75rem;
+  background-color: transparent;
+  color: #ffffff;
+  border: 1px solid rgba(73, 72, 76, 1);
+  border-radius: 200px;
+  font-size: 1.225rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: opacity 0.15s, transform 0.15s, background-color 0.15s;
+  transition: all 0.2s;
+  background-image: url("../src/assets/logo/lobbyInfo.png");
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: 100% 100%;
+}
+
+.headerActionButton:hover {
+  background-color: transparent;
 }
 
 .headerActionButton:active {
   transform: scale(0.98);
 }
 
-.headerActionBuy {
-  background-color: var(--player-accent, #00d4aa);
-  color: #0e0e0f;
-}
-
+.headerActionBuy,
 .headerActionWithdraw {
+  /* Same visual language as transactionFilterTabActive */
   background-color: transparent;
-  color: var(--player-text-primary, #ffffff);
-  border: 1px solid var(--player-border, rgba(64, 64, 64, 0.8));
+  color: #ffffff;
+  border-color: rgba(73, 72, 76, 1);
 }
 
 .headerActionWithdraw:hover {
-  border-color: var(--player-accent, #00d4aa);
+  border-color: rgba(73, 72, 76, 1);
 }
 
 /* Period Tabs */
@@ -91,6 +99,10 @@
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1rem;
+}
+
+.gameStatsSection .periodTabs {
+  margin-bottom: 0.75rem;
 }
 
 .periodTab {
@@ -171,10 +183,10 @@
   color: #ef4444;
 }
 
-/* Game Stats Section */
+/* Game Stats Section — same surface as transactionsSection */
 .gameStatsSection {
-  background-color: rgba(0, 0, 0, 0.25);
-  border: 1px solid #ffffff;
+  background-color: #1a1a1a;
+  border: none;
   border-radius: 0.75rem;
   padding: 1.5rem;
   margin-bottom: 2rem;
@@ -503,6 +515,22 @@
   box-shadow: 0 2px 8px rgba(124, 58, 237, 0.06);
 }
 
+:global(html[data-theme="light"]) .headerActionButton,
+:global(html[data-theme="light"]) .headerActionBuy,
+:global(html[data-theme="light"]) .headerActionWithdraw {
+  background-image: linear-gradient(135deg, #c084fc 0%, #a855f7 48%, #6366f1 100%);
+  background-color: transparent;
+  color: #ffffff;
+  border-color: transparent;
+  border-radius: 1rem;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.28);
+}
+
+:global(html[data-theme="light"]) .headerActionButton:hover {
+  background-color: transparent;
+}
+
 :global(html[data-theme="light"]) .periodTab:hover {
   background-color: #faf5ff;
 }
@@ -524,10 +552,11 @@
 }
 
 :global(html[data-theme="light"]) .gameStatsSection {
-  background-color: #ffffff;
-  border-color: #ebe4ff;
+  background-color: transparent;
+  border: none;
   border-radius: 1.25rem;
-  box-shadow: 0 4px 20px rgba(124, 58, 237, 0.08);
+  box-shadow: none;
+  padding: 0;
 }
 
 :global(html[data-theme="light"]) .sectionTitle {

@@ -314,23 +314,6 @@ export default function FinancialReportsPage() {
             برداشت
           </button>
         </div>
-
-        <div className={styles.periodTabs}>
-          {(["day", "week", "month"] as ReportPeriod[]).map((period) => (
-            <button
-              key={period}
-              onClick={() => setActivePeriod(period)}
-              className={`${styles.periodTab} ${
-                activePeriod === period ? styles.periodTabActive : ""
-              }`}
-            >
-              <span className={styles.periodTabIcon} aria-hidden="true">
-                📅
-              </span>
-              {PERIOD_LABELS[period]}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className={styles.scrollBody} ref={scrollContainerRef}>
@@ -341,6 +324,22 @@ export default function FinancialReportsPage() {
             statsExpanded ? "" : styles.gameStatsSectionCollapsed
           }`}
         >
+          <div className={styles.periodTabs}>
+            {(["day", "week", "month"] as ReportPeriod[]).map((period) => (
+              <button
+                key={period}
+                onClick={() => setActivePeriod(period)}
+                className={`${styles.periodTab} ${
+                  activePeriod === period ? styles.periodTabActive : ""
+                }`}
+              >
+                <span className={styles.periodTabIcon} aria-hidden="true">
+                  📅
+                </span>
+                {PERIOD_LABELS[period]}
+              </button>
+            ))}
+          </div>
           <h2 className={styles.sectionTitle}>
             <span className={styles.sectionTitleIcon} aria-hidden="true">
               📊

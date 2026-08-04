@@ -360,17 +360,14 @@ export default function ProfilePage() {
       <div className={styles.content}>
         <h1 className={styles.title}>پروفایل من</h1>
 
-        <Link href="/player/settings" className={styles.settingsLink}>
-          <span className={styles.settingsLinkLabel}>تنظیمات</span>
-          <span className={styles.settingsLinkHint}>تم و سایر گزینه‌ها</span>
-        </Link>
-
-        <Link href="/player/kyc" className={styles.settingsLink}>
-          <span className={styles.settingsLinkLabel}>احراز هویت</span>
-          <span className={styles.settingsLinkHint}>
-            تأیید هویت با کارت ملی و کارت بانکی
-          </span>
-        </Link>
+        {!profile.kycVerified ? (
+          <Link href="/player/kyc" className={styles.settingsLink}>
+            <span className={styles.settingsLinkLabel}>احراز هویت</span>
+            <span className={styles.settingsLinkHint}>
+              تأیید هویت با کارت ملی و کارت بانکی
+            </span>
+          </Link>
+        ) : null}
 
         {/* بخش آواتار */}
         {!hideAvatarSection && (
