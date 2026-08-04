@@ -39,31 +39,41 @@
   direction: rtl;
 }
 
-.amountInputCompact {
-  flex: 1;
+.amountFieldWrap {
+  position: relative;
+  width: 100%;
   min-width: 0;
+  flex: 1;
+}
+
+.amountInputCompact {
+  width: 100%;
   margin: 0;
+  padding-right: 3.5rem;
+}
+
+.amountSuffix {
+  composes: numeric-text numeric-text--14 from global;
+  position: absolute;
+  top: 50%;
+  right: 0.75rem;
+  transform: translateY(-50%);
+  color: #f3f4f6;
+  font-weight: 700;
+  pointer-events: none;
+  direction: ltr;
 }
 
 .convertInlineButton {
+  composes: root from "./PlayerActionButton.module.css";
   flex-shrink: 0;
+  width: auto;
   min-width: 4.5rem;
   height: 43px;
   min-height: 43px;
   padding: 0 0.875rem;
   box-sizing: border-box;
-  border: none;
-  border-radius: 0.75rem;
-  background-color: var(--player-accent, #00d4aa);
-  color: #0e0e0f;
   font-size: 0.9375rem;
-  font-weight: 800;
-  cursor: pointer;
-  transition: opacity 0.15s, transform 0.15s;
-}
-
-.convertInlineButton:active {
-  transform: scale(0.98);
 }
 
 .convertInlineButton:disabled {
@@ -86,10 +96,10 @@
   width: 100%;
   min-height: 43px;
   height: 43px;
-  padding: 0.55rem 1rem;
+  padding: 0.55rem 3.5rem 0.55rem 1rem;
   border-radius: 0.75rem;
-  border: 1px solid var(--player-border, rgba(64, 64, 64, 0.8));
-  background-color: var(--player-surface-elevated, #2d2d2d);
+  border: 1px solid rgba(116, 128, 255, 0.65);
+  background-color: rgba(18, 18, 22, 0.95);
   color: var(--player-text-primary, #ffffff);
   text-align: left;
   direction: ltr;
@@ -98,7 +108,8 @@
 }
 
 .amountInput:focus {
-  border-color: var(--player-accent, #00d4aa);
+  border-color: rgba(160, 140, 255, 0.9);
+  box-shadow: 0 0 0 1px rgba(116, 128, 255, 0.25);
 }
 
 .amountInput::placeholder {
@@ -126,24 +137,14 @@
 }
 
 .confirmButton {
+  composes: root from "./PlayerActionButton.module.css";
   width: 100%;
   height: 43px;
   min-height: 43px;
   margin-top: 1rem;
   padding: 0 1rem;
   box-sizing: border-box;
-  border: none;
-  border-radius: 0.75rem;
-  background-color: var(--player-accent, #00d4aa);
-  color: #0e0e0f;
   font-size: 1rem;
-  font-weight: 800;
-  cursor: pointer;
-  transition: opacity 0.15s, transform 0.15s;
-}
-
-.confirmButton:active {
-  transform: scale(0.98);
 }
 
 .confirmButton:disabled {
@@ -190,9 +191,11 @@
 }
 
 .networkCardSelected {
-  border-color: var(--player-accent, #00d4aa);
-  background-color: rgba(0, 212, 170, 0.08);
-  box-shadow: 0 0 0 1px rgba(0, 212, 170, 0.25);
+  border-color: rgba(116, 128, 255, 0.65);
+  background-color: rgba(117, 76, 255, 0.12);
+  box-shadow:
+    inset 0 0 16px rgba(117, 76, 255, 0.18),
+    0 0 14px rgba(75, 101, 255, 0.22);
 }
 
 .cardHeader {

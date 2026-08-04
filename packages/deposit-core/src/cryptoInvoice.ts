@@ -171,6 +171,16 @@ export async function calculateCryptoInvoice(
     }
 
     const badges: InvoiceBadge[] = [];
+    const pctFromMultiplier =
+      Math.round((Number(tier.multiplier) - 1) * 1000) / 10;
+    if (Number.isFinite(pctFromMultiplier) && pctFromMultiplier > 0) {
+      const pctLabel = String(pctFromMultiplier).replace(/\.0$/, "");
+      badges.push({
+        type: "multiplier_bonus",
+        text: `بونوس ویژه ${pctLabel} درصد قیمت`,
+        tone: "green",
+      });
+    }
     if (tier.bonusPercent > 0) {
       badges.push({
         type: "bonus",
@@ -198,16 +208,10 @@ export async function calculateCryptoInvoice(
   for (const opt of options) {
     if (opt.finalToman === maxToman) {
       opt.isBestOffer = true;
-      const hasBest = opt.badges.some((b) => b.type === "best_bonus");
-      if (!hasBest) {
-        opt.badges.unshift({
-          type: "best_bonus",
-          text: "بونوس ویژه",
-          tone: "green",
-        });
-      }
     }
   }
+
+  options.sort((a, b) => Number(b.multiplier) - Number(a.multiplier));
 
   return {
     usdAmount,

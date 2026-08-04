@@ -39,7 +39,7 @@ function WalletPageContent() {
               className={styles.buyOptionButton}
               onClick={() => router.push("/player/wallet/buy-dollar")}
             >
-              خرید دلار/تتر
+              خرید رمز ارزی
             </button>
           </div>
         </div>

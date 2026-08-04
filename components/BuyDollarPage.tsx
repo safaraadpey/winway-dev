@@ -89,6 +89,13 @@ function badgeClass(tone: string): string {
   return `${styles.badge} ${styles.badgeTeal}`;
 }
 
+function formatMultiplierBonusBadge(multiplier: number): string {
+  const pct = Math.round((Number(multiplier) - 1) * 1000) / 10;
+  if (!Number.isFinite(pct) || pct <= 0) return "بونوس ویژه";
+  const pctLabel = String(pct).replace(/\.0$/, "");
+  return `بونوس ویژه ${pctLabel} درصد قیمت`;
+}
+
 async function authHeaders(): Promise<HeadersInit | null> {
   const {
     data: { session },
@@ -266,20 +273,29 @@ export default function BuyDollarPage() {
         ? "TRON (TRX)"
         : "TRC-20 (USDT)";
 
+  const hasOptions = Boolean(quote?.options?.length);
+
+  const checkDepositButton = (
+    <button
+      type="button"
+      className={styles.secondaryButton}
+      disabled={checking}
+      onClick={() => void handleCheckDeposit()}
+    >
+      {checking ? "در حال استعلام…" : "بررسی واریز من"}
+    </button>
+  );
+
   return (
     <div className={styles.container}>
       <div className={styles.content}>
-        <h1 className={styles.title}>خرید دلار/تتر</h1>
+        <h1 className={styles.title}>خرید رمز ارزی</h1>
 
         <div
           className={`${styles.panel} ${
             compactLayout ? styles.panelCompact : ""
           }`}
         >
-          <label htmlFor="buy-dollar-amount" className={styles.label}>
-            مبلغ خرید (USDT)
-          </label>
-
           {compactLayout ? (
             <div className={styles.amountRow}>
               <button
@@ -290,35 +306,47 @@ export default function BuyDollarPage() {
               >
                 {submitting ? "…" : "تبدیل"}
               </button>
-              <input
-                id="buy-dollar-amount"
-                className={`${styles.amountInput} ${styles.amountInputCompact}`}
-                inputMode="decimal"
-                dir="ltr"
-                placeholder="0"
-                value={formatUsdtDisplay(amountRaw)}
-                onChange={(e) =>
-                  applyAmountChange(parseUsdtAmount(e.target.value))
-                }
-                disabled={submitting}
-                autoComplete="off"
-              />
+              <div className={styles.amountFieldWrap}>
+                <input
+                  id="buy-dollar-amount"
+                  className={`${styles.amountInput} ${styles.amountInputCompact}`}
+                  inputMode="decimal"
+                  dir="ltr"
+                  placeholder="0"
+                  aria-label="مبلغ خرید USDT"
+                  value={formatUsdtDisplay(amountRaw)}
+                  onChange={(e) =>
+                    applyAmountChange(parseUsdtAmount(e.target.value))
+                  }
+                  disabled={submitting}
+                  autoComplete="off"
+                />
+                <span className={styles.amountSuffix} aria-hidden="true">
+                  USDT
+                </span>
+              </div>
             </div>
           ) : (
             <>
-              <input
-                id="buy-dollar-amount"
-                className={styles.amountInput}
-                inputMode="decimal"
-                dir="ltr"
-                placeholder="0"
-                value={formatUsdtDisplay(amountRaw)}
-                onChange={(e) =>
-                  applyAmountChange(parseUsdtAmount(e.target.value))
-                }
-                disabled={submitting}
-                autoComplete="off"
-              />
+              <div className={styles.amountFieldWrap}>
+                <input
+                  id="buy-dollar-amount"
+                  className={styles.amountInput}
+                  inputMode="decimal"
+                  dir="ltr"
+                  placeholder="0"
+                  aria-label="مبلغ خرید USDT"
+                  value={formatUsdtDisplay(amountRaw)}
+                  onChange={(e) =>
+                    applyAmountChange(parseUsdtAmount(e.target.value))
+                  }
+                  disabled={submitting}
+                  autoComplete="off"
+                />
+                <span className={styles.amountSuffix} aria-hidden="true">
+                  USDT
+                </span>
+              </div>
               <p
                 className={`${styles.hint} ${
                   amountValue > 0 ? styles.hintLive : ""
@@ -348,23 +376,29 @@ export default function BuyDollarPage() {
           )}
         </div>
 
-        {quote?.options?.length ? (
+        {!hasOptions ? checkDepositButton : null}
+
+        {hasOptions ? (
           <div className={styles.optionsSection}>
             <p className={styles.ratesMeta}>
               قیمت پایه تتر:{" "}
               <span className={styles.amountAccent} dir="ltr">
-                {quote.rates.usdtTomanPrice.toLocaleString("en-US")}
+                {quote!.rates.usdtTomanPrice.toLocaleString("en-US")}
               </span>{" "}
               تومان · TRX:{" "}
               <span className={styles.amountAccent} dir="ltr">
                 $
-                {quote.rates.trxUsdPrice.toLocaleString("en-US", {
+                {quote!.rates.trxUsdPrice.toLocaleString("en-US", {
                   maximumFractionDigits: 6,
                 })}
               </span>
             </p>
 
-            {quote.options.map((opt) => {
+            {[...quote!.options]
+              .sort(
+                (a, b) => Number(b.multiplier) - Number(a.multiplier)
+              )
+              .map((opt) => {
               const selected = selectedNetwork === opt.network;
               return (
                 <button
@@ -389,7 +423,10 @@ export default function BuyDollarPage() {
                           key={`${opt.network}-${b.type}-${b.text}`}
                           className={badgeClass(b.tone)}
                         >
-                          {b.text}
+                          {b.type === "best_bonus" ||
+                          b.type === "multiplier_bonus"
+                            ? formatMultiplierBonusBadge(opt.multiplier)
+                            : b.text}
                         </span>
                       ))}
                     </div>
@@ -488,14 +525,7 @@ export default function BuyDollarPage() {
               )}
             </div>
 
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              disabled={checking || !depositAddr}
-              onClick={() => void handleCheckDeposit()}
-            >
-              {checking ? "در حال استعلام…" : "بررسی واریز من"}
-            </button>
+            {checkDepositButton}
           </div>
         ) : null}
       </div>
