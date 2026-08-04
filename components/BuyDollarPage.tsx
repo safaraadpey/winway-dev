@@ -96,6 +96,12 @@ function formatMultiplierBonusBadge(multiplier: number): string {
   return `بونوس ویژه ${pctLabel} درصد قیمت`;
 }
 
+const NETWORK_TABS: { id: "BEP20" | "TRC20" | "TRX"; label: string }[] = [
+  { id: "BEP20", label: "BEP20" },
+  { id: "TRC20", label: "TRC20" },
+  { id: "TRX", label: "TRX" },
+];
+
 async function authHeaders(): Promise<HeadersInit | null> {
   const {
     data: { session },
@@ -112,7 +118,7 @@ export default function BuyDollarPage() {
   const [amountRaw, setAmountRaw] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [quote, setQuote] = useState<InvoiceQuote | null>(null);
-  const [selectedNetwork, setSelectedNetwork] = useState<string | null>(null);
+  const [selectedNetwork, setSelectedNetwork] = useState<string>("TRC20");
   const [depositAddr, setDepositAddr] = useState<DepositAddressData | null>(
     null
   );
@@ -139,8 +145,6 @@ export default function BuyDollarPage() {
   const applyAmountChange = (nextRaw: string) => {
     setAmountRaw(nextRaw);
     setQuote(null);
-    setSelectedNetwork(null);
-    setDepositAddr(null);
     const nextValue = nextRaw ? Number(nextRaw) : 0;
     if (!nextRaw || !Number.isFinite(nextValue) || nextValue <= 0) {
       setCompactLayout(false);
@@ -173,6 +177,11 @@ export default function BuyDollarPage() {
     }
   };
 
+  useEffect(() => {
+    void loadDepositAddress();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once on mount
+  }, []);
+
   const handleConfirm = async () => {
     if (!canSubmit) {
       toast.error("مبلغ خرید را وارد کنید");
@@ -181,8 +190,6 @@ export default function BuyDollarPage() {
 
     setSubmitting(true);
     setQuote(null);
-    setSelectedNetwork(null);
-    setDepositAddr(null);
 
     try {
       console.log("[Payment] BuyDollar convert requested", {
@@ -209,10 +216,17 @@ export default function BuyDollarPage() {
       }
 
       setQuote(body);
-      const bestOffer = body.options.find((o) => o.isBestOffer);
-      setSelectedNetwork(bestOffer?.network ?? body.options[0]?.network ?? null);
+      const sorted = [...body.options].sort(
+        (a, b) => Number(b.multiplier) - Number(a.multiplier)
+      );
+      const bestOffer = sorted.find((o) => o.isBestOffer) ?? sorted[0];
+      if (bestOffer?.network) {
+        setSelectedNetwork(bestOffer.network);
+      }
       setCompactLayout(true);
-      await loadDepositAddress();
+      if (!depositAddr) {
+        await loadDepositAddress();
+      }
     } catch (err) {
       console.error("[Payment] calculate-invoice client failed", err);
       toast.error("اتصال به سرویس قیمت ناموفق بود.");
@@ -471,63 +485,83 @@ export default function BuyDollarPage() {
                 </button>
               );
             })}
-
-            <div className={styles.addressPanel}>
-              <div className={styles.addressLabel}>
-                آدرس واریز {addressNetworkLabel}
-              </div>
-              {addrLoading ? (
-                <p className={styles.addressHint}>در حال آماده‌سازی آدرس…</p>
-              ) : displayAddress ? (
-                <>
-                  <div className={styles.qrWrap} aria-hidden="false">
-                    <div className={styles.qrFrame}>
-                      <QRCodeSVG
-                        value={displayAddress}
-                        size={168}
-                        level="M"
-                        includeMargin={false}
-                        bgColor="#ffffff"
-                        fgColor="#0e0e0f"
-                        title={`QR آدرس ${addressNetworkLabel}`}
-                      />
-                    </div>
-                    <p className={styles.qrCaption}>
-                      اسکن کنید تا آدرس واریز وارد کیف پول شود
-                    </p>
-                  </div>
-                  <div className={styles.addressValue} dir="ltr">
-                    {displayAddress}
-                  </div>
-                  <button
-                    type="button"
-                    className={styles.copyButton}
-                    onClick={() => {
-                      void navigator.clipboard.writeText(displayAddress);
-                      toast.success("آدرس کپی شد");
-                    }}
-                  >
-                    کپی آدرس
-                  </button>
-                  {depositAddr?.priceLock?.expiresAt ? (
-                    <p className={styles.addressHint}>
-                      🔒 نرخ تبدیل این پرداخت تا ۳۰ دقیقه برای شما تضمین
-                      می‌شود. در این مدت، حتی اگر قیمت کاهش پیدا کند، مبلغ شارژ
-                      با همین نرخ محاسبه خواهد شد. پس از پایان این مهلت، نرخ
-                      لحظه‌ای بازار ملاک محاسبه خواهد بود.
-                    </p>
-                  ) : null}
-                </>
-              ) : (
-                <p className={styles.addressHint}>
-                  آدرس در دسترس نیست. دوباره «تبدیل و خرید» را بزنید.
-                </p>
-              )}
-            </div>
-
-            {checkDepositButton}
           </div>
         ) : null}
+
+        <div className={styles.addressPanel}>
+          <div
+            className={styles.networkTabs}
+            role="tablist"
+            aria-label="انتخاب شبکه واریز"
+          >
+            {NETWORK_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={selectedNetwork === tab.id}
+                className={`${styles.networkTab} ${
+                  selectedNetwork === tab.id ? styles.networkTabActive : ""
+                }`}
+                onClick={() => setSelectedNetwork(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <div className={styles.addressLabel}>
+            آدرس واریز {addressNetworkLabel}
+          </div>
+          {addrLoading ? (
+            <p className={styles.addressHint}>در حال آماده‌سازی آدرس…</p>
+          ) : displayAddress ? (
+            <>
+              <div className={styles.qrWrap} aria-hidden="false">
+                <div className={styles.qrFrame}>
+                  <QRCodeSVG
+                    value={displayAddress}
+                    size={168}
+                    level="M"
+                    includeMargin={false}
+                    bgColor="#ffffff"
+                    fgColor="#0e0e0f"
+                    title={`QR آدرس ${addressNetworkLabel}`}
+                  />
+                </div>
+                <p className={styles.qrCaption}>
+                  اسکن کنید تا آدرس واریز وارد کیف پول شود
+                </p>
+              </div>
+              <div className={styles.addressValue} dir="ltr">
+                {displayAddress}
+              </div>
+              <button
+                type="button"
+                className={styles.copyButton}
+                onClick={() => {
+                  void navigator.clipboard.writeText(displayAddress);
+                  toast.success("آدرس کپی شد");
+                }}
+              >
+                کپی آدرس
+              </button>
+              {depositAddr?.priceLock?.expiresAt ? (
+                <p className={styles.addressHint}>
+                  🔒 نرخ تبدیل این پرداخت تا ۳۰ دقیقه برای شما تضمین می‌شود.
+                  در این مدت، حتی اگر قیمت کاهش پیدا کند، مبلغ شارژ با همین نرخ
+                  محاسبه خواهد شد. پس از پایان این مهلت، نرخ لحظه‌ای بازار
+                  ملاک محاسبه خواهد بود.
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <p className={styles.addressHint}>
+              آدرس در دسترس نیست. صفحه را تازه کنید یا دوباره وارد شوید.
+            </p>
+          )}
+        </div>
+
+        {hasOptions ? checkDepositButton : null}
       </div>
     </div>
   );

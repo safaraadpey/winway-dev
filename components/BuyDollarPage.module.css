@@ -168,6 +168,50 @@
   gap: 0.75rem;
 }
 
+.networkTabs {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+}
+
+.addressPanel {
+  margin-top: 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--player-border, rgba(64, 64, 64, 0.8));
+  background-color: var(--player-surface, rgba(26, 26, 26, 0.9));
+  padding: 0.875rem 1rem;
+}
+
+.networkTab {
+  flex: 1;
+  min-height: 38px;
+  padding: 0.45rem 0.5rem;
+  background-color: transparent;
+  color: #ffffff;
+  border: 1px solid rgba(116, 128, 255, 0.45);
+  border-radius: 200px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.networkTab:hover {
+  background-color: rgba(117, 76, 255, 0.1);
+}
+
+.networkTabActive {
+  border-color: rgba(116, 128, 255, 0.65);
+  background:
+    radial-gradient(circle at 15% 25%, rgba(160, 84, 255, 0.32), transparent 45%),
+    radial-gradient(circle at 82% 70%, rgba(73, 125, 255, 0.28), transparent 40%),
+    linear-gradient(180deg, rgba(37, 25, 76, 0.94) 0%, rgba(18, 13, 37, 0.96) 100%);
+  box-shadow:
+    inset 0 0 16px rgba(117, 76, 255, 0.22),
+    0 0 14px rgba(75, 101, 255, 0.24);
+  color: #f3f4ff;
+}
+
 .ratesMeta {
   font-size: 0.6875rem;
   color: var(--player-text-primary, #ffffff);
@@ -269,14 +313,6 @@
   composes: numeric-text numeric-text--12 from global;
   color: var(--player-accent, #00d4aa);
   font-weight: 700;
-}
-
-.addressPanel {
-  margin-top: 0.75rem;
-  border-radius: 0.75rem;
-  border: 1px solid var(--player-border, rgba(64, 64, 64, 0.8));
-  background-color: var(--player-surface, rgba(26, 26, 26, 0.9));
-  padding: 0.875rem 1rem;
 }
 
 .qrWrap {
