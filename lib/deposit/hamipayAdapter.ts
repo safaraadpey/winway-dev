@@ -232,16 +232,36 @@ export async function hamipayCreatePayment(
     hasCustomerPhone: Boolean(body.customerPhone),
   });
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Api-Key": apiKey,
-      "Idempotency-Key": input.depositId,
-    },
-    body: JSON.stringify(body),
-  });
+  const startedAt = Date.now();
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Api-Key": apiKey,
+        "Idempotency-Key": input.depositId,
+        Connection: "close",
+      },
+      body: JSON.stringify(body),
+      // Fail before Vercel function hard-timeout when upstream is unreachable
+      signal: AbortSignal.timeout(25_000),
+    });
+  } catch (err) {
+    const elapsedMs = Date.now() - startedAt;
+    const cause =
+      err instanceof Error
+        ? { name: err.name, message: err.message }
+        : { message: String(err) };
+    console.error("[DepositAdapter:hamipay] create network/timeout", {
+      url,
+      elapsedMs,
+      cause,
+    });
+    throw new Error(`hamipay_create_network:${cause.name || "error"}:${elapsedMs}ms`);
+  }
 
+  const elapsedMs = Date.now() - startedAt;
   const rawText = await res.text();
   let json: Record<string, unknown> = {};
   try {
@@ -255,8 +275,14 @@ export async function hamipayCreatePayment(
     console.error("[DepositAdapter:hamipay] create failed — provider response", {
       status: res.status,
       statusText: res.statusText,
+      elapsedMs,
+      url,
       body: redacted,
       rawBodyPreview: rawText.slice(0, 800),
+      hint:
+        res.status === 504
+          ? "Upstream 504 usually means Vercel cannot reach HamiPay (Iran CDN). Postman from Iran can still succeed."
+          : undefined,
     });
     throw new Error(`hamipay_create_failed:${res.status}`);
   }

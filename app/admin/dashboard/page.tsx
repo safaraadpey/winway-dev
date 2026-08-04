@@ -376,6 +376,15 @@ export default function AdminDashboardPage() {
               <span className="text-xl">›</span>
             </button>
           )}
+          {isAdmin && (
+            <button
+              onClick={() => router.push("/admin/crypto-payment")}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
+            >
+              <span>مدیریت پرداخت کریپتو</span>
+              <span className="text-xl">›</span>
+            </button>
+          )}
           {canAccessEntryBanner && (
             <button
               onClick={() => router.push("/admin/entry-banner")}

@@ -1,0 +1,14 @@
+{
+  "regions": ["dub1", "fra1"],
+  "crons": [
+    {
+      "path": "/api/cron/crypto-scan-active",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/crypto-scan-all",
+      "schedule": "0 */6 * * *"
+    }
+  ]
+}
+

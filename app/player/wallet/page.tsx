@@ -2,7 +2,6 @@
 
 import React, { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import toast from "react-hot-toast";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 
 function WalletPageContent() {
@@ -40,7 +39,7 @@ function WalletPageContent() {
             <button
               type="button"
               className="min-h-[56px] w-full rounded-xl border border-[var(--player-border,rgba(64,64,64,0.8))] bg-[var(--player-surface,rgba(26,26,26,0.75))] px-4 py-4 text-base font-extrabold text-[var(--player-text-primary,#fff)] active:scale-[0.98] transition"
-              onClick={() => toast("خرید دلار/تتر به‌زودی فعال می‌شود")}
+              onClick={() => router.push("/player/wallet/buy-dollar")}
             >
               خرید دلار/تتر
             </button>
