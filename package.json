@@ -31,6 +31,7 @@
     "next": "^14.2.35",
     "nosleep.js": "^0.12.0",
     "pg": "^8.21.0",
+    "qrcode.react": "^4.2.0",
     "react": "^18.3.1",
     "react-confetti": "^6.4.0",
     "react-date-object": "^2.1.9",

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { QRCodeSVG } from "qrcode.react";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { supabase } from "@/lib/supabaseClient";
 import styles from "./BuyDollarPage.module.css";
@@ -110,6 +111,8 @@ export default function BuyDollarPage() {
   );
   const [addrLoading, setAddrLoading] = useState(false);
   const [checking, setChecking] = useState(false);
+  /** Sticky compact panel: stays while amount > 0 after first successful convert. */
+  const [compactLayout, setCompactLayout] = useState(false);
 
   useEffect(() => {
     setShowBackButton(true);
@@ -125,6 +128,17 @@ export default function BuyDollarPage() {
   const amountValue = amountRaw ? Number(amountRaw) : 0;
   const canSubmit =
     Number.isFinite(amountValue) && amountValue > 0 && !submitting;
+
+  const applyAmountChange = (nextRaw: string) => {
+    setAmountRaw(nextRaw);
+    setQuote(null);
+    setSelectedNetwork(null);
+    setDepositAddr(null);
+    const nextValue = nextRaw ? Number(nextRaw) : 0;
+    if (!nextRaw || !Number.isFinite(nextValue) || nextValue <= 0) {
+      setCompactLayout(false);
+    }
+  };
 
   const loadDepositAddress = async () => {
     setAddrLoading(true);
@@ -190,6 +204,7 @@ export default function BuyDollarPage() {
       setQuote(body);
       const bestOffer = body.options.find((o) => o.isBestOffer);
       setSelectedNetwork(bestOffer?.network ?? body.options[0]?.network ?? null);
+      setCompactLayout(true);
       await loadDepositAddress();
     } catch (err) {
       console.error("[Payment] calculate-invoice client failed", err);
@@ -256,63 +271,85 @@ export default function BuyDollarPage() {
       <div className={styles.content}>
         <h1 className={styles.title}>خرید دلار/تتر</h1>
 
-        <div className={styles.panel}>
+        <div
+          className={`${styles.panel} ${
+            compactLayout ? styles.panelCompact : ""
+          }`}
+        >
           <label htmlFor="buy-dollar-amount" className={styles.label}>
             مبلغ خرید (USDT)
           </label>
-          <input
-            id="buy-dollar-amount"
-            className={styles.amountInput}
-            inputMode="decimal"
-            dir="ltr"
-            placeholder="0"
-            value={formatUsdtDisplay(amountRaw)}
-            onChange={(e) => {
-              setAmountRaw(parseUsdtAmount(e.target.value));
-              setQuote(null);
-              setSelectedNetwork(null);
-              setDepositAddr(null);
-            }}
-            disabled={submitting}
-            autoComplete="off"
-          />
-          <p
-            className={`${styles.hint} ${amountValue > 0 ? styles.hintLive : ""}`}
-            aria-live="polite"
-          >
-            {amountValue > 0 ? (
-              <>
-                <span className={styles.amountAccent} dir="ltr">
-                  {amountValue.toLocaleString("en-US", {
-                    maximumFractionDigits: 6,
-                  })}
-                </span>
-                {" USDT — برای دیدن قیمت شبکه‌ها «تبدیل و خرید» را بزنید"}
-              </>
-            ) : (
-              "مبلغ مورد نظر خود را وارد کنید"
-            )}
-          </p>
 
-          {submitting ? (
-            <p className={styles.connecting} aria-live="polite">
-              در حال دریافت قیمت زنده و محاسبه فاکتور…
-            </p>
-          ) : null}
+          {compactLayout ? (
+            <div className={styles.amountRow}>
+              <button
+                type="button"
+                className={styles.convertInlineButton}
+                disabled={!canSubmit}
+                onClick={() => void handleConfirm()}
+              >
+                {submitting ? "…" : "تبدیل"}
+              </button>
+              <input
+                id="buy-dollar-amount"
+                className={`${styles.amountInput} ${styles.amountInputCompact}`}
+                inputMode="decimal"
+                dir="ltr"
+                placeholder="0"
+                value={formatUsdtDisplay(amountRaw)}
+                onChange={(e) =>
+                  applyAmountChange(parseUsdtAmount(e.target.value))
+                }
+                disabled={submitting}
+                autoComplete="off"
+              />
+            </div>
+          ) : (
+            <>
+              <input
+                id="buy-dollar-amount"
+                className={styles.amountInput}
+                inputMode="decimal"
+                dir="ltr"
+                placeholder="0"
+                value={formatUsdtDisplay(amountRaw)}
+                onChange={(e) =>
+                  applyAmountChange(parseUsdtAmount(e.target.value))
+                }
+                disabled={submitting}
+                autoComplete="off"
+              />
+              <p
+                className={`${styles.hint} ${
+                  amountValue > 0 ? styles.hintLive : ""
+                }`}
+                aria-live="polite"
+              >
+                {amountValue > 0
+                  ? "برای دیدن قیمت شبکه‌ها «تبدیل و خرید» را بزنید"
+                  : "مبلغ مورد نظر خود را وارد کنید"}
+              </p>
 
-          <button
-            type="button"
-            className={styles.confirmButton}
-            disabled={!canSubmit}
-            onClick={() => void handleConfirm()}
-          >
-            {submitting ? "در حال محاسبه…" : "تبدیل و خرید"}
-          </button>
+              {submitting ? (
+                <p className={styles.connecting} aria-live="polite">
+                  در حال دریافت قیمت زنده و محاسبه فاکتور…
+                </p>
+              ) : null}
+
+              <button
+                type="button"
+                className={styles.confirmButton}
+                disabled={!canSubmit}
+                onClick={() => void handleConfirm()}
+              >
+                {submitting ? "در حال محاسبه…" : "تبدیل و خرید"}
+              </button>
+            </>
+          )}
         </div>
 
         {quote?.options?.length ? (
           <div className={styles.optionsSection}>
-            <h2 className={styles.optionsTitle}>انتخاب شبکه پرداخت</h2>
             <p className={styles.ratesMeta}>
               قیمت پایه تتر:{" "}
               <span className={styles.amountAccent} dir="ltr">
@@ -406,6 +443,22 @@ export default function BuyDollarPage() {
                 <p className={styles.addressHint}>در حال آماده‌سازی آدرس…</p>
               ) : displayAddress ? (
                 <>
+                  <div className={styles.qrWrap} aria-hidden="false">
+                    <div className={styles.qrFrame}>
+                      <QRCodeSVG
+                        value={displayAddress}
+                        size={168}
+                        level="M"
+                        includeMargin={false}
+                        bgColor="#ffffff"
+                        fgColor="#0e0e0f"
+                        title={`QR آدرس ${addressNetworkLabel}`}
+                      />
+                    </div>
+                    <p className={styles.qrCaption}>
+                      اسکن کنید تا آدرس واریز وارد کیف پول شود
+                    </p>
+                  </div>
                   <div className={styles.addressValue} dir="ltr">
                     {displayAddress}
                   </div>
