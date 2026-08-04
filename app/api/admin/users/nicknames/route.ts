@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminContextOrThrow } from "@/lib/supabaseServer";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function POST(request: NextRequest) {
   try {
     const { session, supabase } = await getAdminContextOrThrow(request);

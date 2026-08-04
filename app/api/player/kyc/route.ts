@@ -5,6 +5,7 @@ import { buildServerKycPayload } from "@/lib/kyc/declaration";
 import type { KycQualityChecks, KycSubmitRequest } from "@/src/types/kyc";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 const ALLOWED_MIME = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);

@@ -14,6 +14,7 @@ import { takeRateLimitToken } from "@/lib/deposit/rateLimit";
 import { rialsToTomans } from "@/lib/format/persianAmountWords";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 /** Prefer regions closer to Iran / Arvan CDN (hppaya) — Vercel US often times out (~15s → 504). */
 export const preferredRegion = ["dub1", "fra1"];
 export const maxDuration = 60;

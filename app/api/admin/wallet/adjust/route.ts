@@ -15,6 +15,9 @@ import type {
 } from "@/src/types/transactions";
 import { financeMetricInc } from "@/lib/finance/metrics";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 type ItemResult = {
   userId: string;
   idempotencyKey: string;

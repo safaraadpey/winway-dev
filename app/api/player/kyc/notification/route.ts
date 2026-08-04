@@ -5,6 +5,7 @@ import { getKycRetryReasonLabel } from "@/lib/kyc/retryReasons";
 import type { KycNotificationResponse } from "@/src/types/kyc";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 /**
  * GET /api/player/kyc/notification — unseen approve/retry result for entry popup.

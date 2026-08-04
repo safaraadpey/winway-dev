@@ -5,6 +5,9 @@ import {
 } from "@/lib/provablyFairDrawSpec";
 import { createServiceClient, getUserFromRequest } from "@/lib/supabaseServer";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 type Winner = {
   id: string;
   avatarUrl: string;

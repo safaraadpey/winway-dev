@@ -4,6 +4,7 @@ import { pgPool } from "@/lib/pg";
 import { getOrGenerateUserAddresses } from "@/lib/deposit/cryptoAddressAllocator";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 /**
  * GET /api/user/crypto-addresses

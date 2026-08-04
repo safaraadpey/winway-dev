@@ -8,6 +8,7 @@ import {
 import type { AdminKycReviewRequest } from "@/src/types/kyc";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 /**
  * POST /api/admin/kyc/review — approve or request KYC retry.

@@ -10,6 +10,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdminContextOrThrow, logAdminAction } from '@/lib/supabaseServer'
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function POST(request: NextRequest) {
   try {
     // 1. استخراج session و service client

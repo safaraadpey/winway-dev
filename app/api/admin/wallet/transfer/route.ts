@@ -16,6 +16,9 @@ import {
 } from "@/lib/supabaseServer";
 import { financeMetricInc } from "@/lib/finance/metrics";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 type TransferAction = "deposit" | "withdraw";
 
 interface BulkTransferRequest {

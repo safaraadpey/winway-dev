@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDevPanelContextOrThrow, logAdminAction } from "@/lib/supabaseServer";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 function normalizePlayWindows(raw: unknown): Array<{ start: string; end: string }> {

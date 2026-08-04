@@ -6,6 +6,7 @@ import { registerActiveCryptoAddresses } from "@/lib/deposit/cryptoActiveScan";
 import { createAndStorePriceLock } from "@/lib/deposit/cryptoPriceLock";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export const preferredRegion = ["dub1", "fra1"];
 export const maxDuration = 30;
 

@@ -5,6 +5,9 @@ import type {
   DevPlayerFinanceSummary,
 } from "@/src/types/dev-player-finance";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 const PERIOD_LABELS: Record<DevPlayerFinancePeriod, string> = {
   day: "روزانه",
   week: "هفتگی",

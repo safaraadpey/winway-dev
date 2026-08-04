@@ -10,6 +10,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdminContextOrThrow, logAdminAction } from '@/lib/supabaseServer'
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 const MIN_PASSWORD_LENGTH = 6
 const PASSWORD_CHANGE_COOLDOWN_MINUTES = 20
 const PASSWORD_CHANGE_COOLDOWN_MS = PASSWORD_CHANGE_COOLDOWN_MINUTES * 60 * 1000

@@ -8,6 +8,9 @@ import {
   logSessionsReportDiff,
 } from "@/lib/platformReports/compare";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 function getPeriodRange(period: string): { from: Date; to: Date } {
   const now = new Date();
   if (period === "day") {

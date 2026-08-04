@@ -4,6 +4,7 @@ import { pgPool } from "@/lib/pg";
 import type { AdminKycListItem } from "@/src/types/kyc";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 type ListRow = {
   id: string;

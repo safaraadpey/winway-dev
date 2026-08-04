@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminContextOrThrow } from "@/lib/supabaseServer";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 function getPeriodRange(period: string): { from: Date; to: Date } {
   const now = new Date();
 

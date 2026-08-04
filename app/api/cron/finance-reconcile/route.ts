@@ -7,6 +7,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { runFinanceReconciliation } from "@/lib/finance/reconcile";
 import { getAdminJwtContextOrThrow } from "@/lib/supabaseServer";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 async function authorize(request: NextRequest): Promise<boolean> {
   const cronSecret = process.env.CRON_SECRET;
   const auth = request.headers.get("authorization") || "";

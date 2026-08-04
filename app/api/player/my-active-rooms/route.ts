@@ -14,6 +14,7 @@ import {
 
 // This route uses Node.js APIs (e.g. Buffer for ETag). Force Node runtime to avoid Edge limitations.
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {

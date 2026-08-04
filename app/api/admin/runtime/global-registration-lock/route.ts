@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminContextOrThrow, logAdminAction } from "@/lib/supabaseServer";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 type RuntimeLockRow = {
   global_registration_locked: boolean | null;
   global_registration_locked_at: string | null;

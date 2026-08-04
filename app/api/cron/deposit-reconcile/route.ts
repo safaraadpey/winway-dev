@@ -5,6 +5,7 @@ import { isDepositHttpIngressAllowed } from "@/lib/deposit/flag";
 import { reconcilePendingHamiPayDeposits } from "@/lib/deposit/hamipayFlow";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 /**
  * POST /api/cron/deposit-reconcile

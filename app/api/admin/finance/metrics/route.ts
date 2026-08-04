@@ -5,6 +5,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { financeMetricsSnapshot } from "@/lib/finance/metrics";
 import { getAdminJwtContextOrThrow } from "@/lib/supabaseServer";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   try {
     const ctx = await getAdminJwtContextOrThrow(request);

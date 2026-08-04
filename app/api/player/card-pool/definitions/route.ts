@@ -7,6 +7,7 @@ import {
 import { buildCardPoolVersionKey } from "@/lib/cardPool/types";
 import { createServiceClient, getUserFromRequest } from "@/lib/supabaseServer";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function normalizeCardGrid(raw: unknown): (number | null)[][] | null {

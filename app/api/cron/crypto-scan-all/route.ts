@@ -4,6 +4,7 @@ import { getAdminContextOrThrow } from "@/lib/supabaseServer";
 import { runFullOfflineCryptoScan } from "@/lib/deposit/cryptoMonitor";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export const preferredRegion = ["dub1", "fra1"];
 export const maxDuration = 300;
 

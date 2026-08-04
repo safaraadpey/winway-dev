@@ -6,6 +6,9 @@ import { financeMetricsSnapshot } from "@/lib/finance/metrics";
 import { runFinanceReconciliation } from "@/lib/finance/reconcile";
 import { getAdminJwtContextOrThrow } from "@/lib/supabaseServer";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function POST(request: NextRequest) {
   try {
     const ctx = await getAdminJwtContextOrThrow(request);

@@ -8,6 +8,7 @@ import {
 import { pgPool } from "@/lib/pg";
 import { createServiceClient, getUserFromRequest } from "@/lib/supabaseServer";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type GameMode = "preview" | "waiting" | "running" | "finished";

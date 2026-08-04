@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDevPanelContextOrThrow, logAdminAction } from "@/lib/supabaseServer";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 function parseOptionalPauseSeconds(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
   const num = Number(value);

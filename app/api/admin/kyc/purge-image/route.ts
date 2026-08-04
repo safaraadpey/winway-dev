@@ -4,6 +4,7 @@ import { pgPool } from "@/lib/pg";
 import type { AdminKycPurgeImageRequest } from "@/src/types/kyc";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 /**
  * POST /api/admin/kyc/purge-image

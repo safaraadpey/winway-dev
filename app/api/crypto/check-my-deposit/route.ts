@@ -7,6 +7,7 @@ import { scanUserAddresses } from "@/lib/deposit/cryptoMonitor";
 import { CRYPTO_TTL } from "@/lib/deposit/cryptoRedis";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export const preferredRegion = ["dub1", "fra1"];
 export const maxDuration = 60;
 

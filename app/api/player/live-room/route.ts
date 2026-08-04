@@ -13,6 +13,7 @@ import {
 import { loadCardPoolMetaForRoomFromPg } from "@/lib/cardPool/cardPoolSnapshotPg";
 import { createServiceClient, getUserFromRequest } from "@/lib/supabaseServer";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type LiveRoomResponse = {

@@ -14,6 +14,7 @@ import {
 } from "@/lib/deposit/cryptoXpubSettings";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 async function requireSuperAdmin(request: NextRequest) {
   const ctx = await getAdminContextOrThrow(request);

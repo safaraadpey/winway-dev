@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createServiceClient, getUserFromRequest } from "@/lib/supabaseServer";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 type LobbyRoomGroup = {
   templateId: string | null;
   entryRoomId: string | null;

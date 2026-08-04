@@ -6,6 +6,9 @@ import {
 import { resolveAdminDashboardRequestAuth } from "@/lib/auth/resolveAdminDashboardRequestAuth";
 import { loadAdminDashboardSnapshot } from "@/lib/dashboard/loadAdminDashboardSnapshot";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   try {
     const { userId, supabase } = await resolveAdminDashboardRequestAuth(request);

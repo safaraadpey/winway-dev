@@ -12,6 +12,9 @@ import {
 } from "@/lib/platformReports/compare";
 import { parsePeriodParams, parseStatusList } from "@/lib/platformReports/period";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 /**
  * Stage 2 — completed/cancelled (terminal) session history.
  * Flag: PLATFORM_HISTORY_SOURCE=legacy|platform|compare (default legacy)

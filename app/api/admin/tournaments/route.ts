@@ -19,6 +19,9 @@ import {
   logAdminAction,
 } from "@/lib/supabaseServer";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 const TOURNAMENT_ADMIN_ROLES = new Set(["admin", "super"]);
 
 function mapRpcError(message: string): { status: number; error: string; message: string } {

@@ -4,6 +4,7 @@ import { calculateCryptoInvoice } from "@/lib/deposit/cryptoInvoice";
 import { takeRateLimitToken } from "@/lib/deposit/rateLimit";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export const preferredRegion = ["dub1", "fra1"];
 export const maxDuration = 30;
 

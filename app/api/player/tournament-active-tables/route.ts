@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabaseServer";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 type TournamentActiveTable = {
   id: string;
   prize: number;

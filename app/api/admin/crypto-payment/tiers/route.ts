@@ -9,6 +9,7 @@ import {
 } from "@/lib/deposit/cryptoInvoice";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 async function requireAdmin(request: NextRequest) {
   const ctx = await getAdminContextOrThrow(request);
