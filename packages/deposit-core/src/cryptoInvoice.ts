@@ -21,7 +21,7 @@ export type CryptoRateTier = {
 };
 
 export type InvoiceBadge = {
-  type: "best_bonus" | "bonus";
+  type: "best_bonus" | "bonus" | "multiplier_bonus";
   text: string;
   tone: "green" | "orange" | "teal";
 };
