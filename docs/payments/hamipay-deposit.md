@@ -9,11 +9,12 @@ DEPOSIT_DOMAIN_ENABLED=true
 # Live HamiPay (also unlocks create when DEPOSIT_DOMAIN_ENABLED is unset,
 # unless DEPOSIT_DOMAIN_ENABLED=false explicitly)
 HAMIPAY_API_KEY=...                 # NEVER NEXT_PUBLIC_
-HAMIPAY_API_BASE_URL=https://api.example.com
+# Base includes /api/v1 (HamiPay / hppaya)
+HAMIPAY_API_BASE_URL=https://hamipay.hppaya.com/api/v1
 
-# Optional path overrides
-HAMIPAY_CREATE_PATH=/v1/payments
-HAMIPAY_STATUS_PATH=/v1/payments/{paymentId}
+# Path overrides — with base ending in /api/v1 use /payments (NOT /v1/payments)
+HAMIPAY_CREATE_PATH=/payments
+HAMIPAY_STATUS_PATH=/payments/{paymentId}
 
 # Provider amount unit for create/status payloads
 # toman = same as wallet unit (default, matches working Postman)

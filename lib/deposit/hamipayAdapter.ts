@@ -189,7 +189,13 @@ export async function hamipayCreatePayment(
   }
 
   const { apiKey, baseUrl } = requireConfig();
-  const path = process.env.HAMIPAY_CREATE_PATH || "/v1/payments";
+  // If base already ends with /api/v1 (Vercel config), default path is /payments
+  // — not /v1/payments (that produced .../api/v1/v1/payments → wrong).
+  const path =
+    process.env.HAMIPAY_CREATE_PATH ||
+    (baseUrl.endsWith("/v1") || baseUrl.endsWith("/api/v1")
+      ? "/payments"
+      : "/v1/payments");
   const url = `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
 
   const description = (
@@ -312,7 +318,10 @@ export async function hamipayGetPaymentStatus(opts: {
 
   const { apiKey, baseUrl } = requireConfig();
   const pathTemplate =
-    process.env.HAMIPAY_STATUS_PATH || "/v1/payments/{paymentId}";
+    process.env.HAMIPAY_STATUS_PATH ||
+    (baseUrl.endsWith("/v1") || baseUrl.endsWith("/api/v1")
+      ? "/payments/{paymentId}"
+      : "/v1/payments/{paymentId}");
   const path = pathTemplate.replace(
     "{paymentId}",
     encodeURIComponent(opts.providerPaymentId)
