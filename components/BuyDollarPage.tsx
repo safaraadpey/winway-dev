@@ -263,12 +263,18 @@ export default function BuyDollarPage() {
       }
       const confirmed = body.data?.confirmed?.length ?? 0;
       const pending = body.data?.pending?.length ?? 0;
+      const scanErrors: string[] = Array.isArray(body.data?.errors)
+        ? body.data.errors
+        : [];
       if (confirmed > 0) {
         toast.success(
           `واریز تأیید شد — ${body.data.confirmed[0].tomanAmount?.toLocaleString("en-US")} تومان`
         );
       } else if (pending > 0) {
         toast("تراکنش مشاهده شد؛ در انتظار تأیید شبکه…");
+      } else if (scanErrors.length > 0) {
+        console.error("[Payment] check-my-deposit scan errors", scanErrors);
+        toast.error("خطا در اتصال به شبکه بلاک‌چین. کمی بعد دوباره تلاش کنید.");
       } else {
         toast("هنوز واریز جدیدی یافت نشد");
       }
