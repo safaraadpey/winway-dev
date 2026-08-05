@@ -3,7 +3,8 @@ import {
   buildDrawVerificationSpec,
   type DrawVerificationSpec,
 } from "@/lib/provablyFairDrawSpec";
-import { createServiceClient, getUserFromRequest } from "@/lib/supabaseServer";
+import { getUserFromRequest } from "@/lib/supabaseServer";
+import { pgPool } from "@/lib/pg";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +28,18 @@ type RoomResultsResponse = {
   tournamentId: string | null;
 };
 
+type ResultRow = {
+  user_id: string;
+  win_type: string;
+  reward_amount: string | number;
+  ticket_id: string | null;
+  draw_number: number | null;
+};
+
+/**
+ * GET /api/player/room-results?roomId=
+ * Critical snapshot — Direct PostgreSQL (not Supabase SDK / RLS).
+ */
 export async function GET(request: NextRequest) {
   try {
     const url = new URL(request.url);
@@ -39,63 +52,72 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Auth اختیاری؛ خطای auth مانع پاسخ نمی‌شود
     try {
       await getUserFromRequest(request);
     } catch (err) {
-      console.error("room-results auth error:", err);
+      console.error("[Room] room-results auth error:", err);
     }
 
-    const supabase = createServiceClient();
-
-    // گرفتن نتایج بر اساس جدول results
-    // فقط فیلدهایی که مطمئن هستیم وجود دارند را select می‌کنیم
-    const { data: resultRows, error: resultsError } = await supabase
-      .from("results")
-      .select("user_id, win_type, reward_amount, ticket_id, draw_number")
-      .eq("room_id", roomId);
-
-    if (resultsError) {
-      console.error("room-results fetch error:", resultsError);
+    if (!pgPool) {
       return NextResponse.json(
-        { error: "internal_error", message: "Failed to load room results" },
-        { status: 500 }
+        { error: "db_unavailable", message: "پایگاه‌داده در دسترس نیست." },
+        { status: 503 }
       );
     }
 
+    console.log("[Room] room-results load", { roomId });
+
+    const { rows: resultRows } = await pgPool.query<ResultRow>(
+      `
+      SELECT user_id, win_type::text AS win_type, reward_amount, ticket_id, draw_number
+      FROM public.results
+      WHERE room_id = $1::uuid
+      ORDER BY draw_number NULLS LAST, created_at ASC
+      `,
+      [roomId]
+    );
+
     const userIds = Array.from(
-      new Set((resultRows || []).map((r) => r.user_id).filter(Boolean))
-    ) as string[];
-
-    const { data: userRows, error: usersError } = userIds.length
-      ? await supabase
-          .from("users")
-          .select("id, username, user_profiles(nickname, avatar_url)")
-          .in("id", userIds)
-      : { data: [], error: null };
-
-    if (usersError) {
-      console.error("room-results users fetch error:", usersError);
-    }
+      new Set(resultRows.map((r) => r.user_id).filter(Boolean))
+    );
 
     const userMap = new Map<
       string,
       { nickname: string | null; username: string | null; avatarUrl: string | null }
     >();
-    (userRows || []).forEach((u: any) => {
-      const profile = Array.isArray(u.user_profiles)
-        ? u.user_profiles[0]
-        : u.user_profiles;
-      userMap.set(u.id, {
-        nickname: profile?.nickname ?? null,
-        username: u.username ?? null,
-        avatarUrl: profile?.avatar_url ?? null,
-      });
-    });
 
-    const mapWinner = (r: any) => {
-      const info = userMap.get(r.user_id) || { nickname: null, username: null, avatarUrl: null };
-      const displayName = info.nickname || info.username || r.user_id || "player";
+    if (userIds.length > 0) {
+      const { rows: userRows } = await pgPool.query<{
+        id: string;
+        username: string | null;
+        nickname: string | null;
+        avatar_url: string | null;
+      }>(
+        `
+        SELECT u.id, u.username, p.nickname, p.avatar_url
+        FROM public.users u
+        LEFT JOIN public.user_profiles p ON p.user_id = u.id
+        WHERE u.id = ANY($1::uuid[])
+        `,
+        [userIds]
+      );
+      for (const u of userRows) {
+        userMap.set(u.id, {
+          nickname: u.nickname ?? null,
+          username: u.username ?? null,
+          avatarUrl: u.avatar_url ?? null,
+        });
+      }
+    }
+
+    const mapWinner = (r: ResultRow): Winner => {
+      const info = userMap.get(r.user_id) || {
+        nickname: null,
+        username: null,
+        avatarUrl: null,
+      };
+      const displayName =
+        info.nickname || info.username || r.user_id || "player";
       return {
         id: r.user_id,
         avatarUrl: info.avatarUrl || "",
@@ -106,51 +128,53 @@ export async function GET(request: NextRequest) {
       };
     };
 
-    const lineWinners = (resultRows || [])
+    const lineWinners = resultRows
       .filter((r) => r.win_type === "line")
       .map(mapWinner);
-
-    const fullWinners = (resultRows || [])
+    const fullWinners = resultRows
       .filter((r) => r.win_type === "full")
       .map(mapWinner);
 
-    // As requested: show BOTH room_seed and room_seed_hash without enforcing "finished-only" reveal.
-    // (Service role is used here; this intentionally bypasses the security gating RPC.)
-    const { data: roomRow, error: roomError } = await supabase
-      .from("rooms")
-      .select("room_seed, room_seed_hash, room_template_id")
-      .eq("id", roomId)
-      .maybeSingle();
-    if (roomError) {
-      console.error("room-results room fetch error:", roomError);
-    }
-    const seed: string | null = (roomRow as any)?.room_seed ?? null;
-    const commitHash: string | null = (roomRow as any)?.room_seed_hash ?? null;
-    const roomTemplateId: string | null = (roomRow as any)?.room_template_id ?? null;
+    const { rows: roomRows } = await pgPool.query<{
+      room_seed_hex: string | null;
+      room_seed_hash: string | null;
+      room_template_id: string | null;
+      room_type: string | null;
+    }>(
+      `
+      SELECT
+        CASE
+          WHEN r.room_seed IS NULL THEN NULL
+          ELSE encode(r.room_seed, 'hex')
+        END AS room_seed_hex,
+        r.room_seed_hash,
+        r.room_template_id,
+        rt.room_type::text AS room_type
+      FROM public.rooms r
+      LEFT JOIN public.room_templates rt ON rt.id = r.room_template_id
+      WHERE r.id = $1::uuid
+      LIMIT 1
+      `,
+      [roomId]
+    );
 
-    let isTournament = false;
-    if (roomTemplateId) {
-      const { data: templateRow, error: templateError } = await supabase
-        .from("room_templates")
-        .select("room_type")
-        .eq("id", roomTemplateId)
-        .maybeSingle();
-      if (templateError) {
-        console.error("room-results template fetch error:", templateError);
-      }
-      isTournament = (templateRow as any)?.room_type === "tournament";
-    }
+    const roomRow = roomRows[0];
+    const seed = roomRow?.room_seed_hex ?? null;
+    const commitHash = roomRow?.room_seed_hash ?? null;
+    const isTournament = roomRow?.room_type === "tournament";
 
-    const { data: drawRows, error: drawsError } = await supabase
-      .from("draws")
-      .select("number")
-      .eq("room_id", roomId)
-      .not("processed_at", "is", null)
-      .order("processed_at", { ascending: true });
-    if (drawsError) {
-      console.error("room-results draws fetch error:", drawsError);
-    }
-    const drawnNumbers = (drawRows || [])
+    const { rows: drawRows } = await pgPool.query<{ number: number }>(
+      `
+      SELECT number
+      FROM public.draws
+      WHERE room_id = $1::uuid
+        AND processed_at IS NOT NULL
+      ORDER BY processed_at ASC
+      `,
+      [roomId]
+    );
+
+    const drawnNumbers = drawRows
       .map((d) => Number(d.number))
       .filter((n) => Number.isFinite(n) && n >= 1 && n <= 90);
 
@@ -163,17 +187,25 @@ export async function GET(request: NextRequest) {
 
     let tournamentId: string | null = null;
     if (isTournament) {
-      const { data: trrRow, error: trrError } = await supabase
-        .from("tournament_round_rooms")
-        .select("tournament_id")
-        .eq("room_id", roomId)
-        .limit(1)
-        .maybeSingle();
-      if (trrError) {
-        console.error("room-results tournament lookup error:", trrError);
-      }
-      tournamentId = (trrRow as any)?.tournament_id ?? null;
+      const { rows: trrRows } = await pgPool.query<{ tournament_id: string }>(
+        `
+        SELECT tournament_id
+        FROM public.tournament_round_rooms
+        WHERE room_id = $1::uuid
+        LIMIT 1
+        `,
+        [roomId]
+      );
+      tournamentId = trrRows[0]?.tournament_id ?? null;
     }
+
+    console.log("[Room] room-results ready", {
+      roomId,
+      lineWinners: lineWinners.length,
+      fullWinners: fullWinners.length,
+      draws: drawnNumbers.length,
+      isTournament,
+    });
 
     const payload: RoomResultsResponse = {
       lineWinners,
@@ -187,9 +219,12 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(payload);
   } catch (err: any) {
-    console.error("GET /api/player/room-results error:", err);
+    console.error("[Room] GET /api/player/room-results error:", err);
     return NextResponse.json(
-      { error: "internal_error", message: err?.message || "Failed to load room results" },
+      {
+        error: "internal_error",
+        message: err?.message || "Failed to load room results",
+      },
       { status: 500 }
     );
   }

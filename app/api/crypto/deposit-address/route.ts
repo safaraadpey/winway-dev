@@ -14,7 +14,8 @@ export const maxDuration = 30;
 
 /**
  * GET /api/crypto/deposit-address
- * Allocates HD addresses, touches Hot Watch (1h), locks price 20m.
+ * Allocates HD addresses (source of truth). Hot Watch + price lock are best-effort
+ * side effects — they must not block returning the user's dedicated addresses.
  */
 export async function GET(request: Request) {
   const user = await getUserFromRequest(request);
@@ -35,9 +36,11 @@ export async function GET(request: Request) {
   try {
     console.log("[Payment] deposit-address request", { userId: user.id });
 
+    // Critical path: allocate / return dedicated addresses from PostgreSQL.
     const addresses = await getOrGenerateUserAddresses(pgPool, user.id);
 
-    const [active, priceLock] = await Promise.all([
+    // Side effects — never fail the address response if Redis/price APIs break.
+    const [activeResult, priceLockResult] = await Promise.allSettled([
       registerActiveCryptoAddresses({
         userId: user.id,
         bep20Address: addresses.bep20Address,
@@ -46,22 +49,64 @@ export async function GET(request: Request) {
       createAndStorePriceLock(pgPool, user.id),
     ]);
 
+    let activeUntil: string | null = null;
+    if (activeResult.status === "fulfilled") {
+      activeUntil = activeResult.value.expiresAt ?? null;
+    } else {
+      console.error("[Payment] deposit-address hot-watch failed", {
+        userId: user.id,
+        err:
+          activeResult.reason instanceof Error
+            ? activeResult.reason.message
+            : String(activeResult.reason),
+      });
+    }
+
+    let priceLock: {
+      lockedAt: string;
+      expiresAt: string;
+      rates: {
+        usdtTomanPrice: number;
+        trxUsdPrice: number;
+        bnbUsdPrice: number;
+      };
+    } | null = null;
+    if (priceLockResult.status === "fulfilled") {
+      const lock = priceLockResult.value;
+      priceLock = {
+        lockedAt: lock.lockedAt,
+        expiresAt: lock.expiresAt,
+        rates: {
+          usdtTomanPrice: lock.rates.usdtTomanPrice,
+          trxUsdPrice: lock.rates.trxUsdPrice,
+          bnbUsdPrice: lock.rates.bnbUsdPrice,
+        },
+      };
+    } else {
+      console.error("[Payment] deposit-address price-lock failed", {
+        userId: user.id,
+        err:
+          priceLockResult.reason instanceof Error
+            ? priceLockResult.reason.message
+            : String(priceLockResult.reason),
+      });
+    }
+
+    console.log("[Payment] deposit-address ok", {
+      userId: user.id,
+      derivationIndex: addresses.derivationIndex,
+      hotWatch: activeResult.status,
+      priceLock: priceLockResult.status,
+    });
+
     return NextResponse.json({
       ok: true,
       data: {
         bep20Address: addresses.bep20Address,
         trc20Address: addresses.trc20Address,
         derivationIndex: addresses.derivationIndex,
-        activeUntil: active.expiresAt,
-        priceLock: {
-          lockedAt: priceLock.lockedAt,
-          expiresAt: priceLock.expiresAt,
-          rates: {
-            usdtTomanPrice: priceLock.rates.usdtTomanPrice,
-            trxUsdPrice: priceLock.rates.trxUsdPrice,
-            bnbUsdPrice: priceLock.rates.bnbUsdPrice,
-          },
-        },
+        activeUntil,
+        priceLock,
       },
     });
   } catch (err: unknown) {

@@ -42,7 +42,7 @@ type DepositAddressData = {
   bep20Address: string;
   trc20Address: string;
   derivationIndex: number;
-  activeUntil: string;
+  activeUntil: string | null;
   priceLock: {
     lockedAt: string;
     expiresAt: string;
@@ -51,7 +51,7 @@ type DepositAddressData = {
       trxUsdPrice: number;
       bnbUsdPrice: number;
     };
-  };
+  } | null;
 };
 
 function parseUsdtAmount(raw: string): string {
