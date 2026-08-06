@@ -60,6 +60,12 @@
   font-weight: 600;
 }
 
+.infoValueCollected {
+  composes: numeric-text numeric-text--14 from global;
+  color: #93c5fd;
+  font-weight: 600;
+}
+
 .infoValueDefault {
   composes: numeric-text numeric-text--14 from global;
   color: #f3f4f6;
@@ -163,6 +169,10 @@
 
 :global(html[data-theme="light"]) .infoValuePrize {
   color: #d97706;
+}
+
+:global(html[data-theme="light"]) .infoValueCollected {
+  color: #2563eb;
 }
 
 :global(html[data-theme="light"]) .infoValueDefault {

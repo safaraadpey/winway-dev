@@ -14,12 +14,20 @@ type TournamentRow = {
   currency: string | null;
   ticket_price: number | null;
   guaranteed_prize: number | null;
+  commission_rate: number | null;
   meta?: {
     min_players_for_guarantee?: number | null;
     final_winners_count?: number | null;
     entry_currency?: string | null;
   } | null;
 };
+
+function normalizeCommissionRate(value: number | null | undefined): number {
+  if (value == null || Number.isNaN(value)) return 0;
+  if (value < 0) return 0;
+  if (value > 1) return value / 100;
+  return value;
+}
 
 export default function TournamentsPage() {
   const router = useRouter();
@@ -29,6 +37,7 @@ export default function TournamentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<TournamentRow[]>([]);
   const [entryCounts, setEntryCounts] = useState<Record<string, number>>({});
+  const [ticketTotals, setTicketTotals] = useState<Record<string, number>>({});
   const [viewMode, setViewMode] = useState<"active" | "finished">("active");
 
   useEffect(() => {
@@ -63,7 +72,7 @@ export default function TournamentsPage() {
     const { data, error } = await supabase
       .from("tournaments")
       .select(
-        "id,title,status,start_at,currency,ticket_price,guaranteed_prize,meta"
+        "id,title,status,start_at,currency,ticket_price,guaranteed_prize,commission_rate,meta"
       )
       .in("status", ["registration_open", "running", "settling", "finished"])
       .order("start_at", { ascending: false })
@@ -73,6 +82,7 @@ export default function TournamentsPage() {
       setError(error.message || "خطا در دریافت لیست تورنومنت‌ها");
       setRows([]);
       setEntryCounts({});
+      setTicketTotals({});
     } else {
       const items = ((data as TournamentRow[]) ?? []).slice();
       const statusPriority: Record<string, number> = {
@@ -96,28 +106,41 @@ export default function TournamentsPage() {
       const tournamentIds = items.map((i) => i.id);
       if (tournamentIds.length === 0) {
         setEntryCounts({});
+        setTicketTotals({});
       } else {
         const { data: entriesData, error: entriesError } = await supabase
           .from("tournament_entries")
-          .select("tournament_id,user_id")
+          .select("tournament_id,user_id,tickets_count")
           .in("tournament_id", tournamentIds)
           .eq("status", "created");
 
         if (entriesError) {
           setEntryCounts({});
+          setTicketTotals({});
         } else {
           const usersByTournament: Record<string, Set<string>> = {};
-          for (const row of (entriesData as { tournament_id: string; user_id: string }[]) ?? []) {
+          const ticketsByTournament: Record<string, number> = {};
+          for (const row of (entriesData as {
+            tournament_id: string;
+            user_id: string;
+            tickets_count: number | null;
+          }[]) ?? []) {
             if (!usersByTournament[row.tournament_id]) {
               usersByTournament[row.tournament_id] = new Set<string>();
             }
             usersByTournament[row.tournament_id].add(row.user_id);
+            ticketsByTournament[row.tournament_id] =
+              (ticketsByTournament[row.tournament_id] ?? 0) +
+              (Number(row.tickets_count) || 0);
           }
           const nextCounts: Record<string, number> = {};
+          const nextTickets: Record<string, number> = {};
           for (const id of tournamentIds) {
             nextCounts[id] = usersByTournament[id]?.size ?? 0;
+            nextTickets[id] = ticketsByTournament[id] ?? 0;
           }
           setEntryCounts(nextCounts);
+          setTicketTotals(nextTickets);
         }
       }
     }
@@ -204,6 +227,22 @@ export default function TournamentsPage() {
                     const minPlayersForGuarantee =
                       t.meta?.min_players_for_guarantee ?? null;
                     const finalWinnersCount = t.meta?.final_winners_count ?? null;
+                    const entryCurrency = (
+                      t.meta?.entry_currency ||
+                      t.currency ||
+                      "IRR"
+                    ).toString();
+                    const totalTickets = ticketTotals[t.id] ?? 0;
+                    const price = Number(t.ticket_price) || 0;
+                    const commissionRate = normalizeCommissionRate(
+                      t.commission_rate
+                    );
+                    const prizePoolGross =
+                      entryCurrency === "DING" ? 0 : price * totalTickets;
+                    const collectedAmount = Math.max(
+                      0,
+                      prizePoolGross * (1 - commissionRate)
+                    );
                     return (
                       <div
                         key={t.id}
@@ -246,21 +285,21 @@ export default function TournamentsPage() {
                               {t.ticket_price != null
                                 ? t.ticket_price <= 0
                                   ? "رایگان"
-                                  : t.ticket_price.toLocaleString("fa-IR")
+                                  : t.ticket_price.toLocaleString("en-US")
                                 : "-"}
                             </span>
                           </div>
                           <div className={styles.field}>
                             <span className={styles.fieldLabel}>تعداد شرکت‌کننده</span>
                             <span className={styles.fieldValue}>
-                              {entriesCount.toLocaleString("fa-IR")}
+                              {entriesCount.toLocaleString("en-US")}
                             </span>
                           </div>
                           <div className={styles.field}>
                             <span className={styles.fieldLabel}>تعداد برنده نهایی</span>
                             <span className={styles.fieldValue}>
                               {finalWinnersCount != null
-                                ? finalWinnersCount.toLocaleString("fa-IR")
+                                ? finalWinnersCount.toLocaleString("en-US")
                                 : "-"}
                             </span>
                           </div>
@@ -268,15 +307,21 @@ export default function TournamentsPage() {
                             <span className={styles.fieldLabel}>جایزه تضمینی</span>
                             <span className={styles.fieldValue}>
                               {t.guaranteed_prize != null
-                                ? t.guaranteed_prize.toLocaleString("fa-IR")
+                                ? t.guaranteed_prize.toLocaleString("en-US")
                                 : "-"}
+                            </span>
+                          </div>
+                          <div className={styles.field}>
+                            <span className={styles.fieldLabel}>مبلغ جمع شده</span>
+                            <span className={styles.fieldValue} dir="ltr">
+                              {collectedAmount.toLocaleString("en-US")}
                             </span>
                           </div>
                           <div className={styles.field}>
                             <span className={styles.fieldLabel}>حداقل بازیکن</span>
                             <span className={styles.fieldValue}>
                               {minPlayersForGuarantee != null
-                                ? minPlayersForGuarantee.toLocaleString("fa-IR")
+                                ? minPlayersForGuarantee.toLocaleString("en-US")
                                 : "-"}
                             </span>
                           </div>

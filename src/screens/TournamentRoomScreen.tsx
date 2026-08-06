@@ -478,10 +478,6 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   const entryCurrency =
     (tournament?.meta?.entry_currency || tournament?.currency || "IRR").toString();
   const guaranteedPrize = tournament?.guaranteed_prize ?? 0;
-  const minPlayersForGuarantee =
-    tournament?.meta?.min_players_for_guarantee != null
-      ? Number(tournament.meta.min_players_for_guarantee)
-      : null;
   const playersCount = entries?.length ?? 0;
   const normalizeCommissionRate = (value: number | null | undefined) => {
     if (value == null || Number.isNaN(value)) return 0;
@@ -497,22 +493,20 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   );
   const prizePoolGross = entryCurrency === "DING" ? 0 : price * totalTickets;
   const prizePoolNet = Math.max(0, prizePoolGross * (1 - commissionRate));
-  const guaranteeActive =
-    hasGuarantee &&
-    (minPlayersForGuarantee == null ||
-      minPlayersForGuarantee <= 0 ||
-      playersCount >= minPlayersForGuarantee);
-  const displayPrize = guaranteeActive
+  // Display: guaranteed tournaments show guarantee while pool is below it.
+  // min_players_for_guarantee is settlement eligibility, not this UI floor.
+  const displayPrize = hasGuarantee
     ? Math.max(guaranteedPrize, prizePoolNet)
     : prizePoolNet;
-  const showGuaranteeLabel = guaranteeActive && prizePoolNet <= guaranteedPrize;
+  const showGuaranteeLabel = hasGuarantee && prizePoolNet < guaranteedPrize;
   const prizeLabel =
     Number.isFinite(displayPrize) && displayPrize > 0
-      ? displayPrize.toLocaleString("fa-IR")
+      ? displayPrize.toLocaleString("en-US")
       : "-";
-  const buyInLabel = `${price.toLocaleString("fa-IR")} ${entryCurrency}`;
+  const collectedLabel = prizePoolNet.toLocaleString("en-US");
+  const buyInLabel = `${price.toLocaleString("en-US")} ${entryCurrency}`;
   const entryCurrencyLabel = entryCurrency === "DING" ? "DING" : "تومن";
-  const playersLabel = playersCount.toLocaleString("fa-IR");
+  const playersLabel = playersCount.toLocaleString("en-US");
   const winnersCount =
     tournament?.meta?.final_winners_count != null
       ? Number(tournament.meta.final_winners_count)
@@ -804,6 +798,12 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
               جایزه کل {showGuaranteeLabel ? "(گارانتی)" : ""}
             </span>
             <span className={screenStyles.infoValuePrize}>{prizeLabel}</span>
+          </div>
+          <div className={screenStyles.infoRow}>
+            <span className={screenStyles.infoLabel}>مبلغ جمع شده</span>
+            <span className={screenStyles.infoValueCollected} dir="ltr">
+              {collectedLabel}
+            </span>
           </div>
           <div className={screenStyles.infoRow}>
             <span className={screenStyles.infoLabel}>(Buy-in) ورودی</span>
