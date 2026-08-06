@@ -50,6 +50,8 @@ function mapToFormValues(row: TournamentRow): TournamentFormValues {
     min_players_to_start:
       (row.meta as any)?.min_players_to_start ?? 3,
     final_winners_count: (row.meta as any)?.final_winners_count ?? 1,
+    registration_extend_minutes:
+      (row.meta as any)?.registration_extend_minutes ?? 60,
   };
 }
 
