@@ -87,6 +87,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
       id: string;
       user_id: string;
       tickets_count: number | null;
+      status?: string | null;
       users?: { username?: string | null; email?: string | null } | null;
     }[]
   >([]);
@@ -173,9 +174,9 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
           .single(),
         supabase
           .from("tournament_entries")
-          .select("id,user_id,tickets_count,users:users(username,email)")
+          .select("id,user_id,tickets_count,status,users:users(username,email)")
           .eq("tournament_id", tournamentId)
-          .eq("status", "created"),
+          .in("status", ["created", "settled"]),
       ]);
 
       if (error || entriesErr) {
@@ -568,9 +569,9 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     if (!tournament?.id) return;
     const { data, error } = await supabase
       .from("tournament_entries")
-      .select("id,user_id,tickets_count,users:users(username,email)")
+      .select("id,user_id,tickets_count,status,users:users(username,email)")
       .eq("tournament_id", tournament.id)
-      .eq("status", "created");
+      .in("status", ["created", "settled"]);
     if (error) {
       toast.error("خطا در به‌روزرسانی لیست ثبت‌نام");
       return;
@@ -585,7 +586,11 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
       toast.error("ابتدا وارد حساب کاربری شوید");
       return;
     }
-    const userEntry = entries.find((e) => e.user_id === currentUserId);
+    const userEntry = entries.find(
+      (e) =>
+        e.user_id === currentUserId &&
+        (e.status == null || e.status === "created")
+    );
     if (!userEntry) {
       toast.error("ثبت‌نامی برای لغو یافت نشد");
       return;
@@ -643,7 +648,13 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   }, [entries, pickHumanName, profileNamesByUserId, tournament]);
 
   const currentEntry = useMemo(
-    () => entries.find((e) => currentUserId && e.user_id === currentUserId),
+    () =>
+      entries.find(
+        (e) =>
+          currentUserId &&
+          e.user_id === currentUserId &&
+          (e.status == null || e.status === "created")
+      ),
     [currentUserId, entries]
   );
 
@@ -803,6 +814,11 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
           useLongCountdown
           tournamentStatus={tournament?.status ?? null}
           currentRoundNo={currentRoundNo}
+          waitingListMessage={
+            isTournamentEnded
+              ? "ثبت‌نام این تورنومنت به پایان رسیده است"
+              : undefined
+          }
         />
 
         <ActiveTablesSection

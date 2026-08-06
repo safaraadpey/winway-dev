@@ -52,7 +52,8 @@ export default function TournamentActiveCardsStatus({
     return `${mins}:${secs}`;
   };
   const safeSeconds = secondsRemaining ?? 0;
-  const isFinished = tournamentStatus === "finished";
+  const isFinished =
+    tournamentStatus === "finished" || tournamentStatus === "settling";
   const showRoundStatus = safeSeconds <= 0;
   const timerLabel = formatTime(safeSeconds);
   const roundLabel = currentRoundNo != null ? `راند ${currentRoundNo}` : "راند";
@@ -98,7 +99,7 @@ export default function TournamentActiveCardsStatus({
         )}
       </div>
 
-      {cards.length === 0 && (
+      {cards.length === 0 && !isFinished && (
         <div className={panelStyles.activeCardsWaitingBanner}>
           <span className={panelStyles.activeCardsWaitingText}>
             {waitingListMessage}

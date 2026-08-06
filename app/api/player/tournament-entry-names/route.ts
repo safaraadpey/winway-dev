@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       .from("tournament_entries")
       .select("user_id")
       .eq("tournament_id", tournamentId)
-      .eq("status", "created");
+      .in("status", ["created", "settled"]);
 
     if (entriesErr) {
       return NextResponse.json(
