@@ -63,7 +63,15 @@ export async function GET(request: Request) {
       .order("round_no", { ascending: false })
       .order("table_no", { ascending: true });
 
-    if (roundErr || !roundRooms || roundRooms.length === 0) {
+    if (roundErr) {
+      console.error("[Tournament] active-tables roundRooms error:", roundErr);
+      return NextResponse.json(
+        { error: "internal_error", message: "Failed to load tournament round rooms." },
+        { status: 500 }
+      );
+    }
+
+    if (!roundRooms || roundRooms.length === 0) {
       return NextResponse.json({
         tables: [] as TournamentActiveTable[],
         currentRoundNo: null,
@@ -207,9 +215,12 @@ export async function GET(request: Request) {
         .filter((value): value is number => value != null)
         .sort((a, b) => b - a)[0] ?? null;
 
-    return NextResponse.json({ tables, currentRoundNo });
+    return NextResponse.json(
+      { tables, currentRoundNo },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (err: unknown) {
-    console.error("GET /api/player/tournament-active-tables error:", err);
+    console.error("[Tournament] GET /api/player/tournament-active-tables error:", err);
     const message = err instanceof Error ? err.message : "Failed to load tournament active tables.";
     return NextResponse.json({ error: "internal_error", message }, { status: 500 });
   }

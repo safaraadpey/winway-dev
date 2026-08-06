@@ -203,7 +203,8 @@ export default function GameRoomScreen({
 }: GameRoomScreenProps) {
   const router = useRouter();
   const { refreshWalletBalances } = useBalancesContext();
-  const { invalidate: invalidateActiveGames } = useActiveGamesContext();
+  const { invalidate: invalidateActiveGames, upsertOptimistic: upsertOptimisticActiveRoom } =
+    useActiveGamesContext();
   useScreenWakeLock(Boolean(roomId));
 
   // State برای اطلاعات روم
@@ -883,6 +884,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
         await cancelWaitingRoom(roomId);
         toast.success("رزرو شما لغو شد");
         await refreshWalletBalances?.();
+        invalidateActiveGames?.();
         setTimeout(() => {
           invalidateActiveGames?.();
         }, 800);
@@ -936,15 +938,38 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
         router.replace(`/player/gameroom?roomId=${targetRoomId}`);
       }
 
+      // چیپ فعال را فوری نشان بده؛ snapshot بعدی لیست را اصلاح می‌کند.
+      if (targetRoomId) {
+        const prevUserCards =
+          targetRoomId === roomId && currentUserId
+            ? cardsToRenderForCancel.find((c) => c.id === currentUserId)?.count ?? 0
+            : 0;
+        const nextCardCount = Math.max(1, prevUserCards + selectedQuantity);
+        upsertOptimisticActiveRoom?.({
+          roomId: targetRoomId,
+          roomCode: roomInfo.roomCode || null,
+          status: (["waiting", "playing", "live", "settling"].includes(roomInfo.status)
+            ? roomInfo.status
+            : "waiting") as "waiting" | "playing" | "live" | "settling",
+          cardPrice: roomInfo.cardPrice,
+          currency: roomInfo.currency,
+          cardCount: nextCardCount,
+          prize: roomInfo.cardPrice * nextCardCount,
+          roomType: roomInfo.roomType || "normal",
+        });
+      } else {
+        invalidateActiveGames?.();
+      }
+
       // رفرش کیف پول به‌صورت غیرمسدودکننده — نباید جلوی ناوبری بالا را بگیرد.
       void Promise.resolve(refreshWalletBalances?.()).catch((walletErr) => {
         console.warn("[JOIN_RPC][WALLET_REFRESH_FAILED]", walletErr);
       });
 
-      // تاخیر برای اطمینان از اینکه بازی جدید در سرور ساخته شده است
+      // Snapshot confirm (در صورت تاخیر commit سرور یک بار دیگر)
       setTimeout(() => {
         invalidateActiveGames?.();
-      }, 800); // 800ms delay برای اینکه سرور فرصت ایجاد بازی را داشته باشد
+      }, 800);
     } catch (error: any) {
       console.error("[JOIN_RPC][ERROR]", error);
       toast.error(error.message || "خطا در خرید کارت");

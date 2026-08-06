@@ -27,7 +27,12 @@ export function ActiveGamesProvider({ children }: { children: ReactNode }) {
   // Single source of truth for user active games + realtime subscription
   const activeGames =
     source === "orchestrator"
-      ? { ...snapshot, invalidate: () => orchestrator.invalidate("manual") }
+      ? {
+          ...snapshot,
+          invalidate: () => orchestrator.invalidate("manual"),
+          upsertOptimistic: (room: Parameters<typeof orchestrator.upsertOptimistic>[0]) =>
+            orchestrator.upsertOptimistic(room),
+        }
       : legacyActiveGames;
 
   if (process.env.NODE_ENV !== "production") {

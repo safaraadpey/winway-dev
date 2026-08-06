@@ -27,17 +27,21 @@ if (!supabaseServiceRoleKey) {
 
 /**
  * Supabase client با service role key
- * 
+ *
  * این کلاینت:
  * - از RLS policies عبور می‌کند (دسترسی کامل)
  * - فقط باید در محیط سرور استفاده شود
  * - برای عملیات حساس ادمین استفاده می‌شود
- * 
+ *
+ * Next.js App Router caches `fetch` GETs by default. Supabase-js uses fetch,
+ * so without the no-store override, snapshot APIs can keep serving a stale
+ * empty result (e.g. tournament tables before room_id was linked).
+ *
  * @example
  * ```typescript
  * // در API route
  * import { supabaseServer } from '@/lib/supabaseServer'
- * 
+ *
  * export async function POST(request: Request) {
  *   const { data, error } = await supabaseServer
  *     .from('users')
@@ -46,10 +50,16 @@ if (!supabaseServiceRoleKey) {
  * }
  * ```
  */
+const noStoreFetch: typeof fetch = (input, init) =>
+  fetch(input, { ...init, cache: "no-store" });
+
 export const supabaseServer = createClient(supabaseUrl, supabaseServiceRoleKey, {
   auth: {
     autoRefreshToken: false,
     persistSession: false,
+  },
+  global: {
+    fetch: noStoreFetch,
   },
 })
 
@@ -338,6 +348,9 @@ export function createServiceClient() {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
+    },
+    global: {
+      fetch: noStoreFetch,
     },
   })
 }

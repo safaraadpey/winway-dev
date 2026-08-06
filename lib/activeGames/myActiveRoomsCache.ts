@@ -4,6 +4,9 @@
  *
  * Note: single Node process scope (dev / long-lived server). Entries expire
  * after CACHE_MAX_AGE_MS so a missed realtime invalidation cannot 304 forever.
+ *
+ * Clients that call invalidate("manual") omit If-None-Match so this cache
+ * cannot hide a fresh post-join snapshot behind a stale 304.
  */
 
 export type CachedActiveRoom = {

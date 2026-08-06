@@ -20,6 +20,8 @@ export type TournamentFormValues = {
   guaranteed_prize: number | null;
   min_players_for_guarantee: number | null;
   min_players_to_start: number | null;
+  /** Minutes to push start_at when under min_players_to_start (default 60). */
+  registration_extend_minutes: number | null;
   final_winners_count: number | null;
 };
 
@@ -105,6 +107,7 @@ export function TournamentForm({
       guaranteed_prize: 0,
       min_players_for_guarantee: null,
       min_players_to_start: 3,
+      registration_extend_minutes: 60,
       final_winners_count: 1,
     }),
     []
@@ -231,6 +234,14 @@ export function TournamentForm({
       values.min_players_to_start < 3
     ) {
       setError("حداقل نفرات شروع تورنومنت باید حداقل 3 باشد.");
+      return;
+    }
+    if (
+      values.registration_extend_minutes != null &&
+      (values.registration_extend_minutes < 1 ||
+        values.registration_extend_minutes > 10080)
+    ) {
+      setError("تمدید زمان ثبت نام باید بین ۱ تا ۱۰۰۸۰ دقیقه باشد.");
       return;
     }
     if (startAtValue) {
@@ -447,6 +458,25 @@ export function TournamentForm({
             className={inputClass}
             disabled={readOnly}
           />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm">
+          <span>تمدید زمان ثبت نام (دقیقه)</span>
+          <input
+            type="number"
+            min="1"
+            max="10080"
+            value={values.registration_extend_minutes ?? ""}
+            onChange={(e) =>
+              handleNumber("registration_extend_minutes", e.target.value)
+            }
+            className={inputClass}
+            disabled={readOnly}
+          />
+          <span className="text-xs text-gray-400">
+            اگر به حد نصاب شروع نرسد، زمان شروع به همین مقدار عقب می‌افتد (پیش‌فرض
+            ۶۰).
+          </span>
         </label>
 
         <label className="flex flex-col gap-1 text-sm">

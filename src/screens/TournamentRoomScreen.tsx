@@ -141,19 +141,6 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     setProfileNamesByUserId(payload.namesByUserId ?? {});
   }, [tournamentId]);
 
-  const entryNamesByUserId = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const entry of entries) {
-      const name = pickHumanName(
-        profileNamesByUserId[entry.user_id],
-        entry.users?.username,
-        entry.users?.email
-      );
-      if (entry.user_id) map.set(entry.user_id, name);
-    }
-    return map;
-  }, [entries, pickHumanName, profileNamesByUserId]);
-
   useEffect(() => {
     setShowBackButton(true);
     setOnBackClick(() => () => router.push("/player/tournaments"));
@@ -273,106 +260,47 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
 
     let active = true;
 
-    const resolveWinnerName = (row: any) =>
-      pickHumanName(
-        row?.user_id ? profileNamesByUserId[row.user_id] : null,
-        row?.users?.username,
-        row?.users?.email,
-        row?.user_id ? entryNamesByUserId.get(row.user_id) : null,
-        row?.user_id
-      );
-
     const loadWinner = async () => {
       setWinnersLoading(true);
       try {
-        const { data, error } = await supabase
-          .from("tournament_payouts")
-          .select("user_id, amount, rank, users:users(username,email)")
-          .eq("tournament_id", tournament.id)
-          .order("rank", { ascending: true });
-
-        if (!error && data && data.length > 0) {
-          const mapped = (data as any[]).map((row) => ({
-            userId: row.user_id,
-            name: resolveWinnerName(row),
-            rank: row.rank ?? null,
-            amount: row.amount != null ? Number(row.amount) : null,
-          }));
-          if (active) setWinners(mapped);
-          return;
-        }
-
-        // Fallback: derive winner from final round room_winners
-        const { data: lastRoundRows, error: lastRoundErr } = await supabase
-          .from("tournament_round_rooms")
-          .select("round_no")
-          .eq("tournament_id", tournament.id)
-          .order("round_no", { ascending: false })
-          .limit(1);
-
-        if (lastRoundErr || !lastRoundRows || lastRoundRows.length === 0) {
-          if (active) setWinners([]);
-          return;
-        }
-
-        const lastRoundNo = lastRoundRows[0]?.round_no;
-        if (!lastRoundNo) {
-          if (active) setWinners([]);
-          return;
-        }
-
-        const { data: finalRooms, error: finalRoomsErr } = await supabase
-          .from("tournament_round_rooms")
-          .select("room_id")
-          .eq("tournament_id", tournament.id)
-          .eq("round_no", lastRoundNo)
-          .not("room_id", "is", null);
-
-        if (finalRoomsErr || !finalRooms || finalRooms.length === 0) {
-          if (active) setWinners([]);
-          return;
-        }
-
-        const roomIds = finalRooms
-          .map((row: any) => row.room_id)
-          .filter(Boolean) as string[];
-
-        if (roomIds.length === 0) {
-          if (active) setWinners([]);
-          return;
-        }
-
-        const { data: roomWinners, error: roomWinnersErr } = await supabase
-          .from("room_winners")
-          .select("user_id, weight, users:users(username,email)")
-          .in("room_id", roomIds);
-
-        if (roomWinnersErr || !roomWinners || roomWinners.length === 0) {
-          if (active) setWinners([]);
-          return;
-        }
-
-        const uniqueWinners = new Map<string, { name: string; weight: number }>();
-        (roomWinners as any[]).forEach((row) => {
-          const userId = row.user_id as string | null;
-          if (!userId) return;
-          const weight = Number(row.weight ?? 0);
-          const existing = uniqueWinners.get(userId);
-          if (!existing || weight > existing.weight) {
-            uniqueWinners.set(userId, { name: resolveWinnerName(row), weight });
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const token = session?.access_token || null;
+        const search = new URLSearchParams({ tournamentId: tournament.id });
+        const res = await fetch(
+          `/api/player/tournament-winners?${search.toString()}`,
+          {
+            method: "GET",
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            cache: "no-store",
           }
-        });
-        const mapped = Array.from(uniqueWinners.entries())
-          .sort((a, b) => b[1].weight - a[1].weight)
-          .map(([userId, info], idx) => ({
-            userId,
-            name: info.name,
-            rank: idx + 1,
-            amount: null,
-          }));
+        );
+
+        if (!res.ok) {
+          if (active) setWinners([]);
+          return;
+        }
+
+        const payload = (await res.json()) as {
+          winners?: Array<{
+            userId?: string;
+            name?: string;
+            rank?: number | null;
+            amount?: number | null;
+          }>;
+        };
+
+        const mapped = (payload.winners || []).map((row) => ({
+          userId: row.userId || "",
+          name: pickHumanName(row.name),
+          rank: row.rank ?? null,
+          amount: row.amount != null ? Number(row.amount) : null,
+        }));
+
         if (active) setWinners(mapped);
       } catch (err) {
-        console.error("load tournament winner error:", err);
+        console.error("[Tournament] load winners error", err);
         if (active) setWinners([]);
       } finally {
         if (active) setWinnersLoading(false);
@@ -383,7 +311,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     return () => {
       active = false;
     };
-  }, [entryNamesByUserId, pickHumanName, profileNamesByUserId, tournament?.id, tournament?.status]);
+  }, [pickHumanName, tournament?.id, tournament?.status]);
 
   useEffect(() => {
     if (!tournamentId) return;

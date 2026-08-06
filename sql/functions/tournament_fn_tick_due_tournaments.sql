@@ -13,6 +13,7 @@ DECLARE
   v_count int := 0;
   v_entries_players int;
   v_min_players int;
+  v_extend_minutes int;
 
   -- error log details
   v_ctx    text;
@@ -23,7 +24,11 @@ BEGIN
     SELECT
       t.id,
       t.status,
-      GREATEST(COALESCE(NULLIF(t.meta->>'min_players_to_start','')::int, 3), 3) AS min_players_to_start
+      GREATEST(COALESCE(NULLIF(t.meta->>'min_players_to_start','')::int, 3), 3) AS min_players_to_start,
+      LEAST(
+        GREATEST(COALESCE(NULLIF(t.meta->>'registration_extend_minutes','')::int, 60), 1),
+        10080
+      ) AS registration_extend_minutes
     FROM public.tournaments t
     WHERE
       (t.status = 'registration_open'::public.tournament_status
@@ -37,6 +42,8 @@ BEGIN
     BEGIN
       IF r.status = 'registration_open'::public.tournament_status THEN
         v_min_players := COALESCE(r.min_players_to_start, 3);
+        v_extend_minutes := COALESCE(r.registration_extend_minutes, 60);
+
         SELECT count(DISTINCT te.user_id)
           INTO v_entries_players
         FROM public.tournament_entries te
@@ -45,7 +52,7 @@ BEGIN
 
         IF COALESCE(v_entries_players, 0) < v_min_players THEN
           UPDATE public.tournaments
-             SET start_at = now() + interval '1 hour',
+             SET start_at = now() + make_interval(mins => v_extend_minutes),
                  updated_at = now()
            WHERE id = r.id
              AND status = 'registration_open'::public.tournament_status;
@@ -92,4 +99,3 @@ BEGIN
   RETURN v_count;
 END;
 $function$;
-

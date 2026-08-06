@@ -13,7 +13,7 @@
  * (fallback), so this is safe during migration.
  */
 
-import { decideTournamentTick, TOURNAMENT_DEFER_SECONDS } from "../../core/index.js";
+import { decideTournamentTick } from "../../core/index.js";
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import type { Logger } from "../../metrics/logger.js";
 import { TournamentRepo } from "../../repositories/tournamentRepo.js";
@@ -54,7 +54,7 @@ export async function tickDueTournaments(
  * fn_tick_due_tournaments into TypeScript:
  *   - choose due tournaments (registration_open past start_at, or running),
  *   - decide eligibility (min players, floor 3) for registration_open,
- *   - defer start_at by 1h when under min, otherwise advance.
+ *   - defer start_at by meta.registration_extend_minutes when under min, otherwise advance.
  *
  * The atomic per-tournament advance stays the DB RPC tournament.fn_tick_tournament
  * (preserves the row lock + seating/cycle atomicity = ownership model + fallback).
@@ -86,7 +86,13 @@ export async function tickDueTournamentsEngine(
     if (action.kind === "skip") continue;
 
     if (action.kind === "defer") {
-      const newStart = new Date(nowMs + TOURNAMENT_DEFER_SECONDS * 1000).toISOString();
+      const newStart = new Date(nowMs + action.deferSeconds * 1000).toISOString();
+      log.info("tournament defer registration", {
+        tournamentId: candidate.id,
+        deferSeconds: action.deferSeconds,
+        newStart,
+        players,
+      });
       await repo.deferStart(candidate.id, newStart, nowIso);
       continue;
     }

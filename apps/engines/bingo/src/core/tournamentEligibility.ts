@@ -6,7 +6,7 @@
  *   - which tournaments are "due" (registration_open whose start_at has passed,
  *     or already running),
  *   - whether a registration_open tournament has enough players to start,
- *   - and what to do when it does not (defer the start by one hour).
+ *   - and what to do when it does not (defer start_at by registration_extend_minutes).
  *
  * The per-tournament STATE ADVANCE (fn_tick_tournament) and the heavy seating /
  * cycle operations remain atomic DB RPCs — this module only decides *whether*
@@ -14,7 +14,7 @@
  *
  * Verified against fn_tick_due_tournaments (live DB, 2026-05-31):
  *   min_players_to_start = GREATEST(COALESCE(NULLIF(meta->>'min_players_to_start','')::int, 3), 3)
- *   registration_open & distinct created players < min  → push start_at + 1h, skip tick
+ *   registration_open & distinct created players < min  → push start_at by extend minutes, skip tick
  *   otherwise (eligible registration_open, or running)   → tick
  */
 
@@ -27,7 +27,11 @@ export type TournamentStatus =
   | string;
 
 export const TOURNAMENT_MIN_PLAYERS_FLOOR = 3;
-export const TOURNAMENT_DEFER_SECONDS = 3600; // start_at + interval '1 hour'
+/** Default when meta.registration_extend_minutes is missing (legacy: 1 hour). */
+export const TOURNAMENT_DEFER_SECONDS = 3600;
+export const TOURNAMENT_EXTEND_MINUTES_DEFAULT = 60;
+export const TOURNAMENT_EXTEND_MINUTES_MIN = 1;
+export const TOURNAMENT_EXTEND_MINUTES_MAX = 10080; // 7 days
 
 export interface TournamentTickCandidate {
   id: string;
@@ -37,8 +41,8 @@ export interface TournamentTickCandidate {
 }
 
 export type TournamentTickAction =
-  /** Not enough players: defer start_at by one hour, do not tick. */
-  | { kind: "defer" }
+  /** Not enough players: defer start_at by registration_extend_minutes, do not tick. */
+  | { kind: "defer"; deferSeconds: number }
   /** Advance the tournament via fn_tick_tournament. */
   | { kind: "tick" }
   /** Not due / not actionable this pass. */
@@ -58,6 +62,26 @@ export function resolveMinPlayersToStart(
     if (Number.isFinite(n)) parsed = n;
   }
   return Math.max(parsed, TOURNAMENT_MIN_PLAYERS_FLOOR);
+}
+
+/**
+ * Resolve registration defer interval from meta.registration_extend_minutes.
+ * Matches SQL: clamp(coalesce(nullif(...), 60), 1, 10080) * 60 seconds.
+ */
+export function resolveRegistrationExtendSeconds(
+  meta: Record<string, unknown> | null
+): number {
+  const raw = meta?.["registration_extend_minutes"];
+  let minutes = TOURNAMENT_EXTEND_MINUTES_DEFAULT;
+  if (raw !== null && raw !== undefined && `${raw}`.trim() !== "") {
+    const n = Number.parseInt(`${raw}`, 10);
+    if (Number.isFinite(n)) minutes = n;
+  }
+  minutes = Math.min(
+    Math.max(minutes, TOURNAMENT_EXTEND_MINUTES_MIN),
+    TOURNAMENT_EXTEND_MINUTES_MAX
+  );
+  return minutes * 60;
 }
 
 /**
@@ -82,7 +106,10 @@ export function decideTournamentTick(
 
     const minPlayers = resolveMinPlayersToStart(candidate.meta);
     if (distinctCreatedPlayers < minPlayers) {
-      return { kind: "defer" };
+      return {
+        kind: "defer",
+        deferSeconds: resolveRegistrationExtendSeconds(candidate.meta),
+      };
     }
     return { kind: "tick" };
   }

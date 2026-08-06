@@ -38,6 +38,8 @@ export default function AdminTournamentEditPage() {
       guaranteed_prize: data.guaranteed_prize ?? 0,
       min_players_for_guarantee: data?.meta?.min_players_for_guarantee ?? null,
       min_players_to_start: data?.meta?.min_players_to_start ?? 3,
+      registration_extend_minutes:
+        data?.meta?.registration_extend_minutes ?? 60,
       final_winners_count: data?.meta?.final_winners_count ?? 1,
     };
   }, []);
@@ -106,6 +108,7 @@ export default function AdminTournamentEditPage() {
         final_winners_count: values.final_winners_count,
         min_players_for_guarantee: values.min_players_for_guarantee,
         min_players_to_start: values.min_players_to_start,
+        registration_extend_minutes: values.registration_extend_minutes ?? 60,
         entry_currency: values.entry_currency,
       },
     };

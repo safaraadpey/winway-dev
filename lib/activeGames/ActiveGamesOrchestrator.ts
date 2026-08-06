@@ -20,6 +20,7 @@ import { noteSnapshotFetched } from "@/lib/activeGames/snapshotGate";
 import {
   ACTIVE_GAMES_EMPTY_BACKOFF_MS,
   ACTIVE_GAMES_POLL_MS,
+  ACTIVE_ROOM_STATUSES,
 } from "@/lib/activeGames/constants";
 import {
   patchActiveRoomsFromRoomUpdate,
@@ -202,6 +203,8 @@ export interface ActiveGamesOrchestrator {
   setAuthContext(ctx: { userId: string | null; accessToken: string | null; authReady: boolean; tokenVersion: number }): void;
   setEnabled(enabled: boolean, reason?: string): void;
   invalidate(reason: ActiveGamesFetchSource): void;
+  /** Immediate chip after join; followed by snapshot invalidate for truth. */
+  upsertOptimistic(room: ActiveRoom): void;
 }
 
 function createOrchestrator(): ActiveGamesOrchestrator {
@@ -224,6 +227,7 @@ function createOrchestrator(): ActiveGamesOrchestrator {
   let pollTimer: NodeJS.Timeout | null = null;
   let realtimeCooldownTimer: NodeJS.Timeout | null = null;
   let realtimeDebounceTimer: NodeJS.Timeout | null = null;
+  let unchangedFlushTimer: NodeJS.Timeout | null = null;
   let fetchAbortController: AbortController | null = null;
   let visibilityHandler: (() => void) | null = null;
   let etag: string | null = null;
@@ -342,7 +346,8 @@ function createOrchestrator(): ActiveGamesOrchestrator {
     store.timerCount =
       Number(Boolean(pollTimer)) +
       Number(Boolean(realtimeCooldownTimer)) +
-      Number(Boolean(realtimeDebounceTimer));
+      Number(Boolean(realtimeDebounceTimer)) +
+      Number(Boolean(unchangedFlushTimer));
     touch(store);
   };
 
@@ -405,6 +410,30 @@ function createOrchestrator(): ActiveGamesOrchestrator {
     recomputeTimerCount();
   };
 
+  /** Do not drop realtime/poll signals blocked by unchanged cooldown — retry once after the window. */
+  const scheduleUnchangedFlush = (localRunId: number, waitMs: number) => {
+    if (unchangedFlushTimer) return;
+    const delay = Math.max(0, waitMs);
+    unchangedFlushTimer = setTimeout(() => {
+      unchangedFlushTimer = null;
+      recomputeTimerCount();
+      if (!active) return;
+      if (localRunId !== runId) return;
+      store.lastUnchanged = false;
+      if (store.lastEtagStatus === 304) {
+        store.lastEtagStatus = null;
+      }
+      touch(store);
+      if (pending || pendingReasons.size > 0) {
+        pending = true;
+        pendingSkipEtag = true;
+        traceFetch("ActiveGamesOrchestrator:schedule", { reason: "unchangedFlush", delayMs: delay });
+        void doFetch(localRunId);
+      }
+    }, delay);
+    recomputeTimerCount();
+  };
+
   const requestFetch = (source: ActiveGamesFetchSource, opts: { skipEtag: boolean }, localRunId: number) => {
     if (!active) return;
     if (localRunId !== runId) return;
@@ -417,9 +446,13 @@ function createOrchestrator(): ActiveGamesOrchestrator {
     const guard = shouldSkipFetchNow(source);
     if (guard.skip) {
       logMetrics("fetch:skipped", { source, guard: guard.reason, waitMs: guard.waitMs });
-      // If this was a realtime cooldown skip, ensure we have a single timer to flush after cooldown.
+      // Keep the signal: coalesce after cooldown / unchanged window (never silently drop).
+      pending = true;
+      pendingSkipEtag = pendingSkipEtag || opts.skipEtag;
       if (guard.reason === "cooldown") {
         scheduleRealtimeCooldownFlush(localRunId);
+      } else if (guard.reason === "unchanged") {
+        scheduleUnchangedFlush(localRunId, guard.waitMs);
       }
       return;
     }
@@ -715,13 +748,8 @@ function createOrchestrator(): ActiveGamesOrchestrator {
           logMetrics("fetch:skipped", { source: followReason, guard: guard.reason, waitMs: guard.waitMs, when: "follow-up" });
           if (guard.reason === "cooldown") {
             scheduleRealtimeCooldownFlush(localRunId);
-          } else {
-            // clear follow-up if blocked by unchanged guard
-            pending = false;
-            pendingSkipEtag = false;
-            pendingReasons = new Set();
-            store.pendingReasons = new Set();
-            touch(store);
+          } else if (guard.reason === "unchanged") {
+            scheduleUnchangedFlush(localRunId, guard.waitMs);
           }
         } else {
           void doFetch(localRunId);
@@ -885,6 +913,10 @@ function createOrchestrator(): ActiveGamesOrchestrator {
       clearTimeout(realtimeDebounceTimer);
       realtimeDebounceTimer = null;
     }
+    if (unchangedFlushTimer) {
+      clearTimeout(unchangedFlushTimer);
+      unchangedFlushTimer = null;
+    }
     if (fetchAbortController) {
       try {
         fetchAbortController.abort();
@@ -999,8 +1031,86 @@ function createOrchestrator(): ActiveGamesOrchestrator {
         return;
       }
 
-      // Other reasons route immediately into existing coalescing pipeline
-      requestFetch(reason, { skipEtag: reason === "initial" }, localRunId);
+      // Post-join / manual refresh must always hit the snapshot API (no stale 304).
+      // Also clear empty-backoff + unchanged guards so the chip can appear immediately.
+      const skipEtag = reason === "initial" || reason === "manual";
+      if (reason === "manual") {
+        etag = null;
+        store.emptyBackoffStep = 0;
+        store.emptyBackoffMs = 0;
+        store.backoffMs = 0;
+        store.lastUnchanged = false;
+        store.lastEtagStatus = null;
+        touch(store);
+        if (unchangedFlushTimer) {
+          clearTimeout(unchangedFlushTimer);
+          unchangedFlushTimer = null;
+          recomputeTimerCount();
+        }
+        // Resume polling promptly after a mutation-driven refresh.
+        if (store.pollingState.active) {
+          scheduleNextPoll(BASE_POLL_INTERVAL_MS, localRunId, "manual-reset");
+        }
+      }
+
+      requestFetch(reason, { skipEtag }, localRunId);
+    },
+    upsertOptimistic: (room: ActiveRoom) => {
+      if (!enabled || !active) return;
+      if (!room?.roomId) return;
+
+      const status = ACTIVE_ROOM_STATUSES.has(room.status) ? room.status : "waiting";
+      const cardCount = Math.max(1, Number(room.cardCount ?? 1));
+      const cardPrice = Number(room.cardPrice ?? 0);
+      const nextRoom: ActiveRoom = {
+        roomId: room.roomId,
+        roomCode: room.roomCode ?? null,
+        status: status as ActiveRoom["status"],
+        cardPrice,
+        currency: room.currency || "IRT",
+        cardCount,
+        prize: Number(room.prize ?? cardPrice * cardCount),
+        roomType: room.roomType || "normal",
+      };
+
+      const rooms = [...store.data.rooms];
+      const idx = rooms.findIndex((r) => r.roomId === nextRoom.roomId);
+      if (idx >= 0) {
+        const prev = rooms[idx]!;
+        const mergedCount = Math.max(prev.cardCount, nextRoom.cardCount);
+        rooms[idx] = {
+          ...prev,
+          ...nextRoom,
+          cardCount: mergedCount,
+          prize:
+            Number(room.prize ?? 0) > 0
+              ? nextRoom.prize
+              : nextRoom.cardPrice * mergedCount,
+        };
+      } else {
+        rooms.push(nextRoom);
+      }
+
+      publishActiveRooms(rooms, "optimistic:upsert");
+      logMetrics("optimistic:upsert", {
+        roomId: nextRoom.roomId,
+        roomCode: nextRoom.roomCode,
+        status: nextRoom.status,
+      });
+
+      // Confirm from snapshot ASAP (same path as invalidate("manual")).
+      const localRunId = runId;
+      etag = null;
+      store.emptyBackoffStep = 0;
+      store.emptyBackoffMs = 0;
+      store.backoffMs = 0;
+      store.lastUnchanged = false;
+      store.lastEtagStatus = null;
+      touch(store);
+      if (store.pollingState.active) {
+        scheduleNextPoll(BASE_POLL_INTERVAL_MS, localRunId, "optimistic-reset");
+      }
+      requestFetch("manual", { skipEtag: true }, localRunId);
     },
   };
 }

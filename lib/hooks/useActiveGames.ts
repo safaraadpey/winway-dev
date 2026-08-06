@@ -28,6 +28,8 @@ export interface ActiveGames {
   error: string | null;
   /** برای به‌روزرسانی فوری لیست بازی‌های فعال (مثلاً بعد از خرید کارت) */
   invalidate?: () => void;
+  /** نمایش فوری چیپ بعد از join؛ snapshot بعدی لیست را اصلاح می‌کند */
+  upsertOptimistic?: (room: ActiveRoom) => void;
 }
 
 import {
@@ -236,6 +238,54 @@ export function useActiveGames(): ActiveGames {
     void fetchActiveRoomsRef.current?.(true, "manual");
   }, []);
 
+  const upsertOptimistic = useCallback((room: ActiveRoom) => {
+    if (!room?.roomId) return;
+    setRooms((prev) => {
+      const status = (["waiting", "playing", "live", "settling"] as const).includes(
+        room.status as ActiveRoom["status"]
+      )
+        ? (room.status as ActiveRoom["status"])
+        : "waiting";
+      const cardCount = Math.max(1, Number(room.cardCount ?? 1));
+      const cardPrice = Number(room.cardPrice ?? 0);
+      const nextRoom: ActiveRoom = {
+        roomId: room.roomId,
+        roomCode: room.roomCode ?? null,
+        status,
+        cardPrice,
+        currency: room.currency || "IRT",
+        cardCount,
+        prize: Number(room.prize ?? cardPrice * cardCount),
+        roomType: room.roomType || "normal",
+      };
+      const idx = prev.findIndex((r) => r.roomId === nextRoom.roomId);
+      let next: ActiveRoom[];
+      if (idx >= 0) {
+        const existing = prev[idx]!;
+        const mergedCount = Math.max(existing.cardCount, nextRoom.cardCount);
+        next = [...prev];
+        next[idx] = {
+          ...existing,
+          ...nextRoom,
+          cardCount: mergedCount,
+          prize:
+            Number(room.prize ?? 0) > 0
+              ? nextRoom.prize
+              : nextRoom.cardPrice * mergedCount,
+        };
+      } else {
+        next = [...prev, nextRoom];
+      }
+      roomsRef.current = next;
+      trackedRoomIdsRef.current = new Set(next.map((r) => r.roomId).filter(Boolean));
+      syncRoomStatusMap(next, roomStatusByIdRef.current);
+      return next;
+    });
+    setLoading(false);
+    setError(null);
+    void fetchActiveRoomsRef.current?.(true, "manual");
+  }, []);
+
   useEffect(() => {
     fetchActiveRoomsRef.current = fetchActiveRooms;
   });
@@ -356,6 +406,7 @@ export function useActiveGames(): ActiveGames {
     loading,
     error,
     invalidate,
+    upsertOptimistic,
   };
 }
 
