@@ -9,6 +9,10 @@ import {
   createHamiPayDepositIntent,
   resumeHamiPayPaymentUrl,
 } from "@/lib/deposit/hamipayFlow";
+import {
+  resolveDepositCustomerName,
+  resolveDepositCustomerPhone,
+} from "@/lib/deposit/customerProfile";
 import { validateDepositAmountToman } from "@/lib/deposit/limits";
 import { takeRateLimitToken } from "@/lib/deposit/rateLimit";
 import { rialsToTomans } from "@/lib/format/persianAmountWords";
@@ -21,8 +25,9 @@ export const maxDuration = 60;
 
 /**
  * POST /api/player/deposit/create
- * Body: { amountRial: number } OR { amountToman: number } OR { depositId: string } to resume
+ * Body: { amountRial | amountToman, depositId? }
  * Never accepts user_id from client.
+ * customerPhone is server-assigned (synthetic MCI/Irancell) — not from the player.
  */
 export async function POST(request: Request) {
   const user = await getUserFromRequest(request);
@@ -110,11 +115,15 @@ export async function POST(request: Request) {
     }
   }
 
+  // BuyRial input is Rials; wallet SoR + limits use toman (1 toman = 10 rials).
+  // HamiPay/SEP receives Rials again via tomanToProviderAmount (default unit=rial).
   let amountToman = 0;
+  let amountRialFromClient: number | null = null;
   if (typeof body.amountToman === "number") {
     amountToman = Math.floor(body.amountToman);
   } else if (typeof body.amountRial === "number") {
-    amountToman = rialsToTomans(Math.floor(body.amountRial));
+    amountRialFromClient = Math.floor(body.amountRial);
+    amountToman = rialsToTomans(amountRialFromClient);
   }
 
   const validated = validateDepositAmountToman(amountToman);
@@ -125,27 +134,81 @@ export async function POST(request: Request) {
     );
   }
 
-  // Load optional customer profile (non-authoritative)
+  // Load customer profile for HamiPay metadata (non-authoritative for wallet)
   let username: string | null = null;
   let email: string | null = null;
+  let nickname: string | null = null;
+  let assignedPhone: string | null = null;
   try {
     const profile = await pgPool.query<{
       username: string | null;
       email: string | null;
+      nickname: string | null;
+      assigned_phone: string | null;
     }>(
-      `SELECT username, email FROM public.users WHERE id = $1 LIMIT 1`,
+      `SELECT
+         u.username,
+         u.email,
+         p.nickname,
+         coalesce(
+           nullif(p.metadata->>'hamipay_phone', ''),
+           nullif(p.metadata->>'phone', '')
+         ) AS assigned_phone
+       FROM public.users u
+       LEFT JOIN public.user_profiles p ON p.user_id = u.id
+       WHERE u.id = $1
+       LIMIT 1`,
       [user.id]
     );
     username = profile.rows[0]?.username ?? null;
     email = profile.rows[0]?.email ?? null;
-  } catch {
-    /* ignore */
+    nickname = profile.rows[0]?.nickname ?? null;
+    assignedPhone = profile.rows[0]?.assigned_phone ?? null;
+  } catch (err) {
+    console.error("[Deposit] create profile lookup failed", {
+      userId: user.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  const resolvedName = resolveDepositCustomerName({
+    nickname,
+    username,
+    email,
+  });
+  const resolvedPhone = resolveDepositCustomerPhone({
+    userId: user.id,
+    assignedPhone,
+  });
+
+  // Persist assigned phone once so the same user always reuses it
+  if (resolvedPhone.source === "generated") {
+    try {
+      await pgPool.query(
+        `INSERT INTO public.user_profiles (user_id, metadata, created_at, updated_at)
+         VALUES ($1, jsonb_build_object('hamipay_phone', $2::text), now(), now())
+         ON CONFLICT (user_id) DO UPDATE
+         SET metadata = coalesce(user_profiles.metadata, '{}'::jsonb)
+                        || jsonb_build_object('hamipay_phone', $2::text),
+             updated_at = now()`,
+        [user.id, resolvedPhone.phone]
+      );
+    } catch (err) {
+      console.error("[Deposit] persist assigned phone failed", {
+        userId: user.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   try {
     console.log("[Deposit] create API → HamiPay adapter", {
       userId: user.id,
+      amountRial:
+        amountRialFromClient ?? validated.amount * 10,
       amountToman: validated.amount,
+      customerNameSource: resolvedName.source,
+      customerPhoneSource: resolvedPhone.source,
       allowReason: diagnostics.createAllowReason,
       hasHamiPayApiKey: diagnostics.hasHamiPayApiKey,
       hasHamiPayApiBaseUrl: diagnostics.hasHamiPayApiBaseUrl,
@@ -155,6 +218,8 @@ export async function POST(request: Request) {
     const result = await createHamiPayDepositIntent(pgPool, {
       userId: user.id,
       amountToman: validated.amount,
+      customerName: resolvedName.name,
+      customerPhone: resolvedPhone.phone,
       username,
       email,
     });

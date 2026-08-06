@@ -12,6 +12,7 @@
 import { createHash } from "crypto";
 import type { VerificationEvidence } from "@/lib/deposit/types";
 import { parseEnvFlag } from "@/lib/deposit/env";
+import { generateAssignedIranMobile } from "@/lib/deposit/customerProfile";
 
 export type HamiPayCreateInput = {
   depositId: string;
@@ -21,6 +22,7 @@ export type HamiPayCreateInput = {
   returnUrl: string;
   customer: {
     userId: string;
+    displayName?: string | null;
     username?: string | null;
     email?: string | null;
     phone?: string | null;
@@ -130,24 +132,35 @@ function mapStatus(raw: string | null): HamiPayStatusResult["status"] {
 }
 
 /**
- * Convert wallet toman amount to provider units.
- * Default: toman (matches working Postman amount scale).
- * Set HAMIPAY_AMOUNT_UNIT=rial to send toman*10.
+ * Provider amount unit for HamiPay / Shaparak SEP.
+ * Iranian PSP gateways display and settle in **Rials**.
+ * Wallet SoR stays toman-scale under currency code IRR.
+ *
+ * Default: `rial` → send toman×10 (matches BuyRial input, e.g. 1_000_000 ریال).
+ * Override with HAMIPAY_AMOUNT_UNIT=toman only for legacy/mock contracts.
  */
-export function tomanToProviderAmount(toman: number): number {
-  const unit = (process.env.HAMIPAY_AMOUNT_UNIT || "toman").toLowerCase();
-  if (unit === "rial") return toman * 10;
-  return toman;
+function resolveHamiPayAmountUnit(): "rial" | "toman" {
+  const unit = (process.env.HAMIPAY_AMOUNT_UNIT || "rial").toLowerCase();
+  return unit === "toman" ? "toman" : "rial";
 }
 
+/** Convert wallet toman amount to HamiPay/SEP provider units (default: Rials). */
+export function tomanToProviderAmount(toman: number): number {
+  if (resolveHamiPayAmountUnit() === "toman") return Math.floor(toman);
+  return Math.floor(toman) * 10;
+}
+
+/** Convert provider amount back to wallet toman. */
 export function providerAmountToToman(providerAmount: number): number {
-  const unit = (process.env.HAMIPAY_AMOUNT_UNIT || "toman").toLowerCase();
-  if (unit === "rial") return Math.floor(providerAmount / 10);
-  return Math.floor(providerAmount);
+  if (resolveHamiPayAmountUnit() === "toman") {
+    return Math.floor(providerAmount);
+  }
+  return Math.floor(providerAmount / 10);
 }
 
 function resolveCustomerName(customer: HamiPayCreateInput["customer"]): string {
   const name =
+    (customer.displayName && customer.displayName.trim()) ||
     (customer.username && customer.username.trim()) ||
     (customer.email && customer.email.split("@")[0]) ||
     "DingMoney User";
@@ -157,13 +170,8 @@ function resolveCustomerName(customer: HamiPayCreateInput["customer"]): string {
 function resolveCustomerPhone(customer: HamiPayCreateInput["customer"]): string {
   const fromInput = (customer.phone || "").replace(/\D/g, "");
   if (fromInput.length >= 10) return fromInput.slice(0, 15);
-  const fromEnv = (process.env.HAMIPAY_DEFAULT_CUSTOMER_PHONE || "").replace(
-    /\D/g,
-    ""
-  );
-  if (fromEnv.length >= 10) return fromEnv.slice(0, 15);
-  // HamiPay Postman contract requires customerPhone; use a stable non-secret placeholder
-  return "09000000000";
+  // Stable per-user synthetic MCI/Irancell — never a shared placeholder
+  return generateAssignedIranMobile(customer.userId);
 }
 
 export async function hamipayCreatePayment(
@@ -224,7 +232,7 @@ export async function hamipayCreatePayment(
     idempotencyKeyEqualsDepositId: input.depositId === input.merchantOrderId,
     bodyFieldNames: Object.keys(body),
     amount: body.amount,
-    amountUnit: (process.env.HAMIPAY_AMOUNT_UNIT || "toman").toLowerCase(),
+    amountUnit: resolveHamiPayAmountUnit(),
     merchantOrderId: body.merchantOrderId,
     descriptionLength: body.description.length,
     returnUrl: body.returnUrl,

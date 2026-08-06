@@ -17,14 +17,15 @@ HAMIPAY_CREATE_PATH=/payments
 HAMIPAY_STATUS_PATH=/payments/{paymentId}
 
 # Provider amount unit for create/status payloads
-# toman = same as wallet unit (default, matches working Postman)
-# rial = wallet_toman * 10
-HAMIPAY_AMOUNT_UNIT=toman
+# rial = wallet_toman * 10 (default — Shaparak/SEP settles in Rials;
+#        BuyRial input 1_000_000 ریال → gateway 1_000_000 ریال)
+# toman = same as wallet unit (legacy/mock only)
+HAMIPAY_AMOUNT_UNIT=rial
 
 # Optional override for description (default: شارژ کیف پول DingMoney)
 # HAMIPAY_PAYMENT_DESCRIPTION=شارژ کیف پول DingMoney
 
-# Optional customerPhone if profile has none
+# Optional customerPhone fallback ONLY when player has none (prefer BuyRial input)
 # HAMIPAY_DEFAULT_CUSTOMER_PHONE=09xxxxxxxxx
 
 # Return URL base (no trailing slash) — callback has NO query string
@@ -60,6 +61,8 @@ Outbound create body (Postman contract): `customerName`, `customerPhone`, `amoun
 ## Flow
 
 1. Buy Rial UI → `POST /api/player/deposit/create` `{ amountRial }`
+   - `customerName` from nickname/username; `customerPhone` is a stable server-assigned
+     synthetic MCI/Irancell number per user (never collected from the player)
 2. Server creates `deposit.intents` (hamipay / fiat_gateway), calls HamiPay with Idempotency-Key=depositId
 3. Browser redirects to `paymentUrl` (wallet untouched)
 4. Return → `/payment/callback` → verify with `depositId` if present, else `merchantOrderId`, else `resolveLatest`

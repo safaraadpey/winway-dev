@@ -110,6 +110,8 @@ export async function createHamiPayDepositIntent(
   input: {
     userId: string;
     amountToman: number;
+    customerName?: string | null;
+    customerPhone?: string | null;
     username?: string | null;
     email?: string | null;
   }
@@ -122,6 +124,8 @@ export async function createHamiPayDepositIntent(
   console.log("[DepositIntent] HamiPay create started", {
     userId: input.userId,
     amountToman: input.amountToman,
+    hasCustomerName: Boolean(input.customerName),
+    hasCustomerPhone: Boolean(input.customerPhone),
     environment,
   });
 
@@ -161,14 +165,24 @@ export async function createHamiPayDepositIntent(
   );
 
   try {
+    const amountProviderUnits = tomanToProviderAmount(input.amountToman);
+    console.log("[DepositIntent] HamiPay amount scale", {
+      depositId,
+      amountToman: input.amountToman,
+      amountProviderUnits,
+      expectedRialIfUnitRial: input.amountToman * 10,
+    });
+
     const createdPay = await hamipayCreatePayment({
       depositId,
       merchantOrderId,
-      amountProviderUnits: tomanToProviderAmount(input.amountToman),
+      amountProviderUnits,
       currency: "IRR",
       returnUrl: resolvePaymentReturnUrl(depositId),
       customer: {
         userId: input.userId,
+        displayName: input.customerName,
+        phone: input.customerPhone,
         username: input.username,
         email: input.email,
       },

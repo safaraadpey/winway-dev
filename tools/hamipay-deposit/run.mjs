@@ -39,11 +39,11 @@ function assert(cond, name, detail = "") {
   }
 }
 
-function tomanToProviderAmount(toman, unit = "toman") {
+function tomanToProviderAmount(toman, unit = "rial") {
   return unit === "rial" ? toman * 10 : toman;
 }
 
-function providerAmountToToman(providerAmount, unit = "toman") {
+function providerAmountToToman(providerAmount, unit = "rial") {
   return unit === "rial"
     ? Math.floor(providerAmount / 10)
     : Math.floor(providerAmount);
@@ -130,14 +130,22 @@ async function passAndCredit(intentId, payId, amountToman) {
 async function run() {
   console.log("[test:hamipay-deposit] start");
 
-  // unit helpers (default toman matches Postman)
+  // unit helpers (default rial = Shaparak/SEP)
   assert(
-    tomanToProviderAmount(10000) === 10000,
-    "default toman→provider identity"
+    tomanToProviderAmount(10000) === 100000,
+    "default toman→provider (rial)"
+  );
+  assert(
+    tomanToProviderAmount(10000, "toman") === 10000,
+    "legacy toman identity"
   );
   assert(
     tomanToProviderAmount(10000, "rial") === 100000,
     "toman→rial conversion"
+  );
+  assert(
+    providerAmountToToman(100000) === 10000,
+    "default rial→toman conversion"
   );
   assert(
     providerAmountToToman(100000, "rial") === 10000,
