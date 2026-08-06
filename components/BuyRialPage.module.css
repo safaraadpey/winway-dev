@@ -35,6 +35,75 @@
   text-align: right;
 }
 
+.labelSecondary {
+  display: block;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--player-text-primary, #ffffff);
+  margin-top: 1rem;
+  margin-bottom: 0.75rem;
+  text-align: right;
+}
+
+.textInput {
+  width: 100%;
+  min-height: 52px;
+  height: 52px;
+  padding: 0.875rem 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(116, 128, 255, 0.45);
+  background: rgba(40, 40, 46, 0.92);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  color: #f3f4ff;
+  text-align: right;
+  direction: rtl;
+  outline: none;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: inherit;
+}
+
+.textInput:focus {
+  border-color: rgba(160, 140, 255, 0.75);
+  background: rgba(48, 48, 56, 0.95);
+  box-shadow: 0 0 0 1px rgba(116, 128, 255, 0.25);
+}
+
+.textInput::placeholder {
+  color: rgba(243, 244, 255, 0.45);
+  font-weight: 500;
+}
+
+.inputLocked {
+  opacity: 0.85;
+  cursor: not-allowed;
+  border-color: rgba(148, 163, 184, 0.35);
+  background: rgba(30, 30, 36, 0.92);
+}
+
+:global(html[data-theme="light"]) .textInput {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  box-shadow: none;
+  color: #374151;
+}
+
+:global(html[data-theme="light"]) .textInput:focus {
+  border-color: #a855f7;
+  background: #f9fafb;
+  box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.2);
+}
+
+:global(html[data-theme="light"]) .textInput::placeholder {
+  color: #9ca3af;
+}
+
+:global(html[data-theme="light"]) .inputLocked {
+  background: #e5e7eb;
+  border-color: #d1d5db;
+  color: #4b5563;
+}
+
 .amountInput {
   composes: numeric-text numeric-text--18 from global;
   width: 100%;

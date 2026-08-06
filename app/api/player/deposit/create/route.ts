@@ -25,9 +25,9 @@ export const maxDuration = 60;
 
 /**
  * POST /api/player/deposit/create
- * Body: { amountRial | amountToman, depositId? }
+ * Body: { amountRial | amountToman, fullName?, phone?, depositId? }
  * Never accepts user_id from client.
- * customerPhone is server-assigned (synthetic MCI/Irancell) — not from the player.
+ * full_name/phone: first write from client, then locked in user_profiles.
  */
 export async function POST(request: Request) {
   const user = await getUserFromRequest(request);
@@ -89,6 +89,8 @@ export async function POST(request: Request) {
     amountRial?: number;
     amountToman?: number;
     depositId?: string;
+    fullName?: string;
+    phone?: string;
   };
   try {
     body = await request.json();
@@ -134,26 +136,23 @@ export async function POST(request: Request) {
     );
   }
 
-  // Load customer profile for HamiPay metadata (non-authoritative for wallet)
+  // Load deposit identity (first-write locked columns)
   let username: string | null = null;
   let email: string | null = null;
-  let nickname: string | null = null;
-  let assignedPhone: string | null = null;
+  let storedFullName: string | null = null;
+  let storedPhone: string | null = null;
   try {
     const profile = await pgPool.query<{
       username: string | null;
       email: string | null;
-      nickname: string | null;
-      assigned_phone: string | null;
+      full_name: string | null;
+      phone: string | null;
     }>(
       `SELECT
          u.username,
          u.email,
-         p.nickname,
-         coalesce(
-           nullif(p.metadata->>'hamipay_phone', ''),
-           nullif(p.metadata->>'phone', '')
-         ) AS assigned_phone
+         p.full_name,
+         p.phone
        FROM public.users u
        LEFT JOIN public.user_profiles p ON p.user_id = u.id
        WHERE u.id = $1
@@ -162,8 +161,8 @@ export async function POST(request: Request) {
     );
     username = profile.rows[0]?.username ?? null;
     email = profile.rows[0]?.email ?? null;
-    nickname = profile.rows[0]?.nickname ?? null;
-    assignedPhone = profile.rows[0]?.assigned_phone ?? null;
+    storedFullName = profile.rows[0]?.full_name ?? null;
+    storedPhone = profile.rows[0]?.phone ?? null;
   } catch (err) {
     console.error("[Deposit] create profile lookup failed", {
       userId: user.id,
@@ -172,32 +171,65 @@ export async function POST(request: Request) {
   }
 
   const resolvedName = resolveDepositCustomerName({
-    nickname,
-    username,
-    email,
+    storedFullName,
+    clientFullName:
+      typeof body.fullName === "string" ? body.fullName : null,
   });
   const resolvedPhone = resolveDepositCustomerPhone({
-    userId: user.id,
-    assignedPhone,
+    storedPhone,
+    clientPhone: typeof body.phone === "string" ? body.phone : null,
   });
 
-  // Persist assigned phone once so the same user always reuses it
-  if (resolvedPhone.source === "generated") {
+  if (!resolvedName.name) {
+    return NextResponse.json(
+      {
+        error: "full_name_required",
+        message: "نام و نام خانوادگی را وارد کنید.",
+      },
+      { status: 400 }
+    );
+  }
+  if (!resolvedPhone.phone) {
+    return NextResponse.json(
+      {
+        error: "phone_required",
+        message: "شماره موبایل معتبر وارد کنید (مثال: 09123456789).",
+      },
+      { status: 400 }
+    );
+  }
+
+  // First-write only: never overwrite locked identity from client
+  const needsPersist =
+    resolvedName.source === "client" || resolvedPhone.source === "client";
+  if (needsPersist) {
     try {
       await pgPool.query(
-        `INSERT INTO public.user_profiles (user_id, metadata, created_at, updated_at)
-         VALUES ($1, jsonb_build_object('hamipay_phone', $2::text), now(), now())
+        `INSERT INTO public.user_profiles (user_id, full_name, phone, created_at, updated_at)
+         VALUES ($1, $2, $3, now(), now())
          ON CONFLICT (user_id) DO UPDATE
-         SET metadata = coalesce(user_profiles.metadata, '{}'::jsonb)
-                        || jsonb_build_object('hamipay_phone', $2::text),
+         SET full_name = COALESCE(user_profiles.full_name, EXCLUDED.full_name),
+             phone = COALESCE(user_profiles.phone, EXCLUDED.phone),
              updated_at = now()`,
-        [user.id, resolvedPhone.phone]
+        [user.id, resolvedName.name, resolvedPhone.phone]
       );
+      console.log("[Deposit] deposit identity persisted", {
+        userId: user.id,
+        nameSource: resolvedName.source,
+        phoneSource: resolvedPhone.source,
+      });
     } catch (err) {
-      console.error("[Deposit] persist assigned phone failed", {
+      console.error("[Deposit] persist deposit identity failed", {
         userId: user.id,
         error: err instanceof Error ? err.message : String(err),
       });
+      return NextResponse.json(
+        {
+          error: "identity_persist_failed",
+          message: "ثبت مشخصات برای درگاه ناموفق بود. دوباره تلاش کنید.",
+        },
+        { status: 500 }
+      );
     }
   }
 

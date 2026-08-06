@@ -22,9 +22,27 @@ function formatAmountDisplay(digits: string): string {
   return n.toLocaleString("en-US");
 }
 
+function normalizePhoneInput(raw: string): string {
+  return raw.replace(/[^\d]/g, "").slice(0, 11);
+}
+
+function isValidIranMobile(raw: string): boolean {
+  return /^09\d{9}$/.test(raw.replace(/\D/g, ""));
+}
+
+function isValidFullName(raw: string): boolean {
+  const name = raw.trim().replace(/\s+/g, " ");
+  return name.length >= 3 && name.length <= 120;
+}
+
 export default function BuyRialPage() {
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
   const [amountDigits, setAmountDigits] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [nameLocked, setNameLocked] = useState(false);
+  const [phoneLocked, setPhoneLocked] = useState(false);
+  const [identityLoading, setIdentityLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [connecting, setConnecting] = useState(false);
 
@@ -39,13 +57,71 @@ export default function BuyRialPage() {
     };
   }, [setShowBackButton, setOnBackClick]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.user || cancelled) return;
+
+        const { data: profile, error } = await supabase
+          .from("user_profiles")
+          .select("full_name, phone")
+          .eq("user_id", session.user.id)
+          .maybeSingle();
+
+        if (cancelled) return;
+        if (error) {
+          console.error("[Deposit] BuyRial identity preload failed", error);
+          return;
+        }
+
+        const savedName = (profile?.full_name || "").trim();
+        const savedPhone = (profile?.phone || "").trim();
+        if (savedName) {
+          setFullName(savedName);
+          setNameLocked(true);
+        }
+        if (savedPhone) {
+          setPhone(savedPhone);
+          setPhoneLocked(true);
+        }
+      } catch (err) {
+        console.error("[Deposit] BuyRial identity preload failed", err);
+      } finally {
+        if (!cancelled) setIdentityLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const amountValue = amountDigits ? Number(amountDigits) : 0;
   const tomanValue = rialsToTomans(amountValue);
-  const canSubmit = amountValue > 0 && !submitting && !connecting;
+  const nameOk = isValidFullName(fullName);
+  const phoneOk = isValidIranMobile(phone);
+  const canSubmit =
+    amountValue > 0 &&
+    nameOk &&
+    phoneOk &&
+    !submitting &&
+    !connecting &&
+    !identityLoading;
 
   const handleConfirm = async () => {
-    if (!canSubmit) {
+    if (!amountValue) {
       toast.error("مبلغ خرید را وارد کنید");
+      return;
+    }
+    if (!nameOk) {
+      toast.error("نام و نام خانوادگی را کامل وارد کنید");
+      return;
+    }
+    if (!phoneOk) {
+      toast.error("شماره موبایل معتبر وارد کنید (مثال: 09123456789)");
       return;
     }
 
@@ -67,7 +143,12 @@ export default function BuyRialPage() {
           Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ amountRial: amountValue }),
+        body: JSON.stringify({
+          amountRial: amountValue,
+          // Server ignores these when already locked in DB
+          fullName: fullName.trim(),
+          phone: phone.trim(),
+        }),
       });
 
       const body = await res.json().catch(() => ({}));
@@ -87,7 +168,6 @@ export default function BuyRialPage() {
       toast.error("اتصال به درگاه پرداخت ناموفق بود. لطفاً دوباره تلاش کنید.");
     } finally {
       setSubmitting(false);
-      // Keep connecting true if we redirected; otherwise reset
       setConnecting(false);
     }
   };
@@ -98,7 +178,53 @@ export default function BuyRialPage() {
         <h1 className={styles.title}>خرید ریالی</h1>
 
         <div className={styles.panel}>
-          <label htmlFor="buy-rial-amount" className={styles.label}>
+          <label htmlFor="buy-rial-fullname" className={styles.label}>
+            نام و نام خانوادگی
+          </label>
+          <input
+            id="buy-rial-fullname"
+            className={`${styles.textInput} ${nameLocked ? styles.inputLocked : ""}`}
+            type="text"
+            dir="rtl"
+            placeholder="مثال: علی احمدی"
+            value={fullName}
+            onChange={(e) => {
+              if (!nameLocked) setFullName(e.target.value);
+            }}
+            disabled={submitting || connecting || identityLoading}
+            readOnly={nameLocked}
+            autoComplete="name"
+            maxLength={120}
+          />
+
+          <label htmlFor="buy-rial-phone" className={styles.labelSecondary}>
+            شماره موبایل
+          </label>
+          <input
+            id="buy-rial-phone"
+            className={`${styles.amountInput} ${phoneLocked ? styles.inputLocked : ""}`}
+            inputMode="tel"
+            dir="ltr"
+            placeholder="09123456789"
+            value={phone}
+            onChange={(e) => {
+              if (!phoneLocked) setPhone(normalizePhoneInput(e.target.value));
+            }}
+            disabled={submitting || connecting || identityLoading}
+            readOnly={phoneLocked}
+            autoComplete="tel"
+          />
+          {nameLocked && phoneLocked ? (
+            <p className={styles.hint}>
+              مشخصات درگاه قفل شده و قابل تغییر نیست.
+            </p>
+          ) : (
+            <p className={styles.hint}>
+              این مشخصات یک‌بار ثبت می‌شود و بعداً قابل تغییر نیست.
+            </p>
+          )}
+
+          <label htmlFor="buy-rial-amount" className={styles.labelSecondary}>
             مبلغ خرید (ریال)
           </label>
           <input

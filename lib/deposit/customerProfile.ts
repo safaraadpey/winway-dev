@@ -1,72 +1,18 @@
 /**
- * Resolve HamiPay customerName / customerPhone from player profile.
+ * Resolve HamiPay customerName / customerPhone from deposit identity profile.
  * Wallet SoR is separate; these fields are provider metadata only.
  *
- * Phone is NEVER collected from the player. Each user gets one stable
- * synthetic MCI / Irancell mobile derived from userId (and persisted).
+ * full_name + phone are first-write locked on user_profiles.
  */
-
-import { createHash } from "crypto";
 
 export type DepositCustomerProfile = {
   customerName: string;
   customerPhone: string;
   source: {
-    name: "nickname" | "username" | "email" | "client" | "fallback";
-    phone: "assigned" | "generated";
+    name: "full_name" | "client" | "nickname" | "username" | "email" | "fallback";
+    phone: "profile" | "client" | "none";
   };
 };
-
-/** Hamrah-e Avval (MCI) + Irancell prefixes — 4-digit including leading 0. */
-const IRAN_MOBILE_PREFIXES = [
-  // MCI / همراه اول
-  "0910",
-  "0911",
-  "0912",
-  "0913",
-  "0914",
-  "0915",
-  "0916",
-  "0917",
-  "0918",
-  "0919",
-  "0990",
-  "0991",
-  "0992",
-  "0993",
-  "0994",
-  // Irancell / ایرانسل
-  "0901",
-  "0902",
-  "0903",
-  "0905",
-  "0930",
-  "0933",
-  "0935",
-  "0936",
-  "0937",
-  "0938",
-  "0939",
-] as const;
-
-function hashToUint32(seed: string): number {
-  const hex = createHash("sha256").update(seed).digest("hex").slice(0, 8);
-  return Number.parseInt(hex, 16) >>> 0;
-}
-
-/**
- * Stable synthetic Iranian mobile for a user (09xxxxxxxxx).
- * Same userId → same number; mixes MCI + Irancell prefixes.
- */
-export function generateAssignedIranMobile(userId: string): string {
-  const seed = `dingmoney:hamipay:phone:v1:${userId}`;
-  const h1 = hashToUint32(seed);
-  const h2 = hashToUint32(`${seed}:tail`);
-  const prefix =
-    IRAN_MOBILE_PREFIXES[h1 % IRAN_MOBILE_PREFIXES.length] ?? "0912";
-  const subscriber = String(h2 % 10_000_000).padStart(7, "0");
-  return `${prefix}${subscriber}`;
-}
 
 /** Normalize Iranian mobile to 09xxxxxxxxx (11 digits) when possible. */
 export function normalizeIranMobile(raw: string | null | undefined): string | null {
@@ -83,43 +29,47 @@ export function normalizeIranMobile(raw: string | null | undefined): string | nu
   return null;
 }
 
-export function resolveDepositCustomerName(input: {
-  clientName?: string | null;
-  nickname?: string | null;
-  username?: string | null;
-  email?: string | null;
-}): { name: string; source: DepositCustomerProfile["source"]["name"] } {
-  const nickname = (input.nickname || "").trim();
-  if (nickname.length >= 2) {
-    return { name: nickname.slice(0, 120), source: "nickname" };
-  }
-  const username = (input.username || "").trim();
-  if (username.length >= 2) {
-    return { name: username.slice(0, 120), source: "username" };
-  }
-  const emailLocal = (input.email || "").split("@")[0]?.trim() || "";
-  if (emailLocal.length >= 2) {
-    return { name: emailLocal.slice(0, 120), source: "email" };
-  }
-  return { name: "DingMoney User", source: "fallback" };
+export function normalizeFullName(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const name = String(raw).trim().replace(/\s+/g, " ");
+  if (name.length < 3 || name.length > 120) return null;
+  return name;
 }
 
 /**
- * Resolve phone for HamiPay: reuse persisted assigned number, else generate
- * a stable MCI/Irancell number from userId (never from client form).
+ * Prefer locked DB full_name. Client value only when DB is empty (first write).
+ */
+export function resolveDepositCustomerName(input: {
+  storedFullName?: string | null;
+  clientFullName?: string | null;
+  nickname?: string | null;
+  username?: string | null;
+  email?: string | null;
+}): { name: string | null; source: DepositCustomerProfile["source"]["name"] } {
+  const stored = normalizeFullName(input.storedFullName);
+  if (stored) return { name: stored, source: "full_name" };
+
+  const client = normalizeFullName(input.clientFullName);
+  if (client) return { name: client, source: "client" };
+
+  return { name: null, source: "fallback" };
+}
+
+/**
+ * Prefer locked DB phone. Client value only when DB is empty (first write).
  */
 export function resolveDepositCustomerPhone(input: {
-  userId: string;
-  assignedPhone?: string | null;
+  storedPhone?: string | null;
+  clientPhone?: string | null;
 }): {
-  phone: string;
+  phone: string | null;
   source: DepositCustomerProfile["source"]["phone"];
 } {
-  const existing = normalizeIranMobile(input.assignedPhone);
-  if (existing) return { phone: existing, source: "assigned" };
+  const stored = normalizeIranMobile(input.storedPhone);
+  if (stored) return { phone: stored, source: "profile" };
 
-  return {
-    phone: generateAssignedIranMobile(input.userId),
-    source: "generated",
-  };
+  const client = normalizeIranMobile(input.clientPhone);
+  if (client) return { phone: client, source: "client" };
+
+  return { phone: null, source: "none" };
 }

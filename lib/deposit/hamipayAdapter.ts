@@ -12,7 +12,6 @@
 import { createHash } from "crypto";
 import type { VerificationEvidence } from "@/lib/deposit/types";
 import { parseEnvFlag } from "@/lib/deposit/env";
-import { generateAssignedIranMobile } from "@/lib/deposit/customerProfile";
 
 export type HamiPayCreateInput = {
   depositId: string;
@@ -170,8 +169,7 @@ function resolveCustomerName(customer: HamiPayCreateInput["customer"]): string {
 function resolveCustomerPhone(customer: HamiPayCreateInput["customer"]): string {
   const fromInput = (customer.phone || "").replace(/\D/g, "");
   if (fromInput.length >= 10) return fromInput.slice(0, 15);
-  // Stable per-user synthetic MCI/Irancell — never a shared placeholder
-  return generateAssignedIranMobile(customer.userId);
+  throw new Error("hamipay_customer_phone_required");
 }
 
 export async function hamipayCreatePayment(

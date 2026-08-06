@@ -60,9 +60,9 @@ Outbound create body (Postman contract): `customerName`, `customerPhone`, `amoun
 
 ## Flow
 
-1. Buy Rial UI → `POST /api/player/deposit/create` `{ amountRial }`
-   - `customerName` from nickname/username; `customerPhone` is a stable server-assigned
-     synthetic MCI/Irancell number per user (never collected from the player)
+1. Buy Rial UI → `POST /api/player/deposit/create` `{ amountRial, fullName?, phone? }`
+   - First deposit: player enters `full_name` + `phone`; saved on `user_profiles` (first-write locked)
+   - Later deposits: fields prefilled read-only; server ignores client overrides
 2. Server creates `deposit.intents` (hamipay / fiat_gateway), calls HamiPay with Idempotency-Key=depositId
 3. Browser redirects to `paymentUrl` (wallet untouched)
 4. Return → `/payment/callback` → verify with `depositId` if present, else `merchantOrderId`, else `resolveLatest`
