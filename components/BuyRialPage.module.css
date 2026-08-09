@@ -211,22 +211,21 @@
   inset: 0;
   z-index: 70;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  padding: 0;
+  padding: 1rem;
   background: rgba(0, 0, 0, 0.85);
 }
 
 .amountPickerSheet {
   width: 80%;
   max-width: 312px;
-  max-height: min(78vh, 560px);
-  border-radius: 1.25rem 1.25rem 0 0;
+  max-height: min(55vh, 392px);
+  border-radius: 1.25rem;
   border: 1px solid rgba(80, 88, 140, 0.35);
-  border-bottom: none;
   background: #0a0b10;
-  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.65);
-  padding: 0.75rem 0 calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.65);
+  padding: 0.75rem 0 0.75rem;
   overflow: hidden;
 }
 
@@ -251,7 +250,7 @@
   margin: 0;
   padding: 0 0.5rem;
   overflow-y: auto;
-  max-height: calc(min(78vh, 560px) - 4.5rem);
+  max-height: calc(min(55vh, 392px) - 4.5rem);
 }
 
 .amountPickerOption {
