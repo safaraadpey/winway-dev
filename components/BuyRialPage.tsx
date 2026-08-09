@@ -14,15 +14,23 @@ import styles from "./BuyRialPage.module.css";
 
 const syntheticIdentityEnabled = isSyntheticCustomerIdentityUiEnabled();
 
-function parseAmountDigits(raw: string): string {
-  return raw.replace(/[^\d]/g, "");
-}
+/** Preset Rial amounts for Buy Rial dropdown (fixed list). */
+const BUY_RIAL_PRESET_AMOUNTS_RIAL = [
+  530_000,
+  870_000,
+  1_030_000,
+  1_780_000,
+  2_550_000,
+  4_320_000,
+  5_630_000,
+  7_240_000,
+  10_450_000,
+  15_560_000,
+] as const;
 
-function formatAmountDisplay(digits: string): string {
-  if (!digits) return "";
-  const n = Number(digits);
-  if (!Number.isFinite(n)) return "";
-  return n.toLocaleString("en-US");
+function formatAmountDisplay(amount: number): string {
+  if (!Number.isFinite(amount) || amount <= 0) return "";
+  return amount.toLocaleString("en-US");
 }
 
 function normalizePhoneInput(raw: string): string {
@@ -40,7 +48,7 @@ function isValidFullName(raw: string): boolean {
 
 export default function BuyRialPage() {
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
-  const [amountDigits, setAmountDigits] = useState("");
+  const [selectedAmountRial, setSelectedAmountRial] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [nameLocked, setNameLocked] = useState(false);
@@ -107,7 +115,7 @@ export default function BuyRialPage() {
     };
   }, []);
 
-  const amountValue = amountDigits ? Number(amountDigits) : 0;
+  const amountValue = selectedAmountRial ? Number(selectedAmountRial) : 0;
   const tomanValue = rialsToTomans(amountValue);
   const nameOk = syntheticIdentityEnabled || isValidFullName(fullName);
   const phoneOk = syntheticIdentityEnabled || isValidIranMobile(phone);
@@ -121,7 +129,7 @@ export default function BuyRialPage() {
 
   const handleConfirm = async () => {
     if (!amountValue) {
-      toast.error("مبلغ خرید را وارد کنید");
+      toast.error("مبلغ خرید را انتخاب کنید");
       return;
     }
     if (!nameOk) {
@@ -243,17 +251,24 @@ export default function BuyRialPage() {
           <label htmlFor="buy-rial-amount" className={styles.labelSecondary}>
             مبلغ خرید (ریال)
           </label>
-          <input
-            id="buy-rial-amount"
-            className={styles.amountInput}
-            inputMode="numeric"
-            dir="ltr"
-            placeholder="0"
-            value={formatAmountDisplay(amountDigits)}
-            onChange={(e) => setAmountDigits(parseAmountDigits(e.target.value))}
-            disabled={submitting || connecting}
-            autoComplete="off"
-          />
+          <div className={styles.amountSelectWrap}>
+            <select
+              id="buy-rial-amount"
+              className={styles.amountSelect}
+              dir="ltr"
+              value={selectedAmountRial}
+              onChange={(e) => setSelectedAmountRial(e.target.value)}
+              disabled={submitting || connecting}
+              aria-label="مبلغ خرید به ریال"
+            >
+              <option value="">مبلغ را انتخاب کنید</option>
+              {BUY_RIAL_PRESET_AMOUNTS_RIAL.map((amount) => (
+                <option key={amount} value={String(amount)}>
+                  {formatAmountDisplay(amount)} ریال
+                </option>
+              ))}
+            </select>
+          </div>
           <p
             className={`${styles.hint} ${amountValue > 0 ? styles.hintLive : ""}`}
             aria-live="polite"
@@ -269,7 +284,7 @@ export default function BuyRialPage() {
                 </span>
               </>
             ) : (
-              "مبلغ مورد نظر خود را وارد کنید"
+              "مبلغ مورد نظر خود را از لیست انتخاب کنید"
             )}
           </p>
 
