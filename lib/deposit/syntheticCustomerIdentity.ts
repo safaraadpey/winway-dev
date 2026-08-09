@@ -7,52 +7,13 @@ import {
   normalizeFullName,
   normalizeIranMobile,
 } from "@/lib/deposit/customerProfile";
+import {
+  SYNTHETIC_FIRST_NAMES,
+  SYNTHETIC_LAST_NAMES,
+} from "@/lib/deposit/syntheticCustomerIdentityNames";
 
-const FIRST_NAMES = [
-  "علی",
-  "محمد",
-  "رضا",
-  "حسین",
-  "امیر",
-  "مهدی",
-  "سعید",
-  "احمد",
-  "حامد",
-  "پویا",
-  "نیما",
-  "کاوه",
-  "آرمان",
-  "بهرام",
-  "دانیال",
-  "فرزاد",
-  "مجید",
-  "مسعود",
-  "نادر",
-  "پیمان",
-] as const;
-
-const LAST_NAMES = [
-  "احمدی",
-  "رضایی",
-  "محمدی",
-  "حسینی",
-  "کریمی",
-  "موسوی",
-  "جعفری",
-  "اکبری",
-  "نوری",
-  "صادقی",
-  "رحیمی",
-  "زارعی",
-  "قاسمی",
-  "مرادی",
-  "عباسی",
-  "شریفی",
-  "ملکی",
-  "باقری",
-  "نجفی",
-  "کاظمی",
-] as const;
+const FIRST_NAMES = SYNTHETIC_FIRST_NAMES;
+const LAST_NAMES = SYNTHETIC_LAST_NAMES;
 
 export type SyntheticCustomerIdentity = {
   fullName: string;

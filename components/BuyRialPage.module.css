@@ -245,12 +245,33 @@
   text-align: right;
 }
 
+.amountPickerListWrap {
+  position: relative;
+  max-height: calc(min(55vh, 392px) - 4.5rem);
+}
+
 .amountPickerList {
   list-style: none;
   margin: 0;
   padding: 0 0.5rem;
   overflow-y: auto;
   max-height: calc(min(55vh, 392px) - 4.5rem);
+  -webkit-overflow-scrolling: touch;
+}
+
+.amountPickerListFade {
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0;
+  height: 3.25rem;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(10, 11, 16, 0) 0%,
+    rgba(10, 11, 16, 0.72) 45%,
+    #0a0b10 100%
+  );
 }
 
 .amountPickerOption {
@@ -325,6 +346,15 @@
 :global(html[data-theme="light"]) .amountPickerSheet {
   background: #ffffff;
   border-color: #e5e7eb;
+}
+
+:global(html[data-theme="light"]) .amountPickerListFade {
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.72) 45%,
+    #ffffff 100%
+  );
 }
 
 :global(html[data-theme="light"]) .amountPickerTitle {

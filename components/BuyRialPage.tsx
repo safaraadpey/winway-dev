@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import {
@@ -57,6 +57,8 @@ export default function BuyRialPage() {
   const [submitting, setSubmitting] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [amountPickerOpen, setAmountPickerOpen] = useState(false);
+  const [showAmountListBottomFade, setShowAmountListBottomFade] = useState(false);
+  const amountPickerListRef = useRef<HTMLUListElement>(null);
 
   useEffect(() => {
     setShowBackButton(true);
@@ -124,6 +126,40 @@ export default function BuyRialPage() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [amountPickerOpen]);
+
+  const updateAmountListBottomFade = useCallback(() => {
+    const list = amountPickerListRef.current;
+    if (!list) {
+      setShowAmountListBottomFade(false);
+      return;
+    }
+    const hasOverflow = list.scrollHeight > list.clientHeight + 1;
+    const atBottom =
+      list.scrollTop + list.clientHeight >= list.scrollHeight - 8;
+    setShowAmountListBottomFade(hasOverflow && !atBottom);
+  }, []);
+
+  useEffect(() => {
+    if (!amountPickerOpen) {
+      setShowAmountListBottomFade(false);
+      return;
+    }
+
+    const list = amountPickerListRef.current;
+    updateAmountListBottomFade();
+    const raf = window.requestAnimationFrame(updateAmountListBottomFade);
+
+    list?.addEventListener("scroll", updateAmountListBottomFade, {
+      passive: true,
+    });
+    window.addEventListener("resize", updateAmountListBottomFade);
+
+    return () => {
+      window.cancelAnimationFrame(raf);
+      list?.removeEventListener("scroll", updateAmountListBottomFade);
+      window.removeEventListener("resize", updateAmountListBottomFade);
+    };
+  }, [amountPickerOpen, updateAmountListBottomFade]);
 
   const amountValue = selectedAmountRial ? Number(selectedAmountRial) : 0;
   const tomanValue = rialsToTomans(amountValue);
@@ -316,37 +352,51 @@ export default function BuyRialPage() {
                 >
                   انتخاب مبلغ (ریال)
                 </h2>
-                <ul className={styles.amountPickerList} role="listbox">
-                  {BUY_RIAL_PRESET_AMOUNTS_RIAL.map((amount) => {
-                    const isSelected = selectedAmountRial === String(amount);
-                    return (
-                      <li key={amount} role="none">
-                        <button
-                          type="button"
-                          role="option"
-                          aria-selected={isSelected}
-                          className={`${styles.amountPickerOption} ${
-                            isSelected ? styles.amountPickerOptionSelected : ""
-                          }`}
-                          onClick={() => handleAmountPick(amount)}
-                        >
-                          <span
-                            className={`${styles.amountPickerOptionValue} numeric-text numeric-text--16`}
-                            dir="ltr"
-                          >
-                            {formatAmountDisplay(amount)} ریال
-                          </span>
-                          <span
-                            className={`${styles.amountPickerRadio} ${
-                              isSelected ? styles.amountPickerRadioSelected : ""
+                <div className={styles.amountPickerListWrap}>
+                  <ul
+                    ref={amountPickerListRef}
+                    className={styles.amountPickerList}
+                    role="listbox"
+                  >
+                    {BUY_RIAL_PRESET_AMOUNTS_RIAL.map((amount) => {
+                      const isSelected = selectedAmountRial === String(amount);
+                      return (
+                        <li key={amount} role="none">
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={isSelected}
+                            className={`${styles.amountPickerOption} ${
+                              isSelected ? styles.amountPickerOptionSelected : ""
                             }`}
-                            aria-hidden="true"
-                          />
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
+                            onClick={() => handleAmountPick(amount)}
+                          >
+                            <span
+                              className={`${styles.amountPickerOptionValue} numeric-text numeric-text--16`}
+                              dir="ltr"
+                            >
+                              {formatAmountDisplay(amount)} ریال
+                            </span>
+                            <span
+                              className={`${styles.amountPickerRadio} ${
+                                isSelected
+                                  ? styles.amountPickerRadioSelected
+                                  : ""
+                              }`}
+                              aria-hidden="true"
+                            />
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {showAmountListBottomFade ? (
+                    <div
+                      className={styles.amountPickerListFade}
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                </div>
               </div>
             </div>
           ) : null}
