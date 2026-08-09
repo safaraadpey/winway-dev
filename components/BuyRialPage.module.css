@@ -214,18 +214,18 @@
   align-items: flex-end;
   justify-content: center;
   padding: 0;
-  background: rgba(0, 0, 0, 0.72);
+  background: rgba(0, 0, 0, 0.85);
 }
 
 .amountPickerSheet {
-  width: 100%;
-  max-width: 390px;
+  width: 80%;
+  max-width: 312px;
   max-height: min(78vh, 560px);
   border-radius: 1.25rem 1.25rem 0 0;
-  border: 1px solid rgba(116, 128, 255, 0.35);
+  border: 1px solid rgba(80, 88, 140, 0.35);
   border-bottom: none;
-  background: rgba(22, 24, 34, 0.98);
-  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+  background: #0a0b10;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.65);
   padding: 0.75rem 0 calc(0.75rem + env(safe-area-inset-bottom, 0px));
   overflow: hidden;
 }
@@ -259,7 +259,7 @@
   min-height: 52px;
   padding: 0.75rem 0.75rem;
   border: none;
-  border-bottom: 1px solid rgba(116, 128, 255, 0.14);
+  border-bottom: 1px solid rgba(60, 66, 96, 0.35);
   background: transparent;
   color: var(--player-text-primary, #ffffff);
   display: flex;
@@ -275,7 +275,7 @@
 }
 
 .amountPickerOptionSelected {
-  background: rgba(0, 212, 170, 0.08);
+  background: rgba(0, 212, 170, 0.06);
 }
 
 .amountPickerOptionValue {
