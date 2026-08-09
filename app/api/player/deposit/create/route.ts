@@ -4,15 +4,14 @@ import { pgPool } from "@/lib/pg";
 import {
   getDepositEnvDiagnostics,
   isDepositHttpIngressAllowed,
+  isDepositSyntheticCustomerIdentityEnabled,
 } from "@/lib/deposit/flag";
 import {
   createHamiPayDepositIntent,
   resumeHamiPayPaymentUrl,
 } from "@/lib/deposit/hamipayFlow";
-import {
-  resolveDepositCustomerName,
-  resolveDepositCustomerPhone,
-} from "@/lib/deposit/customerProfile";
+import { resolveDepositCustomerIdentity } from "@/lib/deposit/customerProfile";
+import { generateStableSyntheticCustomerIdentity } from "@/lib/deposit/syntheticCustomerIdentity";
 import { validateDepositAmountToman } from "@/lib/deposit/limits";
 import { takeRateLimitToken } from "@/lib/deposit/rateLimit";
 import { rialsToTomans } from "@/lib/format/persianAmountWords";
@@ -170,17 +169,18 @@ export async function POST(request: Request) {
     });
   }
 
-  const resolvedName = resolveDepositCustomerName({
+  const resolved = resolveDepositCustomerIdentity({
+    userId: user.id,
+    syntheticEnabled: isDepositSyntheticCustomerIdentityEnabled(),
     storedFullName,
+    storedPhone,
     clientFullName:
       typeof body.fullName === "string" ? body.fullName : null,
-  });
-  const resolvedPhone = resolveDepositCustomerPhone({
-    storedPhone,
     clientPhone: typeof body.phone === "string" ? body.phone : null,
+    generateSynthetic: generateStableSyntheticCustomerIdentity,
   });
 
-  if (!resolvedName.name) {
+  if (!resolved.name) {
     return NextResponse.json(
       {
         error: "full_name_required",
@@ -189,7 +189,7 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  if (!resolvedPhone.phone) {
+  if (!resolved.phone) {
     return NextResponse.json(
       {
         error: "phone_required",
@@ -199,10 +199,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // First-write only: never overwrite locked identity from client
-  const needsPersist =
-    resolvedName.source === "client" || resolvedPhone.source === "client";
-  if (needsPersist) {
+  if (resolved.needsPersist) {
     try {
       await pgPool.query(
         `INSERT INTO public.user_profiles (user_id, full_name, phone, created_at, updated_at)
@@ -211,12 +208,13 @@ export async function POST(request: Request) {
          SET full_name = COALESCE(user_profiles.full_name, EXCLUDED.full_name),
              phone = COALESCE(user_profiles.phone, EXCLUDED.phone),
              updated_at = now()`,
-        [user.id, resolvedName.name, resolvedPhone.phone]
+        [user.id, resolved.name, resolved.phone]
       );
       console.log("[Deposit] deposit identity persisted", {
         userId: user.id,
-        nameSource: resolvedName.source,
-        phoneSource: resolvedPhone.source,
+        identityMode: resolved.identityMode,
+        nameSource: resolved.nameSource,
+        phoneSource: resolved.phoneSource,
       });
     } catch (err) {
       console.error("[Deposit] persist deposit identity failed", {
@@ -239,19 +237,22 @@ export async function POST(request: Request) {
       amountRial:
         amountRialFromClient ?? validated.amount * 10,
       amountToman: validated.amount,
-      customerNameSource: resolvedName.source,
-      customerPhoneSource: resolvedPhone.source,
+      identityMode: resolved.identityMode,
+      customerNameSource: resolved.nameSource,
+      customerPhoneSource: resolved.phoneSource,
       allowReason: diagnostics.createAllowReason,
       hasHamiPayApiKey: diagnostics.hasHamiPayApiKey,
       hasHamiPayApiBaseUrl: diagnostics.hasHamiPayApiBaseUrl,
       hamipayMock: diagnostics.hamipayMock,
+      depositSyntheticCustomerIdentity:
+        diagnostics.depositSyntheticCustomerIdentity,
     });
 
     const result = await createHamiPayDepositIntent(pgPool, {
       userId: user.id,
       amountToman: validated.amount,
-      customerName: resolvedName.name,
-      customerPhone: resolvedPhone.phone,
+      customerName: resolved.name,
+      customerPhone: resolved.phone,
       username,
       email,
     });

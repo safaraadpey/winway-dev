@@ -8,8 +8,11 @@ import {
   rialsToTomans,
 } from "@/lib/format/persianAmountWords";
 import { supabase } from "@/lib/supabaseClient";
+import { isSyntheticCustomerIdentityUiEnabled } from "@/lib/deposit/syntheticCustomerIdentityClient";
 import buyCardButtonBg from "@/src/assets/logo/BuyCardBotton.png";
 import styles from "./BuyRialPage.module.css";
+
+const syntheticIdentityEnabled = isSyntheticCustomerIdentityUiEnabled();
 
 function parseAmountDigits(raw: string): string {
   return raw.replace(/[^\d]/g, "");
@@ -58,6 +61,11 @@ export default function BuyRialPage() {
   }, [setShowBackButton, setOnBackClick]);
 
   useEffect(() => {
+    if (syntheticIdentityEnabled) {
+      setIdentityLoading(false);
+      return;
+    }
+
     let cancelled = false;
     (async () => {
       try {
@@ -101,8 +109,8 @@ export default function BuyRialPage() {
 
   const amountValue = amountDigits ? Number(amountDigits) : 0;
   const tomanValue = rialsToTomans(amountValue);
-  const nameOk = isValidFullName(fullName);
-  const phoneOk = isValidIranMobile(phone);
+  const nameOk = syntheticIdentityEnabled || isValidFullName(fullName);
+  const phoneOk = syntheticIdentityEnabled || isValidIranMobile(phone);
   const canSubmit =
     amountValue > 0 &&
     nameOk &&
@@ -137,18 +145,22 @@ export default function BuyRialPage() {
         return;
       }
 
+      const payload: { amountRial: number; fullName?: string; phone?: string } =
+        {
+          amountRial: amountValue,
+        };
+      if (!syntheticIdentityEnabled) {
+        payload.fullName = fullName.trim();
+        payload.phone = phone.trim();
+      }
+
       const res = await fetch("/api/player/deposit/create", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          amountRial: amountValue,
-          // Server ignores these when already locked in DB
-          fullName: fullName.trim(),
-          phone: phone.trim(),
-        }),
+        body: JSON.stringify(payload),
       });
 
       const body = await res.json().catch(() => ({}));
@@ -178,51 +190,55 @@ export default function BuyRialPage() {
         <h1 className={styles.title}>خرید ریالی</h1>
 
         <div className={styles.panel}>
-          <label htmlFor="buy-rial-fullname" className={styles.label}>
-            نام و نام خانوادگی
-          </label>
-          <input
-            id="buy-rial-fullname"
-            className={`${styles.textInput} ${nameLocked ? styles.inputLocked : ""}`}
-            type="text"
-            dir="rtl"
-            placeholder="مثال: علی احمدی"
-            value={fullName}
-            onChange={(e) => {
-              if (!nameLocked) setFullName(e.target.value);
-            }}
-            disabled={submitting || connecting || identityLoading}
-            readOnly={nameLocked}
-            autoComplete="name"
-            maxLength={120}
-          />
+          {!syntheticIdentityEnabled ? (
+            <>
+              <label htmlFor="buy-rial-fullname" className={styles.label}>
+                نام و نام خانوادگی
+              </label>
+              <input
+                id="buy-rial-fullname"
+                className={`${styles.textInput} ${nameLocked ? styles.inputLocked : ""}`}
+                type="text"
+                dir="rtl"
+                placeholder="مثال: علی احمدی"
+                value={fullName}
+                onChange={(e) => {
+                  if (!nameLocked) setFullName(e.target.value);
+                }}
+                disabled={submitting || connecting || identityLoading}
+                readOnly={nameLocked}
+                autoComplete="name"
+                maxLength={120}
+              />
 
-          <label htmlFor="buy-rial-phone" className={styles.labelSecondary}>
-            شماره موبایل
-          </label>
-          <input
-            id="buy-rial-phone"
-            className={`${styles.amountInput} ${phoneLocked ? styles.inputLocked : ""}`}
-            inputMode="tel"
-            dir="ltr"
-            placeholder="09123456789"
-            value={phone}
-            onChange={(e) => {
-              if (!phoneLocked) setPhone(normalizePhoneInput(e.target.value));
-            }}
-            disabled={submitting || connecting || identityLoading}
-            readOnly={phoneLocked}
-            autoComplete="tel"
-          />
-          {nameLocked && phoneLocked ? (
-            <p className={styles.hint}>
-              مشخصات درگاه قفل شده و قابل تغییر نیست.
-            </p>
-          ) : (
-            <p className={styles.hint}>
-              این مشخصات یک‌بار ثبت می‌شود و بعداً قابل تغییر نیست.
-            </p>
-          )}
+              <label htmlFor="buy-rial-phone" className={styles.labelSecondary}>
+                شماره موبایل
+              </label>
+              <input
+                id="buy-rial-phone"
+                className={`${styles.amountInput} ${phoneLocked ? styles.inputLocked : ""}`}
+                inputMode="tel"
+                dir="ltr"
+                placeholder="09123456789"
+                value={phone}
+                onChange={(e) => {
+                  if (!phoneLocked) setPhone(normalizePhoneInput(e.target.value));
+                }}
+                disabled={submitting || connecting || identityLoading}
+                readOnly={phoneLocked}
+                autoComplete="tel"
+              />
+              {nameLocked && phoneLocked ? (
+                <p className={styles.hint}>
+                  مشخصات درگاه قفل شده و قابل تغییر نیست.
+                </p>
+              ) : (
+                <p className={styles.hint}>
+                  این مشخصات یک‌بار ثبت می‌شود و بعداً قابل تغییر نیست.
+                </p>
+              )}
+            </>
+          ) : null}
 
           <label htmlFor="buy-rial-amount" className={styles.labelSecondary}>
             مبلغ خرید (ریال)

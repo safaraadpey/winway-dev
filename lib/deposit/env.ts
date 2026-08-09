@@ -34,6 +34,7 @@ export function hasNonEmptyEnv(raw: string | undefined | null): boolean {
 
 export function getDepositEnvDiagnostics(): {
   depositDomainEnabled: boolean;
+  depositSyntheticCustomerIdentity: boolean;
   hamipayMock: boolean;
   hasHamiPayApiKey: boolean;
   hasHamiPayApiBaseUrl: boolean;
@@ -46,6 +47,9 @@ export function getDepositEnvDiagnostics(): {
   createAllowReason: string;
 } {
   const depositDomainEnabled = parseEnvFlag(process.env.DEPOSIT_DOMAIN_ENABLED);
+  const depositSyntheticCustomerIdentity = parseEnvFlag(
+    process.env.DEPOSIT_SYNTHETIC_CUSTOMER_IDENTITY
+  );
   const hamipayMock = parseEnvFlag(process.env.HAMIPAY_MOCK);
   const hasHamiPayApiKey = hasNonEmptyEnv(process.env.HAMIPAY_API_KEY);
   const hasHamiPayApiBaseUrl = hasNonEmptyEnv(process.env.HAMIPAY_API_BASE_URL);
@@ -69,6 +73,7 @@ export function getDepositEnvDiagnostics(): {
 
   return {
     depositDomainEnabled,
+    depositSyntheticCustomerIdentity,
     hamipayMock,
     hasHamiPayApiKey,
     hasHamiPayApiBaseUrl,

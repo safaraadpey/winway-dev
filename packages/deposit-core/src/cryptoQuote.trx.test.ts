@@ -9,7 +9,9 @@ import { describe, it } from "node:test";
 import {
   cryptoAmountToUsd,
   getTierMultiplier,
+  isAboveMinCreditableCryptoAmount,
   isSupportedDepositCurrency,
+  MIN_CREDITABLE_CRYPTO_AMOUNT,
   observeTronNativeTransfer,
   sunToTrx,
   tierNetworkForDeposit,
@@ -219,5 +221,21 @@ describe("failing Railway TRC-10 cases (regression)", () => {
     assert.equal(obs!.cryptoAmount, 31);
     const usd = cryptoAmountToUsd("TRX", obs!.cryptoAmount, RATES);
     assert.equal(getTierMultiplier(TIERS, "TRX", usd).id, "trx-0-1000");
+  });
+});
+
+describe("minimum creditable crypto amount", () => {
+  it("rejects dust below 1 unit (TRX / USDT / BNB)", () => {
+    assert.equal(MIN_CREDITABLE_CRYPTO_AMOUNT, 1);
+    assert.equal(isAboveMinCreditableCryptoAmount(0.000007), false);
+    assert.equal(isAboveMinCreditableCryptoAmount(0.999999), false);
+    assert.equal(isAboveMinCreditableCryptoAmount(0), false);
+    assert.equal(isAboveMinCreditableCryptoAmount(Number.NaN), false);
+  });
+
+  it("accepts exactly 1 unit and above", () => {
+    assert.equal(isAboveMinCreditableCryptoAmount(1), true);
+    assert.equal(isAboveMinCreditableCryptoAmount(1.000001), true);
+    assert.equal(isAboveMinCreditableCryptoAmount(3), true);
   });
 });

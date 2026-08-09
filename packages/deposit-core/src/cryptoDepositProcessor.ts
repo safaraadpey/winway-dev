@@ -4,7 +4,9 @@
  */
 import type { Pool } from "pg";
 import {
+  isAboveMinCreditableCryptoAmount,
   isSupportedDepositCurrency,
+  MIN_CREDITABLE_CRYPTO_AMOUNT,
   quoteDepositToman,
 } from "./cryptoPriceLock";
 import { creditCryptoDepositWallet } from "./cryptoCredit";
@@ -21,7 +23,12 @@ import type { ObservedChainTx } from "./cryptoScanners/etherscan";
 export type ProcessResult = {
   txHash: string;
   eventIndex: number;
-  action: "skipped_duplicate" | "inserted_pending" | "confirmed" | "failed";
+  action:
+    | "skipped_duplicate"
+    | "skipped_below_minimum"
+    | "inserted_pending"
+    | "confirmed"
+    | "failed";
   cryptoTxId?: string;
   tomanAmount?: number;
   error?: string;
@@ -129,6 +136,23 @@ export async function processObservedDeposit(
       eventIndex,
       action: "failed",
       error: `unsupported_currency:${obs.currency}`,
+    };
+  }
+
+  if (!isAboveMinCreditableCryptoAmount(obs.cryptoAmount)) {
+    console.log("[Payment] skip below-minimum crypto deposit", {
+      txHash,
+      eventIndex,
+      network: obs.network,
+      currency: obs.currency,
+      cryptoAmount: obs.cryptoAmount,
+      minAmount: MIN_CREDITABLE_CRYPTO_AMOUNT,
+    });
+    return {
+      txHash,
+      eventIndex,
+      action: "skipped_below_minimum",
+      error: `below_minimum_crypto_amount:${obs.currency}`,
     };
   }
 

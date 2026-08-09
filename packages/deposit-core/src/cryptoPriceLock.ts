@@ -130,6 +130,16 @@ export const SUPPORTED_DEPOSIT_CURRENCIES = ["USDT", "BNB", "TRX"] as const;
 export type SupportedDepositCurrency =
   (typeof SUPPORTED_DEPOSIT_CURRENCIES)[number];
 
+/**
+ * Minimum on-chain amount (in token units) that may be quoted/credited.
+ * Dust below this is ignored for TRX, TRC-20 (USDT), and BEP-20 (USDT/BNB).
+ */
+export const MIN_CREDITABLE_CRYPTO_AMOUNT = 1;
+
+export function isAboveMinCreditableCryptoAmount(cryptoAmount: number): boolean {
+  return Number.isFinite(cryptoAmount) && cryptoAmount >= MIN_CREDITABLE_CRYPTO_AMOUNT;
+}
+
 export function isSupportedDepositCurrency(
   currency: string
 ): currency is SupportedDepositCurrency {
@@ -200,6 +210,12 @@ export async function quoteDepositToman(opts: {
   cryptoAmount: number;
   preferLock: boolean;
 }): Promise<TomanQuoteResult> {
+  if (!isAboveMinCreditableCryptoAmount(opts.cryptoAmount)) {
+    throw new Error(
+      `below_minimum_crypto_amount:${opts.currency}:${opts.cryptoAmount}`
+    );
+  }
+
   const lock = opts.preferLock ? await getPriceLock(opts.userId) : null;
   const useLock = Boolean(lock);
 

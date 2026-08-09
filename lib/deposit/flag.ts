@@ -11,6 +11,14 @@ export function isDepositDomainEnabled(): boolean {
 }
 
 /**
+ * When true, HamiPay customerName/phone are stable synthetic per-user values
+ * (no manual Buy Rial identity form). Default: false (manual entry).
+ */
+export function isDepositSyntheticCustomerIdentityEnabled(): boolean {
+  return parseEnvFlag(process.env.DEPOSIT_SYNTHETIC_CUSTOMER_IDENTITY);
+}
+
+/**
  * Explicit local/DEV harness mode. Required for fake ingress when domain flag is off.
  * Never enable in production ingress routes.
  */

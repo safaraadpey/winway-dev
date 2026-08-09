@@ -140,7 +140,7 @@ export default function BuyDollarPage() {
 
   const amountValue = amountRaw ? Number(amountRaw) : 0;
   const canSubmit =
-    Number.isFinite(amountValue) && amountValue > 0 && !submitting;
+    Number.isFinite(amountValue) && amountValue >= 1 && !submitting;
 
   const applyAmountChange = (nextRaw: string) => {
     setAmountRaw(nextRaw);
@@ -188,10 +188,17 @@ export default function BuyDollarPage() {
   }, []);
 
   const handleConfirm = async () => {
-    if (!canSubmit) {
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
       toast.error("مبلغ خرید را وارد کنید");
       return;
     }
+    if (amountValue < 1) {
+      toast.error(
+        "حداقل پرداخت قابل محاسبه ۱ واحد TRX و TRC-20 و BEP-20 می‌باشد."
+      );
+      return;
+    }
+    if (!canSubmit) return;
 
     setSubmitting(true);
     setQuote(null);
@@ -315,6 +322,13 @@ export default function BuyDollarPage() {
     <div className={styles.container}>
       <div className={styles.content}>
         <h1 className={styles.title}>خرید رمز ارزی</h1>
+        <p className={styles.minPaymentNotice}>
+          حداقل پرداخت قابل محاسبه{" "}
+          <span className="numeric-text numeric-text--12" dir="ltr">
+            1
+          </span>{" "}
+          واحد TRX و TRC-20 و BEP-20 می‌باشد.
+        </p>
 
         <div
           className={`${styles.panel} ${
@@ -378,9 +392,11 @@ export default function BuyDollarPage() {
                 }`}
                 aria-live="polite"
               >
-                {amountValue > 0
+                {amountValue >= 1
                   ? "برای دیدن قیمت شبکه‌ها «تبدیل و خرید» را بزنید"
-                  : "مبلغ مورد نظر خود را وارد کنید"}
+                  : amountValue > 0
+                    ? "حداقل مبلغ قابل محاسبه ۱ واحد است"
+                    : "مبلغ مورد نظر خود را وارد کنید"}
               </p>
 
               {submitting ? (

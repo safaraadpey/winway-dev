@@ -41,6 +41,11 @@ DEPOSIT_ENVIRONMENT=development   # or production — isolates wallets/env
 DEPOSIT_MIN_AMOUNT_TOMAN=10000
 DEPOSIT_MAX_AMOUNT_TOMAN=500000000
 
+# Customer identity mode for HamiPay create (default: manual Buy Rial form)
+# DEPOSIT_SYNTHETIC_CUSTOMER_IDENTITY=true          # server: stable synthetic per userId
+# NEXT_PUBLIC_DEPOSIT_SYNTHETIC_CUSTOMER_IDENTITY=true  # client: hide name/phone fields
+# DEPOSIT_SYNTHETIC_IDENTITY_SALT=...               # optional hash salt (server-only)
+
 # Cron
 CRON_SECRET=...
 
@@ -61,8 +66,8 @@ Outbound create body (Postman contract): `customerName`, `customerPhone`, `amoun
 ## Flow
 
 1. Buy Rial UI → `POST /api/player/deposit/create` `{ amountRial, fullName?, phone? }`
-   - First deposit: player enters `full_name` + `phone`; saved on `user_profiles` (first-write locked)
-   - Later deposits: fields prefilled read-only; server ignores client overrides
+   - **Manual (default):** first deposit — player enters `full_name` + `phone`; saved on `user_profiles` (first-write locked). Later deposits: prefilled read-only; server ignores client overrides.
+   - **Synthetic** (`DEPOSIT_SYNTHETIC_CUSTOMER_IDENTITY=true`): UI hides name/phone; server generates stable synthetic identity from `userId` on first deposit (persisted with first-write lock). Existing locked profiles are reused unchanged.
 2. Server creates `deposit.intents` (hamipay / fiat_gateway), calls HamiPay with Idempotency-Key=depositId
 3. Browser redirects to `paymentUrl` (wallet untouched)
 4. Return → `/payment/callback` → verify with `depositId` if present, else `merchantOrderId`, else `resolveLatest`

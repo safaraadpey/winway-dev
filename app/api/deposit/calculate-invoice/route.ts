@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { pgPool } from "@/lib/pg";
-import { calculateCryptoInvoice } from "@dingmoney/deposit-core";
+import {
+  calculateCryptoInvoice,
+  MIN_CREDITABLE_CRYPTO_AMOUNT,
+} from "@dingmoney/deposit-core";
 import { takeRateLimitToken } from "@/lib/deposit/rateLimit";
 
 export const runtime = "nodejs";
@@ -38,6 +41,18 @@ export async function POST(request: Request) {
         ok: false,
         error: "invalid_usd_amount",
         message: "مبلغ دلاری معتبر وارد کنید.",
+      },
+      { status: 400 }
+    );
+  }
+
+  if (usdAmount < MIN_CREDITABLE_CRYPTO_AMOUNT) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "amount_too_small",
+        message:
+          "حداقل پرداخت قابل محاسبه ۱ واحد TRX و TRC-20 و BEP-20 می‌باشد.",
       },
       { status: 400 }
     );
