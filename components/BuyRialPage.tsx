@@ -56,6 +56,7 @@ export default function BuyRialPage() {
   const [identityLoading, setIdentityLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [amountPickerOpen, setAmountPickerOpen] = useState(false);
 
   useEffect(() => {
     setShowBackButton(true);
@@ -115,6 +116,15 @@ export default function BuyRialPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!amountPickerOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAmountPickerOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [amountPickerOpen]);
+
   const amountValue = selectedAmountRial ? Number(selectedAmountRial) : 0;
   const tomanValue = rialsToTomans(amountValue);
   const nameOk = syntheticIdentityEnabled || isValidFullName(fullName);
@@ -126,6 +136,16 @@ export default function BuyRialPage() {
     !submitting &&
     !connecting &&
     !identityLoading;
+
+  const amountPickerDisabled = submitting || connecting;
+  const selectedAmountLabel = amountValue
+    ? `${formatAmountDisplay(amountValue)} ریال`
+    : "مبلغ را انتخاب کنید";
+
+  const handleAmountPick = (amount: number) => {
+    setSelectedAmountRial(String(amount));
+    setAmountPickerOpen(false);
+  };
 
   const handleConfirm = async () => {
     if (!amountValue) {
@@ -248,27 +268,88 @@ export default function BuyRialPage() {
             </>
           ) : null}
 
-          <label htmlFor="buy-rial-amount" className={styles.labelSecondary}>
+          <label id="buy-rial-amount-label" className={styles.labelSecondary}>
             مبلغ خرید (ریال)
           </label>
           <div className={styles.amountSelectWrap}>
-            <select
+            <button
               id="buy-rial-amount"
-              className={styles.amountSelect}
+              type="button"
+              className={`${styles.amountSelectTrigger} ${
+                amountValue > 0 ? styles.amountSelectTriggerFilled : ""
+              }`}
               dir="ltr"
-              value={selectedAmountRial}
-              onChange={(e) => setSelectedAmountRial(e.target.value)}
-              disabled={submitting || connecting}
-              aria-label="مبلغ خرید به ریال"
+              disabled={amountPickerDisabled}
+              aria-haspopup="dialog"
+              aria-expanded={amountPickerOpen}
+              aria-labelledby="buy-rial-amount-label"
+              onClick={() => {
+                if (!amountPickerDisabled) setAmountPickerOpen(true);
+              }}
             >
-              <option value="">مبلغ را انتخاب کنید</option>
-              {BUY_RIAL_PRESET_AMOUNTS_RIAL.map((amount) => (
-                <option key={amount} value={String(amount)}>
-                  {formatAmountDisplay(amount)} ریال
-                </option>
-              ))}
-            </select>
+              <span
+                className={`${styles.amountSelectValue} numeric-text numeric-text--18`}
+                dir="ltr"
+              >
+                {selectedAmountLabel}
+              </span>
+            </button>
           </div>
+
+          {amountPickerOpen ? (
+            <div
+              className={styles.amountPickerOverlay}
+              role="presentation"
+              onClick={() => setAmountPickerOpen(false)}
+            >
+              <div
+                className={styles.amountPickerSheet}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="buy-rial-amount-picker-title"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className={styles.amountPickerHandle} aria-hidden="true" />
+                <h2
+                  id="buy-rial-amount-picker-title"
+                  className={styles.amountPickerTitle}
+                >
+                  انتخاب مبلغ (ریال)
+                </h2>
+                <ul className={styles.amountPickerList} role="listbox">
+                  {BUY_RIAL_PRESET_AMOUNTS_RIAL.map((amount) => {
+                    const isSelected = selectedAmountRial === String(amount);
+                    return (
+                      <li key={amount} role="none">
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={isSelected}
+                          className={`${styles.amountPickerOption} ${
+                            isSelected ? styles.amountPickerOptionSelected : ""
+                          }`}
+                          onClick={() => handleAmountPick(amount)}
+                        >
+                          <span
+                            className={`${styles.amountPickerOptionValue} numeric-text numeric-text--16`}
+                            dir="ltr"
+                          >
+                            {formatAmountDisplay(amount)} ریال
+                          </span>
+                          <span
+                            className={`${styles.amountPickerRadio} ${
+                              isSelected ? styles.amountPickerRadioSelected : ""
+                            }`}
+                            aria-hidden="true"
+                          />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
+          ) : null}
           <p
             className={`${styles.hint} ${amountValue > 0 ? styles.hintLive : ""}`}
             aria-live="polite"

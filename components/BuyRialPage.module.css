@@ -154,7 +154,7 @@
   width: 100%;
 }
 
-.amountSelect {
+.amountSelectTrigger {
   composes: numeric-text numeric-text--18 from global;
   width: 100%;
   min-height: 52px;
@@ -164,24 +164,34 @@
   border: 1px solid rgba(116, 128, 255, 0.45);
   background: rgba(40, 40, 46, 0.92);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  color: #f3f4ff;
+  color: rgba(243, 244, 255, 0.55);
   text-align: left;
   direction: ltr;
   outline: none;
   font-weight: 700;
-  appearance: none;
   cursor: pointer;
+  display: block;
 }
 
-.amountSelect:focus {
+.amountSelectTriggerFilled {
+  color: #f3f4ff;
+}
+
+.amountSelectTrigger:focus-visible {
   border-color: rgba(160, 140, 255, 0.75);
   background: rgba(48, 48, 56, 0.95);
   box-shadow: 0 0 0 1px rgba(116, 128, 255, 0.25);
 }
 
-.amountSelect:disabled {
+.amountSelectTrigger:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.amountSelectValue {
+  display: block;
+  width: 100%;
+  text-align: left;
 }
 
 .amountSelectWrap::after {
@@ -196,14 +206,114 @@
   line-height: 1;
 }
 
-:global(html[data-theme="light"]) .amountSelect {
+.amountPickerOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.amountPickerSheet {
+  width: 100%;
+  max-width: 390px;
+  max-height: min(78vh, 560px);
+  border-radius: 1.25rem 1.25rem 0 0;
+  border: 1px solid rgba(116, 128, 255, 0.35);
+  border-bottom: none;
+  background: rgba(22, 24, 34, 0.98);
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+  padding: 0.75rem 0 calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
+}
+
+.amountPickerHandle {
+  width: 42px;
+  height: 4px;
+  margin: 0 auto 0.75rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.45);
+}
+
+.amountPickerTitle {
+  margin: 0 1rem 0.75rem;
+  font-size: 0.9375rem;
+  font-weight: 800;
+  color: var(--player-text-primary, #ffffff);
+  text-align: right;
+}
+
+.amountPickerList {
+  list-style: none;
+  margin: 0;
+  padding: 0 0.5rem;
+  overflow-y: auto;
+  max-height: calc(min(78vh, 560px) - 4.5rem);
+}
+
+.amountPickerOption {
+  width: 100%;
+  min-height: 52px;
+  padding: 0.75rem 0.75rem;
+  border: none;
+  border-bottom: 1px solid rgba(116, 128, 255, 0.14);
+  background: transparent;
+  color: var(--player-text-primary, #ffffff);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.amountPickerOption:last-child {
+  border-bottom: none;
+}
+
+.amountPickerOptionSelected {
+  background: rgba(0, 212, 170, 0.08);
+}
+
+.amountPickerOptionValue {
+  flex: 1;
+  font-weight: 700;
+  color: #f3f4ff;
+}
+
+.amountPickerRadio {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 2px solid rgba(148, 163, 184, 0.55);
+  background: transparent;
+}
+
+.amountPickerRadioSelected {
+  border-color: var(--player-accent, #00d4aa);
+  background: radial-gradient(
+    circle,
+    var(--player-accent, #00d4aa) 0 35%,
+    transparent 36% 100%
+  );
+}
+
+:global(html[data-theme="light"]) .amountSelectTrigger {
   background: #f3f4f6;
   border-color: #d1d5db;
   box-shadow: none;
+  color: #9ca3af;
+}
+
+:global(html[data-theme="light"]) .amountSelectTriggerFilled {
   color: #374151;
 }
 
-:global(html[data-theme="light"]) .amountSelect:focus {
+:global(html[data-theme="light"]) .amountSelectTrigger:focus-visible {
   border-color: #a855f7;
   background: #f9fafb;
   box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.2);
@@ -211,6 +321,28 @@
 
 :global(html[data-theme="light"]) .amountSelectWrap::after {
   color: #6b7280;
+}
+
+:global(html[data-theme="light"]) .amountPickerSheet {
+  background: #ffffff;
+  border-color: #e5e7eb;
+}
+
+:global(html[data-theme="light"]) .amountPickerTitle {
+  color: #111827;
+}
+
+:global(html[data-theme="light"]) .amountPickerOption {
+  border-bottom-color: #e5e7eb;
+  color: #111827;
+}
+
+:global(html[data-theme="light"]) .amountPickerOptionValue {
+  color: #111827;
+}
+
+:global(html[data-theme="light"]) .amountPickerOptionSelected {
+  background: rgba(0, 212, 170, 0.12);
 }
 
 .hint {
