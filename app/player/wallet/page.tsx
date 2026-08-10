@@ -47,11 +47,33 @@ function WalletPageContent() {
     );
   }
 
-  const title = action === "withdraw" ? "برداشت" : "کیف پول";
-  const message =
-    action === "withdraw"
-      ? "برای برداشت و کش‌اوت با ایجنت خود تماس بگیرید."
-      : "این بخش به‌زودی فعال می‌شود.";
+  if (action === "withdraw") {
+    return (
+      <div className="h-full overflow-y-auto p-4">
+        <div className="mx-auto max-w-[600px]">
+          <div className="mt-[30px] flex flex-col gap-3">
+            <button
+              type="button"
+              className={styles.buyOptionButton}
+              onClick={() => router.push("/player/wallet/withdraw-rial")}
+            >
+              برداشت ریالی
+            </button>
+            <button
+              type="button"
+              className={styles.buyOptionButton}
+              onClick={() => router.push("/player/wallet/withdraw-crypto")}
+            >
+              برداشت رمز ارزی
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const title = "کیف پول";
+  const message = "این بخش به‌زودی فعال می‌شود.";
 
   return (
     <div className="h-full overflow-y-auto p-4">

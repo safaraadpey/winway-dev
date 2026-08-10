@@ -7,8 +7,13 @@ import {
   transferWalletForUsersBulk,
   loadTransactionHistory,
 } from "@/services/transactions";
+import {
+  loadPendingWithdrawals,
+  reviewWithdrawal,
+} from "@/services/withdrawals";
 import { supabase } from "@/lib/supabaseClient";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
+import { formatCardDisplay, stripCardDigits } from "@/lib/format/cardNumber";
 import type {
   ManagedUserRoleFilter,
   ManagedUserSummary,
@@ -18,6 +23,8 @@ import type {
   TransactionHistoryItem,
   DateFilter,
 } from "@/src/types/transactions";
+import type { WithdrawalRequestItem, WithdrawalKind } from "@/src/types/withdrawal";
+import { getNetworkLabel } from "@/src/types/withdrawal";
 import toast from "react-hot-toast";
 
 const ALL_ROLE_TABS: { key: ManagedUserRoleFilter; label: string }[] = [
@@ -27,7 +34,7 @@ const ALL_ROLE_TABS: { key: ManagedUserRoleFilter; label: string }[] = [
   { key: "all", label: "همه" },
 ];
 
-type TabMode = "cashdesk" | "history";
+type TabMode = "cashdesk" | "history" | "withdrawals";
 
 interface TransactionsManagerProps {
   pageTitle?: string;
@@ -71,6 +78,15 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
   const [historySearch, setHistorySearch] = useState("");
   const [historySearchDebounced, setHistorySearchDebounced] = useState("");
   const [currentUserRole, setCurrentUserRole] = useState<string>("player");
+  const [withdrawalRequests, setWithdrawalRequests] = useState<
+    WithdrawalRequestItem[]
+  >([]);
+  const [withdrawalsLoading, setWithdrawalsLoading] = useState(false);
+  const [reviewingRequestId, setReviewingRequestId] = useState<string | null>(
+    null
+  );
+  const [withdrawalKindFilter, setWithdrawalKindFilter] =
+    useState<WithdrawalKind>("rial");
 
   const cachedUsersBase = getCachedManagedUsersBase();
   const [baseUsers, setBaseUsers] = useState<ManagedUserSummary[]>(
@@ -204,6 +220,79 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
     };
   }, [tab, historyDateFilter, historySearchDebounced]);
 
+  useEffect(() => {
+    if (tab !== "withdrawals") return;
+    if (withdrawalKindFilter === "crypto" && currentUserRole !== "admin") {
+      setWithdrawalKindFilter("rial");
+      return;
+    }
+
+    let cancelled = false;
+
+    async function fetchWithdrawals() {
+      try {
+        setWithdrawalsLoading(true);
+        const rows = await loadPendingWithdrawals(withdrawalKindFilter);
+        if (!cancelled) setWithdrawalRequests(rows);
+      } catch (err) {
+        console.error("[Withdrawal] admin list error:", err);
+        if (!cancelled) toast.error("خطا در بارگذاری درخواست‌های برداشت");
+      } finally {
+        if (!cancelled) setWithdrawalsLoading(false);
+      }
+    }
+
+    fetchWithdrawals();
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, withdrawalKindFilter, currentUserRole]);
+
+  const handleWithdrawalReview = async (
+    requestId: string,
+    action: "approve" | "reject",
+    kind: WithdrawalKind
+  ) => {
+    if (reviewingRequestId) return;
+    setReviewingRequestId(requestId);
+    try {
+      const result = await reviewWithdrawal({ requestId, action, kind });
+      toast.success(result.message || "عملیات انجام شد.");
+      const rows = await loadPendingWithdrawals(withdrawalKindFilter);
+      setWithdrawalRequests(rows);
+      await refreshWalletBalances?.();
+    } catch (err: any) {
+      console.error("[Withdrawal] review error:", err);
+      toast.error(err?.message || "بررسی درخواست ناموفق بود.");
+    } finally {
+      setReviewingRequestId(null);
+    }
+  };
+
+  const copyWalletAddress = async (address: string) => {
+    const trimmed = String(address || "").trim();
+    if (!trimmed) return;
+    try {
+      await navigator.clipboard.writeText(trimmed);
+      toast.success("آدرس کیف پول کپی شد.");
+    } catch (err) {
+      console.error("[Withdrawal] copy address failed", err);
+      toast.error("کپی ناموفق بود.");
+    }
+  };
+
+  const copyCardNumber = async (rawCard: string) => {
+    const digits = stripCardDigits(rawCard);
+    if (!digits) return;
+    try {
+      await navigator.clipboard.writeText(digits);
+      toast.success("شماره کارت کپی شد.");
+    } catch (err) {
+      console.error("[Withdrawal] copy card failed", err);
+      toast.error("کپی ناموفق بود.");
+    }
+  };
+
   // فرمت تاریخ برای نمایش
   const formatTransactionDate = (dateString: string): string => {
     const date = new Date(dateString);
@@ -322,7 +411,7 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
         <div className="max-w-md mx-auto w-full h-full flex flex-col overflow-hidden">
           {/* بخش ثابت بالا */}
           <div className="flex-shrink-0 p-4 pb-0">
-            {/* تب‌ها: سوابق / پیشخوان */}
+            {/* تب‌ها: سوابق / پیشخوان / برداشت */}
             <div className="flex mb-4 rounded-2xl overflow-hidden bg-[#111827] text-sm font-semibold">
               <button
                 className={`flex-1 py-3 ${
@@ -339,6 +428,16 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                 onClick={() => setTab("cashdesk")}
               >
                 پیشخوان
+              </button>
+              <button
+                className={`flex-1 py-3 ${
+                  tab === "withdrawals"
+                    ? "bg-teal-500 text-black"
+                    : "text-gray-300"
+                }`}
+                onClick={() => setTab("withdrawals")}
+              >
+                برداشت
               </button>
             </div>
           </div>
@@ -475,6 +574,170 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                 )}
               </div>
             </>
+          ) : tab === "withdrawals" ? (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex-shrink-0 px-4 pb-3">
+                <div className="flex rounded-2xl overflow-hidden bg-[#111827] text-sm font-semibold">
+                  <button
+                    type="button"
+                    className={`flex-1 py-2 ${
+                      withdrawalKindFilter === "rial"
+                        ? "bg-teal-500 text-black"
+                        : "text-gray-300"
+                    }`}
+                    onClick={() => setWithdrawalKindFilter("rial")}
+                  >
+                    ریالی
+                  </button>
+                  {currentUserRole === "admin" ? (
+                    <button
+                      type="button"
+                      className={`flex-1 py-2 ${
+                        withdrawalKindFilter === "crypto"
+                          ? "bg-teal-500 text-black"
+                          : "text-gray-300"
+                      }`}
+                      onClick={() => setWithdrawalKindFilter("crypto")}
+                    >
+                      رمز ارزی
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
+              {withdrawalsLoading ? (
+                <div className="py-8 text-center text-gray-400 text-sm">
+                  در حال بارگذاری...
+                </div>
+              ) : withdrawalRequests.length === 0 ? (
+                <div className="py-8 text-center text-gray-400 text-sm">
+                  درخواست برداشت در انتظار بررسی وجود ندارد
+                </div>
+              ) : (
+                withdrawalRequests.map((req) => {
+                  const isReviewing = reviewingRequestId === req.id;
+                  const kind = req.kind ?? withdrawalKindFilter;
+                  return (
+                    <div
+                      key={req.id}
+                      className="bg-[#1f2933] rounded-2xl px-4 py-4 space-y-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-white">
+                            {req.playerUsername || "پلیر"}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {formatTransactionDate(req.createdAt)}
+                          </p>
+                        </div>
+                        {kind === "crypto" ? (
+                          <span className="numeric-text numeric-text--16 text-yellow-300" dir="ltr">
+                            {(req.cryptoAmount ?? 0).toLocaleString("en-US")}{" "}
+                            {req.cryptoSymbol}
+                          </span>
+                        ) : (
+                          <span className="numeric-text numeric-text--16 text-yellow-300" dir="ltr">
+                            {req.amount.toLocaleString("en-US")} T
+                          </span>
+                        )}
+                      </div>
+
+                      {kind === "crypto" ? (
+                        <div className="text-xs text-gray-300 space-y-1">
+                          <p>
+                            <span className="text-gray-400">شبکه: </span>
+                            {req.network ? getNetworkLabel(req.network) : "—"}
+                          </p>
+                          <p>
+                            <span className="text-gray-400">بلاک تومانی: </span>
+                            <span className="numeric-text numeric-text--12" dir="ltr">
+                              {req.amount.toLocaleString("en-US")}
+                            </span>
+                          </p>
+                          <p className="flex items-center justify-between gap-2">
+                            <span className="break-all text-left" dir="ltr">
+                              <span className="text-gray-400">آدرس: </span>
+                              {req.walletAddress}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => void copyWalletAddress(req.walletAddress || "")}
+                              className="flex-shrink-0 rounded-lg border border-gray-600 px-2 py-1 text-[11px] font-semibold text-gray-200 hover:bg-[#374151]"
+                            >
+                              کپی
+                            </button>
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-gray-300 space-y-1">
+                          <p>
+                            <span className="text-gray-400">نام: </span>
+                            {req.fullName}
+                          </p>
+                          <p className="flex items-center justify-between gap-2">
+                            <span>
+                              <span className="text-gray-400">کارت: </span>
+                              <span className="numeric-text numeric-text--12" dir="ltr">
+                                {formatCardDisplay(req.cardNumber || "")}
+                              </span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => void copyCardNumber(req.cardNumber || "")}
+                              className="flex-shrink-0 rounded-lg border border-gray-600 px-2 py-1 text-[11px] font-semibold text-gray-200 hover:bg-[#374151]"
+                            >
+                              کپی
+                            </button>
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="text-xs text-gray-300 space-y-1 border-t border-gray-700/60 pt-2">
+                        <p>
+                          <span className="text-gray-400">
+                            تعداد بازی (۷ روز گذشته):{" "}
+                          </span>
+                          <span className="numeric-text numeric-text--12 text-white" dir="ltr">
+                            {(req.playerWeekGamesPlayed ?? 0).toLocaleString("en-US")}
+                          </span>
+                        </p>
+                        <p>
+                          <span className="text-gray-400">
+                            جمع برد (۷ روز گذشته):{" "}
+                          </span>
+                          <span className="numeric-text numeric-text--12 text-white" dir="ltr">
+                            {(req.playerWeekTotalWinnings ?? 0).toLocaleString("en-US")}{" "}
+                            تومان
+                          </span>
+                        </p>
+                      </div>
+
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          type="button"
+                          disabled={isReviewing}
+                          onClick={() => void handleWithdrawalReview(req.id, "approve", kind)}
+                          className="flex-1 py-2.5 rounded-xl bg-teal-500 text-black font-semibold text-sm disabled:opacity-60"
+                        >
+                          {isReviewing ? "..." : "تایید برداشت"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isReviewing}
+                          onClick={() => void handleWithdrawalReview(req.id, "reject", kind)}
+                          className="flex-1 py-2.5 rounded-xl bg-red-700 text-white font-semibold text-sm disabled:opacity-60"
+                        >
+                          {isReviewing ? "..." : "رد"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              </div>
+            </div>
           ) : (
             <div className="flex-1 flex flex-col overflow-hidden px-4">
               {/* بخش ثابت: موجودی‌ها، فیلتر نقش، نوار جستجو */}

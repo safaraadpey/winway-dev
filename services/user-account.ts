@@ -110,18 +110,22 @@ function getPeriodStart(period: UserAccountPeriod): Date {
   }
 }
 
+type TicketActivityRow = { room_id: string; created_at: string };
+
 type MonthlyActivitySource =
   | {
       kind: "commissions_log";
       resultsRows: Array<{ win_type: string; created_at: string }>;
       commissionRows: Array<Record<string, any>>;
       manualRows: Array<{ amount: any; type: string; created_at: string }>;
+      ticketRows: TicketActivityRow[];
     }
   | {
       kind: "admin_commission_tx";
       resultsRows: Array<{ win_type: string; created_at: string }>;
       commissionTxRows: Array<{ amount: any; created_at: string }>;
       manualRows: Array<{ amount: any; type: string; created_at: string }>;
+      ticketRows: TicketActivityRow[];
     };
 
 async function loadMonthlyActivitySource(
@@ -144,6 +148,16 @@ async function loadMonthlyActivitySource(
     .in("type", ["deposit", "withdraw"])
     .gte("created_at", monthStart);
 
+  const ticketsPromise =
+    userRole === "player"
+      ? supabase
+          .from("tickets")
+          .select("room_id, created_at")
+          .eq("player_user_id", userId)
+          .in("reservation_status", ["confirmed", "consumed"])
+          .gte("created_at", monthStart)
+      : Promise.resolve({ data: [] as TicketActivityRow[], error: null });
+
   if (userRole === "admin") {
     const adminCommissionPromise = supabase
       .from("transactions")
@@ -153,10 +167,11 @@ async function loadMonthlyActivitySource(
       .eq("source_kind", "ticket_commission")
       .gte("created_at", monthStart);
 
-    const [resultsRes, manualRes, commRes] = await Promise.all([
+    const [resultsRes, manualRes, commRes, ticketsRes] = await Promise.all([
       resultsPromise,
       manualPromise,
       adminCommissionPromise,
+      ticketsPromise,
     ]);
 
     if (resultsRes.error) {
@@ -168,12 +183,16 @@ async function loadMonthlyActivitySource(
     if (commRes.error) {
       console.error("loadMonthlyActivitySource: admin commission tx error", commRes.error);
     }
+    if (ticketsRes.error) {
+      console.error("loadMonthlyActivitySource: tickets error", ticketsRes.error);
+    }
 
     return {
       kind: "admin_commission_tx",
       resultsRows: (resultsRes.data || []) as any,
       manualRows: (manualRes.data || []) as any,
       commissionTxRows: (commRes.data || []) as any,
+      ticketRows: (ticketsRes.data || []) as TicketActivityRow[],
     };
   }
 
@@ -201,10 +220,11 @@ async function loadMonthlyActivitySource(
     .eq("status", "settled")
     .gte("created_at", monthStart);
 
-  const [resultsRes, manualRes, commRes] = await Promise.all([
+  const [resultsRes, manualRes, commRes, ticketsRes] = await Promise.all([
     resultsPromise,
     manualPromise,
     commissionsQuery,
+    ticketsPromise,
   ]);
 
   if (resultsRes.error) {
@@ -216,12 +236,16 @@ async function loadMonthlyActivitySource(
   if (commRes.error) {
     console.error("loadMonthlyActivitySource: commissions_log error", commRes.error);
   }
+  if (ticketsRes.error) {
+    console.error("loadMonthlyActivitySource: tickets error", ticketsRes.error);
+  }
 
   return {
     kind: "commissions_log",
     resultsRows: (resultsRes.data || []) as any,
     manualRows: (manualRes.data || []) as any,
     commissionRows: (commRes.data || []) as any,
+    ticketRows: (ticketsRes.data || []) as TicketActivityRow[],
   };
 }
 
@@ -238,11 +262,24 @@ function buildActivitiesFromMonthlySource(
     winType: r.win_type,
   }));
 
+  const tickets = (source.ticketRows || []).map((t) => ({
+    ms: Date.parse(t.created_at),
+    roomId: t.room_id,
+  }));
+
   const manual = (source.manualRows || []).map((t) => ({
     ms: Date.parse(t.created_at),
     amount: Number(t.amount || 0),
     type: t.type,
   }));
+
+  const getGamesPlayed = (startMs: number) => {
+    const rooms = new Set<string>();
+    for (const t of tickets) {
+      if (t.ms >= startMs && t.roomId) rooms.add(t.roomId);
+    }
+    return rooms.size;
+  };
 
   const getLineFullWins = (startMs: number) => {
     let lineWins = 0;
@@ -309,11 +346,13 @@ function buildActivitiesFromMonthlySource(
   };
 
   const buildOne = (period: UserAccountPeriod, startMs: number): UserAccountActivity => {
+    const gamesPlayed = getGamesPlayed(startMs);
     const { lineWins, fullWins } = getLineFullWins(startMs);
     const { deposits, withdrawals, net } = getDepositsWithdrawals(startMs);
     const { commission, commissionTotal } = getCommission(startMs);
     return {
       period,
+      gamesPlayed,
       lineWins,
       fullWins,
       commission,
@@ -598,6 +637,27 @@ async function calculateUserActivity(
     const lineWins = (resultsData || []).filter((r: any) => r.win_type === "line").length;
     const fullWins = (resultsData || []).filter((r: any) => r.win_type === "full").length;
 
+    // تعداد بازی = اتاق‌های متمایزی که پلیر تیکت معتبر خریده
+    let gamesPlayed = 0;
+    if (userRole === "player") {
+      const { data: ticketsData, error: ticketsError } = await supabase
+        .from("tickets")
+        .select("room_id")
+        .eq("player_user_id", userId)
+        .in("reservation_status", ["confirmed", "consumed"])
+        .gte("created_at", periodStart.toISOString());
+
+      if (ticketsError) {
+        console.error("calculateUserActivity: tickets error", ticketsError);
+      }
+
+      gamesPlayed = new Set(
+        (ticketsData || [])
+          .map((t: any) => t.room_id)
+          .filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
+      ).size;
+    }
+
     // محاسبه کانیات:
     // - player: مجموع کمیسیون‌های ساخته‌شده از تیکت‌های خودش (agent+super+admin)
     // - agent: مجموع سهم agent روی تیکت‌های زیرمجموعه
@@ -720,6 +780,7 @@ async function calculateUserActivity(
 
     return {
       period,
+      gamesPlayed,
       lineWins,
       fullWins,
       commission,
@@ -732,6 +793,7 @@ async function calculateUserActivity(
     console.error("calculateUserActivity unexpected error:", err);
     return {
       period,
+      gamesPlayed: 0,
       lineWins: 0,
       fullWins: 0,
       commission: 0,

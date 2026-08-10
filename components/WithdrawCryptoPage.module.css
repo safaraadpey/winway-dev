@@ -1,0 +1,154 @@
+.networkRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.networkChip {
+  flex: 1;
+  min-width: 5.5rem;
+  padding: 0.625rem 0.5rem;
+  border-radius: 12px;
+  border: 1px solid rgba(116, 128, 255, 0.45);
+  background: rgba(40, 40, 46, 0.92);
+  color: #f3f4ff;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.networkChipActive {
+  border-color: rgba(160, 140, 255, 0.85);
+  background: rgba(76, 68, 120, 0.55);
+  color: #fff;
+}
+
+.quoteBox {
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  padding: 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(116, 128, 255, 0.35);
+  background: rgba(30, 30, 36, 0.65);
+}
+
+.quoteTitle {
+  font-size: 0.9375rem;
+  font-weight: 800;
+  color: var(--player-text-primary, #fff);
+  margin-bottom: 0.75rem;
+  text-align: right;
+}
+
+.quoteRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--player-text-muted, #9ca3af);
+}
+
+.submitButton {
+  margin-top: 0.75rem;
+}
+
+.receiptSection {
+  margin-top: 1.25rem;
+}
+
+.receiptTitle {
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: var(--player-text-primary, #ffffff);
+  text-align: center;
+  margin-bottom: 0.875rem;
+}
+
+.receiptEmpty {
+  text-align: center;
+  color: var(--player-text-muted, #9ca3af);
+  font-size: 0.875rem;
+  padding: 1rem 0;
+}
+
+.receiptList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.receiptCard {
+  composes: activeCardsPanelSurface from "./room/gameRoomPanels.module.css";
+  border-radius: 1rem;
+  padding: 1rem 1.125rem;
+}
+
+.receiptRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.receiptLabel {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--player-text-muted, #9ca3af);
+}
+
+.receiptValue {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--player-text-primary, #ffffff);
+}
+
+.receiptNumericValue {
+  font-weight: 700;
+  color: #ffffff !important;
+}
+
+.receiptNumeric16 {
+  composes: numeric-text numeric-text--16 from global;
+  composes: receiptNumericValue;
+}
+
+.receiptNumeric14 {
+  composes: numeric-text numeric-text--14 from global;
+  composes: receiptNumericValue;
+}
+
+.statusBadge {
+  font-size: 0.8125rem;
+  font-weight: 800;
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+}
+
+.statusPending {
+  background: rgba(251, 191, 36, 0.18);
+  color: #fcd34d;
+}
+
+.statusApproved {
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+}
+
+.statusRejected {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+}
+
+.addressLine {
+  font-size: 0.75rem;
+  color: var(--player-text-muted, #9ca3af);
+  word-break: break-all;
+  margin: 0.25rem 0 0.5rem;
+  text-align: left;
+}

@@ -28,6 +28,7 @@ export interface UserAccountInfo {
 
 export interface UserAccountActivity {
   period: UserAccountPeriod;
+  gamesPlayed: number; // تعداد بازی (اتاق‌های متمایز با تیکت معتبر)
   lineWins: number; // تعداد برد خطی
   fullWins: number; // تعداد برد پر
   commission: number; // کانیات (کمیسیون)

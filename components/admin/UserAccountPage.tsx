@@ -1027,6 +1027,10 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
             <div className="grid grid-cols-2 gap-y-1">
               {data?.user?.role === "player" && (
                 <>
+                  <span>تعداد بازی</span>
+                  <span className="text-right font-mono">
+                    {(activity.gamesPlayed ?? 0).toLocaleString("en-US")}
+                  </span>
                   <span>تعداد برد خطی</span>
                   <span className="text-right font-mono">
                     {activity.lineWins.toLocaleString("en-US")}

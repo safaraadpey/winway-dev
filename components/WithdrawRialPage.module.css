@@ -1,0 +1,87 @@
+.receiptSection {
+  margin-top: 1.25rem;
+}
+
+.receiptTitle {
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: var(--player-text-primary, #ffffff);
+  text-align: center;
+  margin-bottom: 0.875rem;
+}
+
+.receiptEmpty {
+  text-align: center;
+  color: var(--player-text-muted, #9ca3af);
+  font-size: 0.875rem;
+  padding: 1rem 0;
+}
+
+.receiptList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.receiptCard {
+  composes: activeCardsPanelSurface from "./room/gameRoomPanels.module.css";
+  border-radius: 1rem;
+  padding: 1rem 1.125rem;
+}
+
+.receiptRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.receiptRow:last-child {
+  margin-bottom: 0;
+}
+
+.receiptLabel {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--player-text-muted, #9ca3af);
+}
+
+.receiptValue {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--player-text-primary, #ffffff);
+  text-align: left;
+}
+
+.statusBadge {
+  font-size: 0.8125rem;
+  font-weight: 800;
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+}
+
+.statusPending {
+  background: rgba(251, 191, 36, 0.18);
+  color: #fcd34d;
+}
+
+.statusApproved {
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+}
+
+.statusRejected {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+}
+
+.rejectReason {
+  margin-top: 0.625rem;
+  font-size: 0.8125rem;
+  color: #fca5a5;
+  text-align: right;
+}
