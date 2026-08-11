@@ -26,9 +26,12 @@ const logoSrc = getLogoImagePath(DEFAULT_THEME, "logo");
 export default function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const refFromUrl = (searchParams.get("ref") || "").trim().toUpperCase();
+  const referralLockedFromUrl = refFromUrl.length > 0;
+
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [referralCode, setReferralCode] = useState("");
+  const [referralCode, setReferralCode] = useState(refFromUrl);
   const [loading, setLoading] = useState(false);
   const [referralErrorHint, setReferralErrorHint] = useState<string | null>(null);
   
@@ -36,11 +39,10 @@ export default function SignupForm() {
   const [showPassword] = useState(true);
 
   useEffect(() => {
-    const refFromUrl = searchParams.get("ref");
-    if (refFromUrl?.trim()) {
-      setReferralCode(refFromUrl.trim().toUpperCase());
+    if (refFromUrl) {
+      setReferralCode(refFromUrl);
     }
-  }, [searchParams]);
+  }, [refFromUrl]);
 
   /**
    * هندل کردن submit فرم ثبت‌نام
@@ -237,7 +239,11 @@ export default function SignupForm() {
             <label htmlFor="referralCode" className={styles.label}>
               کد معرف
             </label>
-            <div className={styles.inputFrame}>
+            <div
+              className={`${styles.inputFrame}${
+                referralLockedFromUrl ? ` ${styles.inputFrameLocked}` : ""
+              }`}
+            >
               <input
                 id="referralCode"
                 name="referralCode"
@@ -245,19 +251,26 @@ export default function SignupForm() {
                 required
                 value={referralCode}
                 onChange={(e) => {
+                  if (referralLockedFromUrl) return;
                   setReferralCode(e.target.value.toUpperCase());
                   if (referralErrorHint) setReferralErrorHint(null);
                 }}
-                className={`${styles.input} ${styles.latinInput} ${styles.uppercaseInput}`}
+                className={`${styles.input} ${styles.latinInput} ${styles.uppercaseInput}${
+                  referralLockedFromUrl ? ` ${styles.inputReadOnly}` : ""
+                }`}
                 placeholder="کد معرف خود را وارد کنید"
                 disabled={loading}
+                readOnly={referralLockedFromUrl}
+                aria-readonly={referralLockedFromUrl}
               />
             </div>
             {referralErrorHint ? (
               <p className={styles.errorHint}>{referralErrorHint}</p>
             ) : (
               <p className={styles.helperText}>
-                ثبت‌نام بدون کد معرف امکان‌پذیر نیست
+                {referralLockedFromUrl
+                  ? "کد معرف از طریق لینک پر شده است."
+                  : "ثبت‌نام بدون کد معرف امکان‌پذیر نیست"}
               </p>
             )}
           </div>
