@@ -36,8 +36,8 @@ DATABASE_URL=postgresql://...
 GAME_ENGINE_CORS_ORIGINS=https://dingmoney.org,http://localhost:3000
 ```
 
-4. در Supabase SQL Editor، فایل `docs/archive/supabase-schema.sql` را اجرا کنید
-   (برای محیط‌های جدید ترجیحاً از `sql/migrations/` استفاده کنید)
+4. برای ساخت اسکیما روی دیتابیس خالی: `sql/baseline/` را اعمال کنید
+   (`.\scripts\db-apply-baseline.ps1` یا `000_extensions.sql` سپس `001_schema.sql`)
 
 برای راهنمای کامل، فایل `docs/archive/supabase-setup.md` را مطالعه کنید.
 
@@ -70,6 +70,7 @@ npm run dev
 - `docs/archive/supabase-setup.md` - راهنمای کامل تنظیم Supabase (legacy)
 - `docs/archive/supabase-schema.sql` - Schema دیتابیس (legacy snapshot)
 - `docs/archive/SETUP_GUIDE.md` - راهنمای اولیه پروژه
-- `sql/migrations/` - canonical SQL migrations
+- `sql/baseline/` - canonical schema for rebuild/clone
+- `sql/migrations/` - forward deltas after baseline (legacy archive under `_legacy_archive/`)
 - `docs/architecture/` - repository architecture (P4.x)
 

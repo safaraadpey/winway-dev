@@ -6,6 +6,7 @@ import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import {
   calculateAllCryptoWithdrawQuotes,
+  cancelPlayerWithdrawalRequest,
   createCryptoWithdrawalRequest,
   loadPlayerWithdrawalList,
 } from "@/services/withdrawals";
@@ -52,6 +53,21 @@ function formatCryptoAmount(amount: number): string {
   });
 }
 
+function getReceiptStatusClass(status: WithdrawalRequestItem["status"]): string {
+  switch (status) {
+    case "pending":
+      return styles.statusPending;
+    case "processing":
+      return styles.statusProcessing;
+    case "approved":
+      return styles.statusApproved;
+    case "cancelled":
+      return styles.statusCancelled;
+    default:
+      return styles.statusRejected;
+  }
+}
+
 export default function WithdrawCryptoPage() {
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
   const { tomanBalance, refreshWalletBalances } = useBalancesContext();
@@ -67,6 +83,9 @@ export default function WithdrawCryptoPage() {
   const [loadingRequests, setLoadingRequests] = useState(true);
   const [requests, setRequests] = useState<WithdrawalRequestItem[]>([]);
   const [maxBalance, setMaxBalance] = useState(0);
+  const [cancellingRequestId, setCancellingRequestId] = useState<string | null>(
+    null
+  );
 
   const amountValue = Number(amountInput || 0);
   const effectiveMaxBalance =
@@ -178,6 +197,22 @@ export default function WithdrawCryptoPage() {
       );
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleCancel = async (requestId: string) => {
+    if (cancellingRequestId) return;
+    setCancellingRequestId(requestId);
+    try {
+      const result = await cancelPlayerWithdrawalRequest(requestId);
+      toast.success(result.message || "درخواست لغو شد.");
+      await Promise.all([refreshRequests(), refreshWalletBalances?.()]);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "لغو درخواست ناموفق بود."
+      );
+    } finally {
+      setCancellingRequestId(null);
     }
   };
 
@@ -325,13 +360,7 @@ export default function WithdrawCryptoPage() {
                   <div className={styles.receiptRow}>
                     <span className={styles.receiptLabel}>وضعیت</span>
                     <span
-                      className={`${styles.statusBadge} ${
-                        req.status === "pending"
-                          ? styles.statusPending
-                          : req.status === "approved"
-                            ? styles.statusApproved
-                            : styles.statusRejected
-                      }`}
+                      className={`${styles.statusBadge} ${getReceiptStatusClass(req.status)}`}
                     >
                       {req.statusLabel}
                     </span>
@@ -347,6 +376,27 @@ export default function WithdrawCryptoPage() {
                       {formatReceiptDate(req.createdAt)}
                     </span>
                   </div>
+                  {req.reviewNote || req.rejectReason ? (
+                    <p
+                      className={
+                        req.status === "rejected"
+                          ? styles.reviewNoteRejected
+                          : styles.reviewNote
+                      }
+                    >
+                      توضیحات بررسی: {req.reviewNote || req.rejectReason}
+                    </p>
+                  ) : null}
+                  {req.status === "pending" ? (
+                    <button
+                      type="button"
+                      className={styles.cancelButton}
+                      disabled={cancellingRequestId === req.id}
+                      onClick={() => void handleCancel(req.id)}
+                    >
+                      {cancellingRequestId === req.id ? "در حال لغو…" : "لغو درخواست"}
+                    </button>
+                  ) : null}
                 </li>
               ))}
             </ul>

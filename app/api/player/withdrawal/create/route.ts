@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * POST /api/player/withdrawal/create
- * Body: { amount, cardNumber, fullName, clientRequestId }
+ * Body: { amount, cardNumber, shebaNumber, fullName, clientRequestId }
  */
 export async function POST(request: Request) {
   const user = await getUserFromRequest(request);
@@ -32,6 +32,7 @@ export async function POST(request: Request) {
   let body: {
     amount?: number;
     cardNumber?: string;
+    shebaNumber?: string;
     fullName?: string;
     clientRequestId?: string;
   };
@@ -46,6 +47,7 @@ export async function POST(request: Request) {
 
   const amount = Number(body.amount);
   const cardNumber = String(body.cardNumber || "").trim();
+  const shebaNumber = String(body.shebaNumber || "").trim();
   const fullName = String(body.fullName || "").trim();
   const clientRequestId = String(body.clientRequestId || "").trim();
 
@@ -85,6 +87,7 @@ export async function POST(request: Request) {
       playerId: user.id,
       amount,
       cardNumber,
+      shebaNumber,
       fullName,
       clientRequestId,
     });

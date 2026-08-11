@@ -2,6 +2,9 @@
 
 export type TransactionAction = "deposit" | "withdraw";
 
+/** History row kinds shown in TransactionsManager «سوابق». */
+export type TransactionHistoryType = TransactionAction | "withdrawal_request";
+
 /** Per-item result for Strategy B bulk money ops (P6.4). */
 export interface BulkMoneyItemResult {
   userId: string;
@@ -63,7 +66,7 @@ export interface TransactionHistoryItem {
   toUsername: string;
   toShortId: string;
   amount: number;
-  type: TransactionAction;
+  type: TransactionHistoryType;
   createdAt: string; // ISO date string
   description?: string;
 }

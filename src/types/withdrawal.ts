@@ -1,5 +1,6 @@
 export type WithdrawalRequestStatus =
   | "pending"
+  | "processing"
   | "approved"
   | "rejected"
   | "cancelled";
@@ -15,10 +16,12 @@ export interface WithdrawalRequestItem {
   agentId?: string | null;
   amount: number;
   cardNumber?: string | null;
+  shebaNumber?: string | null;
   fullName?: string | null;
   status: WithdrawalRequestStatus;
   statusLabel: string;
   rejectReason?: string | null;
+  reviewNote?: string | null;
   createdAt: string;
   reviewedAt?: string | null;
   playerUsername?: string | null;
@@ -36,6 +39,7 @@ export interface WithdrawalRequestItem {
 export interface CreateWithdrawalRequestBody {
   amount: number;
   cardNumber: string;
+  shebaNumber: string;
   fullName: string;
   clientRequestId: string;
 }
@@ -81,12 +85,19 @@ export interface AdminWithdrawalReviewBody {
   kind?: WithdrawalKind;
 }
 
+export interface AdminWithdrawalMarkProcessingBody {
+  requestId: string;
+  kind?: WithdrawalKind;
+}
+
 export function getWithdrawalStatusLabel(
   status: WithdrawalRequestStatus
 ): string {
   switch (status) {
     case "pending":
       return "در حال بررسی";
+    case "processing":
+      return "در حال پرداخت";
     case "approved":
       return "تأیید شده";
     case "rejected":

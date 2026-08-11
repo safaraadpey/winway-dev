@@ -217,8 +217,12 @@ function makeHistoryCacheKey(params: { dateFilter: DateFilter; search: string; u
   return `${params.userId}|${params.dateFilter}|${q}`;
 }
 
-/** Panel cashdesk ledger only — excludes room join, settlement, commission, etc. */
-const PANEL_HISTORY_SOURCE_KINDS = ["manual_panel", "admin_panel_transfer"] as const;
+/** Panel cashdesk + approved withdrawal credits — excludes room join, settlement, commission, etc. */
+const PANEL_HISTORY_SOURCE_KINDS = [
+  "manual_panel",
+  "admin_panel_transfer",
+  "withdrawal_request",
+] as const;
 
 function isPanelCashdeskTransaction(row: {
   source_kind?: string | null;
@@ -232,11 +236,15 @@ function isPanelCashdeskTransaction(row: {
   if (kind === "admin_panel_transfer") {
     return type === "transfer_in" || type === "transfer_out";
   }
+  // Only the approve credit leg (player → agent/admin), not hold/release.
+  if (kind === "withdrawal_request") {
+    return type === "transfer_in";
+  }
   return false;
 }
 
 /**
- * تاریخچه پیشخوان پنل: فقط واریز/برداشت دستی (manual_panel) و انتقال پنلی (admin_panel_transfer).
+ * تاریخچه پیشخوان پنل: واریز/برداشت دستی، انتقال پنلی، و برداشت‌های تأییدشده (withdrawal_request).
  * تراکنش‌های بازی (room_join، settlement، کمیسیون و …) در این گزارش نیست.
  */
 export async function loadTransactionHistory(
@@ -469,10 +477,73 @@ export async function loadTransactionHistory(
     }
 
     const panelTransactions = uniqueTransactions.filter((t: any) => isPanelCashdeskTransaction(t));
+
+    const withdrawalRequestIds = Array.from(
+      new Set(
+        panelTransactions
+          .filter((t: any) => t.source_kind === "withdrawal_request" && t.source_ref)
+          .map((t: any) => String(t.source_ref))
+      )
+    );
+
+    const withdrawalPlayerByRequestId = new Map<string, string>();
+    if (withdrawalRequestIds.length > 0) {
+      const { data: wrRows, error: wrError } = await supabase
+        .from("withdrawal_requests")
+        .select("id, player_id")
+        .in("id", withdrawalRequestIds);
+
+      if (wrError) {
+        console.error("[Wallet] loadTransactionHistory withdrawal_requests error:", wrError);
+      } else {
+        for (const row of wrRows || []) {
+          if (row?.id && row?.player_id) {
+            withdrawalPlayerByRequestId.set(String(row.id), String(row.player_id));
+          }
+        }
+      }
+
+      // Fallback: hold leg has the player as user_id when WR meta/row is unavailable.
+      const missingIds = withdrawalRequestIds.filter(
+        (id) => !withdrawalPlayerByRequestId.has(id)
+      );
+      if (missingIds.length > 0) {
+        const { data: holdRows, error: holdError } = await supabase
+          .from("transactions")
+          .select("source_ref, user_id")
+          .eq("source_kind", "withdrawal_request")
+          .eq("type", "join_hold")
+          .in("source_ref", missingIds);
+
+        if (holdError) {
+          console.error("[Wallet] loadTransactionHistory withdrawal hold lookup error:", holdError);
+        } else {
+          for (const row of holdRows || []) {
+            const ref = String(row?.source_ref || "");
+            const playerId = String(row?.user_id || "");
+            if (ref && playerId && !withdrawalPlayerByRequestId.has(ref)) {
+              withdrawalPlayerByRequestId.set(ref, playerId);
+            }
+          }
+        }
+      }
+    }
     
     const targetUserSet = new Set(targetUserIds);
     const filteredTransactions = panelTransactions.filter((t: any) => {
       if (!scopeAll) {
+        if (t.source_kind === "withdrawal_request") {
+          const playerId =
+            String(t.meta?.player_id || "") ||
+            withdrawalPlayerByRequestId.get(String(t.source_ref || "")) ||
+            "";
+          const receiverId = String(t.user_id || "");
+          return (
+            (playerId && targetUserSet.has(playerId)) ||
+            (receiverId && targetUserSet.has(receiverId))
+          );
+        }
+
         if (t.source_kind === "admin_panel_transfer" && t.meta?.actor_id && t.meta?.target_id) {
           const actorId = String(t.meta.actor_id);
           const targetId = String(t.meta.target_id);
@@ -547,9 +618,27 @@ export async function loadTransactionHistory(
           .filter((id: string | null) => !!id)
       )
     ) as string[];
+    const withdrawalPlayerIds = Array.from(
+      new Set(
+        (transactions || [])
+          .filter((t: any) => t.source_kind === "withdrawal_request")
+          .map((t: any) => {
+            const fromMeta = t.meta?.player_id ? String(t.meta.player_id) : "";
+            if (fromMeta) return fromMeta;
+            return withdrawalPlayerByRequestId.get(String(t.source_ref || "")) || "";
+          })
+          .filter((id: string) => !!id)
+      )
+    );
 
     const allUserIds = Array.from(
-      new Set([...actorIds, ...targetIds, ...metaActorIds, ...metaTargetIds])
+      new Set([
+        ...actorIds,
+        ...targetIds,
+        ...metaActorIds,
+        ...metaTargetIds,
+        ...withdrawalPlayerIds,
+      ])
     ).filter((id) => /^[0-9a-fA-F-]{36}$/.test(id));
 
     const { data: users, error: usersError } = await supabase
@@ -601,6 +690,46 @@ export async function loadTransactionHistory(
     };
 
     for (const t of transactions || []) {
+      if (t.source_kind === "withdrawal_request") {
+        const playerId =
+          String(t.meta?.player_id || "") ||
+          withdrawalPlayerByRequestId.get(String(t.source_ref || "")) ||
+          "";
+        const receiverId = String(t.user_id || "");
+        if (!playerId || !receiverId) continue;
+
+        const playerUser =
+          userMap.get(playerId) || buildFallbackUser(playerId, t.description);
+        const receiverUser =
+          userMap.get(receiverId) || buildFallbackUser(receiverId, t.description);
+
+        if (search) {
+          const searchLower = search.toLowerCase();
+          const matchesPlayer =
+            playerUser.username.toLowerCase().includes(searchLower) ||
+            playerUser.shortId.includes(search);
+          const matchesReceiver =
+            receiverUser.username.toLowerCase().includes(searchLower) ||
+            receiverUser.shortId.includes(search);
+          if (!matchesPlayer && !matchesReceiver) continue;
+        }
+
+        historyItems.push({
+          id: t.id,
+          fromUserId: playerId,
+          fromUsername: playerUser.username,
+          fromShortId: playerUser.shortId,
+          toUserId: receiverId,
+          toUsername: receiverUser.username,
+          toShortId: receiverUser.shortId,
+          amount: Number(t.amount) || 0,
+          type: "withdrawal_request",
+          createdAt: t.created_at,
+          description: t.description || undefined,
+        });
+        continue;
+      }
+
       const displayAction: TransactionAction =
         t.source_kind === "admin_panel_transfer" &&
         (t.meta?.action === "deposit" || t.meta?.action === "withdraw")

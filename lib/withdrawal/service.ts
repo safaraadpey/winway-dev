@@ -14,9 +14,11 @@ type DbWithdrawalRow = {
   agent_id: string | null;
   amount: string | number;
   card_number: string | null;
+  sheba_number?: string | null;
   full_name: string | null;
   status: WithdrawalRequestStatus;
   reject_reason: string | null;
+  review_note?: string | null;
   created_at: string | Date;
   reviewed_at: string | Date | null;
   player_username?: string | null;
@@ -34,9 +36,11 @@ const SELECT_FIELDS = `
   wr.agent_id,
   wr.amount,
   wr.card_number,
+  wr.sheba_number,
   wr.full_name,
   wr.status,
   wr.reject_reason,
+  wr.review_note,
   wr.created_at,
   wr.reviewed_at,
   wr.network,
@@ -54,10 +58,12 @@ function mapRow(row: DbWithdrawalRow): WithdrawalRequestItem {
     agentId: row.agent_id,
     amount: Number(row.amount) || 0,
     cardNumber: row.card_number,
+    shebaNumber: row.sheba_number ?? null,
     fullName: row.full_name,
     status: row.status,
     statusLabel: getWithdrawalStatusLabel(row.status),
     rejectReason: row.reject_reason,
+    reviewNote: row.review_note ?? null,
     createdAt:
       row.created_at instanceof Date
         ? row.created_at.toISOString()
@@ -92,6 +98,12 @@ function mapWithdrawalError(message: string): { code: string; message: string } 
   if (msg.includes("invalid_card_number")) {
     return { code: "invalid_card_number", message: "شماره کارت نامعتبر است." };
   }
+  if (msg.includes("invalid_sheba_number")) {
+    return {
+      code: "invalid_sheba_number",
+      message: "شماره شبا نامعتبر است. باید IR و ۲۴ رقم باشد.",
+    };
+  }
   if (msg.includes("invalid_full_name")) {
     return {
       code: "invalid_full_name",
@@ -114,7 +126,10 @@ function mapWithdrawalError(message: string): { code: string; message: string } 
     return { code: "not_found", message: "درخواست برداشت یافت نشد." };
   }
   if (msg.includes("invalid_status")) {
-    return { code: "invalid_status", message: "این درخواست قابل بررسی نیست." };
+    return {
+      code: "invalid_status",
+      message: "این درخواست در وضعیت فعلی قابل انجام نیست.",
+    };
   }
   return { code: "withdrawal_failed", message: message || "عملیات ناموفق بود." };
 }
@@ -125,6 +140,7 @@ export async function createWithdrawalRequest(
     playerId: string;
     amount: number;
     cardNumber: string;
+    shebaNumber: string;
     fullName: string;
     clientRequestId: string;
   }
@@ -136,13 +152,14 @@ export async function createWithdrawalRequest(
       replayed: boolean;
     }>(
       `SELECT request_id, status, replayed
-       FROM public.fn_withdrawal_request_create($1, $2, $3, $4, $5)`,
+       FROM public.fn_withdrawal_request_create($1, $2, $3, $4, $5, $6)`,
       [
         params.playerId,
         params.amount,
         params.cardNumber,
         params.fullName,
         params.clientRequestId,
+        params.shebaNumber,
       ]
     );
 
@@ -270,7 +287,7 @@ export async function listPendingWithdrawalsForActor(
               u.username AS player_username
        FROM public.withdrawal_requests wr
        JOIN public.users u ON u.id = wr.player_id
-       WHERE wr.status = 'pending'
+       WHERE wr.status IN ('pending', 'processing')
          AND wr.kind = 'crypto'
        ORDER BY wr.created_at ASC
        LIMIT 200`
@@ -278,60 +295,22 @@ export async function listPendingWithdrawalsForActor(
     return result.rows.map(mapRow);
   }
 
-  let query = `
-    SELECT ${SELECT_FIELDS},
-           u.username AS player_username
-    FROM public.withdrawal_requests wr
-    JOIN public.users u ON u.id = wr.player_id
-    WHERE wr.status = 'pending'
-      AND coalesce(wr.kind, 'rial') = 'rial'
-  `;
-  const params: unknown[] = [];
-
-  if (actorRole === "admin") {
-    query += ` ORDER BY wr.created_at ASC LIMIT 200`;
-  } else if (actorRole === "super") {
-    params.push(actorId);
-    query += `
-      AND (
-        wr.agent_id = $1
-        OR EXISTS (
-          SELECT 1 FROM public.player_affiliation pa
-          WHERE pa.user_id = wr.player_id AND pa.super_id = $1
-        )
-        OR EXISTS (
-          SELECT 1 FROM public.users p
-          WHERE p.id = wr.player_id AND p.parent_id = $1
-        )
-        OR EXISTS (
-          SELECT 1 FROM public.users p
-          JOIN public.users a ON a.id = p.parent_id
-          WHERE p.id = wr.player_id AND a.parent_id = $1
-        )
-      )
-      ORDER BY wr.created_at ASC
-      LIMIT 200`;
-  } else if (actorRole === "agent") {
-    params.push(actorId);
-    query += `
-      AND (
-        wr.agent_id = $1
-        OR EXISTS (
-          SELECT 1 FROM public.player_affiliation pa
-          WHERE pa.user_id = wr.player_id AND pa.agent_id = $1
-        )
-        OR EXISTS (
-          SELECT 1 FROM public.users p
-          WHERE p.id = wr.player_id AND p.parent_id = $1
-        )
-      )
-      ORDER BY wr.created_at ASC
-      LIMIT 200`;
-  } else {
+  if (actorRole !== "agent") {
     return [];
   }
 
-  const result = await pool.query<DbWithdrawalRow>(query, params);
+  const result = await pool.query<DbWithdrawalRow>(
+    `SELECT ${SELECT_FIELDS},
+            u.username AS player_username
+     FROM public.withdrawal_requests wr
+     JOIN public.users u ON u.id = wr.player_id
+     WHERE wr.status IN ('pending', 'processing')
+       AND coalesce(wr.kind, 'rial') = 'rial'
+       AND wr.agent_id = $1
+     ORDER BY wr.created_at ASC
+     LIMIT 200`,
+    [actorId]
+  );
   return result.rows.map(mapRow);
 }
 
@@ -361,9 +340,10 @@ export async function reviewWithdrawalRequest(
         request_id: string;
         status: WithdrawalRequestStatus;
         replayed: boolean;
-      }>(`SELECT request_id, status, replayed FROM ${fn}($1, $2)`, [
+      }>(`SELECT request_id, status, replayed FROM ${fn}($1, $2, $3)`, [
         params.requestId,
         params.actorId,
+        params.reason ?? null,
       ]);
       const row = result.rows[0];
       if (!row) throw new Error("withdrawal_approve_empty");
@@ -385,6 +365,66 @@ export async function reviewWithdrawalRequest(
     );
     const row = result.rows[0];
     if (!row) throw new Error("withdrawal_reject_empty");
+    return {
+      requestId: row.request_id,
+      status: row.status,
+      replayed: row.replayed,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const mapped = mapWithdrawalError(message);
+    const error = new Error(mapped.message) as Error & { code?: string };
+    error.code = mapped.code;
+    throw error;
+  }
+}
+
+export async function cancelWithdrawalRequest(
+  pool: Pool,
+  params: { requestId: string; playerId: string }
+): Promise<{ requestId: string; status: WithdrawalRequestStatus; replayed: boolean }> {
+  try {
+    const result = await pool.query<{
+      request_id: string;
+      status: WithdrawalRequestStatus;
+      replayed: boolean;
+    }>(
+      `SELECT request_id, status, replayed
+       FROM public.fn_withdrawal_request_cancel($1, $2)`,
+      [params.requestId, params.playerId]
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("withdrawal_cancel_empty");
+    return {
+      requestId: row.request_id,
+      status: row.status,
+      replayed: row.replayed,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const mapped = mapWithdrawalError(message);
+    const error = new Error(mapped.message) as Error & { code?: string };
+    error.code = mapped.code;
+    throw error;
+  }
+}
+
+export async function markWithdrawalProcessing(
+  pool: Pool,
+  params: { requestId: string; actorId: string }
+): Promise<{ requestId: string; status: WithdrawalRequestStatus; replayed: boolean }> {
+  try {
+    const result = await pool.query<{
+      request_id: string;
+      status: WithdrawalRequestStatus;
+      replayed: boolean;
+    }>(
+      `SELECT request_id, status, replayed
+       FROM public.fn_withdrawal_request_mark_processing($1, $2)`,
+      [params.requestId, params.actorId]
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("withdrawal_mark_processing_empty");
     return {
       requestId: row.request_id,
       status: row.status,

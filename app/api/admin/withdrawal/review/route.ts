@@ -65,6 +65,14 @@ export async function POST(request: Request) {
       );
     }
 
+    const reason = String(body.reason || "").trim();
+    if (!reason) {
+      return NextResponse.json(
+        { error: "review_note_required", message: "توضیحات بررسی الزامی است." },
+        { status: 400 }
+      );
+    }
+
     const kind: WithdrawalKind =
       kindHint ??
       (await getWithdrawalRequestKind(pgPool, requestId)) ??
@@ -77,9 +85,12 @@ export async function POST(request: Request) {
       );
     }
 
-    if (kind === "rial" && !["admin", "super", "agent"].includes(role)) {
+    if (kind === "rial" && role !== "agent") {
       return NextResponse.json(
-        { error: "forbidden", message: "دسترسی مجاز نیست." },
+        {
+          error: "forbidden",
+          message: "فقط ایجنت بالادستی پلیر می‌تواند برداشت ریالی را بررسی کند.",
+        },
         { status: 403 }
       );
     }
@@ -96,7 +107,7 @@ export async function POST(request: Request) {
       requestId,
       actorId: ctx.user.id,
       action,
-      reason: body.reason,
+      reason,
       kind,
     });
 
@@ -116,7 +127,7 @@ export async function POST(request: Request) {
       logAction,
       "withdrawal_requests",
       requestId,
-      { action, kind, replayed: result.replayed },
+      { action, kind, reason, replayed: result.replayed },
       request
     );
 

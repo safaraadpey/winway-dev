@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import type {
   AdminWithdrawalReviewBody,
+  AdminWithdrawalMarkProcessingBody,
   CreateCryptoWithdrawalRequestBody,
   CreateWithdrawalRequestBody,
   CryptoWithdrawQuoteResponse,
@@ -174,6 +175,40 @@ export async function reviewWithdrawal(
   const json = await res.json();
   if (!res.ok) {
     throw new Error(json?.message || json?.error || "بررسی درخواست ناموفق بود.");
+  }
+  return json;
+}
+
+export async function cancelPlayerWithdrawalRequest(
+  requestId: string
+): Promise<{ ok: boolean; message?: string }> {
+  const headers = await authHeaders();
+  const res = await fetch("/api/player/withdrawal/cancel", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ requestId }),
+    cache: "no-store",
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.message || json?.error || "لغو درخواست ناموفق بود.");
+  }
+  return json;
+}
+
+export async function markWithdrawalProcessing(
+  body: AdminWithdrawalMarkProcessingBody
+): Promise<{ ok: boolean; message?: string }> {
+  const headers = await authHeaders();
+  const res = await fetch("/api/admin/withdrawal/mark-processing", {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json?.message || json?.error || "تغییر وضعیت ناموفق بود.");
   }
   return json;
 }

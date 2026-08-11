@@ -6,11 +6,17 @@ import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import {
   createPlayerWithdrawalRequest,
+  cancelPlayerWithdrawalRequest,
   loadPlayerWithdrawalList,
 } from "@/services/withdrawals";
 import type { WithdrawalRequestItem } from "@/src/types/withdrawal";
 import buyCardButtonBg from "@/src/assets/logo/BuyCardBotton.png";
 import { formatCardDisplay, stripCardDigits } from "@/lib/format/cardNumber";
+import {
+  formatShebaDisplay,
+  isValidSheba,
+  normalizeSheba,
+} from "@/lib/format/shebaNumber";
 import buyStyles from "./BuyRialPage.module.css";
 import styles from "./WithdrawRialPage.module.css";
 
@@ -21,6 +27,10 @@ function formatAmountDisplay(amount: number): string {
 
 function normalizeCardInput(raw: string): string {
   return formatCardDisplay(raw);
+}
+
+function normalizeShebaInput(raw: string): string {
+  return formatShebaDisplay(raw);
 }
 
 function normalizeAmountInput(raw: string): string {
@@ -47,20 +57,40 @@ function formatReceiptDate(iso: string): string {
   }
 }
 
+function getReceiptStatusClass(status: WithdrawalRequestItem["status"]): string {
+  switch (status) {
+    case "pending":
+      return styles.statusPending;
+    case "processing":
+      return styles.statusProcessing;
+    case "approved":
+      return styles.statusApproved;
+    case "cancelled":
+      return styles.statusCancelled;
+    default:
+      return styles.statusRejected;
+  }
+}
+
 export default function WithdrawRialPage() {
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
   const { tomanBalance, refreshWalletBalances } = useBalancesContext();
 
   const [amountInput, setAmountInput] = useState("");
   const [cardNumber, setCardNumber] = useState("");
+  const [shebaNumber, setShebaNumber] = useState("");
   const [fullName, setFullName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [loadingRequests, setLoadingRequests] = useState(true);
   const [requests, setRequests] = useState<WithdrawalRequestItem[]>([]);
   const [maxBalance, setMaxBalance] = useState<number>(0);
+  const [cancellingRequestId, setCancellingRequestId] = useState<string | null>(
+    null
+  );
 
   const amountValue = Number(amountInput || 0);
   const cardDigits = stripCardDigits(cardNumber);
+  const shebaNormalized = normalizeSheba(shebaNumber);
 
   const refreshRequests = useCallback(async () => {
     try {
@@ -102,6 +132,7 @@ export default function WithdrawRialPage() {
     Number.isInteger(amountValue) &&
     amountValue <= maxBalance &&
     cardDigits.length >= 16 &&
+    isValidSheba(shebaNormalized) &&
     isValidFullName(fullName);
 
   const handleSubmit = async () => {
@@ -112,6 +143,7 @@ export default function WithdrawRialPage() {
       const result = await createPlayerWithdrawalRequest({
         amount: amountValue,
         cardNumber: cardDigits,
+        shebaNumber: shebaNormalized,
         fullName: fullName.trim().replace(/\s+/g, " "),
         clientRequestId: crypto.randomUUID(),
       });
@@ -124,6 +156,7 @@ export default function WithdrawRialPage() {
 
       setAmountInput("");
       setCardNumber("");
+      setShebaNumber("");
       setFullName("");
       await Promise.all([refreshRequests(), refreshWalletBalances?.()]);
     } catch (err) {
@@ -132,6 +165,22 @@ export default function WithdrawRialPage() {
       );
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleCancel = async (requestId: string) => {
+    if (cancellingRequestId) return;
+    setCancellingRequestId(requestId);
+    try {
+      const result = await cancelPlayerWithdrawalRequest(requestId);
+      toast.success(result.message || "درخواست لغو شد.");
+      await Promise.all([refreshRequests(), refreshWalletBalances?.()]);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "لغو درخواست ناموفق بود."
+      );
+    } finally {
+      setCancellingRequestId(null);
     }
   };
 
@@ -146,7 +195,7 @@ export default function WithdrawRialPage() {
           </label>
           <input
             id="withdraw-rial-amount"
-            className={buyStyles.amountInput}
+            className={`${buyStyles.amountInput} ${styles.compactField}`}
             inputMode="numeric"
             dir="ltr"
             placeholder="0"
@@ -167,7 +216,7 @@ export default function WithdrawRialPage() {
           </label>
           <input
             id="withdraw-rial-card"
-            className={buyStyles.amountInput}
+            className={`${buyStyles.amountInput} ${styles.compactField}`}
             inputMode="numeric"
             dir="ltr"
             placeholder="6037-xxxx-xxxx-xxxx"
@@ -177,12 +226,28 @@ export default function WithdrawRialPage() {
             autoComplete="off"
           />
 
+          <label htmlFor="withdraw-rial-sheba" className={buyStyles.labelSecondary}>
+            شماره شبا
+          </label>
+          <input
+            id="withdraw-rial-sheba"
+            className={`${buyStyles.amountInput} ${styles.compactField}`}
+            inputMode="text"
+            dir="ltr"
+            placeholder="IR12-3456-7890-1234-5678-9012-34"
+            value={shebaNumber}
+            onChange={(e) => setShebaNumber(normalizeShebaInput(e.target.value))}
+            disabled={submitting}
+            autoComplete="off"
+            maxLength={34}
+          />
+
           <label htmlFor="withdraw-rial-name" className={buyStyles.labelSecondary}>
             نام و نام خانوادگی
           </label>
           <input
             id="withdraw-rial-name"
-            className={buyStyles.textInput}
+            className={`${buyStyles.textInput} ${styles.compactField}`}
             type="text"
             dir="rtl"
             placeholder="مثال: علی احمدی"
@@ -216,30 +281,32 @@ export default function WithdrawRialPage() {
                 <li key={req.id} className={styles.receiptCard}>
                   <div className={styles.receiptRow}>
                     <span className={styles.receiptLabel}>مبلغ</span>
-                    <span className="numeric-text numeric-text--16" dir="ltr">
+                    <span className={styles.receiptNumeric16} dir="ltr">
                       {req.amount.toLocaleString("en-US")} تومان
                     </span>
                   </div>
                   <div className={styles.receiptRow}>
                     <span className={styles.receiptLabel}>وضعیت</span>
                     <span
-                      className={`${styles.statusBadge} ${
-                        req.status === "pending"
-                          ? styles.statusPending
-                          : req.status === "approved"
-                            ? styles.statusApproved
-                            : styles.statusRejected
-                      }`}
+                      className={`${styles.statusBadge} ${getReceiptStatusClass(req.status)}`}
                     >
                       {req.statusLabel}
                     </span>
                   </div>
                   <div className={styles.receiptRow}>
                     <span className={styles.receiptLabel}>کارت</span>
-                    <span className="numeric-text numeric-text--14" dir="ltr">
+                    <span className={styles.receiptNumeric14} dir="ltr">
                       {formatCardDisplay(req.cardNumber || "")}
                     </span>
                   </div>
+                  {req.shebaNumber ? (
+                    <div className={styles.receiptRow}>
+                      <span className={styles.receiptLabel}>شبا</span>
+                      <span className={styles.receiptNumeric14} dir="ltr">
+                        {formatShebaDisplay(req.shebaNumber)}
+                      </span>
+                    </div>
+                  ) : null}
                   <div className={styles.receiptRow}>
                     <span className={styles.receiptLabel}>نام</span>
                     <span className={styles.receiptValue}>{req.fullName}</span>
@@ -250,8 +317,26 @@ export default function WithdrawRialPage() {
                       {formatReceiptDate(req.createdAt)}
                     </span>
                   </div>
-                  {req.rejectReason ? (
-                    <p className={styles.rejectReason}>دلیل رد: {req.rejectReason}</p>
+                  {req.reviewNote || req.rejectReason ? (
+                    <p
+                      className={
+                        req.status === "rejected"
+                          ? styles.rejectReason
+                          : styles.reviewNote
+                      }
+                    >
+                      توضیحات بررسی: {req.reviewNote || req.rejectReason}
+                    </p>
+                  ) : null}
+                  {req.status === "pending" ? (
+                    <button
+                      type="button"
+                      className={styles.cancelButton}
+                      disabled={cancellingRequestId === req.id}
+                      onClick={() => void handleCancel(req.id)}
+                    >
+                      {cancellingRequestId === req.id ? "در حال لغو…" : "لغو درخواست"}
+                    </button>
                   ) : null}
                 </li>
               ))}

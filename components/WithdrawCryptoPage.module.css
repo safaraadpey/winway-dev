@@ -145,10 +145,49 @@
   color: #fca5a5;
 }
 
+.statusProcessing {
+  background: rgba(59, 130, 246, 0.18);
+  color: #93c5fd;
+}
+
+.statusCancelled {
+  background: rgba(107, 114, 128, 0.22);
+  color: #d1d5db;
+}
+
+.cancelButton {
+  margin-top: 0.75rem;
+  width: 100%;
+  padding: 0.625rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  background: rgba(127, 29, 29, 0.35);
+  color: #fecaca;
+  font-size: 0.875rem;
+  font-weight: 800;
+}
+
+.cancelButton:disabled {
+  opacity: 0.6;
+}
+
 .addressLine {
   font-size: 0.75rem;
   color: var(--player-text-muted, #9ca3af);
   word-break: break-all;
   margin: 0.25rem 0 0.5rem;
   text-align: left;
+}
+
+.reviewNote {
+  margin-top: 0.625rem;
+  font-size: 0.8125rem;
+  color: var(--player-text-primary, #ffffff);
+  text-align: right;
+  line-height: 1.5;
+}
+
+.reviewNoteRejected {
+  composes: reviewNote;
+  color: #fca5a5;
 }

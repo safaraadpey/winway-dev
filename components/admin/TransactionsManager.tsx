@@ -9,11 +9,13 @@ import {
 } from "@/services/transactions";
 import {
   loadPendingWithdrawals,
+  markWithdrawalProcessing,
   reviewWithdrawal,
 } from "@/services/withdrawals";
 import { supabase } from "@/lib/supabaseClient";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import { formatCardDisplay, stripCardDigits } from "@/lib/format/cardNumber";
+import { formatShebaDisplay, normalizeSheba } from "@/lib/format/shebaNumber";
 import type {
   ManagedUserRoleFilter,
   ManagedUserSummary,
@@ -24,7 +26,7 @@ import type {
   DateFilter,
 } from "@/src/types/transactions";
 import type { WithdrawalRequestItem, WithdrawalKind } from "@/src/types/withdrawal";
-import { getNetworkLabel } from "@/src/types/withdrawal";
+import { getNetworkLabel, getWithdrawalStatusLabel } from "@/src/types/withdrawal";
 import toast from "react-hot-toast";
 
 const ALL_ROLE_TABS: { key: ManagedUserRoleFilter; label: string }[] = [
@@ -85,8 +87,19 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
   const [reviewingRequestId, setReviewingRequestId] = useState<string | null>(
     null
   );
+  const [processingRequestId, setProcessingRequestId] = useState<string | null>(
+    null
+  );
+  const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [withdrawalKindFilter, setWithdrawalKindFilter] =
     useState<WithdrawalKind>("rial");
+
+  const canAccessRialWithdrawals = currentUserRole === "agent";
+  const canAccessCryptoWithdrawals = currentUserRole === "admin";
+  const canAccessWithdrawalsTab =
+    canAccessRialWithdrawals || canAccessCryptoWithdrawals;
+  const showWithdrawalKindTabs =
+    canAccessRialWithdrawals && canAccessCryptoWithdrawals;
 
   const cachedUsersBase = getCachedManagedUsersBase();
   const [baseUsers, setBaseUsers] = useState<ManagedUserSummary[]>(
@@ -221,9 +234,28 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
   }, [tab, historyDateFilter, historySearchDebounced]);
 
   useEffect(() => {
-    if (tab !== "withdrawals") return;
-    if (withdrawalKindFilter === "crypto" && currentUserRole !== "admin") {
+    if (tab === "withdrawals" && !canAccessWithdrawalsTab) {
+      setTab("cashdesk");
+    }
+  }, [tab, canAccessWithdrawalsTab]);
+
+  useEffect(() => {
+    if (currentUserRole === "admin") {
+      setWithdrawalKindFilter("crypto");
+    } else if (currentUserRole === "agent") {
       setWithdrawalKindFilter("rial");
+    }
+  }, [currentUserRole]);
+
+  useEffect(() => {
+    if (tab !== "withdrawals") return;
+    if (!canAccessWithdrawalsTab) return;
+    if (withdrawalKindFilter === "crypto" && !canAccessCryptoWithdrawals) {
+      setWithdrawalKindFilter("rial");
+      return;
+    }
+    if (withdrawalKindFilter === "rial" && !canAccessRialWithdrawals) {
+      setWithdrawalKindFilter("crypto");
       return;
     }
 
@@ -246,7 +278,13 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
     return () => {
       cancelled = true;
     };
-  }, [tab, withdrawalKindFilter, currentUserRole]);
+  }, [
+    tab,
+    withdrawalKindFilter,
+    canAccessWithdrawalsTab,
+    canAccessCryptoWithdrawals,
+    canAccessRialWithdrawals,
+  ]);
 
   const handleWithdrawalReview = async (
     requestId: string,
@@ -254,9 +292,19 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
     kind: WithdrawalKind
   ) => {
     if (reviewingRequestId) return;
+    const note = (reviewNotes[requestId] || "").trim();
+    if (!note) {
+      toast.error("لطفاً توضیحات بررسی را وارد کنید.");
+      return;
+    }
     setReviewingRequestId(requestId);
     try {
-      const result = await reviewWithdrawal({ requestId, action, kind });
+      const result = await reviewWithdrawal({
+        requestId,
+        action,
+        kind,
+        reason: note,
+      });
       toast.success(result.message || "عملیات انجام شد.");
       const rows = await loadPendingWithdrawals(withdrawalKindFilter);
       setWithdrawalRequests(rows);
@@ -266,6 +314,25 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
       toast.error(err?.message || "بررسی درخواست ناموفق بود.");
     } finally {
       setReviewingRequestId(null);
+    }
+  };
+
+  const handleMarkProcessing = async (
+    requestId: string,
+    kind: WithdrawalKind
+  ) => {
+    if (processingRequestId || reviewingRequestId) return;
+    setProcessingRequestId(requestId);
+    try {
+      const result = await markWithdrawalProcessing({ requestId, kind });
+      toast.success(result.message || "وضعیت به «در حال پرداخت» تغییر کرد.");
+      const rows = await loadPendingWithdrawals(withdrawalKindFilter);
+      setWithdrawalRequests(rows);
+    } catch (err: any) {
+      console.error("[Withdrawal] mark processing error:", err);
+      toast.error(err?.message || "تغییر وضعیت ناموفق بود.");
+    } finally {
+      setProcessingRequestId(null);
     }
   };
 
@@ -289,6 +356,18 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
       toast.success("شماره کارت کپی شد.");
     } catch (err) {
       console.error("[Withdrawal] copy card failed", err);
+      toast.error("کپی ناموفق بود.");
+    }
+  };
+
+  const copyShebaNumber = async (rawSheba: string) => {
+    const sheba = normalizeSheba(rawSheba);
+    if (!sheba) return;
+    try {
+      await navigator.clipboard.writeText(sheba);
+      toast.success("شماره شبا کپی شد.");
+    } catch (err) {
+      console.error("[Withdrawal] copy sheba failed", err);
       toast.error("کپی ناموفق بود.");
     }
   };
@@ -429,16 +508,18 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
               >
                 پیشخوان
               </button>
-              <button
-                className={`flex-1 py-3 ${
-                  tab === "withdrawals"
-                    ? "bg-teal-500 text-black"
-                    : "text-gray-300"
-                }`}
-                onClick={() => setTab("withdrawals")}
-              >
-                برداشت
-              </button>
+              {canAccessWithdrawalsTab ? (
+                <button
+                  className={`flex-1 py-3 ${
+                    tab === "withdrawals"
+                      ? "bg-teal-500 text-black"
+                      : "text-gray-300"
+                  }`}
+                  onClick={() => setTab("withdrawals")}
+                >
+                  برداشت
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -511,7 +592,7 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                 ) : (
                   historyTransactions.map((tx) => {
                     const isDeposit = tx.type === "deposit";
-                    const isWithdraw = tx.type === "withdraw";
+                    const isWithdrawalRequest = tx.type === "withdrawal_request";
                     const formattedDate = formatTransactionDate(tx.createdAt);
                     const fromShortIdFormatted = `${tx.fromShortId.slice(0, 4)}-${
                       tx.fromShortId.length > 4 ? tx.fromShortId.slice(4) : ""
@@ -541,17 +622,24 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                             {formattedDate}
                           </span>
                           <div className="flex items-center gap-1">
-                            {isDeposit ? (
+                            {isWithdrawalRequest ? (
+                              <>
+                                <span className="text-blue-400 text-lg">→</span>
+                                <span className="numeric-text numeric-text--14 text-blue-400 font-semibold" dir="ltr">
+                                  -{tx.amount.toLocaleString("en-US")}
+                                </span>
+                              </>
+                            ) : isDeposit ? (
                               <>
                                 <span className="text-red-500 text-lg">→</span>
-                                <span className="text-red-500 font-semibold text-sm">
+                                <span className="numeric-text numeric-text--14 text-red-500 font-semibold" dir="ltr">
                                   -{tx.amount.toLocaleString("en-US")}
                                 </span>
                               </>
                             ) : (
                               <>
                                 <span className="text-green-500 text-lg">←</span>
-                                <span className="text-green-500 font-semibold text-sm">
+                                <span className="numeric-text numeric-text--14 text-green-500 font-semibold" dir="ltr">
                                   +{tx.amount.toLocaleString("en-US")}
                                 </span>
                               </>
@@ -576,34 +664,38 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
             </>
           ) : tab === "withdrawals" ? (
             <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="flex-shrink-0 px-4 pb-3">
-                <div className="flex rounded-2xl overflow-hidden bg-[#111827] text-sm font-semibold">
-                  <button
-                    type="button"
-                    className={`flex-1 py-2 ${
-                      withdrawalKindFilter === "rial"
-                        ? "bg-teal-500 text-black"
-                        : "text-gray-300"
-                    }`}
-                    onClick={() => setWithdrawalKindFilter("rial")}
-                  >
-                    ریالی
-                  </button>
-                  {currentUserRole === "admin" ? (
-                    <button
-                      type="button"
-                      className={`flex-1 py-2 ${
-                        withdrawalKindFilter === "crypto"
-                          ? "bg-teal-500 text-black"
-                          : "text-gray-300"
-                      }`}
-                      onClick={() => setWithdrawalKindFilter("crypto")}
-                    >
-                      رمز ارزی
-                    </button>
-                  ) : null}
+              {showWithdrawalKindTabs ? (
+                <div className="flex-shrink-0 px-4 pb-3">
+                  <div className="flex rounded-2xl overflow-hidden bg-[#111827] text-sm font-semibold">
+                    {canAccessRialWithdrawals ? (
+                      <button
+                        type="button"
+                        className={`flex-1 py-2 ${
+                          withdrawalKindFilter === "rial"
+                            ? "bg-teal-500 text-black"
+                            : "text-gray-300"
+                        }`}
+                        onClick={() => setWithdrawalKindFilter("rial")}
+                      >
+                        ریالی
+                      </button>
+                    ) : null}
+                    {canAccessCryptoWithdrawals ? (
+                      <button
+                        type="button"
+                        className={`flex-1 py-2 ${
+                          withdrawalKindFilter === "crypto"
+                            ? "bg-teal-500 text-black"
+                            : "text-gray-300"
+                        }`}
+                        onClick={() => setWithdrawalKindFilter("crypto")}
+                      >
+                        رمز ارزی
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
+              ) : null}
 
               <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
               {withdrawalsLoading ? (
@@ -617,7 +709,12 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
               ) : (
                 withdrawalRequests.map((req) => {
                   const isReviewing = reviewingRequestId === req.id;
+                  const isProcessing = processingRequestId === req.id;
                   const kind = req.kind ?? withdrawalKindFilter;
+                  const reviewNote = reviewNotes[req.id] || "";
+                  const canReview = reviewNote.trim().length > 0 && !isReviewing && !isProcessing;
+                  const canMarkProcessing =
+                    req.status === "pending" && !isReviewing && !isProcessing;
                   return (
                     <div
                       key={req.id}
@@ -630,6 +727,9 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                           </p>
                           <p className="text-xs text-gray-400 mt-1">
                             {formatTransactionDate(req.createdAt)}
+                          </p>
+                          <p className="text-xs text-amber-300/90 mt-1">
+                            {getWithdrawalStatusLabel(req.status)}
                           </p>
                         </div>
                         {kind === "crypto" ? (
@@ -691,6 +791,23 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                               کپی
                             </button>
                           </p>
+                          {req.shebaNumber ? (
+                            <p className="flex items-center justify-between gap-2">
+                              <span className="break-all text-left" dir="ltr">
+                                <span className="text-gray-400">شبا: </span>
+                                <span className="numeric-text numeric-text--12">
+                                  {formatShebaDisplay(req.shebaNumber)}
+                                </span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => void copyShebaNumber(req.shebaNumber || "")}
+                                className="flex-shrink-0 rounded-lg border border-gray-600 px-2 py-1 text-[11px] font-semibold text-gray-200 hover:bg-[#374151]"
+                              >
+                                کپی
+                              </button>
+                            </p>
+                          ) : null}
                         </div>
                       )}
 
@@ -714,10 +831,37 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                         </p>
                       </div>
 
+                      <label className="block pt-1">
+                        <span className="text-xs text-gray-400 mb-1.5 block">
+                          توضیحات بررسی (الزامی)
+                        </span>
+                        <textarea
+                          className="w-full min-h-[72px] rounded-xl border border-gray-600 bg-[#111827] px-3 py-2 text-sm text-white placeholder:text-gray-500 outline-none focus:border-teal-500 resize-y"
+                          placeholder="دلیل تأیید یا رد را بنویسید…"
+                          value={reviewNote}
+                          onChange={(e) =>
+                            setReviewNotes((prev) => ({
+                              ...prev,
+                              [req.id]: e.target.value,
+                            }))
+                          }
+                          disabled={isReviewing}
+                        />
+                      </label>
+
+                      <button
+                        type="button"
+                        disabled={!canMarkProcessing}
+                        onClick={() => void handleMarkProcessing(req.id, kind)}
+                        className="w-full py-2.5 rounded-xl bg-blue-600 text-white font-semibold text-sm disabled:opacity-60"
+                      >
+                        {isProcessing ? "..." : "در حال انجام"}
+                      </button>
+
                       <div className="flex gap-2 pt-1">
                         <button
                           type="button"
-                          disabled={isReviewing}
+                          disabled={!canReview}
                           onClick={() => void handleWithdrawalReview(req.id, "approve", kind)}
                           className="flex-1 py-2.5 rounded-xl bg-teal-500 text-black font-semibold text-sm disabled:opacity-60"
                         >
@@ -725,7 +869,7 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                         </button>
                         <button
                           type="button"
-                          disabled={isReviewing}
+                          disabled={!canReview}
                           onClick={() => void handleWithdrawalReview(req.id, "reject", kind)}
                           className="flex-1 py-2.5 rounded-xl bg-red-700 text-white font-semibold text-sm disabled:opacity-60"
                         >
