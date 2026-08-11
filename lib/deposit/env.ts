@@ -47,9 +47,9 @@ export function getDepositEnvDiagnostics(): {
   createAllowReason: string;
 } {
   const depositDomainEnabled = parseEnvFlag(process.env.DEPOSIT_DOMAIN_ENABLED);
-  const depositSyntheticCustomerIdentity = parseEnvFlag(
-    process.env.DEPOSIT_SYNTHETIC_CUSTOMER_IDENTITY
-  );
+  const depositSyntheticCustomerIdentity =
+    parseEnvFlag(process.env.DEPOSIT_SYNTHETIC_CUSTOMER_IDENTITY) ||
+    parseEnvFlag(process.env.NEXT_PUBLIC_DEPOSIT_SYNTHETIC_CUSTOMER_IDENTITY);
   const hamipayMock = parseEnvFlag(process.env.HAMIPAY_MOCK);
   const hasHamiPayApiKey = hasNonEmptyEnv(process.env.HAMIPAY_API_KEY);
   const hasHamiPayApiBaseUrl = hasNonEmptyEnv(process.env.HAMIPAY_API_BASE_URL);

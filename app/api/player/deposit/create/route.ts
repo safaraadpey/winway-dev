@@ -181,6 +181,13 @@ export async function POST(request: Request) {
   });
 
   if (!resolved.name) {
+    console.warn("[Deposit] create missing customer name", {
+      userId: user.id,
+      identityMode: resolved.identityMode,
+      syntheticEnabled: isDepositSyntheticCustomerIdentityEnabled(),
+      hasClientFullName: typeof body.fullName === "string" && body.fullName.trim().length > 0,
+      hasStoredFullName: Boolean(storedFullName),
+    });
     return NextResponse.json(
       {
         error: "full_name_required",

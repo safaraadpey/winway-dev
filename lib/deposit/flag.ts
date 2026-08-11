@@ -13,9 +13,16 @@ export function isDepositDomainEnabled(): boolean {
 /**
  * When true, HamiPay customerName/phone are stable synthetic per-user values
  * (no manual Buy Rial identity form). Default: false (manual entry).
+ *
+ * Also honors NEXT_PUBLIC_DEPOSIT_SYNTHETIC_CUSTOMER_IDENTITY so a client-only
+ * deploy env cannot hide the Buy Rial form while the server still requires
+ * manual full_name/phone (full_name_required).
  */
 export function isDepositSyntheticCustomerIdentityEnabled(): boolean {
-  return parseEnvFlag(process.env.DEPOSIT_SYNTHETIC_CUSTOMER_IDENTITY);
+  return (
+    parseEnvFlag(process.env.DEPOSIT_SYNTHETIC_CUSTOMER_IDENTITY) ||
+    parseEnvFlag(process.env.NEXT_PUBLIC_DEPOSIT_SYNTHETIC_CUSTOMER_IDENTITY)
+  );
 }
 
 /**
