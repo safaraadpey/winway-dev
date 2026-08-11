@@ -9,24 +9,11 @@ import {
 } from "@/lib/format/persianAmountWords";
 import { supabase } from "@/lib/supabaseClient";
 import { isSyntheticCustomerIdentityUiEnabled } from "@/lib/deposit/syntheticCustomerIdentityClient";
+import { DEFAULT_BUY_RIAL_PRESET_AMOUNTS_RIAL } from "@/lib/deposit/buyRialPresetDefaults";
 import buyCardButtonBg from "@/src/assets/logo/BuyCardBotton.png";
 import styles from "./BuyRialPage.module.css";
 
 const syntheticIdentityEnabled = isSyntheticCustomerIdentityUiEnabled();
-
-/** Preset Rial amounts for Buy Rial dropdown (fixed list). */
-const BUY_RIAL_PRESET_AMOUNTS_RIAL = [
-  530_000,
-  870_000,
-  1_030_000,
-  1_780_000,
-  2_550_000,
-  4_320_000,
-  5_630_000,
-  7_240_000,
-  10_450_000,
-  15_560_000,
-] as const;
 
 function formatAmountDisplay(amount: number): string {
   if (!Number.isFinite(amount) || amount <= 0) return "";
@@ -58,7 +45,47 @@ export default function BuyRialPage() {
   const [connecting, setConnecting] = useState(false);
   const [amountPickerOpen, setAmountPickerOpen] = useState(false);
   const [showAmountListBottomFade, setShowAmountListBottomFade] = useState(false);
+  const [presetAmountsRial, setPresetAmountsRial] = useState<number[]>([
+    ...DEFAULT_BUY_RIAL_PRESET_AMOUNTS_RIAL,
+  ]);
   const amountPickerListRef = useRef<HTMLUListElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.access_token || cancelled) return;
+
+        const res = await fetch("/api/player/deposit/rial-presets", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+        const body = (await res.json().catch(() => null)) as {
+          ok?: boolean;
+          data?: { amountsRial?: number[] };
+        } | null;
+        const amounts = body?.data?.amountsRial;
+        if (
+          !cancelled &&
+          Array.isArray(amounts) &&
+          amounts.length > 0 &&
+          amounts.every((n) => Number.isFinite(n) && n > 0)
+        ) {
+          setPresetAmountsRial(amounts.map((n) => Math.floor(n)));
+        }
+      } catch (err) {
+        console.error("[Deposit] BuyRial presets load failed", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     setShowBackButton(true);
@@ -358,7 +385,7 @@ export default function BuyRialPage() {
                     className={styles.amountPickerList}
                     role="listbox"
                   >
-                    {BUY_RIAL_PRESET_AMOUNTS_RIAL.map((amount) => {
+                    {presetAmountsRial.map((amount) => {
                       const isSelected = selectedAmountRial === String(amount);
                       return (
                         <li key={amount} role="none">
