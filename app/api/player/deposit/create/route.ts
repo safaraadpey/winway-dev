@@ -269,12 +269,18 @@ export async function POST(request: Request) {
       userId: user.id,
       error: message,
     });
+    const isReturnUrlMismatch = message.startsWith(
+      "hamipay_return_url_mismatch:"
+    );
     return NextResponse.json(
       {
-        error: "failed_to_create",
-        message:
-          "اتصال به درگاه پرداخت ناموفق بود. لطفاً دوباره تلاش کنید.",
-        retryable: true,
+        error: isReturnUrlMismatch
+          ? "hamipay_return_url_mismatch"
+          : "failed_to_create",
+        message: isReturnUrlMismatch
+          ? "آدرس بازگشت درگاه با دامنه ثبت‌شده در HamiPay مطابقت ندارد. دامنه در پنل HamiPay باید به dingmoney.org به‌روز شود."
+          : "اتصال به درگاه پرداخت ناموفق بود. لطفاً دوباره تلاش کنید.",
+        retryable: !isReturnUrlMismatch,
       },
       { status: 502 }
     );

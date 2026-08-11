@@ -278,6 +278,12 @@ export async function hamipayCreatePayment(
   const redacted = redact(json);
 
   if (!res.ok) {
+    const providerError =
+      typeof json.error === "string"
+        ? json.error
+        : typeof json.message === "string"
+          ? json.message
+          : undefined;
     console.error("[DepositAdapter:hamipay] create failed — provider response", {
       status: res.status,
       statusText: res.statusText,
@@ -285,11 +291,17 @@ export async function hamipayCreatePayment(
       url,
       body: redacted,
       rawBodyPreview: rawText.slice(0, 800),
+      returnUrl: body.returnUrl,
       hint:
         res.status === 504
           ? "Upstream 504 usually means Vercel cannot reach HamiPay (Iran CDN). Postman from Iran can still succeed."
-          : undefined,
+          : providerError && /بازگشت|return/i.test(providerError)
+            ? "HamiPay returnUrl must match the base URL registered for this API key (domain change)."
+            : undefined,
     });
+    if (providerError && /بازگشت|return/i.test(providerError)) {
+      throw new Error(`hamipay_return_url_mismatch:${res.status}`);
+    }
     throw new Error(`hamipay_create_failed:${res.status}`);
   }
 

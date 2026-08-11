@@ -58,3 +58,4 @@ build.debug.log
 .tmp-*.txt
 .tmp-*.bin
 .tmp-*.js
+.env*
