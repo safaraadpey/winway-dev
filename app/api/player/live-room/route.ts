@@ -21,6 +21,8 @@ type LiveRoomResponse = {
     id: string;
     status: string | null;
     room_code: string | null;
+    /** Lobby display name from room_templates.name (e.g. «پنج هزار»). */
+    room_name: string | null;
     room_seed_hash: string | null;
     card_price: number;
     currency: string;
@@ -122,6 +124,7 @@ export async function GET(request: Request) {
     }
 
     let template: {
+      name: string | null;
       line_reward_percentage: number | null;
       full_reward_percentage: number | null;
       commission_rate: number | null;
@@ -133,6 +136,7 @@ export async function GET(request: Request) {
         .from("room_templates")
         .select(
           `
+          name,
           line_reward_percentage,
           full_reward_percentage,
           commission_rate,
@@ -144,6 +148,11 @@ export async function GET(request: Request) {
 
       template = templateRow ?? null;
     }
+
+    const roomDisplayName =
+      typeof template?.name === "string" && template.name.trim()
+        ? template.name.trim()
+        : null;
 
     const roomMeta =
       room.meta && typeof room.meta === "object"
@@ -399,6 +408,7 @@ export async function GET(request: Request) {
         id: room.id,
         status: room.status,
         room_code: room.room_code,
+        room_name: roomDisplayName,
         room_seed_hash: (room as any)?.room_seed_hash ?? null,
         card_price: Number(room.card_price || 0),
         currency: room.currency || "IRR",

@@ -2,7 +2,10 @@ import styles from "./DrawStrip.module.css";
 import { useEffect, useRef, useState } from "react";
 
 interface DrawStripProps {
+  /** Room code (e.g. B95143) — used in badge / commit pill. */
   roomName?: string;
+  /** Lobby template display name (e.g. «پنج هزار») — shown left of commit pill. */
+  displayRoomName?: string | null;
   showRoomBadge?: boolean;
   commitHash?: string | null;
   currentNumber: number | null;
@@ -17,6 +20,7 @@ interface DrawStripProps {
 
 export default function DrawStrip({
   roomName,
+  displayRoomName = null,
   showRoomBadge = true,
   commitHash = null,
   currentNumber,
@@ -123,6 +127,8 @@ export default function DrawStrip({
     winningFullDrawNumber > 0 &&
     currentNumber === winningFullDrawNumber;
 
+  const trimmedDisplayName = displayRoomName?.trim() || null;
+
   return (
     <div className={styles.container}>
       <div className={styles.labelRow}>
@@ -132,29 +138,33 @@ export default function DrawStrip({
             <span className={styles.roomBadgeLabel}>شماره میز</span>
           </span>
         )}
-        <span className={`${styles.badge} numeric-text numeric-text--11`}>90/{drawsCount}</span>
-        {roomName && commitShort && (
-          <span className={styles.commitRow}>
-            {copyToast && (
-              <span
-                role="status"
-                aria-live="polite"
-                className={`${styles.copyToast} ${
-                  copyToast === "success" ? styles.copyToastSuccess : styles.copyToastError
-                }`}
-              >
-                {copyToast === "success" ? "کپی شد" : "خطا در کپی"}
-              </span>
-            )}
-            <span className={styles.commitText}>
-              <span dir="ltr" className="numeric-text numeric-text--12">
-                {roomName}
-              </span>{" "}
-              <span className={styles.commitCodeLabel}>کد</span>
+        <span className={styles.badge}>90/{drawsCount}</span>
+        {commitShort && (
+          <span className={styles.commitGroup} dir="ltr">
+            {trimmedDisplayName ? (
+              <span className={styles.commitRoomName}>{trimmedDisplayName}</span>
+            ) : null}
+            <span className={styles.commitRow}>
+              {copyToast && (
+                <span
+                  role="status"
+                  aria-live="polite"
+                  className={`${styles.copyToast} ${
+                    copyToast === "success" ? styles.copyToastSuccess : styles.copyToastError
+                  }`}
+                >
+                  {copyToast === "success" ? "کپی شد" : "خطا در کپی"}
+                </span>
+              )}
+              {roomName ? (
+                <span className={styles.commitText}>
+                  <span className="numeric-text numeric-text--12">{roomName}</span>
+                </span>
+              ) : null}
+              <button type="button" onClick={copyCommit} className={styles.copyButton}>
+                کپی هش
+              </button>
             </span>
-            <button type="button" onClick={copyCommit} className={styles.copyButton}>
-              کپی هش
-            </button>
           </span>
         )}
       </div>

@@ -1119,7 +1119,8 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   );
   const linePrize = roundToCurrency(totalPool * linePct);
   const fullPrize = roundToCurrency(Math.max(totalPool - linePrize, 0));
-  const roomName = data.room.room_code || `اتاق ${data.room.card_price}`;
+  const roomCode = data.room.room_code || `اتاق ${data.room.card_price}`;
+  const displayRoomName = data.room.room_name?.trim() || null;
   const roomCommitHash = (data.room as any)?.room_seed_hash ?? null;
   const orderedCards = [...data.cards].sort(
     (a, b) => Number(b.is_my_card) - Number(a.is_my_card)
@@ -1164,7 +1165,8 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
             />
 
             <DrawStrip
-              roomName={roomName}
+              roomName={roomCode}
+              displayRoomName={displayRoomName}
               showRoomBadge={false}
               commitHash={roomCommitHash}
               currentNumber={latestNumber ?? null}
@@ -1221,7 +1223,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
           <span dir="rtl">
             نتیجه بازی شماره :{" "}
             <span dir="ltr" className="numeric-text numeric-text--16">
-              {roomName}
+              {roomCode}
             </span>
           </span>
         }

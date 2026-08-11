@@ -691,6 +691,8 @@ export interface LiveRoomSnapshot {
     id: string;
     status: string | null;
     room_code: string | null;
+    /** Lobby display name from room_templates.name (e.g. «پنج هزار»). */
+    room_name?: string | null;
     room_seed_hash?: string | null;
     card_price: number;
     currency: string;

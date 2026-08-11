@@ -27,7 +27,9 @@
 }
 
 .badge {
-  composes: numeric-text numeric-text--11 from global;
+  composes: numeric-text from global;
+  font-size: 13.2px;
+  line-height: 13.2px;
   padding: 2px 8px;
   border-radius: 999px;
   background: #253046;
@@ -212,6 +214,20 @@
   color: #9ca3af;
 }
 
+.commitGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.commitRoomName {
+  white-space: nowrap;
+  font-size: 13.8px;
+  line-height: 13.8px;
+  font-weight: 700;
+  color: #fbbf24;
+}
+
 .commitRow {
   position: relative;
   display: inline-flex;
@@ -229,10 +245,6 @@
 
 .commitText {
   white-space: nowrap;
-}
-
-.commitCodeLabel {
-  color: rgba(255, 255, 255, 0.7);
 }
 
 .copyButton {
@@ -287,14 +299,14 @@
   color: #6d28d9;
 }
 
+:global(html[data-theme="light"]) .commitRoomName {
+  color: #d97706;
+}
+
 :global(html[data-theme="light"]) .commitRow {
   background: #ffffff;
   border: 1px solid #d1d5db;
   color: #6d28d9;
-}
-
-:global(html[data-theme="light"]) .commitCodeLabel {
-  color: #9ca3af;
 }
 
 :global(html[data-theme="light"]) .copyButton {

@@ -81,8 +81,18 @@ export default function MyActiveGames() {
     return price.toLocaleString("en-US");
   };
 
-  const getDisplayText = (room: { roomCode: string | null; cardPrice: number }): string => {
-    return room.roomCode || formatPrice(room.cardPrice);
+  const getPriceInThousands = (cardPrice: number): number => {
+    return Math.trunc(Number(cardPrice || 0) / 1000);
+  };
+
+  const getDisplayText = (room: {
+    roomCode: string | null;
+    cardPrice: number;
+  }): string => {
+    const code = room.roomCode?.trim() || null;
+    const priceK = getPriceInThousands(room.cardPrice);
+    if (code) return `${code}-${priceK}`;
+    return formatPrice(room.cardPrice);
   };
 
   const isTournament = (room: { roomType?: string }): boolean => {
