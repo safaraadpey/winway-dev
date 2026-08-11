@@ -1,18 +1,35 @@
 .lobbyContainer {
-  min-height: 100vh;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   background-color: var(--menu-screen-overlay, rgba(14, 14, 15, 0.55));
   padding: 0 21px 0 25px;
   padding-top: 16px;
-  padding-bottom: 0px;
+  padding-bottom: 0;
+  overflow: hidden;
 }
 
 .roomsList {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   max-width: 600px;
+  width: 100%;
   margin: 0 auto;
   padding-left: 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  scrollbar-width: none;
+}
+
+.roomsList::-webkit-scrollbar {
+  display: none;
 }
 
 .emptyState {
