@@ -122,6 +122,17 @@ export async function POST(request: NextRequest) {
           { status: 403 }
         )
       }
+
+      if (new_role === 'admin' && admin_sub_role === 'dev_panel' && !isAdminZero) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'forbidden',
+            message: 'فقط adminzero می‌تواند نقش Dev Panel را تعیین کند',
+          },
+          { status: 403 }
+        )
+      }
     }
 
     // (ب) Super فقط می‌تواند Player را به Agent تبدیل کند

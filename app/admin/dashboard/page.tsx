@@ -120,6 +120,7 @@ export default function AdminDashboardPage() {
   const adminSubRole = data?.user?.adminSubRole || null;
   const normalizedSubRole = adminSubRole ? adminSubRole.toLowerCase() : null;
   const isAdminZero = isAdmin && !!adminZeroId && data?.user?.id === adminZeroId;
+  const canManageReferralCode = isAdminZero;
   const reportAccessResolved = Boolean(data?.user);
   const canViewFinancialReport = reportAccessResolved
     ? isAdmin &&
@@ -268,7 +269,7 @@ export default function AdminDashboardPage() {
             </button>
           </div>
 
-          {isAdmin && (
+          {canManageReferralCode && (
             <ReferralRegistrationLink
               referralCode={data?.user?.referralCode}
               settingsPath="/admin/settings"

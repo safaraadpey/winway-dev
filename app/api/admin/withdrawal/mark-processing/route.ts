@@ -79,7 +79,6 @@ export async function POST(request: Request) {
         { status: 403 }
       );
     }
-
     console.log("[Withdrawal] Mark processing started", {
       actorId: ctx.user.id,
       role,

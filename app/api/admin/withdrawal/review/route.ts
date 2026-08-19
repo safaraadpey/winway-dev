@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const ctx = await getAdminJwtContextOrThrow(request);
     const role = ctx.role;
 
-    if (!["admin", "super", "agent"].includes(role)) {
+    if (!["admin", "agent"].includes(role)) {
       return NextResponse.json(
         { error: "forbidden", message: "دسترسی مجاز نیست." },
         { status: 403 }

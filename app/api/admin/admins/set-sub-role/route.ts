@@ -47,6 +47,26 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (new_sub_role === 'dev_panel') {
+      const { data: adminZero, error: adminZeroError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('username', 'adminzero')
+        .eq('role', 'admin')
+        .maybeSingle()
+
+      if (adminZeroError || !adminZero?.id || session.user.id !== adminZero.id) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'forbidden',
+            message: 'فقط adminzero می‌تواند نقش Dev Panel را تعیین کند',
+          },
+          { status: 403 }
+        )
+      }
+    }
+
     // 5. بررسی وجود و role مدیر هدف
     const { data: targetAdmin, error: targetAdminError } = await supabase
       .from('users')

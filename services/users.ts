@@ -28,11 +28,14 @@ export interface LoadManagedUsersParams {
 }
 
 type ManagedUsersBaseCache = {
+  version: number;
   currentUserId: string;
   currentUserRole: ManagedUserRole;
   fetchedAtMs: number;
   usersAll: ManagedUserSummary[];
 };
+
+const MANAGED_USERS_CACHE_VERSION = 2;
 
 let managedUsersBaseCache: ManagedUsersBaseCache | null = null;
 
@@ -40,7 +43,9 @@ export function getCachedManagedUsersBase(): {
   currentUserRole: ManagedUserRole;
   usersAll: ManagedUserSummary[];
 } | null {
-  if (!managedUsersBaseCache) return null;
+  if (!managedUsersBaseCache || managedUsersBaseCache.version !== MANAGED_USERS_CACHE_VERSION) {
+    return null;
+  }
   return {
     currentUserRole: managedUsersBaseCache.currentUserRole,
     usersAll: managedUsersBaseCache.usersAll,
@@ -176,8 +181,20 @@ export async function loadManagedUsers(
     return { currentUserRole: currentRole, users: [], totalCount: 0 };
   }
 
+  let isAdminZero = false;
+  if (currentRole === "admin") {
+    const { data: adminZero } = await supabase
+      .from("users")
+      .select("id")
+      .eq("username", "adminzero")
+      .eq("role", "admin")
+      .maybeSingle();
+    isAdminZero = !!adminZero?.id && currentUserId === adminZero.id;
+  }
+
   const cacheEligible =
     !force &&
+    managedUsersBaseCache?.version === MANAGED_USERS_CACHE_VERSION &&
     managedUsersBaseCache?.currentUserId === currentUserId &&
     managedUsersBaseCache?.currentUserRole === currentRole &&
     Date.now() - managedUsersBaseCache.fetchedAtMs <= maxAgeMs;
@@ -309,12 +326,16 @@ export async function loadManagedUsers(
       // ادمین: همه کاربران (فعلاً ساده)
       const { data: allUsers, error: usersError } = await supabase
         .from("users")
-        .select("id");
+        .select("id, admin_sub_role");
 
       if (usersError) {
         console.error("loadManagedUsers: users error (admin)", usersError);
       } else {
-        targetUserIds = (allUsers || []).map((u: any) => u.id);
+        targetUserIds = (allUsers || [])
+          .filter((u: { id: string; admin_sub_role?: string | null }) =>
+            isAdminZero || u.admin_sub_role !== "dev_panel"
+          )
+          .map((u: { id: string }) => u.id);
       }
     }
   } catch (err) {
@@ -328,13 +349,20 @@ export async function loadManagedUsers(
   // گرفتن اطلاعات کاربران (به‌همراه parent_id برای ساخت درخت)
   const { data: usersData, error: usersError } = await supabase
     .from("users")
-    .select("id, username, role, referral_code, parent_id")
+    .select("id, username, role, referral_code, parent_id, admin_sub_role")
     .in("id", targetUserIds);
 
   if (usersError || !usersData) {
     console.error("loadManagedUsers: users details error", usersError);
     return { currentUserRole: currentRole, users: [], totalCount: 0 };
   }
+
+  const visibleUsersData =
+    currentRole === "admin" && !isAdminZero
+      ? usersData.filter(
+          (u: { admin_sub_role?: string | null }) => u.admin_sub_role !== "dev_panel"
+        )
+      : usersData;
 
   // گرفتن موجودی تومان برای همه این کاربران
   // فقط کیف‌پول با ارز IRR (تومان) را در نظر می‌گیریم
@@ -359,7 +387,7 @@ export async function loadManagedUsers(
   });
 
   // گرفتن nickname از user_profiles برای همه کاربران (از API سروری برای عبور از RLS)
-  const userIds = usersData.map((u: any) => u.id).filter((id: string) => id !== currentUserId);
+  const userIds = visibleUsersData.map((u: any) => u.id).filter((id: string) => id !== currentUserId);
   const profileMap = await loadNicknamesViaApi(userIds);
   if (profileMap.size === 0 && userIds.length > 0) {
     // fallback: query مستقیم (ممکن است به دلیل RLS ناقص باشد)
@@ -397,7 +425,7 @@ export async function loadManagedUsers(
 
   // map نقش هر کاربر برای استفاده در منطق parent
   const roleById = new Map<string, ManagedUserRole>();
-  (usersData || []).forEach((u: any) => {
+  (visibleUsersData || []).forEach((u: any) => {
     roleById.set(u.id as string, (u.role || "player") as ManagedUserRole);
   });
 
@@ -460,7 +488,7 @@ export async function loadManagedUsers(
   }
 
   // مپ کردن به مدل ManagedUserSummary
-  let mappedAll: ManagedUserSummary[] = usersData
+  let mappedAll: ManagedUserSummary[] = visibleUsersData
     .filter((u: any) => u.id !== currentUserId) // حذف کاربر فعلی از لیست
     .map((u: any) => {
       const role = (u.role || "player") as ManagedUserRole;
@@ -500,6 +528,7 @@ export async function loadManagedUsers(
 
   // Cache the full list (unfiltered) for fast tab switching.
   managedUsersBaseCache = {
+    version: MANAGED_USERS_CACHE_VERSION,
     currentUserId,
     currentUserRole: currentRole,
     fetchedAtMs: Date.now(),

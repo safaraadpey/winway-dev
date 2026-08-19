@@ -387,6 +387,22 @@ async function loadUserAccountInfo(userId: string): Promise<UserAccountInfo | nu
       return null;
     }
 
+    if ((user as { admin_sub_role?: string | null }).admin_sub_role === "dev_panel") {
+      const {
+        data: { user: actor },
+      } = await supabase.auth.getUser();
+      const { data: adminZero } = await supabase
+        .from("users")
+        .select("id")
+        .eq("username", "adminzero")
+        .eq("role", "admin")
+        .maybeSingle();
+
+      if (!actor?.id || !adminZero?.id || actor.id !== adminZero.id) {
+        return null;
+      }
+    }
+
     // گرفتن موجودی Ding
     const { data: dingBalanceData, error: dingError } = await supabase
       .from("ding_balances")

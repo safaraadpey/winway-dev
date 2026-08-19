@@ -67,8 +67,10 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
   const router = useRouter();
   const { setShowHeader, setShowBackButton, setOnBackClick } = useHeaderVisibility();
   const cached = getCachedUserAccountData(userId, { maxAgeMs: 30_000 });
-  const [data, setData] = useState<UserAccountData | null>(() => cached);
-  const [loading, setLoading] = useState(() => cached === null);
+  const safeCached =
+    cached?.user.adminSubRole === "dev_panel" ? null : cached;
+  const [data, setData] = useState<UserAccountData | null>(() => safeCached);
+  const [loading, setLoading] = useState(() => safeCached === null);
   const [activePeriod, setActivePeriod] = useState<UserAccountPeriod>("month");
   const [commissionPercent, setCommissionPercent] = useState<string>("");
   const [savingCommission, setSavingCommission] = useState(false);
@@ -193,15 +195,17 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
   // When navigating between userIds without a full remount, sync state to cache immediately.
   useEffect(() => {
     const nextCached = getCachedUserAccountData(userId, { maxAgeMs: 30_000 });
-    setData(nextCached);
-    setLoading(nextCached === null);
+    const nextSafeCached =
+      nextCached?.user.adminSubRole === "dev_panel" ? null : nextCached;
+    setData(nextSafeCached);
+    setLoading(nextSafeCached === null);
   }, [userId]);
 
   useEffect(() => {
     let isMounted = true;
     async function fetchData() {
       try {
-        if (!cached) setLoading(true);
+        if (!safeCached) setLoading(true);
         const result = await loadUserAccountData(userId, { maxAgeMs: 30_000, force: true });
         if (!isMounted) return;
         setData(result);
@@ -342,6 +346,9 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
     }
   };
 
+  const isCurrentUserAdminZero =
+    Boolean(currentUserId && adminZeroId && currentUserId === adminZeroId);
+
   // آماده‌سازی تغییر نقش و نمایش مودال هشدار
   const handleRoleChange = (
     newRole: "player" | "agent" | "super" | "admin",
@@ -374,6 +381,12 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
       super: "سوپر",
       admin: "ادمین",
     };
+
+    if (newRole === "admin" && adminSubRole === "dev_panel" && !isCurrentUserAdminZero) {
+      toast.error("فقط adminzero می‌تواند نقش Dev Panel را تعیین کند");
+      setShowRoleDropdown(false);
+      return;
+    }
 
     // اگر تبدیل به admin است، باید sub_role انتخاب شود
     if (newRole === "admin" && adminSubRole === undefined) {
@@ -470,6 +483,15 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
     if (!data || !currentUserRole) return [];
 
     const targetRole = data.user.role;
+    const adminSubRoles: Array<{ value: AdminSubRole | null; label: string }> = [
+      { value: null, label: "مدیر کل" },
+      { value: "finance", label: "مدیر مالی" },
+      { value: "support", label: "مدیر پشتیبانی" },
+      { value: "room", label: "مدیر اتاق‌ها" },
+    ];
+    if (isCurrentUserAdminZero) {
+      adminSubRoles.push({ value: "dev_panel", label: "Dev Panel" });
+    }
     const roles: Array<{ value: "player" | "agent" | "super" | "admin"; label: string; disabled: boolean; adminSubRoles?: Array<{ value: AdminSubRole | null; label: string }> }> = [
       { value: "player", label: "پلیر", disabled: false },
       { value: "agent", label: "ایجنت", disabled: false },
@@ -478,13 +500,7 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
         value: "admin", 
         label: "ادمین", 
         disabled: false,
-        adminSubRoles: [
-          { value: null, label: "مدیر کل" },
-          { value: "finance", label: "مدیر مالی" },
-          { value: "support", label: "مدیر پشتیبانی" },
-          { value: "room", label: "مدیر اتاق‌ها" },
-          { value: "dev_panel", label: "Dev Panel" },
-        ]
+        adminSubRoles,
       },
     ];
 
@@ -725,11 +741,7 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
     (currentUserRole === "super" || currentUserRole === "agent") && user.role === "agent"
       ? Math.max(0, Math.min(100, currentUserCommissionPercent ?? 0))
       : 100;
-  const canSetPassword =
-    currentUserRole === "admin" &&
-    !!currentUserId &&
-    !!adminZeroId &&
-    currentUserId === adminZeroId;
+  const canSetPassword = isCurrentUserAdminZero;
 
   return (
     <div className="min-h-screen bg-[#0E0E0F] text-white p-4 pb-32">
@@ -1293,7 +1305,9 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
                 { value: "finance" as AdminSubRole, label: "مدیر مالی" },
                 { value: "support" as AdminSubRole, label: "مدیر پشتیبانی" },
                 { value: "room" as AdminSubRole, label: "مدیر اتاق‌ها" },
-                { value: "dev_panel" as AdminSubRole, label: "Dev Panel" },
+                ...(isCurrentUserAdminZero
+                  ? [{ value: "dev_panel" as AdminSubRole, label: "Dev Panel" }]
+                  : []),
               ].map((subRole) => (
                 <button
                   key={subRole.value || "manager"}
