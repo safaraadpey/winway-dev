@@ -52,10 +52,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    try {
-      await getUserFromRequest(request);
-    } catch (err) {
-      console.error("[Room] room-results auth error:", err);
+    const user = await getUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json(
+        { error: "unauthorized", message: "Authentication required." },
+        { status: 401 }
+      );
     }
 
     if (!pgPool) {

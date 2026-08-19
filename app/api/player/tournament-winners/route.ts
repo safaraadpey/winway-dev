@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabaseServer";
+import { createServiceClient, getUserFromRequest } from "@/lib/supabaseServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -70,6 +70,14 @@ export async function GET(request: Request) {
       return NextResponse.json(
         { error: "missing_parameters", message: "tournamentId is required." },
         { status: 400 }
+      );
+    }
+
+    const user = await getUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json(
+        { error: "unauthorized", message: "Authentication required." },
+        { status: 401 }
       );
     }
 
