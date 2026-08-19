@@ -1,0 +1,66 @@
+.page {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100%;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.primaryButton,
+.secondaryButton,
+.listItem {
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-weight: 700;
+}
+
+.primaryButton {
+  background: #fcd34d;
+  color: #111;
+}
+
+.secondaryButton {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.listItem {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  text-align: left;
+}
+
+.meta {
+  composes: numeric-text numeric-text--12 from global;
+  color: rgba(255, 255, 255, 0.65);
+  margin-top: 4px;
+}
+
+.error {
+  color: #fca5a5;
+  font-size: 13px;
+}
+
+.loading {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+}

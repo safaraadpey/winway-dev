@@ -406,6 +406,15 @@ export default function AdminDashboardPage() {
           )}
           {isAdminZero && (
             <button
+              onClick={() => router.push("/admin/features")}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
+            >
+              <span>Feature Management</span>
+              <span className="text-xl">›</span>
+            </button>
+          )}
+          {isAdminZero && (
+            <button
               onClick={() => router.push("/admin/card-pool")}
               className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
             >

@@ -1,0 +1,21 @@
+{
+  "name": "@dingmoney/backgammon-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backgammon game rules engine (pure domain, no I/O)",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "tsx scripts/run-tests.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.5.3"
+  }
+}

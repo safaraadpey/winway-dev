@@ -4,6 +4,7 @@ import React, { useEffect } from "react";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import { getThemeOptions } from "@/lib/theme/registry";
+import FeatureGate from "@/components/features/FeatureGate";
 import styles from "./SettingsPage.module.css";
 
 export default function SettingsPage() {
@@ -27,6 +28,30 @@ export default function SettingsPage() {
       <div className={styles.content}>
         <h1 className={styles.title}>تنظیمات</h1>
         <p className={styles.subtitle}>شخصی‌سازی تجربه استفاده از اپلیکیشن</p>
+
+        <FeatureGate featureKey="sample_beta_badge">
+          <section className={styles.section} aria-labelledby="beta-badge-settings">
+            <h2 id="beta-badge-settings" className={styles.sectionLabel}>
+              Beta
+            </h2>
+            <p className={styles.sectionDescription}>
+              شما به Feature نمونه Feature Management دسترسی دارید.
+            </p>
+            <div className={styles.themeOptions}>
+              <div className={styles.themeOption}>
+                <span className={styles.themeOptionText}>
+                  <span className={styles.themeOptionTitle}>Sample Beta Badge</span>
+                  <span className={styles.themeOptionHint}>
+                    فقط برای تست end-to-end زیرساخت Feature Flag
+                  </span>
+                </span>
+                <span className="rounded-full bg-amber-500/20 px-2 py-1 text-xs text-amber-300">
+                  BETA
+                </span>
+              </div>
+            </div>
+          </section>
+        </FeatureGate>
 
         <section className={styles.section} aria-labelledby="theme-settings">
           <h2 id="theme-settings" className={styles.sectionLabel}>

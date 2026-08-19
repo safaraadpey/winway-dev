@@ -7,6 +7,8 @@ import { MENU_ENTRIES } from "@/lib/theme/menuEntries";
 import type { MenuEntryDefinition } from "@/lib/theme/types";
 import InstallAppButton from "@/components/InstallAppButton";
 import MenuItem from "@/components/theme/MenuItem";
+import FeatureGate from "@/components/features/FeatureGate";
+import { BACKGAMMON_FEATURE_KEY } from "@/lib/backgammon/constants";
 import { useMenuLiveCounts } from "@/lib/hooks/useMenuLiveCounts";
 import styles from "./MainMenuScreen.module.css";
 
@@ -41,6 +43,7 @@ const MainMenuScreen: React.FC = () => {
   };
 
   const gameRoomEntry = MENU_ENTRIES.find((entry) => entry.id === "gameRoom");
+  const backgammonEntry = MENU_ENTRIES.find((entry) => entry.id === "backgammon");
   const tournamentsEntry = MENU_ENTRIES.find(
     (entry) => entry.id === "tournaments"
   );
@@ -92,6 +95,11 @@ const MainMenuScreen: React.FC = () => {
               data-tour-id="game-room-and-tournaments"
             >
               {gameRoomEntry ? renderMenuItem(gameRoomEntry) : null}
+              {backgammonEntry ? (
+                <FeatureGate featureKey={BACKGAMMON_FEATURE_KEY}>
+                  {renderMenuItem(backgammonEntry)}
+                </FeatureGate>
+              ) : null}
               {tournamentsEntry ? renderMenuItem(tournamentsEntry) : null}
               {reportsEntry ? renderMenuItem(reportsEntry) : null}
             </div>

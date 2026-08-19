@@ -4,7 +4,8 @@
   "private": true,
   "workspaces": [
     "packages/*",
-    "apps/workers/*"
+    "apps/workers/*",
+    "apps/engines/backgammon"
   ],
   "scripts": {
     "dev": "next dev",
@@ -16,9 +17,11 @@
     "test:finance-integrity": "node tools/finance-integrity/run.mjs",
     "test:deposit-domain": "node tools/deposit-domain/run.mjs",
     "test:hamipay-deposit": "node tools/hamipay-deposit/run.mjs",
-    "test:auth-form-security": "node tools/auth-form-security/run.mjs"
+    "test:auth-form-security": "node tools/auth-form-security/run.mjs",
+    "test:backgammon-e2e": "node tools/backgammon-e2e/run.mjs"
   },
   "dependencies": {
+    "@dingmoney/backgammon-engine": "*",
     "@dingmoney/deposit-core": "*",
     "@noble/curves": "^2.2.0",
     "@noble/hashes": "^2.2.0",
@@ -38,7 +41,8 @@
     "react-dom": "^18.3.1",
     "react-hot-toast": "^2.6.0",
     "react-multi-date-picker": "^4.5.2",
-    "use-sound": "^5.0.0"
+    "use-sound": "^5.0.0",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",

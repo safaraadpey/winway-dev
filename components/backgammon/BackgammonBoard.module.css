@@ -1,0 +1,83 @@
+.backgammonBoard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+}
+
+.pointsGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+}
+
+.point {
+  min-height: 72px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 4px;
+  cursor: default;
+}
+
+.pointSelectable {
+  composes: point;
+  cursor: pointer;
+  border-color: rgba(252, 211, 77, 0.7);
+}
+
+.pointSelected {
+  composes: pointSelectable;
+  box-shadow: 0 0 0 2px rgba(252, 211, 77, 0.9);
+}
+
+.pointLabel {
+  composes: numeric-text numeric-text--11 from global;
+  color: rgba(255, 255, 255, 0.45);
+  text-align: center;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+}
+
+.checkerWhite,
+.checkerBlack {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid rgba(0, 0, 0, 0.25);
+}
+
+.checkerWhite {
+  background: #f8fafc;
+}
+
+.checkerBlack {
+  background: #111827;
+}
+
+.countBadge {
+  composes: numeric-text numeric-text--12 from global;
+  color: #fff;
+  font-weight: 700;
+}
+
+.midRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.halfLabel {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: center;
+  margin-bottom: 4px;
+}

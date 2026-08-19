@@ -9,6 +9,7 @@ export const DEFAULT_THEME: ThemeId = "dark";
 
 export type MenuItemId =
   | "gameRoom"
+  | "backgammon"
   | "tournaments"
   | "leaderboard"
   | "myProfile"

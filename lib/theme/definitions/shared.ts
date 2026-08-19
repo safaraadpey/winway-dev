@@ -15,6 +15,7 @@ export const SHARED_IMAGE_MENU_TOKENS: MenuTokens = {
 /** Image presentations used by dark and light themes (current production menus). */
 export const IMAGE_MENU_PRESENTATIONS: Record<MenuItemId, MenuItemPresentation> = {
   gameRoom: { kind: "image", imageKey: "gameRoom", alt: "Game Room" },
+  backgammon: { kind: "styled", titleFa: "تخته‌نرد", titleEn: "Backgammon" },
   tournaments: { kind: "image", imageKey: "tournaments", alt: "Tournaments" },
   leaderboard: { kind: "image", imageKey: "leaderboard", alt: "Leaderboard" },
   myProfile: { kind: "image", imageKey: "myProfile", alt: "My Profile" },

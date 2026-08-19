@@ -1,0 +1,47 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+  padding: 16px;
+}
+
+.card {
+  width: 100%;
+  max-width: 320px;
+  border-radius: 16px;
+  background: #171717;
+  border: 1px solid rgba(252, 211, 77, 0.35);
+  padding: 20px;
+  text-align: center;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #fcd34d;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.winKind {
+  composes: numeric-text numeric-text--14 from global;
+  margin-top: 8px;
+  color: #fff;
+}
+
+.button {
+  margin-top: 16px;
+  border-radius: 10px;
+  padding: 10px 16px;
+  background: #fcd34d;
+  color: #111;
+  font-weight: 700;
+}

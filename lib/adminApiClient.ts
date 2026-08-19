@@ -34,7 +34,7 @@ export class AdminApiError extends Error {
 export async function callAdminApi<T = any>(
   path: string,
   options: {
-    method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
+    method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
     body?: any
   } = {}
 ): Promise<T> {
