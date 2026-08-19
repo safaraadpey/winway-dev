@@ -16,7 +16,7 @@ type Props = {
 export default function BackgammonSessionPage({ params }: Props) {
   const router = useRouter();
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
-  const { snapshot, loading, error, roll, move, endTurn } = useBackgammonSession(
+  const { snapshot, loading, error, roll, move, endTurn, undo } = useBackgammonSession(
     params.sessionId
   );
   const [busy, setBusy] = useState(false);
@@ -75,6 +75,7 @@ export default function BackgammonSessionPage({ params }: Props) {
         busy={busy}
         onRoll={() => wrap(roll)}
         onEndTurn={() => wrap(endTurn)}
+        onUndo={() => wrap(undo)}
       />
 
       {error ? <div className={styles.error}>{error}</div> : null}

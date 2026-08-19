@@ -325,6 +325,7 @@ export function endTurn(state: MatchState): MatchState {
   const next = cloneMatchState(state);
   next.currentTurn = opponent(state.currentTurn!);
   next.dice = { values: null, remaining: [], rolled: false };
+  next.undoStack = [];
   return next;
 }
 

@@ -46,6 +46,8 @@ export type MatchState = {
   dice: DiceState;
   winner: Seat | null;
   winKind: WinKind | null;
+  /** Snapshots to restore on undo within the current turn */
+  undoStack?: MatchState[];
 };
 
 export type MoveEndpoint = "bar" | "off" | PointIndex;
@@ -62,6 +64,7 @@ export type DomainEvent =
   | { type: "game_started"; startingSeat: Seat }
   | { type: "dice_rolled"; values: DicePair; seat: Seat }
   | { type: "move_made"; move: Move; seat: Seat; hit: boolean }
+  | { type: "move_undone"; seat: Seat }
   | { type: "turn_ended"; previousSeat: Seat; nextSeat: Seat }
   | { type: "game_finished"; winner: Seat; winKind: WinKind };
 

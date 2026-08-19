@@ -8,7 +8,7 @@ import {
   getBackgammonSnapshot,
   type BackgammonSnapshot,
 } from "@/lib/backgammon/repository";
-import { WHITE, BLACK } from "@dingmoney/backgammon-engine";
+import { WHITE, BLACK, canUndo } from "@dingmoney/backgammon-engine";
 
 export function buildPublicSnapshot(
   snapshot: BackgammonSnapshot,
@@ -51,6 +51,9 @@ export function buildPublicSnapshot(
       snapshot.matchState.currentTurn === snapshot.mySeat &&
       snapshot.matchState.status === "running" &&
       !snapshot.matchState.dice.rolled,
+    canUndo:
+      snapshot.mySeat !== null &&
+      canUndo(snapshot.matchState, snapshot.mySeat),
   };
 }
 

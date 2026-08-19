@@ -73,7 +73,8 @@
 .diePip9 { grid-area: 3 / 3; }
 
 .rollButton,
-.endTurnButton {
+.endTurnButton,
+.undoButton {
   border-radius: 10px;
   padding: 10px 12px;
   font-size: 13px;
@@ -83,8 +84,15 @@
   white-space: nowrap;
 }
 
+.undoButton {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
 .rollButton:disabled,
-.endTurnButton:disabled {
+.endTurnButton:disabled,
+.undoButton:disabled {
   opacity: 0.45;
 }
 

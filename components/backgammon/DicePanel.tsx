@@ -8,6 +8,7 @@ type Props = {
   snapshot: BackgammonPublicSnapshot;
   onRoll: () => Promise<void>;
   onEndTurn: () => Promise<void>;
+  onUndo: () => Promise<void>;
   busy?: boolean;
 };
 
@@ -39,6 +40,7 @@ export default function DicePanel({
   snapshot,
   onRoll,
   onEndTurn,
+  onUndo,
   busy,
 }: Props) {
   const [dieA, dieB] = snapshot.dice.values ?? [null, null];
@@ -71,6 +73,14 @@ export default function DicePanel({
       </div>
 
       <div className={styles.actions}>
+        <button
+          type="button"
+          className={styles.undoButton}
+          disabled={!snapshot.canUndo || busy}
+          onClick={() => void onUndo()}
+        >
+          بازگشت
+        </button>
         <button
           type="button"
           className={styles.rollButton}

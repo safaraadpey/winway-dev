@@ -30,6 +30,7 @@ export type BackgammonPublicSnapshot = {
   legalMoves: Move[];
   isMyTurn: boolean;
   canRoll: boolean;
+  canUndo: boolean;
 };
 
 async function authFetch(path: string, init?: RequestInit) {
@@ -164,6 +165,14 @@ export function useBackgammonSession(sessionId: string) {
     });
   }, [mutate, sessionId, snapshot]);
 
+  const undo = useCallback(async () => {
+    if (!snapshot) return;
+    await mutate("/api/player/backgammon/undo", {
+      sessionId,
+      expectedVersion: snapshot.stateVersion,
+    });
+  }, [mutate, sessionId, snapshot]);
+
   return {
     snapshot,
     loading,
@@ -172,6 +181,7 @@ export function useBackgammonSession(sessionId: string) {
     roll,
     move,
     endTurn,
+    undo,
   };
 }
 

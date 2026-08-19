@@ -5,6 +5,7 @@ import {
   rollDice,
   makeMove,
   finishTurn,
+  undoLast,
   getLegalMoves,
   deserializeMatchState,
   type SerializedMatchState,
@@ -134,6 +135,7 @@ async function persistMatchState(
     participantCount?: number;
     startedAt?: boolean;
     finishedAt?: boolean;
+    reopenRunning?: boolean;
   }
 ): Promise<number> {
   await client.query(
@@ -161,13 +163,21 @@ async function persistMatchState(
     seq += 1;
   }
 
-  if (sessionPatch?.status || sessionPatch?.participantCount !== undefined) {
+  if (
+    sessionPatch?.status ||
+    sessionPatch?.participantCount !== undefined ||
+    sessionPatch?.reopenRunning
+  ) {
     await client.query(
       `UPDATE platform.game_sessions
-       SET status = COALESCE($2, status),
+       SET status = CASE WHEN $6 THEN 'running' ELSE COALESCE($2, status) END,
            participant_count = COALESCE($3, participant_count),
            started_at = CASE WHEN $4 THEN now() ELSE started_at END,
-           finished_at = CASE WHEN $5 THEN now() ELSE finished_at END,
+           finished_at = CASE
+             WHEN $6 THEN NULL
+             WHEN $5 THEN now()
+             ELSE finished_at
+           END,
            updated_at = now()
        WHERE id = $1::uuid`,
       [
@@ -176,6 +186,7 @@ async function persistMatchState(
         sessionPatch.participantCount ?? null,
         sessionPatch.startedAt ?? false,
         sessionPatch.finishedAt ?? false,
+        sessionPatch.reopenRunning ?? false,
       ]
     );
   }
@@ -430,6 +441,42 @@ export async function endBackgammonTurn(
     );
 
     console.log("[Backgammon] turn ended", { sessionId, userId, nextVersion });
+    await notifyBackgammonSessionChanged({ sessionId, stateVersion: nextVersion });
+    return { stateVersion: nextVersion };
+  });
+}
+
+export async function undoBackgammonMove(
+  sessionId: string,
+  userId: string,
+  expectedVersion: number
+): Promise<{ stateVersion: number }> {
+  return withTransaction(async (client) => {
+    const locked = await loadLockedSession(client, sessionId, expectedVersion);
+    const seat = locked.participants.find((p) => p.user_id === userId)?.seat_no;
+    if (seat !== 0 && seat !== 1) {
+      throw new BackgammonRepositoryError("Not a participant.", "not_a_participant", 403);
+    }
+
+    let result;
+    try {
+      result = undoLast(locked.matchState, { seat: seat as Seat });
+    } catch (err) {
+      wrapDomainError(err);
+    }
+
+    const wasFinished = locked.matchState.status === "finished";
+    const nextVersion = await persistMatchState(
+      client,
+      locked,
+      result!.state,
+      domainEventsToRows(result!.events),
+      wasFinished && result!.state.status === "running"
+        ? { reopenRunning: true }
+        : undefined
+    );
+
+    console.log("[Backgammon] move undone", { sessionId, userId, nextVersion });
     await notifyBackgammonSessionChanged({ sessionId, stateVersion: nextVersion });
     return { stateVersion: nextVersion };
   });

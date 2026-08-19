@@ -10,7 +10,7 @@ type Props = {
 };
 
 export default function WinnerOverlay({ snapshot, onClose }: Props) {
-  if (snapshot.matchStatus !== "finished" || snapshot.winner === null) {
+  if (snapshot.matchStatus !== "finished" || snapshot.winner === null || snapshot.canUndo) {
     return null;
   }
 

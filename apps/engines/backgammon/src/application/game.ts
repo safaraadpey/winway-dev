@@ -76,6 +76,65 @@ export function getGameState(state: MatchState): MatchState {
   return state;
 }
 
+const MAX_UNDO_DEPTH = 16;
+
+function captureUndoSnapshot(state: MatchState): MatchState {
+  const snapshot = deserializeMatchState(state);
+  snapshot.undoStack = state.undoStack ? [...state.undoStack] : [];
+  return snapshot;
+}
+
+function appendUndoSnapshot(state: MatchState, snapshot: MatchState): MatchState {
+  const undoStack = [...(state.undoStack ?? []), snapshot];
+  return {
+    ...state,
+    undoStack:
+      undoStack.length > MAX_UNDO_DEPTH
+        ? undoStack.slice(-MAX_UNDO_DEPTH)
+        : undoStack,
+  };
+}
+
+export function canUndo(state: MatchState, seat: Seat): boolean {
+  if ((state.undoStack?.length ?? 0) === 0) return false;
+
+  if (state.status === "running" && state.currentTurn === seat) {
+    return true;
+  }
+
+  return state.status === "finished" && state.winner === seat;
+}
+
+export function undoLast(
+  state: MatchState,
+  input: { seat: Seat }
+): ApplicationResult {
+  const stack = state.undoStack ?? [];
+  if (stack.length === 0) {
+    throw new DomainError("nothing to undo", "cannot_undo");
+  }
+
+  const canUndoNow =
+    (state.status === "running" && state.currentTurn === input.seat) ||
+    (state.status === "finished" && state.winner === input.seat);
+
+  if (!canUndoNow) {
+    throw new DomainError("not your turn", "not_your_turn");
+  }
+
+  const restored = deserializeMatchState(stack[stack.length - 1]);
+  if (restored.currentTurn !== input.seat) {
+    throw new DomainError("cannot undo", "cannot_undo");
+  }
+
+  restored.undoStack = stack.slice(0, -1);
+
+  return {
+    state: restored,
+    events: [{ type: "move_undone", seat: input.seat }],
+  };
+}
+
 export function rollDice(
   state: MatchState,
   input: { seat: Seat; diceProvider: DiceProvider }
@@ -88,10 +147,12 @@ export function rollDice(
     throw new DomainError("cannot roll dice", "cannot_roll");
   }
 
+  const undoSnapshot = captureUndoSnapshot(state);
   const values = input.diceProvider.roll();
   let next: MatchState = {
     ...state,
     dice: setRolledDice(state.dice, values),
+    undoStack: [undoSnapshot],
   };
 
   const events: ApplicationResult["events"] = [
@@ -120,8 +181,10 @@ export function makeMove(
     throw new DomainError("dice not rolled", "dice_not_rolled");
   }
 
+  const undoSnapshot = captureUndoSnapshot(state);
   const before = state.board;
-  const next = applyMove(state, input.move);
+  const applied = applyMove(state, input.move);
+  const next = appendUndoSnapshot(applied, undoSnapshot);
   const hit =
     input.move.to !== "off" &&
     typeof input.move.to === "number" &&
@@ -211,7 +274,8 @@ export function deserializeMatchState(raw: SerializedMatchState): MatchState {
     dice: {
       ...raw.dice,
       remaining: [...raw.dice.remaining],
-      values: raw.dice.values ? [...raw.dice.values] as DicePair : null,
+      values: raw.dice.values ? ([...raw.dice.values] as DicePair) : null,
     },
+    undoStack: raw.undoStack?.map(deserializeMatchState),
   };
 }
