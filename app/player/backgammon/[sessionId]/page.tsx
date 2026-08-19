@@ -54,15 +54,21 @@ export default function BackgammonSessionPage({ params }: Props) {
   return (
     <div className={styles.page}>
       <div>
-        <h1 className={styles.title}>Backgammon Match</h1>
+        <h1 className={styles.title}>تخته‌نرد</h1>
         <p className={styles.subtitle}>
           {snapshot.matchStatus === "waiting"
-            ? "Waiting for opponent…"
+            ? "در انتظار حریف…"
             : snapshot.matchStatus === "finished"
-              ? "Game finished"
-              : "Play your checkers"}
+              ? "بازی تمام شد"
+              : "مهره‌های خود را بازی کنید"}
         </p>
       </div>
+
+      <BackgammonBoard
+        snapshot={snapshot}
+        disabled={busy || snapshot.matchStatus !== "running"}
+        onMove={(m) => wrap(() => move(m))}
+      />
 
       <DicePanel
         snapshot={snapshot}
@@ -70,14 +76,6 @@ export default function BackgammonSessionPage({ params }: Props) {
         onRoll={() => wrap(roll)}
         onEndTurn={() => wrap(endTurn)}
       />
-
-      {snapshot.matchStatus === "running" ? (
-        <BackgammonBoard
-          snapshot={snapshot}
-          disabled={busy}
-          onMove={(m) => wrap(() => move(m))}
-        />
-      ) : null}
 
       {error ? <div className={styles.error}>{error}</div> : null}
 

@@ -1,8 +1,8 @@
 .page {
-  padding: 16px;
+  padding: 12px 10px 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   min-height: 100%;
 }
 

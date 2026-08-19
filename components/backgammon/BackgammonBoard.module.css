@@ -1,83 +1,301 @@
-.backgammonBoard {
+.boardShell {
+  width: 100%;
+  padding: 4px 0 8px;
+}
+
+.boardFrame {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px;
+  gap: 6px;
+  align-items: stretch;
+  justify-content: center;
 }
 
-.pointsGrid {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 4px;
-}
-
-.point {
-  min-height: 72px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
+.bearOffColumn {
+  width: 28px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 4px;
+  padding: 4px 0;
+}
+
+.bearOffTray {
+  min-height: 72px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 4px 2px;
+  gap: 2px;
+}
+
+button.bearOffTray {
+  appearance: none;
+  font: inherit;
+  color: inherit;
+}
+
+.bearOffCount {
+  composes: numeric-text numeric-text--12 from global;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.boardSurface {
+  flex: 1;
+  max-width: 340px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #b8894a 0%, #9a6b32 100%);
+  border: 3px solid #5c3d1e;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  padding: 6px;
+  overflow: hidden;
+}
+
+.boardInner {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.boardInnerFlipped {
+  transform: rotate(180deg);
+}
+
+.boardGrid {
+  display: grid;
+  grid-template-columns: 1fr 28px 1fr;
+  align-items: stretch;
+}
+
+.halfBoard {
+  display: grid;
+  grid-template-rows: 118px 118px;
+}
+
+.pointRow {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+}
+
+.bearOffTrayActive {
+  box-shadow: inset 0 0 0 2px rgba(252, 211, 77, 0.85);
+  cursor: pointer;
+}
+
+.bearOffTray:disabled {
   cursor: default;
 }
 
-.pointSelectable {
-  composes: point;
-  cursor: pointer;
-  border-color: rgba(252, 211, 77, 0.7);
-}
-
-.pointSelected {
-  composes: pointSelectable;
-  box-shadow: 0 0 0 2px rgba(252, 211, 77, 0.9);
-}
-
-.pointLabel {
-  composes: numeric-text numeric-text--11 from global;
-  color: rgba(255, 255, 255, 0.45);
-  text-align: center;
-}
-
-.stack {
+.barCell {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.12);
+  border-left: 1px solid rgba(0, 0, 0, 0.2);
+  border-right: 1px solid rgba(0, 0, 0, 0.2);
+  padding: 4px 2px;
+}
+
+.barCellSelectable {
+  composes: barCell;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 2px rgba(252, 211, 77, 0.55);
+}
+
+.barCellSelected {
+  composes: barCellSelectable;
+  box-shadow: inset 0 0 0 2px rgba(252, 211, 77, 1);
+}
+
+.barLabel {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.55);
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  letter-spacing: 1px;
+}
+
+.pointWrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 118px;
+  padding: 0 1px;
+}
+
+.pointWrapTop {
+  composes: pointWrap;
+  justify-content: flex-start;
+}
+
+.pointWrapBottom {
+  composes: pointWrap;
+  justify-content: flex-end;
+}
+
+.pointButton {
+  position: relative;
+  width: 100%;
+  height: 118px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: default;
+  display: flex;
+  flex-direction: column;
   align-items: center;
 }
 
-.checkerWhite,
-.checkerBlack {
-  width: 18px;
-  height: 18px;
+.pointButtonTop {
+  composes: pointButton;
+  justify-content: flex-start;
+}
+
+.pointButtonBottom {
+  composes: pointButton;
+  justify-content: flex-end;
+}
+
+.pointButtonInteractive {
+  cursor: pointer;
+}
+
+.pointButtonSelected {
+  filter: drop-shadow(0 0 4px rgba(252, 211, 77, 0.95));
+}
+
+.triangle {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  height: 108px;
+  z-index: 0;
+}
+
+.triangleDown {
+  composes: triangle;
+  top: 0;
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+}
+
+.triangleUp {
+  composes: triangle;
+  bottom: 0;
+  clip-path: polygon(50% 0%, 0 100%, 100% 100%);
+}
+
+.triangleLight {
+  background: #e8c992;
+}
+
+.triangleDark {
+  background: #7a5230;
+}
+
+.triangleHighlight {
+  filter: brightness(1.12);
+  box-shadow: inset 0 0 0 2px rgba(252, 211, 77, 0.75);
+}
+
+.checkerStack {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding: 4px 0;
+  pointer-events: none;
+}
+
+.checkerStackTop {
+  composes: checkerStack;
+  justify-content: flex-start;
+}
+
+.checkerStackBottom {
+  composes: checkerStack;
+  justify-content: flex-end;
+}
+
+.checker {
+  width: 22px;
+  height: 22px;
   border-radius: 999px;
-  border: 2px solid rgba(0, 0, 0, 0.25);
+  flex-shrink: 0;
+  border: 2px solid rgba(0, 0, 0, 0.35);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 .checkerWhite {
-  background: #f8fafc;
+  composes: checker;
+  background: radial-gradient(circle at 35% 30%, #ffffff 0%, #e8e4dc 55%, #c9c4bc 100%);
+  border-color: rgba(0, 0, 0, 0.28);
 }
 
 .checkerBlack {
-  background: #111827;
+  composes: checker;
+  background: radial-gradient(circle at 35% 30%, #4a4a58 0%, #1f1f2e 55%, #0f0f18 100%);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
-.countBadge {
-  composes: numeric-text numeric-text--12 from global;
+.checkerOverlap {
+  margin-top: -11px;
+}
+
+.checkerOverlapBottom {
+  margin-bottom: -11px;
+}
+
+.stackCount {
+  composes: numeric-text numeric-text--11 from global;
+  position: absolute;
+  z-index: 2;
+  font-weight: 800;
   color: #fff;
-  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  pointer-events: none;
 }
 
-.midRow {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+.stackCountTop {
+  composes: stackCount;
+  top: 6px;
 }
 
-.halfLabel {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
-  text-align: center;
-  margin-bottom: 4px;
+.stackCountBottom {
+  composes: stackCount;
+  bottom: 6px;
 }
+
+.barStack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+}
+
+.barChecker {
+  composes: checker;
+  width: 20px;
+  height: 20px;
+}
+
+.barCheckerOverlap {
+  margin-top: -9px;
+}
+
+.barCount {
+  composes: numeric-text numeric-text--11 from global;
+  color: #fff;
+  font-weight: 800;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
