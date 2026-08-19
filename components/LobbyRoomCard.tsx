@@ -109,10 +109,7 @@ export default function LobbyRoomCard({
           src={getRoomImageByListIndex(listIndex)}
           alt={`روم ${formatPrice(price)} تومان`}
           className={styles.roomImage}
-          fill={false}
-          width={600}
-          height={200}
-          style={{ width: "100%", height: "auto" }}
+          fill
           sizes="(max-width: 640px) 100vw, 600px"
           priority
         />

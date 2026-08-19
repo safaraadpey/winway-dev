@@ -5,6 +5,7 @@
   cursor: pointer;
   transition: all 0.3s ease;
   border: 2px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
 }
 
 .roomCard.minimal {
@@ -32,20 +33,18 @@
 
 .roomImageContainer {
   width: 100%;
-  min-height: 100px;
-  height: 100px;
+  height: 120px;
+  min-height: 120px;
+  max-height: 120px;
+  flex-shrink: 0;
   position: relative;
   overflow: hidden;
   background: rgba(0, 0, 0, 0.2);
 }
 
 .roomImage {
-  width: 100%;
-  height: auto;
-  display: block;
   object-fit: cover;
   object-position: center;
-  background-color: rgba(225, 71, 71, 1);
 }
 
 .topBadges {
@@ -229,14 +228,6 @@
 }
 
 @media (max-width: 640px) {
-  .roomImageContainer {
-    height: 100px;
-  }
-
-  .roomPrice {
-    font-size: 1.25rem;
-  }
-
   .roomStats {
     flex-direction: column;
     gap: 0.5rem;

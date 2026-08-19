@@ -11,7 +11,7 @@
 }
 
 .roomsList {
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
@@ -26,6 +26,10 @@
   padding-left: 16px;
   padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   scrollbar-width: none;
+}
+
+.roomsList > * {
+  flex-shrink: 0;
 }
 
 .roomsList::-webkit-scrollbar {
@@ -99,19 +103,6 @@
 @media (max-width: 640px) {
   .lobbyContainer {
     padding: 16px 20px 0 0.75rem;
-  }
-
-  .roomImageContainer {
-    height: 150px;
-  }
-
-  .roomPrice {
-    font-size: 1.25rem;
-  }
-
-  .roomStats {
-    flex-direction: column;
-    gap: 0.5rem;
   }
 }
 
