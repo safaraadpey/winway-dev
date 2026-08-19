@@ -57,6 +57,11 @@ export function buildPublicSnapshot(
   };
 }
 
+export async function getPublicSnapshot(sessionId: string, userId: string) {
+  const snapshot = await getBackgammonSnapshot(sessionId, userId);
+  return buildPublicSnapshot(snapshot, userId);
+}
+
 export async function loadAuthorizedSnapshot(
   request: NextRequest,
   sessionId: string

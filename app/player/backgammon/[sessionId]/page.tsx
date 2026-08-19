@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBackgammonSession } from "@/lib/backgammon/useBackgammonSession";
@@ -16,10 +16,8 @@ type Props = {
 export default function BackgammonSessionPage({ params }: Props) {
   const router = useRouter();
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
-  const { snapshot, loading, error, roll, move, endTurn, undo } = useBackgammonSession(
-    params.sessionId
-  );
-  const [busy, setBusy] = useState(false);
+  const { snapshot, loading, error, roll, move, endTurn, undo, isMutating } =
+    useBackgammonSession(params.sessionId);
 
   useEffect(() => {
     setShowBackButton(true);
@@ -29,15 +27,6 @@ export default function BackgammonSessionPage({ params }: Props) {
       setOnBackClick(null);
     };
   }, [router, setOnBackClick, setShowBackButton]);
-
-  const wrap = async (fn: () => Promise<void>) => {
-    try {
-      setBusy(true);
-      await fn();
-    } finally {
-      setBusy(false);
-    }
-  };
 
   if (loading && !snapshot) {
     return <div className={styles.loading}>Loading game…</div>;
@@ -66,16 +55,16 @@ export default function BackgammonSessionPage({ params }: Props) {
 
       <BackgammonBoard
         snapshot={snapshot}
-        disabled={busy || snapshot.matchStatus !== "running"}
-        onMove={(m) => wrap(() => move(m))}
+        disabled={snapshot.matchStatus !== "running"}
+        onMove={move}
       />
 
       <DicePanel
         snapshot={snapshot}
-        busy={busy}
-        onRoll={() => wrap(roll)}
-        onEndTurn={() => wrap(endTurn)}
-        onUndo={() => wrap(undo)}
+        busy={isMutating}
+        onRoll={roll}
+        onEndTurn={endTurn}
+        onUndo={undo}
       />
 
       {error ? <div className={styles.error}>{error}</div> : null}

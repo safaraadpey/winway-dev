@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { requireBackgammonContext } from "@/lib/backgammon/guards";
 import { endBackgammonTurn } from "@/lib/backgammon/repository";
+import { getPublicSnapshot } from "@/lib/backgammon/snapshot";
 import {
   backgammonFail,
   backgammonOk,
@@ -30,7 +31,8 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await endBackgammonTurn(sessionId, userId, expectedVersion);
-    return backgammonOk(result);
+    const snapshot = await getPublicSnapshot(sessionId, userId);
+    return backgammonOk({ stateVersion: result.stateVersion, snapshot });
   } catch (err) {
     return handleBackgammonRouteError(err);
   }

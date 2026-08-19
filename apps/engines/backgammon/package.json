@@ -6,6 +6,10 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./node": "./src/infrastructure/nodeDiceProvider.ts"
+  },
   "scripts": {
     "test": "tsx scripts/run-tests.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"

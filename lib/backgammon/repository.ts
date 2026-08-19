@@ -12,7 +12,7 @@ import {
 } from "@dingmoney/backgammon-engine";
 import { DomainError } from "@dingmoney/backgammon-engine";
 import type { Move, Seat } from "@dingmoney/backgammon-engine";
-import { NodeDiceProvider } from "@dingmoney/backgammon-engine";
+import { NodeDiceProvider } from "@dingmoney/backgammon-engine/node";
 import { withTransaction } from "@/lib/db/withTransaction";
 import {
   BACKGAMMON_CAPACITY,

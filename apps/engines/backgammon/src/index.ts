@@ -5,4 +5,3 @@ export * from "./domain/dice";
 export * from "./domain/rules";
 export * from "./application/game";
 export * from "./ports/DiceProvider";
-export * from "./infrastructure/nodeDiceProvider";
