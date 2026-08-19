@@ -78,28 +78,20 @@ button.bearOffTray {
 
 .pointRow {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-}
-
-.bearOffTrayActive {
-  box-shadow: inset 0 0 0 2px rgba(252, 211, 77, 0.85);
-  cursor: pointer;
-}
-
-.bearOffTray:disabled {
-  cursor: default;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .barCell {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
+  justify-content: space-between;
+  min-height: 236px;
+  position: relative;
   background: rgba(0, 0, 0, 0.12);
   border-left: 1px solid rgba(0, 0, 0, 0.2);
   border-right: 1px solid rgba(0, 0, 0, 0.2);
-  padding: 4px 2px;
+  padding: 6px 2px;
 }
 
 .barCellSelectable {
@@ -114,11 +106,40 @@ button.bearOffTray {
 }
 
 .barLabel {
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.55);
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.4);
   writing-mode: vertical-rl;
   text-orientation: mixed;
   letter-spacing: 1px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.barStackTop,
+.barStackBottom {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.barStackBottom {
+  margin-top: auto;
+}
+
+.bearOffTrayActive {
+  box-shadow: inset 0 0 0 2px rgba(252, 211, 77, 0.85);
+  cursor: pointer;
+}
+
+.bearOffTray:disabled {
+  cursor: default;
 }
 
 .pointWrap {
@@ -127,7 +148,10 @@ button.bearOffTray {
   flex-direction: column;
   align-items: center;
   min-height: 118px;
-  padding: 0 1px;
+  min-width: 0;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
 }
 
 .pointWrapTop {
@@ -151,6 +175,7 @@ button.bearOffTray {
   display: flex;
   flex-direction: column;
   align-items: center;
+  overflow: hidden;
 }
 
 .pointButtonTop {
@@ -173,8 +198,10 @@ button.bearOffTray {
 
 .triangle {
   position: absolute;
-  left: 2px;
-  right: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 2px);
+  max-width: 26px;
   height: 108px;
   z-index: 0;
 }
@@ -204,34 +231,37 @@ button.bearOffTray {
   box-shadow: inset 0 0 0 2px rgba(252, 211, 77, 0.75);
 }
 
-.checkerStack {
+.checkerStackTop,
+.checkerStackBottom {
   position: relative;
   z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-  padding: 4px 0;
+  flex-shrink: 0;
   pointer-events: none;
 }
 
 .checkerStackTop {
-  composes: checkerStack;
-  justify-content: flex-start;
+  margin-top: 1px;
+  align-self: flex-start;
 }
 
 .checkerStackBottom {
-  composes: checkerStack;
-  justify-content: flex-end;
+  margin-bottom: 1px;
+  align-self: flex-end;
 }
 
 .checker {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
+  box-sizing: border-box;
   border-radius: 999px;
   flex-shrink: 0;
   border: 2px solid rgba(0, 0, 0, 0.35);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.checkerPlaced {
+  position: absolute;
+  left: 0;
 }
 
 .checkerWhite {
@@ -246,56 +276,16 @@ button.bearOffTray {
   border-color: rgba(255, 255, 255, 0.22);
 }
 
-.checkerOverlap {
-  margin-top: -11px;
-}
-
-.checkerOverlapBottom {
-  margin-bottom: -11px;
-}
-
-.stackCount {
+.stackCountBadge {
   composes: numeric-text numeric-text--11 from global;
   position: absolute;
-  z-index: 2;
+  left: 0;
+  right: 0;
+  text-align: center;
   font-weight: 800;
   color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
   pointer-events: none;
-}
-
-.stackCountTop {
-  composes: stackCount;
-  top: 6px;
-}
-
-.stackCountBottom {
-  composes: stackCount;
-  bottom: 6px;
-}
-
-.barStack {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
-  width: 100%;
-}
-
-.barChecker {
-  composes: checker;
-  width: 20px;
-  height: 20px;
-}
-
-.barCheckerOverlap {
-  margin-top: -9px;
-}
-
-.barCount {
-  composes: numeric-text numeric-text--11 from global;
-  color: #fff;
-  font-weight: 800;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  line-height: 1;
 }
 

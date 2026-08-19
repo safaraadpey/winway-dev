@@ -17,48 +17,81 @@ const BOTTOM_LEFT = [12, 11, 10, 9, 8, 7] as const;
 const BOTTOM_RIGHT = [6, 5, 4, 3, 2, 1] as const;
 
 const MAX_VISIBLE_CHECKERS = 5;
+const CHECKER_SIZE = 20;
+const MAX_STACK_HEIGHT = 100;
 
 function endpointKey(value: Move["from"] | Move["to"]): string {
   return String(value);
 }
 
-function CheckerStack({
+function stackMetrics(count: number) {
+  const visible = Math.min(count, MAX_VISIBLE_CHECKERS);
+  if (visible <= 1) {
+    return { visible, step: 0, height: CHECKER_SIZE };
+  }
+
+  const idealStep = 12;
+  const maxStep = Math.floor(
+    (MAX_STACK_HEIGHT - CHECKER_SIZE) / (visible - 1)
+  );
+  const step = Math.min(idealStep, maxStep);
+  const height = CHECKER_SIZE + (visible - 1) * step;
+  return { visible, step, height };
+}
+
+function VerticalCheckerStack({
   count,
   color,
   fromTop,
+  size = CHECKER_SIZE,
 }: {
   count: number;
   color: "white" | "black";
   fromTop: boolean;
+  size?: number;
 }) {
   if (count <= 0) return null;
 
-  const visible = Math.min(count, MAX_VISIBLE_CHECKERS);
+  const { visible, step, height } = stackMetrics(count);
   const checkerClass =
     color === "white" ? styles.checkerWhite : styles.checkerBlack;
-  const overlapClass = fromTop
-    ? styles.checkerOverlap
-    : styles.checkerOverlapBottom;
+  const containerClass = fromTop
+    ? styles.checkerStackTop
+    : styles.checkerStackBottom;
+  const frontOffset = (visible - 1) * step;
 
   return (
-    <>
+    <div
+      className={containerClass}
+      style={{ width: size, height, minWidth: size }}
+    >
       {Array.from({ length: visible }, (_, i) => (
         <span
           key={`${color}-${i}`}
-          className={[checkerClass, i > 0 ? overlapClass : ""]
-            .filter(Boolean)
-            .join(" ")}
+          className={[checkerClass, styles.checkerPlaced].join(" ")}
+          style={{
+            width: size,
+            height: size,
+            ...(fromTop ? { top: i * step } : { bottom: i * step }),
+            zIndex: i + 1,
+          }}
         />
       ))}
       {count > MAX_VISIBLE_CHECKERS ? (
         <span
-          className={fromTop ? styles.stackCountTop : styles.stackCountBottom}
+          className={styles.stackCountBadge}
+          style={{
+            ...(fromTop
+              ? { top: frontOffset + size / 2 - 8 }
+              : { bottom: frontOffset + size / 2 - 8 }),
+            zIndex: visible + 2,
+          }}
           dir="ltr"
         >
           {count}
         </span>
       ) : null}
-    </>
+    </div>
   );
 }
 
@@ -123,8 +156,6 @@ function PointCell({
     .filter(Boolean)
     .join(" ");
 
-  const stackClass = fromTop ? styles.checkerStackTop : styles.checkerStackBottom;
-
   return (
     <div className={fromTop ? styles.pointWrapTop : styles.pointWrapBottom}>
       <button
@@ -135,11 +166,9 @@ function PointCell({
         aria-label={`Point ${point}`}
       >
         <span className={triangleClass} aria-hidden />
-        <div className={stackClass}>
-          {owner ? (
-            <CheckerStack count={count} color={owner} fromTop={fromTop} />
-          ) : null}
-        </div>
+        {owner ? (
+          <VerticalCheckerStack count={count} color={owner} fromTop={fromTop} />
+        ) : null}
       </button>
     </div>
   );
@@ -340,43 +369,21 @@ export default function BackgammonBoard({ snapshot, onMove, disabled }: Props) {
                 }}
               >
                 <span className={styles.barLabel}>BAR</span>
-                <div className={styles.barStack}>
-                  {Array.from({ length: Math.min(oppBarCount, 3) }, (_, i) => (
-                    <span
-                      key={`opp-bar-${i}`}
-                      className={[
-                        styles.barChecker,
-                        oppCheckerOnBearOff,
-                        i > 0 ? styles.barCheckerOverlap : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                    />
-                  ))}
-                  {oppBarCount > 3 ? (
-                    <span className={styles.barCount} dir="ltr">
-                      {oppBarCount}
-                    </span>
-                  ) : null}
+                <div className={styles.barStackTop}>
+                  <VerticalCheckerStack
+                    count={oppBarCount}
+                    color={snapshot.mySeat === 0 ? "black" : "white"}
+                    fromTop
+                    size={18}
+                  />
                 </div>
-                <div className={styles.barStack}>
-                  {Array.from({ length: Math.min(myBarCount, 3) }, (_, i) => (
-                    <span
-                      key={`my-bar-${i}`}
-                      className={[
-                        styles.barChecker,
-                        myCheckerOnBearOff,
-                        i > 0 ? styles.barCheckerOverlap : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                    />
-                  ))}
-                  {myBarCount > 3 ? (
-                    <span className={styles.barCount} dir="ltr">
-                      {myBarCount}
-                    </span>
-                  ) : null}
+                <div className={styles.barStackBottom}>
+                  <VerticalCheckerStack
+                    count={myBarCount}
+                    color={snapshot.mySeat === 0 ? "white" : "black"}
+                    fromTop={false}
+                    size={18}
+                  />
                 </div>
               </div>
 
