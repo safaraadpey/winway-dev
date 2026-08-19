@@ -86,6 +86,16 @@
   font-size: 1rem;
 }
 
+.backgammonEntry {
+  margin-top: 0.75rem;
+  padding-top: 0.25rem;
+}
+
+.backgammonMenuItem {
+  display: block;
+  width: 100%;
+}
+
 @media (max-width: 640px) {
   .lobbyContainer {
     padding: 16px 20px 0 0.75rem;

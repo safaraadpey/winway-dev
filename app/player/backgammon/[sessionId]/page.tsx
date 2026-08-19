@@ -21,7 +21,7 @@ export default function BackgammonSessionPage({ params }: Props) {
 
   useEffect(() => {
     setShowBackButton(true);
-    setOnBackClick(() => () => router.push("/player/backgammon"));
+    setOnBackClick(() => () => router.push("/player/lobby"));
     return () => {
       setShowBackButton(false);
       setOnBackClick(null);

@@ -3,7 +3,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
+import { useTheme } from "@/lib/contexts/ThemeContext";
 import LobbyRoomCard from '@/components/LobbyRoomCard';
+import MenuItem from "@/components/theme/MenuItem";
+import FeatureGate from "@/components/features/FeatureGate";
+import { BACKGAMMON_FEATURE_KEY } from "@/lib/backgammon/constants";
 import toast from 'react-hot-toast';
 import styles from './lobby.module.css';
 import { supabase } from "@/lib/supabaseClient";
@@ -34,6 +38,7 @@ interface RoomPriceGroup {
 export default function LobbyPage() {
   const router = useRouter();
   const pathname = usePathname();
+  const { themeDefinition } = useTheme();
   const sessionSnap = useSession();
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
   const [roomGroups, setRoomGroups] = useState<RoomPriceGroup[]>([]);
@@ -336,6 +341,17 @@ export default function LobbyPage() {
             />
           ))
         )}
+
+        <FeatureGate featureKey={BACKGAMMON_FEATURE_KEY}>
+          <div className={styles.backgammonEntry}>
+            <MenuItem
+              menuItemId="backgammon"
+              presentation={themeDefinition.menuItems.backgammon}
+              href="/player/backgammon"
+              className={styles.backgammonMenuItem}
+            />
+          </div>
+        </FeatureGate>
       </div>
     </div>
   );

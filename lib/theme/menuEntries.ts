@@ -3,7 +3,6 @@ import type { MenuEntryDefinition } from "@/lib/theme/types";
 /** Static menu structure (order, routes, actions). Presentation comes from theme definition. */
 export const MENU_ENTRIES: MenuEntryDefinition[] = [
   { id: "gameRoom", label: "Game Room", href: "/player/lobby" },
-  { id: "backgammon", label: "Backgammon", href: "/player/backgammon" },
   { id: "tournaments", label: "Tournaments", href: "/player/tournaments" },
   { id: "leaderboard", label: "Leaderboard", href: "/player/leaderboard" },
   { id: "myProfile", label: "My Profile", href: "/player/myprofile" },

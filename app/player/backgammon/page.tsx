@@ -34,7 +34,7 @@ export default function BackgammonLobbyPage() {
 
   useEffect(() => {
     setShowBackButton(true);
-    setOnBackClick(() => () => router.push("/player/home"));
+    setOnBackClick(() => () => router.push("/player/lobby"));
     return () => {
       setShowBackButton(false);
       setOnBackClick(null);
