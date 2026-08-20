@@ -1,10 +1,11 @@
-import { getMainOrigin } from "@/lib/auth/portalHosts";
+import { getMainPublicOrigin } from "@/lib/auth/portalHosts";
+import { normalizeReferralCodeSegment } from "@/lib/referral/normalizeReferralCode";
 
 export function buildRegistrationLinkPath(referralCode: string): string {
-  const code = referralCode.trim().toUpperCase();
-  return `/register?ref=${encodeURIComponent(code)}`;
+  const code = normalizeReferralCodeSegment(referralCode);
+  return `/register/${encodeURIComponent(code)}`;
 }
 
 export function buildRegistrationLink(referralCode: string): string {
-  return `${getMainOrigin()}${buildRegistrationLinkPath(referralCode)}`;
+  return `${getMainPublicOrigin()}${buildRegistrationLinkPath(referralCode)}`;
 }

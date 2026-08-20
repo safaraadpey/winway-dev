@@ -27,6 +27,29 @@ export function getMainOrigin(): string {
   return DEFAULT_MAIN_ORIGIN;
 }
 
+/**
+ * Canonical public origin for share links and referral page metadata.
+ * Production serves www; bare apex redirects (307) to www.
+ */
+export function getMainPublicOrigin(): string {
+  const configuredPublicOrigin = process.env.NEXT_PUBLIC_MAIN_PUBLIC_ORIGIN;
+  if (configuredPublicOrigin) {
+    return configuredPublicOrigin.replace(/\/+$/, "");
+  }
+
+  const mainOrigin = getMainOrigin();
+  try {
+    const url = new URL(mainOrigin);
+    const mainHost = getMainHost();
+    if (url.hostname === mainHost) {
+      return `https://www.${mainHost}`;
+    }
+    return mainOrigin;
+  } catch {
+    return `https://www.${getMainHost()}`;
+  }
+}
+
 export function isMainHost(hostname: string): boolean {
   const mainHost = getMainHost();
   const normalized = hostname.toLowerCase();

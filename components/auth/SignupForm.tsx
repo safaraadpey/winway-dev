@@ -13,9 +13,13 @@ import { AUTH_FORM_FALLBACK_PATH } from "@/lib/auth/formFallback";
 
 const logoSrc = getLogoImagePath(DEFAULT_THEME, "logo");
 
+type SignupFormProps = {
+  initialReferralCode?: string;
+};
+
 /**
  * کامپوننت فرم ثبت‌نام با Username + Password
- * 
+ *
  * ویژگی‌ها:
  * - فقط username و password می‌گیرد (نه email)
  * - ایمیل را خودش می‌سازد: ${username}@dingmoney.org
@@ -23,15 +27,18 @@ const logoSrc = getLogoImagePath(DEFAULT_THEME, "logo");
  * - Toast برای نمایش خطاها و موفقیت‌ها
  * - Redirect به /post-login بعد از موفقیت
  */
-export default function SignupForm() {
+export default function SignupForm(props: SignupFormProps = {}) {
+  const { initialReferralCode } = props;
   const router = useRouter();
   const searchParams = useSearchParams();
+  const refFromProp = (initialReferralCode || "").trim().toUpperCase();
   const refFromUrl = (searchParams.get("ref") || "").trim().toUpperCase();
-  const referralLockedFromUrl = refFromUrl.length > 0;
+  const resolvedReferral = refFromProp || refFromUrl;
+  const referralLockedFromUrl = resolvedReferral.length > 0;
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [referralCode, setReferralCode] = useState(refFromUrl);
+  const [referralCode, setReferralCode] = useState(resolvedReferral);
   const [loading, setLoading] = useState(false);
   const [referralErrorHint, setReferralErrorHint] = useState<string | null>(null);
   
@@ -39,10 +46,10 @@ export default function SignupForm() {
   const [showPassword] = useState(true);
 
   useEffect(() => {
-    if (refFromUrl) {
-      setReferralCode(refFromUrl);
+    if (resolvedReferral) {
+      setReferralCode(resolvedReferral);
     }
-  }, [refFromUrl]);
+  }, [resolvedReferral]);
 
   /**
    * هندل کردن submit فرم ثبت‌نام

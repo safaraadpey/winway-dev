@@ -47,7 +47,7 @@ export default function ReferralRegistrationLink({
         >
           {normalizedCode ? (
             <>
-              <span className="text-[10px] text-gray-500 leading-none">/register?ref=</span>
+              <span className="text-[10px] text-gray-500 leading-none">/register/</span>
               <span className="text-sm text-green-400 font-semibold">{normalizedCode}</span>
             </>
           ) : (

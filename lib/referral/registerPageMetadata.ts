@@ -1,31 +1,55 @@
 import type { Metadata } from "next";
-import { getMainOrigin } from "@/lib/auth/portalHosts";
+import { getMainPublicOrigin } from "@/lib/auth/portalHosts";
 import { getLogoImagePath } from "@/lib/theme/logoImageFiles";
 import { DEFAULT_THEME } from "@/lib/theme/types";
+import {
+  normalizeReferralCodeSegment,
+  normalizeReferralRefParam,
+} from "@/lib/referral/normalizeReferralCode";
 
 const REGISTER_PAGE_TITLE = "لینک ثبت نام اپلیکیشن دینگ مانی";
 const REGISTER_PAGE_DESCRIPTION =
   "اولین اپلیکیشن دبرنا دارای تورنومنت و تکنیک هش جهت جلوگیری از تقلب";
 
-type RegisterPath = "/register" | "/signup";
+type BuildRegisterPageMetadataOptions = {
+  /** Path segment or raw referral code for /register/[code] */
+  referralCode?: string | null;
+  /** Legacy query ref (?ref=) — metadata only, e.g. /signup before redirect */
+  legacyQueryRef?: string | string[] | undefined;
+  /** When set with legacyQueryRef, emit /signup?ref= URL instead of path-based */
+  legacySignupPath?: boolean;
+};
 
-function normalizeRefParam(ref: string | string[] | undefined): string {
-  const raw = Array.isArray(ref) ? ref[0] : ref;
-  return (raw || "").trim().toUpperCase();
+function resolveRegisterPageUrl(
+  options: BuildRegisterPageMetadataOptions
+): string {
+  const siteOrigin = getMainPublicOrigin();
+  const fromPath = options.referralCode
+    ? normalizeReferralCodeSegment(options.referralCode)
+    : "";
+  const fromQuery = normalizeReferralRefParam(options.legacyQueryRef);
+  const normalizedRef = fromPath || fromQuery;
+
+  if (!normalizedRef) {
+    return `${siteOrigin}/register`;
+  }
+
+  if (options.legacySignupPath && fromQuery && !fromPath) {
+    return `${siteOrigin}/signup?ref=${encodeURIComponent(normalizedRef)}`;
+  }
+
+  return `${siteOrigin}/register/${encodeURIComponent(normalizedRef)}`;
 }
 
 export function buildRegisterPageMetadata(
-  pathname: RegisterPath,
-  ref: string | string[] | undefined
+  options: BuildRegisterPageMetadataOptions = {}
 ): Metadata {
-  const siteOrigin = getMainOrigin();
+  const siteOrigin = getMainPublicOrigin();
   const ogPreviewImage = getLogoImagePath(DEFAULT_THEME, "ogPreview");
-  const normalizedRef = normalizeRefParam(ref);
-  const pageUrl = normalizedRef
-    ? `${siteOrigin}${pathname}?ref=${encodeURIComponent(normalizedRef)}`
-    : `${siteOrigin}${pathname}`;
+  const pageUrl = resolveRegisterPageUrl(options);
 
   return {
+    metadataBase: new URL(siteOrigin),
     title: REGISTER_PAGE_TITLE,
     description: REGISTER_PAGE_DESCRIPTION,
     openGraph: {
