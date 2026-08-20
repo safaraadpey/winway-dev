@@ -212,3 +212,26 @@ export async function markWithdrawalProcessing(
   }
   return json;
 }
+
+export async function loadPendingWithdrawalAlertSummary(
+  userRole: "admin" | "agent" | string
+): Promise<{ total: number; rial: number; crypto: number }> {
+  if (userRole === "agent") {
+    const rial = await loadPendingWithdrawals("rial");
+    return { total: rial.length, rial: rial.length, crypto: 0 };
+  }
+
+  if (userRole === "admin") {
+    const [rial, crypto] = await Promise.all([
+      loadPendingWithdrawals("rial"),
+      loadPendingWithdrawals("crypto"),
+    ]);
+    return {
+      rial: rial.length,
+      crypto: crypto.length,
+      total: rial.length + crypto.length,
+    };
+  }
+
+  return { total: 0, rial: 0, crypto: 0 };
+}

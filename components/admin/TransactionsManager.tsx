@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { filterManagedUsers, getCachedManagedUsersBase, loadManagedUsers } from "@/services/users";
 import {
   adjustWalletForUsersBulk,
@@ -59,8 +60,12 @@ function getTotalsFromManagedUsers(users: ManagedUserSummary[]) {
 }
 
 export default function TransactionsManager({ pageTitle }: TransactionsManagerProps) {
+  const searchParams = useSearchParams();
   const { refreshWalletBalances } = useBalancesContext();
-  const [tab, setTab] = useState<TabMode>("cashdesk");
+  const [tab, setTab] = useState<TabMode>(() => {
+    const tabParam = searchParams.get("tab");
+    return tabParam === "withdrawals" ? "withdrawals" : "cashdesk";
+  });
   const [users, setUsers] = useState<ManagedUserSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [roleFilter, setRoleFilter] = useState<ManagedUserRoleFilter>("all");
@@ -91,8 +96,10 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
     null
   );
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
-  const [withdrawalKindFilter, setWithdrawalKindFilter] =
-    useState<WithdrawalKind>("rial");
+  const [withdrawalKindFilter, setWithdrawalKindFilter] = useState<WithdrawalKind>(() => {
+    const kindParam = searchParams.get("kind");
+    return kindParam === "crypto" ? "crypto" : "rial";
+  });
 
   const canAccessRialWithdrawals =
     currentUserRole === "agent" || currentUserRole === "admin";
@@ -235,18 +242,24 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
   }, [tab, historyDateFilter, historySearchDebounced]);
 
   useEffect(() => {
+    if (loading) return;
     if (tab === "withdrawals" && !canAccessWithdrawalsTab) {
       setTab("cashdesk");
     }
-  }, [tab, canAccessWithdrawalsTab]);
+  }, [tab, canAccessWithdrawalsTab, loading]);
 
   useEffect(() => {
+    const kindParam = searchParams.get("kind");
+    if (kindParam === "rial" || kindParam === "crypto") {
+      setWithdrawalKindFilter(kindParam);
+      return;
+    }
     if (currentUserRole === "admin") {
       setWithdrawalKindFilter("crypto");
     } else if (currentUserRole === "agent") {
       setWithdrawalKindFilter("rial");
     }
-  }, [currentUserRole]);
+  }, [currentUserRole, searchParams]);
 
   useEffect(() => {
     if (tab !== "withdrawals") return;

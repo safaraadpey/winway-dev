@@ -17,6 +17,7 @@ import type { DashboardPeriod, DashboardData } from "@/src/types/dashboard";
 import type { AdminPermissions } from "@/src/types/admins";
 import InstallAppButton from "@/components/InstallAppButton";
 import ReferralRegistrationLink from "@/components/admin/ReferralRegistrationLink";
+import PendingWithdrawalAlertBadge from "@/components/admin/PendingWithdrawalAlertBadge";
 import { useReferralCodeDashboardSync } from "@/lib/referral/useReferralCodeDashboardSync";
 
 const PERIOD_LABELS: Record<DashboardPeriod, string> = {
@@ -261,12 +262,20 @@ export default function AdminDashboardPage() {
                 </span>
               </div>
             </div>
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 rounded-xl bg-red-700 text-white text-sm font-semibold hover:bg-red-600 active:bg-red-800 whitespace-nowrap"
-            >
-              خروج
-            </button>
+            <div className="flex items-center gap-2">
+              {canAccessTransactions && (
+                <PendingWithdrawalAlertBadge
+                  userRole={userRole}
+                  transactionsPath="/admin/transactions?tab=withdrawals"
+                />
+              )}
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 rounded-xl bg-red-700 text-white text-sm font-semibold hover:bg-red-600 active:bg-red-800 whitespace-nowrap"
+              >
+                خروج
+              </button>
+            </div>
           </div>
 
           {canManageReferralCode && (

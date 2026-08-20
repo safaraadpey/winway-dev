@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import TransactionsManager from "@/components/admin/TransactionsManager";
 
@@ -19,7 +19,9 @@ export default function AdminTransactionsPage() {
   }, [setShowHeader, setShowBackButton, setOnBackClick]);
 
   return (
-    <TransactionsManager pageTitle="مدیریت تراکنش‌ها" />
+    <Suspense fallback={<div className="p-4 text-center text-gray-400">در حال بارگذاری...</div>}>
+      <TransactionsManager pageTitle="مدیریت تراکنش‌ها" />
+    </Suspense>
   );
 }
 
