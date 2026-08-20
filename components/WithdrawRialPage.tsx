@@ -17,6 +17,7 @@ import {
   isValidSheba,
   normalizeSheba,
 } from "@/lib/format/shebaNumber";
+import { MIN_RIAL_WITHDRAWAL_AMOUNT } from "@/lib/withdrawal/constants";
 import buyStyles from "./BuyRialPage.module.css";
 import styles from "./WithdrawRialPage.module.css";
 
@@ -128,7 +129,7 @@ export default function WithdrawRialPage() {
 
   const canSubmit =
     !submitting &&
-    amountValue > 0 &&
+    amountValue >= MIN_RIAL_WITHDRAWAL_AMOUNT &&
     Number.isInteger(amountValue) &&
     amountValue <= maxBalance &&
     cardDigits.length >= 16 &&
@@ -203,6 +204,13 @@ export default function WithdrawRialPage() {
             onChange={(e) => setAmountInput(normalizeAmountInput(e.target.value))}
             disabled={submitting}
           />
+          <p className={buyStyles.hint}>
+            حداقل مبلغ برداشت:{" "}
+            <span className="numeric-text numeric-text--14" dir="ltr">
+              {MIN_RIAL_WITHDRAWAL_AMOUNT.toLocaleString("en-US")}
+            </span>{" "}
+            تومان
+          </p>
           <p className={buyStyles.hint}>
             حداکثر قابل برداشت:{" "}
             <span className="numeric-text numeric-text--14" dir="ltr">

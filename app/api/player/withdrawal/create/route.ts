@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/supabaseServer";
 import { pgPool } from "@/lib/pg";
+import { MIN_RIAL_WITHDRAWAL_AMOUNT } from "@/lib/withdrawal/constants";
 import {
   createWithdrawalRequest,
   getPlayerWalletFreeBalance,
@@ -56,6 +57,16 @@ export async function POST(request: Request) {
       {
         error: "invalid_amount",
         message: "مبلغ باید عدد صحیح بزرگ‌تر از صفر باشد.",
+      },
+      { status: 400 }
+    );
+  }
+
+  if (amount < MIN_RIAL_WITHDRAWAL_AMOUNT) {
+    return NextResponse.json(
+      {
+        error: "below_minimum_amount",
+        message: `حداقل مبلغ برداشت ${MIN_RIAL_WITHDRAWAL_AMOUNT.toLocaleString("en-US")} تومان است.`,
       },
       { status: 400 }
     );
