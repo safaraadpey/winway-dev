@@ -129,12 +129,17 @@ export default function RootLayout({
         <AppSplashScreen enabled={!isAdminHost} />
         <div
           id={APP_SPLASH_SHELL_ID}
-          className="relative mx-auto min-h-dvh w-full max-w-[390px] overflow-x-hidden bg-[#0E0E0F]"
+          className="relative mx-auto flex min-h-dvh w-full max-w-[390px] flex-col overflow-x-hidden bg-[#0E0E0F]"
         >
-          <GlobalUserStateClient>{children}</GlobalUserStateClient>
+          <div className="app-content-safe">
+            <GlobalUserStateClient>{children}</GlobalUserStateClient>
+          </div>
         </div>
         <Toaster
           position="top-center"
+          containerStyle={{
+            top: "calc(8px + var(--safe-area-top))",
+          }}
           toastOptions={{
             duration: 4000,
             style: {

@@ -23,7 +23,7 @@ export default function PlayerLayout({
 }) {
   return (
     <div
-      className="h-dvh min-h-dvh overflow-hidden bg-cover bg-center bg-no-repeat player-layout-root"
+      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-cover bg-center bg-no-repeat player-layout-root"
       style={{
         backgroundColor: "var(--player-layout-bg, #0E0E0F)",
         backgroundImage: "var(--player-layout-bg-image, url(/themes/dark/backgrounds/layout_BG.webp))",
