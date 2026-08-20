@@ -94,7 +94,8 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
   const [withdrawalKindFilter, setWithdrawalKindFilter] =
     useState<WithdrawalKind>("rial");
 
-  const canAccessRialWithdrawals = currentUserRole === "agent";
+  const canAccessRialWithdrawals =
+    currentUserRole === "agent" || currentUserRole === "admin";
   const canAccessCryptoWithdrawals = currentUserRole === "admin";
   const canAccessWithdrawalsTab =
     canAccessRialWithdrawals || canAccessCryptoWithdrawals;

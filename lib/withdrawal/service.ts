@@ -295,7 +295,7 @@ export async function listPendingWithdrawalsForActor(
     return result.rows.map(mapRow);
   }
 
-  if (actorRole !== "agent") {
+  if (actorRole !== "agent" && actorRole !== "admin") {
     return [];
   }
 

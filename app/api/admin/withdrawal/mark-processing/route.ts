@@ -70,11 +70,11 @@ export async function POST(request: Request) {
       );
     }
 
-    if (kind === "rial" && role !== "agent") {
+    if (kind === "rial" && role !== "agent" && role !== "admin") {
       return NextResponse.json(
         {
           error: "forbidden",
-          message: "فقط ایجنت بالادستی پلیر می‌تواند برداشت ریالی را مدیریت کند.",
+          message: "فقط ایجنت بالادستی یا ادمین assign‌شده می‌تواند برداشت ریالی را مدیریت کند.",
         },
         { status: 403 }
       );

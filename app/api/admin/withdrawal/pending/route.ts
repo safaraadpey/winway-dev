@@ -26,11 +26,11 @@ export async function GET(request: Request) {
           { status: 403 }
         );
       }
-    } else if (role !== "agent") {
+    } else if (role !== "agent" && role !== "admin") {
       return NextResponse.json(
         {
           error: "forbidden",
-          message: "فقط ایجنت بالادستی پلیر می‌تواند برداشت ریالی را ببیند.",
+          message: "فقط ایجنت بالادستی یا ادمین assign‌شده می‌تواند برداشت ریالی را ببیند.",
         },
         { status: 403 }
       );
