@@ -1,6 +1,14 @@
-"use client";
-
+import type { Metadata } from "next";
 import SignupForm from "@/components/auth/SignupForm";
+import { buildRegisterPageMetadata } from "@/lib/referral/registerPageMetadata";
+
+type SignupPageProps = {
+  searchParams: { ref?: string | string[] };
+};
+
+export function generateMetadata({ searchParams }: SignupPageProps): Metadata {
+  return buildRegisterPageMetadata("/signup", searchParams.ref);
+}
 
 /**
  * صفحه ثبت‌نام
@@ -9,4 +17,3 @@ import SignupForm from "@/components/auth/SignupForm";
 export default function SignupPage() {
   return <SignupForm />;
 }
-
