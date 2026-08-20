@@ -35,7 +35,7 @@ type ManagedUsersBaseCache = {
   usersAll: ManagedUserSummary[];
 };
 
-const MANAGED_USERS_CACHE_VERSION = 2;
+const MANAGED_USERS_CACHE_VERSION = 3;
 
 let managedUsersBaseCache: ManagedUsersBaseCache | null = null;
 
@@ -181,6 +181,7 @@ export async function loadManagedUsers(
     return { currentUserRole: currentRole, users: [], totalCount: 0 };
   }
 
+  let adminZeroId: string | null = null;
   let isAdminZero = false;
   if (currentRole === "admin") {
     const { data: adminZero } = await supabase
@@ -189,8 +190,11 @@ export async function loadManagedUsers(
       .eq("username", "adminzero")
       .eq("role", "admin")
       .maybeSingle();
-    isAdminZero = !!adminZero?.id && currentUserId === adminZero.id;
+    adminZeroId = adminZero?.id ?? null;
+    isAdminZero = !!adminZeroId && currentUserId === adminZeroId;
   }
+
+  const hideAdminZeroFromViewer = !!adminZeroId && !isAdminZero;
 
   const cacheEligible =
     !force &&
@@ -332,9 +336,12 @@ export async function loadManagedUsers(
         console.error("loadManagedUsers: users error (admin)", usersError);
       } else {
         targetUserIds = (allUsers || [])
-          .filter((u: { id: string; admin_sub_role?: string | null }) =>
-            isAdminZero || u.admin_sub_role !== "dev_panel"
-          )
+          .filter((u: { id: string; admin_sub_role?: string | null }) => {
+            if (hideAdminZeroFromViewer && u.id === adminZeroId) {
+              return false;
+            }
+            return isAdminZero || u.admin_sub_role !== "dev_panel";
+          })
           .map((u: { id: string }) => u.id);
       }
     }
@@ -360,9 +367,13 @@ export async function loadManagedUsers(
   const visibleUsersData =
     currentRole === "admin" && !isAdminZero
       ? usersData.filter(
-          (u: { admin_sub_role?: string | null }) => u.admin_sub_role !== "dev_panel"
+          (u: { id: string; admin_sub_role?: string | null }) =>
+            u.admin_sub_role !== "dev_panel" &&
+            !(hideAdminZeroFromViewer && u.id === adminZeroId)
         )
-      : usersData;
+      : hideAdminZeroFromViewer
+        ? usersData.filter((u: { id: string }) => u.id !== adminZeroId)
+        : usersData;
 
   // گرفتن موجودی تومان برای همه این کاربران
   // فقط کیف‌پول با ارز IRR (تومان) را در نظر می‌گیریم
