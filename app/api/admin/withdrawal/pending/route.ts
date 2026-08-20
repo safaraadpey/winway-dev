@@ -47,7 +47,8 @@ export async function GET(request: Request) {
       pgPool,
       ctx.user.id,
       role,
-      kind
+      kind,
+      ctx.adminSubRole
     );
 
     const playerIds = [...new Set(requests.map((r) => r.playerId))];

@@ -277,7 +277,8 @@ export async function listPendingWithdrawalsForActor(
   pool: Pool,
   actorId: string,
   actorRole: string,
-  kind: WithdrawalKind = "rial"
+  kind: WithdrawalKind = "rial",
+  adminSubRole: string | null = null
 ): Promise<WithdrawalRequestItem[]> {
   if (kind === "crypto") {
     if (actorRole !== "admin") return [];
@@ -299,16 +300,31 @@ export async function listPendingWithdrawalsForActor(
     return [];
   }
 
+  const isManagerAdmin = actorRole === "admin" && adminSubRole === null;
+
   const result = await pool.query<DbWithdrawalRow>(
-    `SELECT ${SELECT_FIELDS},
-            u.username AS player_username
-     FROM public.withdrawal_requests wr
-     JOIN public.users u ON u.id = wr.player_id
-     WHERE wr.status IN ('pending', 'processing')
-       AND coalesce(wr.kind, 'rial') = 'rial'
-       AND wr.agent_id = $1
-     ORDER BY wr.created_at ASC
-     LIMIT 200`,
+    isManagerAdmin
+      ? `SELECT ${SELECT_FIELDS},
+                u.username AS player_username
+         FROM public.withdrawal_requests wr
+         JOIN public.users u ON u.id = wr.player_id
+         WHERE wr.status IN ('pending', 'processing')
+           AND coalesce(wr.kind, 'rial') = 'rial'
+           AND (
+             wr.agent_id = $1
+             OR wr.agent_id = public.fn_adminzero_user_id()
+           )
+         ORDER BY wr.created_at ASC
+         LIMIT 200`
+      : `SELECT ${SELECT_FIELDS},
+                u.username AS player_username
+         FROM public.withdrawal_requests wr
+         JOIN public.users u ON u.id = wr.player_id
+         WHERE wr.status IN ('pending', 'processing')
+           AND coalesce(wr.kind, 'rial') = 'rial'
+           AND wr.agent_id = $1
+         ORDER BY wr.created_at ASC
+         LIMIT 200`,
     [actorId]
   );
   return result.rows.map(mapRow);
