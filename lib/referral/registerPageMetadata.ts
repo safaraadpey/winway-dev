@@ -47,18 +47,22 @@ export function buildRegisterPageMetadata(
   const siteOrigin = getMainPublicOrigin();
   const ogPreviewImage = getLogoImagePath(DEFAULT_THEME, "ogPreview");
   const pageUrl = resolveRegisterPageUrl(options);
+  const absoluteOgImage = new URL(ogPreviewImage, siteOrigin).toString();
 
   return {
     metadataBase: new URL(siteOrigin),
     title: REGISTER_PAGE_TITLE,
     description: REGISTER_PAGE_DESCRIPTION,
     openGraph: {
+      type: "website",
+      locale: "fa_IR",
+      siteName: "Dingmoney - بازی آنلاین و تورنومنت دبرنا",
       title: REGISTER_PAGE_TITLE,
       description: REGISTER_PAGE_DESCRIPTION,
       url: pageUrl,
       images: [
         {
-          url: ogPreviewImage,
+          url: absoluteOgImage,
           width: 1200,
           height: 630,
           alt: "Dingmoney - بازی آنلاین و تورنومنت دبرنا",
@@ -69,7 +73,7 @@ export function buildRegisterPageMetadata(
       card: "summary_large_image",
       title: REGISTER_PAGE_TITLE,
       description: REGISTER_PAGE_DESCRIPTION,
-      images: [ogPreviewImage],
+      images: [absoluteOgImage],
     },
     alternates: {
       canonical: pageUrl,
