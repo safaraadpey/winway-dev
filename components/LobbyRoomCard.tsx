@@ -151,20 +151,22 @@ export default function LobbyRoomCard({
             <span className={styles.badgeCount}>{playingRooms}</span>
           </div>
         </div>
-        {/* قیمت و نام اتاق — پایین سمت راست */}
+        {/* قیمت — بالا راست (هم‌تراز با topBadges)؛ نام اتاق — پایین راست */}
         {!isExpanded && (
-          <div className={styles.priceStack}>
+          <>
             <div className={styles.priceBadge}>
               <span className={styles.priceCount}>{formatPrice(price)}</span>
             </div>
-            {displayRoomName ? (
-              <div className={styles.roomNameBadge}>
-                <span className={styles.roomNameText}>{displayRoomName}</span>
-              </div>
-            ) : (
-              <div className={styles.roomNameSpacer} aria-hidden="true" />
-            )}
-          </div>
+            <div className={styles.priceStack}>
+              {displayRoomName ? (
+                <div className={styles.roomNameBadge}>
+                  <span className={styles.roomNameText}>{displayRoomName}</span>
+                </div>
+              ) : (
+                <div className={styles.roomNameSpacer} aria-hidden="true" />
+              )}
+            </div>
+          </>
         )}
       </div>
       
