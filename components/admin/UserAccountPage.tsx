@@ -1140,13 +1140,16 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
             </div>
           ) : (
             transactions.map((tx) => {
-              // برای نمایش به کاربر: deposit = + و سبز ، withdraw = - و قرمز
               const isDeposit = tx.type === "deposit";
               const roleLabels: Record<string, string> = {
                 admin: "ادمین",
                 agent: "ایجنت",
                 super: "سوپر",
               };
+              const headline =
+                tx.category === "panel" && tx.actorRole && tx.actorShortId
+                  ? `${roleLabels[tx.actorRole]} ID : ${formatShortId(tx.actorShortId)}`
+                  : tx.title;
 
               return (
                 <div
@@ -1154,9 +1157,7 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
                   className="flex items-center justify-between bg-[#1f2933] rounded-2xl px-3 py-3"
                 >
                   <div className="flex flex-col">
-                    <span className="text-sm font-semibold">
-                      {roleLabels[tx.actorRole]} ID : {formatShortId(tx.actorShortId)}
-                    </span>
+                    <span className="text-sm font-semibold">{headline}</span>
                     <span className="text-xs text-gray-400">
                       {formatTransactionDate(tx.createdAt)}
                     </span>

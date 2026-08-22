@@ -977,94 +977,203 @@ async function calculateUserActivity(
 }
 
 /**
+ * بارگذاری تراکنش‌های پنلی (واریز/برداشت دستی و انتقال پنلی)
+ */
+async function loadPanelUserTransactions(userId: string): Promise<UserAccountTransaction[]> {
+  const { data: transactionsData, error: transactionsError } = await supabase
+    .from("transactions")
+    .select("id, user_id, amount, type, source_kind, source_ref, meta, created_at")
+    .in("source_kind", ["manual_panel", "admin_panel_transfer"])
+    .in("type", ["deposit", "withdraw", "transfer_in", "transfer_out"])
+    .or(`user_id.eq.${userId},source_ref.eq.${userId}`)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (transactionsError) {
+    console.error("[UserAccount] panel transactions error", transactionsError);
+    return [];
+  }
+
+  const actorIds = Array.from(
+    new Set(
+      (transactionsData || [])
+        .map((t: any) =>
+          t.source_kind === "admin_panel_transfer"
+            ? (t.meta?.actor_id as string | null)
+            : (t.source_ref as string | null)
+        )
+        .filter((id: string | null) => !!id)
+    )
+  ) as string[];
+
+  if (actorIds.length === 0) {
+    return [];
+  }
+
+  const { data: actorsData, error: actorsError } = await supabase
+    .from("users")
+    .select("id, username, role")
+    .in("id", actorIds);
+
+  if (actorsError) {
+    console.error("[UserAccount] panel transaction actors error", actorsError);
+    return [];
+  }
+
+  const actorMap = new Map<string, { username: string; role: string }>();
+  (actorsData || []).forEach((a: any) => {
+    actorMap.set(a.id, {
+      username: a.username || "نامشخص",
+      role: a.role,
+    });
+  });
+
+  return (transactionsData || [])
+    .filter((t: any) => {
+      const actorId =
+        t.source_kind === "admin_panel_transfer"
+          ? (t.meta?.actor_id as string | null)
+          : (t.source_ref as string | null);
+      return !!actorId && actorMap.has(actorId);
+    })
+    .map((t: any) => {
+      const actorId =
+        t.source_kind === "admin_panel_transfer"
+          ? (t.meta?.actor_id as string | null)
+          : (t.source_ref as string | null);
+      const actor = actorMap.get(actorId as string)!;
+      const mappedType: "deposit" | "withdraw" =
+        t.type === "deposit" || t.type === "transfer_in" ? "deposit" : "withdraw";
+      return {
+        id: t.id,
+        amount: Number(t.amount || 0),
+        type: mappedType,
+        category: "panel" as const,
+        title: mappedType === "deposit" ? "واریز پنل" : "برداشت پنل",
+        actorRole: actor.role as "admin" | "agent" | "super",
+        actorId: actorId as string,
+        actorShortId: makeShortIdFromUuid(actorId as string),
+        actorUsername: actor.username,
+        createdAt: t.created_at,
+      };
+    });
+}
+
+function classifyDepositDomainTitle(idempotencyKey: string | null | undefined): {
+  category: "gateway_deposit" | "crypto_deposit";
+  title: string;
+} {
+  const key = String(idempotencyKey ?? "");
+  if (key.startsWith("deposit:tron:")) {
+    return { category: "crypto_deposit", title: "خرید تتری" };
+  }
+  if (key.startsWith("deposit:fiat:")) {
+    return { category: "gateway_deposit", title: "خرید درگاه" };
+  }
+  return { category: "gateway_deposit", title: "خرید درگاه" };
+}
+
+/**
+ * بارگذاری واریزهای درگاه / تتری (deposit_domain)
+ */
+async function loadDepositDomainUserTransactions(
+  userId: string
+): Promise<UserAccountTransaction[]> {
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("id, amount, type, created_at, idempotency_key")
+    .eq("user_id", userId)
+    .eq("source_kind", "deposit_domain")
+    .eq("type", "deposit")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) {
+    console.warn("[UserAccount] deposit_domain transactions error", error.message);
+    return [];
+  }
+
+  return (data || []).map((row: any) => {
+    const { category, title } = classifyDepositDomainTitle(row.idempotency_key);
+    return {
+      id: row.id,
+      amount: Number(row.amount || 0),
+      type: "deposit" as const,
+      category,
+      title,
+      createdAt: row.created_at,
+    };
+  });
+}
+
+/**
+ * بارگذاری درخواست‌های برداشت پلیر (ریالی / تتری)
+ */
+async function loadWithdrawalUserTransactions(
+  userId: string
+): Promise<UserAccountTransaction[]> {
+  const { data, error } = await supabase
+    .from("withdrawal_requests")
+    .select("id, amount, kind, created_at, crypto_symbol, network")
+    .eq("player_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) {
+    console.warn("[UserAccount] withdrawal_requests error", error.message);
+    return [];
+  }
+
+  return (data || []).map((row: any) => {
+    const isCrypto = row.kind === "crypto";
+    const symbol = String(row.crypto_symbol || "USDT").toUpperCase();
+    const network = String(row.network || "").toUpperCase();
+    const title = isCrypto
+      ? network
+        ? `برداشت ${symbol} (${network})`
+        : `برداشت ${symbol}`
+      : "برداشت";
+
+    return {
+      id: String(row.id),
+      amount: Number(row.amount || 0),
+      type: "withdraw" as const,
+      category: "withdrawal" as const,
+      title,
+      createdAt: row.created_at,
+    };
+  });
+}
+
+/**
  * بارگذاری تراکنش‌های کاربر
  */
 async function loadUserTransactions(userId: string): Promise<UserAccountTransaction[]> {
   try {
-    // گرفتن تراکنش‌های پنلی:
-    // - مسیر قدیمی: manual_panel (deposit/withdraw)
-    // - مسیر جدید: admin_panel_transfer (transfer_in/transfer_out)
-    const { data: transactionsData, error: transactionsError } = await supabase
-      .from("transactions")
-      .select("id, user_id, amount, type, source_kind, source_ref, meta, created_at")
-      .in("source_kind", ["manual_panel", "admin_panel_transfer"])
-      .in("type", ["deposit", "withdraw", "transfer_in", "transfer_out"])
-      .or(`user_id.eq.${userId},source_ref.eq.${userId}`)
-      .order("created_at", { ascending: false })
-      .limit(50);
+    const [panelTransactions, depositTransactions, withdrawalTransactions] =
+      await Promise.all([
+        loadPanelUserTransactions(userId),
+        loadDepositDomainUserTransactions(userId),
+        loadWithdrawalUserTransactions(userId),
+      ]);
 
-    if (transactionsError) {
-      console.error("loadUserTransactions: transactions error", transactionsError);
-      return [];
-    }
+    const merged = [
+      ...panelTransactions,
+      ...depositTransactions,
+      ...withdrawalTransactions,
+    ].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
 
-    // گرفتن اطلاعات actor:
-    // - manual_panel: source_ref
-    // - admin_panel_transfer: meta.actor_id
-    const actorIds = Array.from(
-      new Set(
-        (transactionsData || [])
-          .map((t: any) =>
-            t.source_kind === "admin_panel_transfer"
-              ? (t.meta?.actor_id as string | null)
-              : (t.source_ref as string | null)
-          )
-          .filter((id: string | null) => !!id)
-      )
-    ) as string[];
-
-    if (actorIds.length === 0) {
-      return [];
-    }
-
-    const { data: actorsData, error: actorsError } = await supabase
-      .from("users")
-      .select("id, username, role")
-      .in("id", actorIds);
-
-    if (actorsError) {
-      console.error("loadUserTransactions: actors error", actorsError);
-      return [];
-    }
-
-    const actorMap = new Map<string, { username: string; role: string }>();
-    (actorsData || []).forEach((a: any) => {
-      actorMap.set(a.id, {
-        username: a.username || "نامشخص",
-        role: a.role,
-      });
+    console.info("[UserAccount] transactions loaded", {
+      userId,
+      panelCount: panelTransactions.length,
+      depositCount: depositTransactions.length,
+      withdrawalCount: withdrawalTransactions.length,
+      totalCount: merged.length,
     });
 
-    // تبدیل به UserAccountTransaction
-    const transactions: UserAccountTransaction[] = (transactionsData || [])
-      .filter((t: any) => {
-        const actorId =
-          t.source_kind === "admin_panel_transfer"
-            ? (t.meta?.actor_id as string | null)
-            : (t.source_ref as string | null);
-        return !!actorId && actorMap.has(actorId);
-      })
-      .map((t: any) => {
-        const actorId =
-          t.source_kind === "admin_panel_transfer"
-            ? (t.meta?.actor_id as string | null)
-            : (t.source_ref as string | null);
-        const actor = actorMap.get(actorId as string)!;
-        const mappedType: "deposit" | "withdraw" =
-          t.type === "deposit" || t.type === "transfer_in" ? "deposit" : "withdraw";
-        return {
-          id: t.id,
-          amount: Number(t.amount || 0),
-          type: mappedType,
-          actorRole: actor.role as "admin" | "agent" | "super",
-          actorId: actorId as string,
-          actorShortId: makeShortIdFromUuid(actorId as string),
-          actorUsername: actor.username,
-          createdAt: t.created_at,
-        };
-      });
-
-    return transactions;
+    return merged.slice(0, 50);
   } catch (err) {
     console.error("loadUserTransactions unexpected error:", err);
     return [];

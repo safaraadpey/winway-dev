@@ -42,14 +42,22 @@ export interface UserAccountActivity {
   net: number; // بیلان
 }
 
+export type UserAccountTransactionCategory =
+  | "panel"
+  | "gateway_deposit"
+  | "crypto_deposit"
+  | "withdrawal";
+
 export interface UserAccountTransaction {
   id: string;
   amount: number;
   type: "deposit" | "withdraw";
-  actorRole: "admin" | "agent" | "super";
-  actorId: string;
-  actorShortId: string;
-  actorUsername: string;
+  category: UserAccountTransactionCategory;
+  title: string;
+  actorRole?: "admin" | "agent" | "super";
+  actorId?: string;
+  actorShortId?: string;
+  actorUsername?: string;
   createdAt: string;
 }
 
