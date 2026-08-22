@@ -8,7 +8,7 @@ interface InstallAppButtonProps {
 }
 
 export default function InstallAppButton({
-  label = "نصب اپلیکیشن",
+  label = "نصب دسترسی سریع(وب اپ)",
 }: InstallAppButtonProps) {
   const { isInstalled, installUiState, canInstallDirectly, requestInstall } =
     useInstallPrompt();
