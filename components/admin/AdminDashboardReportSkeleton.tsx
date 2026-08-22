@@ -5,7 +5,7 @@ export default function AdminDashboardReportSkeleton() {
       aria-busy="true"
       aria-label="در حال بارگذاری گزارش"
     >
-      {Array.from({ length: 10 }).map((_, index) => (
+      {Array.from({ length: 11 }).map((_, index) => (
         <div key={index} className="contents">
           <div className="h-4 w-24 rounded bg-gray-800 animate-pulse" />
           <div className="h-4 w-16 rounded bg-gray-700 animate-pulse justify-self-end" />

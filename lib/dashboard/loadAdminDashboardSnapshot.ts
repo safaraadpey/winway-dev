@@ -5,6 +5,7 @@ import type {
   DashboardUserInfo,
   FinancialSummary,
 } from "@/src/types/dashboard";
+import { sumGatewayPurchasesSince } from "@/lib/dashboard/gatewayPurchases";
 
 function makeShortIdFromUuid(id: string): string {
   let hash = 0;
@@ -23,6 +24,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     tournamentTicketsVolumeTotal: 0,
     tournamentCommission: 0,
     tournamentGuaranteePayout: 0,
+    gatewayPurchases: 0,
     deposits: 0,
     withdrawals: 0,
     net: 0,
@@ -34,6 +36,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     tournamentTicketsVolumeTotal: 0,
     tournamentCommission: 0,
     tournamentGuaranteePayout: 0,
+    gatewayPurchases: 0,
     deposits: 0,
     withdrawals: 0,
     net: 0,
@@ -45,6 +48,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     tournamentTicketsVolumeTotal: 0,
     tournamentCommission: 0,
     tournamentGuaranteePayout: 0,
+    gatewayPurchases: 0,
     deposits: 0,
     withdrawals: 0,
     net: 0,
@@ -211,7 +215,7 @@ export async function loadAdminDashboardSnapshot(
   const weekIso = iso(weekStart);
   const dayIso = iso(dayStart);
 
-  const [commissionSummary, guaranteeSummary, manualPanelTxsRes, transferTxsRes] =
+  const [commissionSummary, guaranteeSummary, manualPanelTxsRes, transferTxsRes, gatewayDepositTxsRes] =
     await Promise.all([
       fetchAdminCommissionSummary(supabase),
       fetchAdminGuaranteeSummary(supabase),
@@ -229,6 +233,12 @@ export async function loadAdminDashboardSnapshot(
         .eq("type", "transfer_out")
         .filter("meta->>actor_id", "eq", user.id)
         .gte("created_at", monthIso),
+      supabase
+        .from("transactions")
+        .select("amount, created_at, idempotency_key")
+        .eq("source_kind", "deposit_domain")
+        .eq("type", "deposit")
+        .gte("created_at", monthIso),
     ]);
 
   if (manualPanelTxsRes.error) {
@@ -237,9 +247,13 @@ export async function loadAdminDashboardSnapshot(
   if (transferTxsRes.error) {
     console.error("[DashboardSnapshot] admin_panel_transfer tx error:", transferTxsRes.error);
   }
+  if (gatewayDepositTxsRes.error) {
+    console.error("[DashboardSnapshot] deposit_domain gateway tx error:", gatewayDepositTxsRes.error);
+  }
 
   const manualTxs = manualPanelTxsRes.data || [];
   const transferTxs = transferTxsRes.data || [];
+  const gatewayDepositTxs = gatewayDepositTxsRes.data || [];
 
   const adminCommissionMap = {
     admin: {
@@ -337,6 +351,7 @@ export async function loadAdminDashboardSnapshot(
         : adminCommissionMap.tournament.month;
     const deposits = depositsFor(startIso);
     const withdrawals = withdrawalsFor(startIso);
+    const gatewayPurchases = sumGatewayPurchasesSince(gatewayDepositTxs, startIso);
 
     summaries[period] = {
       period,
@@ -345,6 +360,7 @@ export async function loadAdminDashboardSnapshot(
       tournamentTicketsVolumeTotal: tournamentCommissionBase,
       tournamentCommission,
       tournamentGuaranteePayout: adminGuaranteeMap[period],
+      gatewayPurchases,
       deposits,
       withdrawals,
       net: deposits - withdrawals,

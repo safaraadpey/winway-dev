@@ -26,6 +26,8 @@ export interface FinancialSummary {
   tournamentCommission: number;
   /** مبلغ پرداختی گارانتی تورنومنت‌ها (تاپ‌آپ ضمانت) */
   tournamentGuaranteePayout: number;
+  /** مجموع خریدهای درگاه (deposit_domain، بدون تتر) */
+  gatewayPurchases: number;
   deposits: number; // واریزها
   withdrawals: number; // برداشت‌ها
   net: number; // بیلان (deposits - withdrawals یا عدد ترکیبی)

@@ -5,6 +5,7 @@
 
 import { supabase } from "@/lib/supabaseClient";
 import { callAdminApi } from "@/lib/adminApiClient";
+import { sumGatewayPurchasesInRange } from "@/lib/dashboard/gatewayPurchases";
 import type {
   DashboardData,
   DashboardPeriod,
@@ -18,6 +19,7 @@ export interface DashboardRangeSummary {
   tournamentTicketsVolumeTotal: number;
   tournamentCommission: number;
   tournamentGuaranteePayout: number;
+  gatewayPurchases: number;
   deposits: number;
   withdrawals: number;
   net: number;
@@ -42,6 +44,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     tournamentTicketsVolumeTotal: 0,
     tournamentCommission: 0,
     tournamentGuaranteePayout: 0,
+    gatewayPurchases: 0,
     deposits: 0,
     withdrawals: 0,
     net: 0,
@@ -53,6 +56,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     tournamentTicketsVolumeTotal: 0,
     tournamentCommission: 0,
     tournamentGuaranteePayout: 0,
+    gatewayPurchases: 0,
     deposits: 0,
     withdrawals: 0,
     net: 0,
@@ -64,6 +68,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     tournamentTicketsVolumeTotal: 0,
     tournamentCommission: 0,
     tournamentGuaranteePayout: 0,
+    gatewayPurchases: 0,
     deposits: 0,
     withdrawals: 0,
     net: 0,
@@ -246,6 +251,7 @@ export async function loadDashboardRangeSummary(params: {
       tournamentTicketsVolumeTotal: 0,
       tournamentCommission: 0,
       tournamentGuaranteePayout: 0,
+      gatewayPurchases: 0,
       deposits: 0,
       withdrawals: 0,
       net: 0,
@@ -375,14 +381,35 @@ export async function loadDashboardRangeSummary(params: {
     );
 
   if (user.role === "admin") {
-    const admin = await fetchAdminCommissionSummaryRange(fromIso, toIso);
-    const guarantee = await fetchAdminGuaranteeSummaryRange(fromIso, toIso);
+    const [admin, guarantee, gatewayDepositRes] = await Promise.all([
+      fetchAdminCommissionSummaryRange(fromIso, toIso),
+      fetchAdminGuaranteeSummaryRange(fromIso, toIso),
+      supabase
+        .from("transactions")
+        .select("amount, created_at, idempotency_key")
+        .eq("source_kind", "deposit_domain")
+        .eq("type", "deposit")
+        .gte("created_at", fromIso)
+        .lte("created_at", toIso),
+    ]);
+
+    if (gatewayDepositRes.error) {
+      console.error("[Dashboard] deposit_domain gateway range error:", gatewayDepositRes.error);
+    }
+
+    const gatewayPurchases = sumGatewayPurchasesInRange(
+      gatewayDepositRes.data || [],
+      fromIso,
+      toIso
+    );
+
     return {
       ticketsVolume: admin.amount,
       ticketsVolumeTotal: admin.total,
       tournamentTicketsVolumeTotal: admin.tournamentTotal,
       tournamentCommission: admin.tournamentAmount,
       tournamentGuaranteePayout: guarantee.amount,
+      gatewayPurchases,
       deposits,
       withdrawals,
       net: deposits - withdrawals,
@@ -417,6 +444,7 @@ export async function loadDashboardRangeSummary(params: {
     tournamentTicketsVolumeTotal: tournamentCommissionBase,
     tournamentCommission,
     tournamentGuaranteePayout: 0,
+    gatewayPurchases: 0,
     deposits,
     withdrawals,
     net: deposits - withdrawals,
@@ -558,6 +586,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
       tournamentTicketsVolumeTotal: 0,
       tournamentCommission: 0,
       tournamentGuaranteePayout: 0,
+      gatewayPurchases: 0,
       deposits: 0,
       withdrawals: 0,
       net: 0,
@@ -569,6 +598,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
       tournamentTicketsVolumeTotal: 0,
       tournamentCommission: 0,
       tournamentGuaranteePayout: 0,
+      gatewayPurchases: 0,
       deposits: 0,
       withdrawals: 0,
       net: 0,
@@ -580,6 +610,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
       tournamentTicketsVolumeTotal: 0,
       tournamentCommission: 0,
       tournamentGuaranteePayout: 0,
+      gatewayPurchases: 0,
       deposits: 0,
       withdrawals: 0,
       net: 0,
@@ -862,6 +893,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
       tournamentTicketsVolumeTotal: tournamentCommissionBaseFor(startIso),
       tournamentCommission: tournamentCommissionFor(startIso),
       tournamentGuaranteePayout: user.role === "admin" ? adminGuaranteeMap?.[period] ?? 0 : 0,
+      gatewayPurchases: 0,
       deposits,
       withdrawals,
       net,

@@ -42,6 +42,7 @@ export default function AdminDashboardPage() {
     tournamentTicketsVolumeTotal: number;
     tournamentCommission: number;
     tournamentGuaranteePayout: number;
+    gatewayPurchases: number;
     deposits: number;
     withdrawals: number;
   } | null>(null);
@@ -157,6 +158,7 @@ export default function AdminDashboardPage() {
         tournamentTicketsVolumeTotal: result.tournamentTicketsVolumeTotal,
         tournamentCommission: result.tournamentCommission,
         tournamentGuaranteePayout: result.tournamentGuaranteePayout,
+        gatewayPurchases: result.gatewayPurchases,
         deposits: result.deposits,
         withdrawals: result.withdrawals,
       });
@@ -221,6 +223,10 @@ export default function AdminDashboardPage() {
         <span>تاپ آپ گارانتی</span>
         <span className="text-right font-mono">
           {(summary.tournamentGuaranteePayout ?? 0).toLocaleString("en-US")}
+        </span>
+        <span>خرید از درگاه</span>
+        <span className="text-right font-mono">
+          {(summary.gatewayPurchases ?? 0).toLocaleString("en-US")}
         </span>
         <span>واریز</span>
         <span className="text-right font-mono">{summary.deposits.toLocaleString("en-US")}</span>
