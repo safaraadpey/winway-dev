@@ -18,6 +18,8 @@ import {
   PWA_PROMPT_GRACE_MS,
   clearDeferredInstallPrompt,
   getDeferredInstallPrompt,
+  markPwaInstalledFlag,
+  readPwaInstalledFlag,
 } from "@/lib/pwa/pwaInstallBootstrap";
 import { registerServiceWorker } from "@/lib/pwa/registerServiceWorker";
 
@@ -26,7 +28,10 @@ type InstallResult = "accepted" | "dismissed" | "unavailable";
 export type InstallUiState = "checking" | "installable" | "not_installable";
 
 interface InstallPromptContextValue {
-  isInstalled: boolean;
+  /** True when opened from the installed app icon (standalone PWA). */
+  isStandalone: boolean;
+  /** True when PWA is installed on device (including browser sessions). */
+  isPwaInstalledOnDevice: boolean;
   installUiState: InstallUiState;
   /** True only when native beforeinstallprompt is held and SW is ready. */
   canInstallDirectly: boolean;
@@ -71,13 +76,22 @@ export function InstallPromptProvider({
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const deferredRef = useRef<BeforeInstallPromptEvent | null>(null);
-  const [isInstalled, setIsInstalled] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [isPwaInstalledOnDevice, setIsPwaInstalledOnDevice] = useState(false);
   const [swReady, setSwReady] = useState(false);
   const [swSettled, setSwSettled] = useState(false);
   const [promptGraceExpired, setPromptGraceExpired] = useState(false);
 
   useEffect(() => {
-    setIsInstalled(isRunningStandalonePwa());
+    const syncStandalone = () => setIsStandalone(isRunningStandalonePwa());
+    const syncInstalledOnDevice = () => {
+      setIsPwaInstalledOnDevice(
+        isRunningStandalonePwa() || readPwaInstalledFlag()
+      );
+    };
+
+    syncStandalone();
+    syncInstalledOnDevice();
 
     syncPromptFromWindow(setDeferredPrompt, deferredRef);
 
@@ -86,7 +100,8 @@ export function InstallPromptProvider({
     };
 
     const onInstalled = () => {
-      setIsInstalled(true);
+      markPwaInstalledFlag();
+      setIsPwaInstalledOnDevice(true);
       deferredRef.current = null;
       setDeferredPrompt(null);
       clearDeferredInstallPrompt();
@@ -97,16 +112,17 @@ export function InstallPromptProvider({
       setSwSettled(true);
     };
 
-    const refreshInstalledState = () => {
-      setIsInstalled(isRunningStandalonePwa());
+    const refreshDisplayState = () => {
+      syncStandalone();
+      syncInstalledOnDevice();
     };
 
     window.addEventListener(PWA_EVENT_BEFORE_INSTALL, onBeforeInstallPrompt);
     window.addEventListener(PWA_EVENT_APP_INSTALLED, onInstalled);
     window.addEventListener(PWA_EVENT_SW_READY, onSwReady);
     window.addEventListener("appinstalled", onInstalled);
-    window.addEventListener("focus", refreshInstalledState);
-    document.addEventListener("visibilitychange", refreshInstalledState);
+    window.addEventListener("focus", refreshDisplayState);
+    document.addEventListener("visibilitychange", refreshDisplayState);
 
     void (async () => {
       if ("serviceWorker" in navigator) {
@@ -155,8 +171,8 @@ export function InstallPromptProvider({
       window.removeEventListener(PWA_EVENT_APP_INSTALLED, onInstalled);
       window.removeEventListener(PWA_EVENT_SW_READY, onSwReady);
       window.removeEventListener("appinstalled", onInstalled);
-      window.removeEventListener("focus", refreshInstalledState);
-      document.removeEventListener("visibilitychange", refreshInstalledState);
+      window.removeEventListener("focus", refreshDisplayState);
+      document.removeEventListener("visibilitychange", refreshDisplayState);
     };
   }, []);
 
@@ -169,14 +185,16 @@ export function InstallPromptProvider({
   }, [swReady]);
 
   const installUiState = useMemo((): InstallUiState => {
-    if (isInstalled) return "not_installable";
+    if (isStandalone) return "not_installable";
+    if (isPwaInstalledOnDevice && !deferredPrompt) return "not_installable";
     if (!swSettled) return "checking";
     if (!swReady) return "not_installable";
     if (deferredPrompt) return "installable";
     if (!promptGraceExpired) return "checking";
     return "not_installable";
   }, [
-    isInstalled,
+    isStandalone,
+    isPwaInstalledOnDevice,
     swSettled,
     swReady,
     deferredPrompt,
@@ -199,17 +217,23 @@ export function InstallPromptProvider({
     setDeferredPrompt(null);
     clearDeferredInstallPrompt();
 
+    if (choice.outcome === "accepted") {
+      markPwaInstalledFlag();
+      setIsPwaInstalledOnDevice(true);
+    }
+
     return choice.outcome === "accepted" ? "accepted" : "dismissed";
   }, []);
 
   const value = useMemo<InstallPromptContextValue>(
     () => ({
-      isInstalled,
+      isStandalone,
+      isPwaInstalledOnDevice,
       installUiState,
       canInstallDirectly: installUiState === "installable",
       requestInstall,
     }),
-    [isInstalled, installUiState, requestInstall]
+    [isStandalone, isPwaInstalledOnDevice, installUiState, requestInstall]
   );
 
   return (

@@ -4,6 +4,7 @@
  */
 
 export const PWA_DEFERRED_PROMPT_KEY = "__WINWAY_DEFERRED_INSTALL_PROMPT__";
+export const PWA_INSTALLED_LS_KEY = "winway_pwa_installed";
 
 export const PWA_EVENT_BEFORE_INSTALL = "winway:pwa-beforeinstallprompt";
 export const PWA_EVENT_APP_INSTALLED = "winway:pwa-appinstalled";
@@ -27,6 +28,24 @@ export function getDeferredInstallPrompt(): BeforeInstallPromptEvent | null {
 export function clearDeferredInstallPrompt(): void {
   if (typeof window === "undefined") return;
   (window as WinwayWindow)[PWA_DEFERRED_PROMPT_KEY] = null;
+}
+
+export function readPwaInstalledFlag(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(PWA_INSTALLED_LS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function markPwaInstalledFlag(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(PWA_INSTALLED_LS_KEY, "1");
+  } catch {
+    // ignore
+  }
 }
 
 export function getPwaInstallBootstrapScript(registerServiceWorkerInHead: boolean): string {
@@ -83,6 +102,9 @@ export function getPwaInstallBootstrapScript(registerServiceWorkerInHead: boolea
 
   window.addEventListener("appinstalled", function () {
     log("appinstalled fired");
+    try {
+      localStorage.setItem("${PWA_INSTALLED_LS_KEY}", "1");
+    } catch (e) {}
     window.${PWA_DEFERRED_PROMPT_KEY} = null;
     window.dispatchEvent(new Event("${PWA_EVENT_APP_INSTALLED}"));
   });
