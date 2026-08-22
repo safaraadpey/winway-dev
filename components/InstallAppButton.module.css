@@ -5,6 +5,37 @@
 
 .button {
   composes: root from "./PlayerActionButton.module.css";
+  border: 3px solid rgba(74, 222, 128, 0.85);
+  background:
+    radial-gradient(circle at 15% 25%, rgba(134, 239, 172, 0.45), transparent 45%),
+    radial-gradient(circle at 82% 70%, rgba(34, 197, 94, 0.38), transparent 40%),
+    linear-gradient(180deg, rgba(22, 163, 74, 0.96) 0%, rgba(21, 128, 61, 0.98) 100%);
+  box-shadow:
+    inset 0 0 18px rgba(187, 247, 208, 0.28),
+    0 0 18px rgba(74, 222, 128, 0.45),
+    0 4px 14px rgba(34, 197, 94, 0.35);
+  color: #f0fdf4;
+  text-shadow: 0 1px 8px rgba(22, 101, 52, 0.55);
+}
+
+.button:active {
+  transform: translateY(1px);
+  opacity: 0.92;
+}
+
+:global(html[data-theme="light"]) .button {
+  background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+  border: 3px solid #86efac;
+  box-shadow:
+    0 0 16px rgba(34, 197, 94, 0.35),
+    0 4px 14px rgba(22, 163, 74, 0.2);
+  color: #ffffff;
+  text-shadow: none;
+}
+
+:global(html[data-theme="light"]) .button:active {
+  background: linear-gradient(180deg, #16a34a 0%, #15803d 100%);
+  opacity: 1;
 }
 
 .actionLink {
