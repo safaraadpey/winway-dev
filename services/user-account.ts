@@ -469,33 +469,15 @@ async function getSubordinateUserIdsForAssets(
   return Array.from(ids);
 }
 
-async function sumSubordinateWalletAssets(subordinateIds: string[]): Promise<{
-  dingBalance: number;
-  tomanBalance: number;
-}> {
+async function sumSubordinateWalletAssets(subordinateIds: string[]): Promise<number> {
   if (subordinateIds.length === 0) {
-    return { dingBalance: 0, tomanBalance: 0 };
+    return 0;
   }
 
-  let dingBalance = 0;
   let tomanBalance = 0;
 
   for (let i = 0; i < subordinateIds.length; i += SUBORDINATE_IDS_CHUNK_SIZE) {
     const chunk = subordinateIds.slice(i, i + SUBORDINATE_IDS_CHUNK_SIZE);
-
-    const { data: dingRows, error: dingError } = await supabase
-      .from("ding_balances")
-      .select("balance")
-      .in("user_id", chunk);
-
-    if (dingError) {
-      console.warn("[UserAccount] subordinate ding_balances error", dingError.message);
-    } else {
-      dingBalance += (dingRows || []).reduce(
-        (sum, row) => sum + Number(row.balance || 0),
-        0
-      );
-    }
 
     const { data: walletRows, error: walletError } = await supabase
       .from("wallets")
@@ -513,7 +495,7 @@ async function sumSubordinateWalletAssets(subordinateIds: string[]): Promise<{
     }
   }
 
-  return { dingBalance, tomanBalance };
+  return tomanBalance;
 }
 
 async function loadSubordinateAssets(
@@ -525,17 +507,16 @@ async function loadSubordinateAssets(
   }
 
   const subordinateIds = await getSubordinateUserIdsForAssets(userId, role);
-  const totals = await sumSubordinateWalletAssets(subordinateIds);
+  const tomanBalance = await sumSubordinateWalletAssets(subordinateIds);
 
   console.info("[UserAccount] subordinate assets loaded", {
     userId,
     role,
     memberCount: subordinateIds.length,
-    dingBalance: totals.dingBalance,
-    tomanBalance: totals.tomanBalance,
+    tomanBalance,
   });
 
-  return totals;
+  return { tomanBalance };
 }
 
 /**
