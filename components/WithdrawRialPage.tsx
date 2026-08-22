@@ -17,7 +17,7 @@ import {
   isValidSheba,
   normalizeSheba,
 } from "@/lib/format/shebaNumber";
-import { MIN_RIAL_WITHDRAWAL_AMOUNT } from "@/lib/withdrawal/constants";
+import { MIN_RIAL_WITHDRAWAL_AMOUNT, MAX_RIAL_WITHDRAWAL_CARD_DIGITS } from "@/lib/withdrawal/constants";
 import buyStyles from "./BuyRialPage.module.css";
 import styles from "./WithdrawRialPage.module.css";
 
@@ -27,7 +27,10 @@ function formatAmountDisplay(amount: number): string {
 }
 
 function normalizeCardInput(raw: string): string {
-  return formatCardDisplay(raw);
+  const clean = String(raw || "")
+    .replace(/\D/g, "")
+    .slice(0, MAX_RIAL_WITHDRAWAL_CARD_DIGITS);
+  return clean.replace(/(\d{4})(?=\d)/g, "$1-");
 }
 
 function normalizeShebaInput(raw: string): string {
@@ -127,12 +130,24 @@ export default function WithdrawRialPage() {
     }
   }, [tomanBalance, maxBalance]);
 
+  const balanceBelowMinimum = maxBalance < MIN_RIAL_WITHDRAWAL_AMOUNT;
+  const showAmountError =
+    !balanceBelowMinimum &&
+    amountInput.trim().length > 0 &&
+    (amountValue < MIN_RIAL_WITHDRAWAL_AMOUNT || amountValue > maxBalance);
+  const showCardError =
+    cardNumber.trim().length > 0 &&
+    cardDigits.length !== MAX_RIAL_WITHDRAWAL_CARD_DIGITS;
+  const showShebaError =
+    shebaNumber.trim().length > 0 && !isValidSheba(shebaNormalized);
+
   const canSubmit =
     !submitting &&
+    !balanceBelowMinimum &&
     amountValue >= MIN_RIAL_WITHDRAWAL_AMOUNT &&
     Number.isInteger(amountValue) &&
     amountValue <= maxBalance &&
-    cardDigits.length >= 16 &&
+    cardDigits.length === MAX_RIAL_WITHDRAWAL_CARD_DIGITS &&
     isValidSheba(shebaNormalized) &&
     isValidFullName(fullName);
 
@@ -191,37 +206,55 @@ export default function WithdrawRialPage() {
         <h1 className={buyStyles.title}>برداشت ریالی</h1>
 
         <div className={buyStyles.panel}>
-          <label htmlFor="withdraw-rial-amount" className={buyStyles.label}>
-            مبلغ برداشت (تومان)
-          </label>
+          <div className={styles.amountFieldHeader}>
+            <label htmlFor="withdraw-rial-amount" className={`${buyStyles.label} ${styles.fieldLabel}`}>
+              مبلغ برداشت (تومان)
+            </label>
+            {showAmountError ? (
+              <p className={styles.fieldError}>مبلغ برداشت را به شکل صحیح وارد کنید</p>
+            ) : null}
+          </div>
           <input
             id="withdraw-rial-amount"
-            className={`${buyStyles.amountInput} ${styles.compactField}`}
+            className={`${buyStyles.amountInput} ${styles.compactField}${
+              balanceBelowMinimum ? ` ${buyStyles.inputLocked}` : ""
+            }`}
             inputMode="numeric"
             dir="ltr"
-            placeholder="0"
+            placeholder={`حداقل مبلغ برداشت: ${MIN_RIAL_WITHDRAWAL_AMOUNT.toLocaleString("en-US")} تومان`}
             value={amountInput ? formatAmountDisplay(amountValue) : ""}
             onChange={(e) => setAmountInput(normalizeAmountInput(e.target.value))}
-            disabled={submitting}
+            disabled={submitting || balanceBelowMinimum}
           />
-          <p className={buyStyles.hint}>
-            حداقل مبلغ برداشت:{" "}
-            <span className="numeric-text numeric-text--14" dir="ltr">
-              {MIN_RIAL_WITHDRAWAL_AMOUNT.toLocaleString("en-US")}
-            </span>{" "}
-            تومان
-          </p>
-          <p className={buyStyles.hint}>
-            حداکثر قابل برداشت:{" "}
-            <span className="numeric-text numeric-text--14" dir="ltr">
-              {maxBalance.toLocaleString("en-US")}
-            </span>{" "}
-            تومان
+          <p
+            className={
+              balanceBelowMinimum ? styles.insufficientBalanceHint : buyStyles.hint
+            }
+          >
+            {balanceBelowMinimum ? (
+              "دارایی کیف پول شما کمتر از حداقل قابل برداشت میباشد و قادر به انجام اینکار نمیباشید."
+            ) : (
+              <>
+                شما تا سقف{" "}
+                <span className="numeric-text numeric-text--14" dir="ltr">
+                  {maxBalance.toLocaleString("en-US")}
+                </span>{" "}
+                تومان امکان برداشت دارید.
+              </>
+            )}
           </p>
 
-          <label htmlFor="withdraw-rial-card" className={buyStyles.labelSecondary}>
-            شماره کارت
-          </label>
+          <div className={styles.fieldHeader}>
+            <label
+              htmlFor="withdraw-rial-card"
+              className={`${buyStyles.labelSecondary} ${styles.fieldLabel}`}
+            >
+              شماره کارت
+            </label>
+            {showCardError ? (
+              <p className={styles.fieldError}>شماره کارت را به شکل صحیح وارد کنید</p>
+            ) : null}
+          </div>
           <input
             id="withdraw-rial-card"
             className={`${buyStyles.amountInput} ${styles.compactField}`}
@@ -232,11 +265,20 @@ export default function WithdrawRialPage() {
             onChange={(e) => setCardNumber(normalizeCardInput(e.target.value))}
             disabled={submitting}
             autoComplete="off"
+            maxLength={MAX_RIAL_WITHDRAWAL_CARD_DIGITS + 3}
           />
 
-          <label htmlFor="withdraw-rial-sheba" className={buyStyles.labelSecondary}>
-            شماره شبا
-          </label>
+          <div className={styles.fieldHeader}>
+            <label
+              htmlFor="withdraw-rial-sheba"
+              className={`${buyStyles.labelSecondary} ${styles.fieldLabel}`}
+            >
+              شماره شبا
+            </label>
+            {showShebaError ? (
+              <p className={styles.fieldError}>شماره شبا را به شکل صحیح وارد کنید</p>
+            ) : null}
+          </div>
           <input
             id="withdraw-rial-sheba"
             className={`${buyStyles.amountInput} ${styles.compactField}`}

@@ -142,3 +142,44 @@
   text-align: right;
   line-height: 1.5;
 }
+
+.insufficientBalanceHint {
+  composes: hint from "./BuyRialPage.module.css";
+  color: #fca5a5;
+  font-weight: 700;
+}
+
+.fieldHeader,
+.amountFieldHeader {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.fieldHeader {
+  margin-top: 1rem;
+}
+
+.amountFieldHeader {
+  margin-top: 0;
+}
+
+.fieldLabel {
+  margin: 0 !important;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.fieldError {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #fca5a5;
+  text-align: left;
+  line-height: 1.4;
+}
