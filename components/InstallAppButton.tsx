@@ -13,11 +13,8 @@ export default function InstallAppButton({
   const { isInstalled, installUiState, canInstallDirectly, requestInstall } =
     useInstallPrompt();
 
+  // Hide only when opened from the installed app icon (standalone PWA).
   if (isInstalled) return null;
-
-  if (installUiState === "not_installable") {
-    return null;
-  }
 
   const checking = installUiState === "checking";
 
