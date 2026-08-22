@@ -243,6 +243,208 @@ function isPanelCashdeskTransaction(row: {
   return false;
 }
 
+const HISTORY_GATEWAY_COUNTERPART = {
+  userId: "system:gateway",
+  username: "درگاه",
+  shortId: "0000000001",
+} as const;
+
+const HISTORY_TETHER_COUNTERPART = {
+  userId: "system:tether",
+  username: "تتر",
+  shortId: "0000000002",
+} as const;
+
+const HISTORY_TETHER_WITHDRAW_COUNTERPART = {
+  userId: "system:tether-withdraw",
+  username: "برداشت تتر",
+  shortId: "0000000003",
+} as const;
+
+function classifyDepositHistoryType(
+  idempotencyKey: string | null | undefined
+): "gateway_deposit" | "crypto_deposit" {
+  const key = String(idempotencyKey ?? "");
+  if (key.startsWith("deposit:tron:")) {
+    return "crypto_deposit";
+  }
+  return "gateway_deposit";
+}
+
+async function fetchUsernameMap(
+  userIds: string[]
+): Promise<Map<string, { username: string; shortId: string }>> {
+  const map = new Map<string, { username: string; shortId: string }>();
+  const uniqueIds = Array.from(new Set(userIds.filter((id) => /^[0-9a-fA-F-]{36}$/.test(id))));
+  if (uniqueIds.length === 0) return map;
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, username")
+    .in("id", uniqueIds);
+
+  if (error) {
+    console.error("[Wallet] fetchUsernameMap error:", error);
+    return map;
+  }
+
+  for (const row of data || []) {
+    map.set(String(row.id), {
+      username: row.username || "نامشخص",
+      shortId: makeShortIdFromUuid(String(row.id)),
+    });
+  }
+
+  return map;
+}
+
+function matchesHistorySearch(
+  search: string,
+  left: { username: string; shortId: string },
+  right: { username: string; shortId: string }
+): boolean {
+  if (!search.trim()) return true;
+  const q = search.trim().toLowerCase();
+  return (
+    left.username.toLowerCase().includes(q) ||
+    right.username.toLowerCase().includes(q) ||
+    left.shortId.includes(search.trim()) ||
+    right.shortId.includes(search.trim())
+  );
+}
+
+async function loadOnlineDepositHistoryItems(params: {
+  scopeAll: boolean;
+  targetUserIds: string[];
+  dateFromIso: string;
+  search: string;
+}): Promise<TransactionHistoryItem[]> {
+  const { scopeAll, targetUserIds, dateFromIso, search } = params;
+
+  if (!scopeAll && targetUserIds.length === 0) {
+    return [];
+  }
+
+  let query = supabase
+    .from("transactions")
+    .select("id, user_id, amount, created_at, idempotency_key")
+    .eq("source_kind", "deposit_domain")
+    .eq("type", "deposit")
+    .gte("created_at", dateFromIso)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (!scopeAll) {
+    query = query.in("user_id", targetUserIds);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.warn("[Wallet] deposit_domain history error:", error.message);
+    return [];
+  }
+
+  const playerIds = (data || []).map((row: any) => String(row.user_id));
+  const userMap = await fetchUsernameMap(playerIds);
+  const items: TransactionHistoryItem[] = [];
+
+  for (const row of data || []) {
+    const txType = classifyDepositHistoryType(row.idempotency_key);
+    const counterpart =
+      txType === "crypto_deposit"
+        ? HISTORY_TETHER_COUNTERPART
+        : HISTORY_GATEWAY_COUNTERPART;
+    const playerId = String(row.user_id);
+    const player = userMap.get(playerId) || {
+      username: "کاربر",
+      shortId: makeShortIdFromUuid(playerId),
+    };
+
+    if (!matchesHistorySearch(search, counterpart, player)) {
+      continue;
+    }
+
+    items.push({
+      id: String(row.id),
+      fromUserId: counterpart.userId,
+      fromUsername: counterpart.username,
+      fromShortId: counterpart.shortId,
+      toUserId: playerId,
+      toUsername: player.username,
+      toShortId: player.shortId,
+      amount: Number(row.amount) || 0,
+      type: txType,
+      createdAt: row.created_at,
+    });
+  }
+
+  return items;
+}
+
+async function loadCryptoWithdrawalHistoryItems(params: {
+  scopeAll: boolean;
+  targetUserIds: string[];
+  dateFromIso: string;
+  search: string;
+}): Promise<TransactionHistoryItem[]> {
+  const { scopeAll, targetUserIds, dateFromIso, search } = params;
+
+  if (!scopeAll && targetUserIds.length === 0) {
+    return [];
+  }
+
+  let query = supabase
+    .from("withdrawal_requests")
+    .select("id, player_id, amount, created_at")
+    .eq("kind", "crypto")
+    .gte("created_at", dateFromIso)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (!scopeAll) {
+    query = query.in("player_id", targetUserIds);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.warn("[Wallet] crypto withdrawal history error:", error.message);
+    return [];
+  }
+
+  const playerIds = (data || []).map((row: any) => String(row.player_id));
+  const userMap = await fetchUsernameMap(playerIds);
+  const items: TransactionHistoryItem[] = [];
+
+  for (const row of data || []) {
+    const playerId = String(row.player_id);
+    const player = userMap.get(playerId) || {
+      username: "کاربر",
+      shortId: makeShortIdFromUuid(playerId),
+    };
+
+    if (
+      !matchesHistorySearch(search, player, HISTORY_TETHER_WITHDRAW_COUNTERPART)
+    ) {
+      continue;
+    }
+
+    items.push({
+      id: `wr:${String(row.id)}`,
+      fromUserId: playerId,
+      fromUsername: player.username,
+      fromShortId: player.shortId,
+      toUserId: HISTORY_TETHER_WITHDRAW_COUNTERPART.userId,
+      toUsername: HISTORY_TETHER_WITHDRAW_COUNTERPART.username,
+      toShortId: HISTORY_TETHER_WITHDRAW_COUNTERPART.shortId,
+      amount: Number(row.amount) || 0,
+      type: "crypto_withdrawal",
+      createdAt: row.created_at,
+    });
+  }
+
+  return items;
+}
+
 /**
  * تاریخچه پیشخوان پنل: واریز/برداشت دستی، انتقال پنلی، و برداشت‌های تأییدشده (withdrawal_request).
  * تراکنش‌های بازی (room_join، settlement، کمیسیون و …) در این گزارش نیست.
@@ -586,11 +788,7 @@ export async function loadTransactionHistory(
       }
     }
 
-    const transactions = Array.from(transferMap.values()).slice(0, 100); // limit to 100
-
-    if (!transactions || transactions.length === 0) {
-      return { transactions: [], totalCount: 0 };
-    }
+    const transactions = Array.from(transferMap.values());
 
     // گرفتن اطلاعات کاربران (فرستنده و گیرنده)
     const actorIds = Array.from(
@@ -641,24 +839,25 @@ export async function loadTransactionHistory(
       ])
     ).filter((id) => /^[0-9a-fA-F-]{36}$/.test(id));
 
-    const { data: users, error: usersError } = await supabase
-      .from("users")
-      .select("id, username")
-      .in("id", allUserIds);
-
-    if (usersError) {
-      console.error("loadTransactionHistory users error:", usersError);
-      throw new Error("خطا در دریافت اطلاعات کاربران");
-    }
-
-    // ساخت map برای کاربران
     const userMap = new Map<string, { username: string; shortId: string }>();
-    (users || []).forEach((u: any) => {
-      userMap.set(u.id, {
-        username: u.username || "نامشخص",
-        shortId: makeShortIdFromUuid(u.id),
+    if (allUserIds.length > 0) {
+      const { data: users, error: usersError } = await supabase
+        .from("users")
+        .select("id, username")
+        .in("id", allUserIds);
+
+      if (usersError) {
+        console.error("loadTransactionHistory users error:", usersError);
+        throw new Error("خطا در دریافت اطلاعات کاربران");
+      }
+
+      (users || []).forEach((u: any) => {
+        userMap.set(u.id, {
+          username: u.username || "نامشخص",
+          shortId: makeShortIdFromUuid(u.id),
+        });
       });
-    });
+    }
 
     // تبدیل به TransactionHistoryItem
     // همیشه actor (عامل) را در سمت چپ (fromUser) و target را در سمت راست (toUser) نمایش می‌دهیم
@@ -792,9 +991,38 @@ export async function loadTransactionHistory(
       });
     }
 
+    const [onlineDepositItems, cryptoWithdrawalItems] = await Promise.all([
+      loadOnlineDepositHistoryItems({
+        scopeAll,
+        targetUserIds,
+        dateFromIso,
+        search,
+      }),
+      loadCryptoWithdrawalHistoryItems({
+        scopeAll,
+        targetUserIds,
+        dateFromIso,
+        search,
+      }),
+    ]);
+
+    const mergedItems = [...historyItems, ...onlineDepositItems, ...cryptoWithdrawalItems]
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
+      .slice(0, 100);
+
+    console.info("[Wallet] transaction history loaded", {
+      panelCount: historyItems.length,
+      gatewayAndCryptoDepositCount: onlineDepositItems.length,
+      cryptoWithdrawalCount: cryptoWithdrawalItems.length,
+      totalCount: mergedItems.length,
+    });
+
     const result: TransactionHistoryResult = {
-      transactions: historyItems,
-      totalCount: historyItems.length,
+      transactions: mergedItems,
+      totalCount: mergedItems.length,
     };
 
     transactionHistoryCache = {

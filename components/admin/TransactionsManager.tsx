@@ -605,8 +605,13 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                   </div>
                 ) : (
                   historyTransactions.map((tx) => {
-                    const isDeposit = tx.type === "deposit";
-                    const isWithdrawalRequest = tx.type === "withdrawal_request";
+                    const isDepositLike =
+                      tx.type === "deposit" ||
+                      tx.type === "gateway_deposit" ||
+                      tx.type === "crypto_deposit";
+                    const isWithdrawalLike =
+                      tx.type === "withdrawal_request" ||
+                      tx.type === "crypto_withdrawal";
                     const formattedDate = formatTransactionDate(tx.createdAt);
                     const fromShortIdFormatted = `${tx.fromShortId.slice(0, 4)}-${
                       tx.fromShortId.length > 4 ? tx.fromShortId.slice(4) : ""
@@ -636,14 +641,14 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                             {formattedDate}
                           </span>
                           <div className="flex items-center gap-1">
-                            {isWithdrawalRequest ? (
+                            {isWithdrawalLike ? (
                               <>
                                 <span className="text-blue-400 text-lg">→</span>
                                 <span className="numeric-text numeric-text--14 text-blue-400 font-semibold" dir="ltr">
                                   -{tx.amount.toLocaleString("en-US")}
                                 </span>
                               </>
-                            ) : isDeposit ? (
+                            ) : isDepositLike ? (
                               <>
                                 <span className="text-red-500 text-lg">→</span>
                                 <span className="numeric-text numeric-text--14 text-red-500 font-semibold" dir="ltr">

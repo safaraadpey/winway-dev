@@ -3,7 +3,12 @@
 export type TransactionAction = "deposit" | "withdraw";
 
 /** History row kinds shown in TransactionsManager «سوابق». */
-export type TransactionHistoryType = TransactionAction | "withdrawal_request";
+export type TransactionHistoryType =
+  | TransactionAction
+  | "withdrawal_request"
+  | "gateway_deposit"
+  | "crypto_deposit"
+  | "crypto_withdrawal";
 
 /** Per-item result for Strategy B bulk money ops (P6.4). */
 export interface BulkMoneyItemResult {
