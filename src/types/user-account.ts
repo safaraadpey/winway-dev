@@ -24,6 +24,11 @@ export interface UserAccountInfo {
   personalNote?: string | null;
   isSuspended: boolean;
   commissionPercent: number | null; // درصد کانیات (0-100) برای agent و super
+  /** مجموع موجودی کیف‌پول زیرمجموعه (فقط super/agent) */
+  subordinateAssets: {
+    dingBalance: number;
+    tomanBalance: number;
+  } | null;
 }
 
 export interface UserAccountActivity {

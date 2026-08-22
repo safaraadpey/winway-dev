@@ -757,6 +757,45 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
         (user.parentId === currentUserId || user.superId === currentUserId)));
   const canSetPassword = isCurrentUserManager || isSubordinateForPassword;
 
+  const renderAssetAmounts = (
+    ding: number,
+    toman: number,
+    tone: "yellow" | "emerald" | "white" = "yellow"
+  ) => {
+    const amountClass =
+      tone === "emerald"
+        ? "text-emerald-300"
+        : tone === "white"
+          ? "text-white"
+          : "text-yellow-300";
+
+    return (
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1">
+          <span className={`text-sm font-mono ${amountClass}`}>
+            {ding.toLocaleString("en-US")}
+          </span>
+          <span className={`text-xs font-bold ${amountClass}`}>D</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className={`text-sm font-mono ${amountClass}`}>
+            {toman.toLocaleString("en-US")}
+          </span>
+          <span className={`text-xs ${amountClass}`}>T</span>
+        </div>
+      </div>
+    );
+  };
+
+  const showStructuredAssets =
+    (user.role === "super" || user.role === "agent") && !!user.subordinateAssets;
+  const subordinateAssets = user.subordinateAssets ?? {
+    dingBalance: 0,
+    tomanBalance: 0,
+  };
+  const totalDingBalance = user.dingBalance + subordinateAssets.dingBalance;
+  const totalTomanBalance = user.tomanBalance + subordinateAssets.tomanBalance;
+
   return (
     <div className="min-h-screen bg-[#0E0E0F] text-white p-4 pb-32">
       <div className="max-w-md mx-auto">
@@ -783,22 +822,38 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
               )}
             </div>
 
-            {/* موجودی‌ها */}
-            <div className="flex flex-col items-end gap-2">
-              <div className="flex items-center gap-1">
-                <span className="text-sm font-mono text-yellow-300">
-                  {user.dingBalance.toLocaleString("en-US")}
-                </span>
-                <span className="text-base font-bold text-yellow-300">🪙</span>
+            {!showStructuredAssets ? (
+              <div className="flex flex-col items-end gap-2">
+                {renderAssetAmounts(user.dingBalance, user.tomanBalance)}
               </div>
-              <div className="flex items-center gap-1">
-                <span className="text-sm font-mono text-yellow-300">
-                  {user.tomanBalance.toLocaleString("en-US")}
-                </span>
-                <span className="text-xs text-yellow-300">T</span>
+            ) : null}
+          </div>
+
+          {showStructuredAssets ? (
+            <div className="mb-3 rounded-xl bg-[#1f2933] px-3 py-2">
+              <div className="text-xs text-gray-400 mb-2">دارایی</div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs text-gray-400 shrink-0">
+                    {user.role === "super" ? "دارایی سوپر" : "دارایی ایجنت"}
+                  </span>
+                  {renderAssetAmounts(user.dingBalance, user.tomanBalance)}
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs text-gray-400 shrink-0">دارایی زیر مجموعه</span>
+                  {renderAssetAmounts(
+                    subordinateAssets.dingBalance,
+                    subordinateAssets.tomanBalance,
+                    "emerald"
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-3 border-t border-[#2a3441] pt-2">
+                  <span className="text-xs text-gray-200 font-semibold shrink-0">مجموع</span>
+                  {renderAssetAmounts(totalDingBalance, totalTomanBalance, "white")}
+                </div>
               </div>
             </div>
-          </div>
+          ) : null}
 
           {/* یادداشت شخصی و تعلیق اکانت */}
           <div className="mb-3">

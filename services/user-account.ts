@@ -370,6 +370,174 @@ function buildActivitiesFromMonthlySource(
   };
 }
 
+const SUBORDINATE_IDS_CHUNK_SIZE = 100;
+
+/**
+ * شناسه کاربران زیرمجموعه برای جمع دارایی:
+ * - super: ایجنت‌ها + پلیرهای مستقیم و زیر ایجنت‌ها
+ * - agent: فقط پلیرهای زیرمجموعه
+ */
+async function getSubordinateUserIdsForAssets(
+  userId: string,
+  role: "super" | "agent"
+): Promise<string[]> {
+  const ids = new Set<string>();
+
+  if (role === "agent") {
+    const { data: directPlayers, error: directPlayersError } = await supabase
+      .from("users")
+      .select("id")
+      .eq("parent_id", userId)
+      .eq("role", "player");
+
+    if (directPlayersError) {
+      console.error("[UserAccount] subordinate players (agent) error", directPlayersError);
+    } else {
+      (directPlayers || []).forEach((row) => ids.add(row.id));
+    }
+
+    const { data: affiliationRows, error: affiliationError } = await supabase
+      .from("player_affiliation")
+      .select("user_id")
+      .eq("agent_id", userId);
+
+    if (affiliationError) {
+      console.error("[UserAccount] subordinate affiliation (agent) error", affiliationError);
+    } else {
+      (affiliationRows || []).forEach((row) => {
+        if (row.user_id) ids.add(row.user_id);
+      });
+    }
+  } else {
+    const { data: agents, error: agentsError } = await supabase
+      .from("users")
+      .select("id")
+      .eq("parent_id", userId)
+      .eq("role", "agent");
+
+    if (agentsError) {
+      console.error("[UserAccount] subordinate agents (super) error", agentsError);
+    }
+
+    const agentIds = (agents || []).map((row) => row.id);
+    agentIds.forEach((id) => ids.add(id));
+
+    const { data: directPlayers, error: directPlayersError } = await supabase
+      .from("users")
+      .select("id")
+      .eq("parent_id", userId)
+      .eq("role", "player");
+
+    if (directPlayersError) {
+      console.error("[UserAccount] subordinate direct players (super) error", directPlayersError);
+    } else {
+      (directPlayers || []).forEach((row) => ids.add(row.id));
+    }
+
+    if (agentIds.length > 0) {
+      const { data: playersUnderAgents, error: playersUnderAgentsError } =
+        await supabase
+          .from("users")
+          .select("id")
+          .in("parent_id", agentIds)
+          .eq("role", "player");
+
+      if (playersUnderAgentsError) {
+        console.error(
+          "[UserAccount] subordinate players under agents (super) error",
+          playersUnderAgentsError
+        );
+      } else {
+        (playersUnderAgents || []).forEach((row) => ids.add(row.id));
+      }
+    }
+
+    const { data: affiliationRows, error: affiliationError } = await supabase
+      .from("player_affiliation")
+      .select("user_id")
+      .eq("super_id", userId);
+
+    if (affiliationError) {
+      console.error("[UserAccount] subordinate affiliation (super) error", affiliationError);
+    } else {
+      (affiliationRows || []).forEach((row) => {
+        if (row.user_id) ids.add(row.user_id);
+      });
+    }
+  }
+
+  return Array.from(ids);
+}
+
+async function sumSubordinateWalletAssets(subordinateIds: string[]): Promise<{
+  dingBalance: number;
+  tomanBalance: number;
+}> {
+  if (subordinateIds.length === 0) {
+    return { dingBalance: 0, tomanBalance: 0 };
+  }
+
+  let dingBalance = 0;
+  let tomanBalance = 0;
+
+  for (let i = 0; i < subordinateIds.length; i += SUBORDINATE_IDS_CHUNK_SIZE) {
+    const chunk = subordinateIds.slice(i, i + SUBORDINATE_IDS_CHUNK_SIZE);
+
+    const { data: dingRows, error: dingError } = await supabase
+      .from("ding_balances")
+      .select("balance")
+      .in("user_id", chunk);
+
+    if (dingError) {
+      console.warn("[UserAccount] subordinate ding_balances error", dingError.message);
+    } else {
+      dingBalance += (dingRows || []).reduce(
+        (sum, row) => sum + Number(row.balance || 0),
+        0
+      );
+    }
+
+    const { data: walletRows, error: walletError } = await supabase
+      .from("wallets")
+      .select("balance")
+      .in("user_id", chunk)
+      .eq("currency", "IRR");
+
+    if (walletError) {
+      console.warn("[UserAccount] subordinate wallets error", walletError.message);
+    } else {
+      tomanBalance += (walletRows || []).reduce(
+        (sum, row) => sum + Number(row.balance || 0),
+        0
+      );
+    }
+  }
+
+  return { dingBalance, tomanBalance };
+}
+
+async function loadSubordinateAssets(
+  userId: string,
+  role: UserAccountInfo["role"]
+): Promise<UserAccountInfo["subordinateAssets"]> {
+  if (role !== "super" && role !== "agent") {
+    return null;
+  }
+
+  const subordinateIds = await getSubordinateUserIdsForAssets(userId, role);
+  const totals = await sumSubordinateWalletAssets(subordinateIds);
+
+  console.info("[UserAccount] subordinate assets loaded", {
+    userId,
+    role,
+    memberCount: subordinateIds.length,
+    dingBalance: totals.dingBalance,
+    tomanBalance: totals.tomanBalance,
+  });
+
+  return totals;
+}
+
 /**
  * بارگذاری اطلاعات پایه کاربر
  */
@@ -601,6 +769,11 @@ async function loadUserAccountInfo(userId: string): Promise<UserAccountInfo | nu
     }
     const displayName = nickname || username;
 
+    const subordinateAssets =
+      user.role === "super" || user.role === "agent"
+        ? await loadSubordinateAssets(userId, user.role as "super" | "agent")
+        : null;
+
     return {
       id: user.id,
       shortId: makeShortIdFromUuid(user.id),
@@ -621,6 +794,7 @@ async function loadUserAccountInfo(userId: string): Promise<UserAccountInfo | nu
       personalNote,
       isSuspended: (user as any).status === "suspended",
       commissionPercent,
+      subordinateAssets,
     };
   } catch (err) {
     console.error("loadUserAccountInfo unexpected error:", err);
