@@ -82,6 +82,7 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [changingRole, setChangingRole] = useState(false);
   const [currentUserRole, setCurrentUserRole] = useState<"admin" | "super" | "agent" | "player" | null>(null);
+  const [currentUserAdminSubRole, setCurrentUserAdminSubRole] = useState<AdminSubRole | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserParentId, setCurrentUserParentId] = useState<string | null>(null);
   const [adminZeroId, setAdminZeroId] = useState<string | null>(null);
@@ -131,11 +132,14 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
           }
           const { data: userData } = await supabase
             .from("users")
-            .select("role, parent_id")
+            .select("role, parent_id, admin_sub_role")
             .eq("id", currentUser.id)
             .single();
           if (userData) {
             setCurrentUserRole(userData.role as "admin" | "super" | "agent" | "player");
+            setCurrentUserAdminSubRole(
+              ((userData as any).admin_sub_role as AdminSubRole | null) ?? null
+            );
             setCurrentUserParentId((userData as any).parent_id || null);
 
             // Load current user's commission percent (used for super->agent cap).
@@ -741,7 +745,17 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
     (currentUserRole === "super" || currentUserRole === "agent") && user.role === "agent"
       ? Math.max(0, Math.min(100, currentUserCommissionPercent ?? 0))
       : 100;
-  const canSetPassword = isCurrentUserAdminZero;
+  const isCurrentUserManager =
+    currentUserRole === "admin" && currentUserAdminSubRole === null;
+  const isSubordinateForPassword =
+    !!currentUserId &&
+    user.id !== currentUserId &&
+    (user.role === "player" || user.role === "agent") &&
+    ((currentUserRole === "agent" &&
+      (user.parentId === currentUserId || user.agentId === currentUserId)) ||
+      (currentUserRole === "super" &&
+        (user.parentId === currentUserId || user.superId === currentUserId)));
+  const canSetPassword = isCurrentUserManager || isSubordinateForPassword;
 
   return (
     <div className="min-h-screen bg-[#0E0E0F] text-white p-4 pb-32">
@@ -815,7 +829,7 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
                   : "تعلیق اکانت"}
               </button>
             </div>
-            {/* صدور رمز عبور جدید — فقط برای ادمین */}
+            {/* صدور رمز عبور جدید — مدیر کل، یا سوپر/ایجنت برای زیرمجموعه */}
             {canSetPassword && (
               <div className="flex gap-2 items-center mt-2">
                 <div className="flex-1 relative flex items-center">
