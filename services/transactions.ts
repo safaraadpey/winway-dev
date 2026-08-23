@@ -443,19 +443,19 @@ async function loadCryptoWithdrawalHistoryItems(params: {
     };
 
     if (
-      !matchesHistorySearch(search, player, HISTORY_TETHER_WITHDRAW_COUNTERPART)
+      !matchesHistorySearch(search, HISTORY_TETHER_WITHDRAW_COUNTERPART, player)
     ) {
       continue;
     }
 
     items.push({
       id: `wr:${String(row.id)}`,
-      fromUserId: playerId,
-      fromUsername: player.username,
-      fromShortId: player.shortId,
-      toUserId: HISTORY_TETHER_WITHDRAW_COUNTERPART.userId,
-      toUsername: HISTORY_TETHER_WITHDRAW_COUNTERPART.username,
-      toShortId: HISTORY_TETHER_WITHDRAW_COUNTERPART.shortId,
+      fromUserId: HISTORY_TETHER_WITHDRAW_COUNTERPART.userId,
+      fromUsername: HISTORY_TETHER_WITHDRAW_COUNTERPART.username,
+      fromShortId: HISTORY_TETHER_WITHDRAW_COUNTERPART.shortId,
+      toUserId: playerId,
+      toUsername: player.username,
+      toShortId: player.shortId,
       amount: Number(row.amount) || 0,
       type: "crypto_withdrawal",
       createdAt: row.created_at,
@@ -905,7 +905,7 @@ export async function loadTransactionHistory(
     };
 
     // تبدیل به TransactionHistoryItem
-    // همیشه actor (عامل) را در سمت چپ (fromUser) و target را در سمت راست (toUser) نمایش می‌دهیم
+    // همیشه پنل/سیستم در سمت چپ (fromUser) و پلیر در سمت راست (toUser)
     const historyItems: TransactionHistoryItem[] = [];
     const depositTypes = new Set(["deposit"]);
     const isUuid = (value?: string | null) =>
@@ -960,12 +960,12 @@ export async function loadTransactionHistory(
 
         historyItems.push({
           id: t.id,
-          fromUserId: playerId,
-          fromUsername: playerUser.username,
-          fromShortId: playerUser.shortId,
-          toUserId: receiverId,
-          toUsername: receiverUser.username,
-          toShortId: receiverUser.shortId,
+          fromUserId: receiverId,
+          fromUsername: receiverUser.username,
+          fromShortId: receiverUser.shortId,
+          toUserId: playerId,
+          toUsername: playerUser.username,
+          toShortId: playerUser.shortId,
           amount: Number(t.amount) || 0,
           type: "withdrawal_request",
           createdAt: t.created_at,
@@ -983,58 +983,54 @@ export async function loadTransactionHistory(
           ? "withdraw"
           : "deposit";
 
-      // تعیین actor و target بر اساس اکشن نهایی
-      let actorId: string;
-      let targetId: string;
+      // تعیین طرف چپ (پنل/سیستم) و راست (پلیر) — مستقل از جهت پول
+      let panelSideId: string;
+      let playerSideId: string;
 
       if (t.source_kind === "admin_panel_transfer" && t.meta?.actor_id && t.meta?.target_id) {
-        if (depositTypes.has(displayAction)) {
-          actorId = t.meta.actor_id;
-          targetId = t.meta.target_id;
-        } else {
-          actorId = t.meta.target_id;
-          targetId = t.meta.actor_id;
-        }
+        // actor_id همیشه اپراتور پنل (admin/super/agent) است
+        panelSideId = t.meta.actor_id;
+        playerSideId = t.meta.target_id;
       } else if (depositTypes.has(displayAction)) {
-        // در deposit: actor = source_ref (کسی که واریز می‌کند), target = user_id (کسی که دریافت می‌کند)
-        actorId = t.source_ref || "";
-        targetId = t.user_id;
+        panelSideId = t.source_ref || "";
+        playerSideId = t.user_id;
       } else {
-        // در withdraw: actor = user_id (کسی که برداشت می‌کند), target = source_ref (کسی که از او برداشت می‌شود)
-        actorId = t.user_id;
-        targetId = t.source_ref || "";
+        panelSideId = t.source_ref || "";
+        playerSideId = t.user_id;
       }
 
-      const actorUser = userMap.get(actorId) || buildFallbackUser(actorId, t.description);
-      const targetUser = userMap.get(targetId) || buildFallbackUser(targetId, t.description);
+      const panelUser =
+        userMap.get(panelSideId) || buildFallbackUser(panelSideId, t.description);
+      const playerUser =
+        userMap.get(playerSideId) || buildFallbackUser(playerSideId, t.description);
 
       // فیلتر جستجو
       if (search) {
         const searchLower = search.toLowerCase();
-        const matchesActor =
-          actorUser.username.toLowerCase().includes(searchLower) ||
-          actorUser.shortId.includes(search);
-        const matchesTarget =
-          targetUser.username.toLowerCase().includes(searchLower) ||
-          targetUser.shortId.includes(search);
-        if (!matchesActor && !matchesTarget) {
+        const matchesPanel =
+          panelUser.username.toLowerCase().includes(searchLower) ||
+          panelUser.shortId.includes(search);
+        const matchesPlayer =
+          playerUser.username.toLowerCase().includes(searchLower) ||
+          playerUser.shortId.includes(search);
+        if (!matchesPanel && !matchesPlayer) {
           continue;
         }
       }
 
       historyItems.push({
         id: t.id,
-        fromUserId: actorId, // همیشه actor در سمت چپ
-        fromUsername: actorUser.username,
-        fromShortId: actorUser.shortId,
-        toUserId: targetId, // همیشه target در سمت راست
-        toUsername: targetUser.username,
-        toShortId: targetUser.shortId,
+        fromUserId: panelSideId,
+        fromUsername: panelUser.username,
+        fromShortId: panelUser.shortId,
+        toUserId: playerSideId,
+        toUsername: playerUser.username,
+        toShortId: playerUser.shortId,
         amount: Number(t.amount) || 0,
         type: displayAction,
         createdAt: t.created_at,
         description: t.description || undefined,
-        ...actorRoleFields(actorId),
+        ...actorRoleFields(panelSideId),
       });
     }
 
