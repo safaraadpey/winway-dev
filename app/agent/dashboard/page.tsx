@@ -10,6 +10,7 @@ import ShamsiDateInput from "@/components/common/ShamsiDateInput";
 import ReferralRegistrationLink from "@/components/admin/ReferralRegistrationLink";
 import PendingWithdrawalAlertBadge from "@/components/admin/PendingWithdrawalAlertBadge";
 import { useReferralCodeDashboardSync } from "@/lib/referral/useReferralCodeDashboardSync";
+import InstallAppButton from "@/components/InstallAppButton";
 
 const PERIOD_LABELS: Record<DashboardPeriod, string> = {
   day: "روز",
@@ -103,6 +104,10 @@ export default function AgentDashboardPage() {
   return (
     <div className="min-h-screen bg-[#0E0E0F] p-4">
       <div className="max-w-2xl mx-auto">
+        <div className="mb-4">
+          <InstallAppButton label="نصب اپ ایجنت" />
+        </div>
+
         {/* کارت اطلاعات کاربر و ردیف کد معرف */}
         <div className="mb-4">
           <div className="flex items-center justify-between gap-3 mb-3">
