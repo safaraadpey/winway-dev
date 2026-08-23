@@ -273,14 +273,32 @@ function classifyDepositHistoryType(
 
 async function fetchUsernameMap(
   userIds: string[]
-): Promise<Map<string, { username: string; shortId: string }>> {
-  const map = new Map<string, { username: string; shortId: string }>();
+): Promise<
+  Map<
+    string,
+    {
+      username: string;
+      shortId: string;
+      role?: string;
+      adminSubRole?: string | null;
+    }
+  >
+> {
+  const map = new Map<
+    string,
+    {
+      username: string;
+      shortId: string;
+      role?: string;
+      adminSubRole?: string | null;
+    }
+  >();
   const uniqueIds = Array.from(new Set(userIds.filter((id) => /^[0-9a-fA-F-]{36}$/.test(id))));
   if (uniqueIds.length === 0) return map;
 
   const { data, error } = await supabase
     .from("users")
-    .select("id, username")
+    .select("id, username, role, admin_sub_role")
     .in("id", uniqueIds);
 
   if (error) {
@@ -292,6 +310,8 @@ async function fetchUsernameMap(
     map.set(String(row.id), {
       username: row.username || "نامشخص",
       shortId: makeShortIdFromUuid(String(row.id)),
+      role: row.role,
+      adminSubRole: row.admin_sub_role ?? null,
     });
   }
 
@@ -839,11 +859,19 @@ export async function loadTransactionHistory(
       ])
     ).filter((id) => /^[0-9a-fA-F-]{36}$/.test(id));
 
-    const userMap = new Map<string, { username: string; shortId: string }>();
+    const userMap = new Map<
+      string,
+      {
+        username: string;
+        shortId: string;
+        role?: string;
+        adminSubRole?: string | null;
+      }
+    >();
     if (allUserIds.length > 0) {
       const { data: users, error: usersError } = await supabase
         .from("users")
-        .select("id, username")
+        .select("id, username, role, admin_sub_role")
         .in("id", allUserIds);
 
       if (usersError) {
@@ -855,9 +883,26 @@ export async function loadTransactionHistory(
         userMap.set(u.id, {
           username: u.username || "نامشخص",
           shortId: makeShortIdFromUuid(u.id),
+          role: u.role,
+          adminSubRole: u.admin_sub_role ?? null,
         });
       });
     }
+
+    const actorRoleFields = (
+      userId: string
+    ): {
+      actorRole?: "admin" | "agent" | "super" | "player";
+      actorAdminSubRole?: string | null;
+    } => {
+      const info = userMap.get(userId);
+      if (!info?.role) return {};
+      const role = info.role as "admin" | "agent" | "super" | "player";
+      return {
+        actorRole: role,
+        actorAdminSubRole: role === "admin" ? info.adminSubRole ?? null : undefined,
+      };
+    };
 
     // تبدیل به TransactionHistoryItem
     // همیشه actor (عامل) را در سمت چپ (fromUser) و target را در سمت راست (toUser) نمایش می‌دهیم
@@ -925,6 +970,7 @@ export async function loadTransactionHistory(
           type: "withdrawal_request",
           createdAt: t.created_at,
           description: t.description || undefined,
+          ...actorRoleFields(receiverId),
         });
         continue;
       }
@@ -988,6 +1034,7 @@ export async function loadTransactionHistory(
         type: displayAction,
         createdAt: t.created_at,
         description: t.description || undefined,
+        ...actorRoleFields(actorId),
       });
     }
 

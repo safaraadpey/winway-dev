@@ -29,6 +29,10 @@ import type {
 import type { WithdrawalRequestItem, WithdrawalKind } from "@/src/types/withdrawal";
 import { getNetworkLabel, getWithdrawalStatusLabel } from "@/src/types/withdrawal";
 import toast from "react-hot-toast";
+import {
+  getTransactionHistoryIndicator,
+  TRANSACTION_HISTORY_LEGEND,
+} from "@/lib/transactions/historyIndicator";
 
 const ALL_ROLE_TABS: { key: ManagedUserRoleFilter; label: string }[] = [
   { key: "player", label: "پلیر" },
@@ -591,6 +595,23 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                     روز
                   </button>
                 </div>
+
+                {/* Color legend */}
+                <div className="mb-3 flex flex-wrap gap-x-3 gap-y-1.5 px-1">
+                  {TRANSACTION_HISTORY_LEGEND.map((item) => (
+                    <span
+                      key={item.legendKey}
+                      className="inline-flex items-center gap-1.5 text-[10px] text-gray-400"
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: item.color }}
+                        aria-hidden
+                      />
+                      {item.label}
+                    </span>
+                  ))}
+                </div>
               </div>
 
               {/* Transaction list - قابل اسکرول */}
@@ -619,12 +640,20 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                     const toShortIdFormatted = `${tx.toShortId.slice(0, 4)}-${
                       tx.toShortId.length > 4 ? tx.toShortId.slice(4) : ""
                     }`;
+                    const indicator = getTransactionHistoryIndicator(tx);
 
                     return (
                       <div
                         key={tx.id}
-                        className="flex items-center justify-between bg-[#1f2933] rounded-2xl px-3 py-3"
+                        className="flex items-stretch bg-[#1f2933] rounded-2xl overflow-hidden"
+                        title={indicator.label}
                       >
+                        <div
+                          className="w-1.5 flex-shrink-0 self-stretch min-h-[72px]"
+                          style={{ backgroundColor: indicator.color }}
+                          aria-hidden
+                        />
+                        <div className="flex flex-1 items-center justify-between px-3 py-3 min-w-0">
                         {/* From user (left) */}
                         <div className="flex flex-col">
                           <span className="text-sm font-semibold text-white">
@@ -674,6 +703,7 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                           <span className="text-xs text-gray-400">
                             ID : {toShortIdFormatted}
                           </span>
+                        </div>
                         </div>
                       </div>
                     );

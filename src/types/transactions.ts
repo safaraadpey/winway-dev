@@ -62,6 +62,8 @@ export interface BulkAdjustRequest {
 // Types for transaction history
 export type DateFilter = "day" | "week" | "month";
 
+export type TransactionHistoryActorRole = "admin" | "agent" | "super" | "player";
+
 export interface TransactionHistoryItem {
   id: string;
   fromUserId: string;
@@ -74,6 +76,10 @@ export interface TransactionHistoryItem {
   type: TransactionHistoryType;
   createdAt: string; // ISO date string
   description?: string;
+  /** Panel actor role (admin / agent / super) when applicable. */
+  actorRole?: TransactionHistoryActorRole;
+  /** Admin sub-role when actorRole is admin. */
+  actorAdminSubRole?: string | null;
 }
 
 export interface TransactionHistoryResult {
