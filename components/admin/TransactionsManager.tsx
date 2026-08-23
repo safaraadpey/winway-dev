@@ -17,6 +17,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import { formatCardDisplay, stripCardDigits } from "@/lib/format/cardNumber";
 import { formatShebaDisplay, normalizeSheba } from "@/lib/format/shebaNumber";
+import { formatShamsiDateTime } from "@/lib/format/shamsiDate";
 import type {
   ManagedUserRoleFilter,
   ManagedUserSummary,
@@ -390,16 +391,8 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
     }
   };
 
-  // فرمت تاریخ برای نمایش
-  const formatTransactionDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    const day = date.getDate();
-    const month = date.getMonth() + 1;
-    const year = date.getFullYear();
-    const hours = date.getHours();
-    const minutes = date.getMinutes().toString().padStart(2, "0");
-    return `${day}-${month}-${year} ${hours}:${minutes}`;
-  };
+  const formatTransactionDate = (dateString: string): string =>
+    formatShamsiDateTime(dateString);
 
   const toggleSelect = (userId: string) => {
     setSelectedIds((prev) => {
@@ -666,7 +659,7 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
 
                         {/* Middle: Date and amount */}
                         <div className="flex flex-col items-center">
-                          <span className="text-xs text-gray-400 mb-1">
+                          <span className="text-xs text-gray-400 mb-1" dir="ltr">
                             {formattedDate}
                           </span>
                           <div className="flex items-center gap-1">
