@@ -25,6 +25,7 @@ function tokensToCssProperties(tokens: ThemeTokens): Record<string, string> {
     "--player-active-game-chip-bg-image": player.activeGameChipBgImage,
     "--player-active-game-chip-radius": player.activeGameChipRadius,
     "--player-buy-cards-panel-bg-image": player.buyCardsPanelBgImage,
+    "--player-buy-cards-panel-expanded-bg-image": player.buyCardsPanelExpandedBgImage,
     "--player-buy-cards-panel-bg-color": player.buyCardsPanelBgColor,
     "--player-active-cards-panel-bg-image": player.activeCardsPanelBgImage,
     "--player-active-cards-panel-bg-color": player.activeCardsPanelBgColor,

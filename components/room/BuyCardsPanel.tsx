@@ -1,14 +1,29 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import buyCardButtonBg from "@/src/assets/logo/BuyCardBotton.png";
 import cancelCardButtonBg from "@/src/assets/logo/cancelCardBotton.png";
 import minusButtonImg from "@/src/assets/logo/minusBotton.png";
 import plusButtonImg from "@/src/assets/logo/plusBotton.png";
 import panelStyles from "@/components/room/gameRoomPanels.module.css";
+import type { AutoBuySnapshot } from "@/lib/autoBuy/types";
 
 type PanelMode = "purchase" | "cancel";
+
+export type AutoBuyPanelConfig = {
+  available: boolean;
+  running: boolean;
+  snapshot?: AutoBuySnapshot;
+  hasReservedCards?: boolean;
+  onStart: (params: {
+    fundAmount: number;
+    cardCount: number;
+    profitTarget: number;
+    serialBuyEnabled: boolean;
+  }) => Promise<void>;
+  onStop: () => Promise<void>;
+};
 
 interface BuyCardsPanelProps {
   price: number;
@@ -27,6 +42,18 @@ interface BuyCardsPanelProps {
   secondaryActionLabel?: string;
   secondaryDisabled?: boolean;
   onSecondaryAction?: () => Promise<void> | void;
+  autoBuy?: AutoBuyPanelConfig;
+}
+
+function parseNumericInput(value: string): number {
+  const digits = value.replace(/[^\d]/g, "");
+  if (!digits) return 0;
+  return Number(digits);
+}
+
+function formatNumericInput(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "";
+  return value.toLocaleString("en-US");
 }
 
 export default function BuyCardsPanel({
@@ -46,19 +73,65 @@ export default function BuyCardsPanel({
   secondaryActionLabel,
   secondaryDisabled,
   onSecondaryAction,
+  autoBuy,
 }: BuyCardsPanelProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [autoBuySubmitting, setAutoBuySubmitting] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [roomPassword, setRoomPassword] = useState("");
   const [showRoomPassword, setShowRoomPassword] = useState(false);
+  const [autoBuyExpanded, setAutoBuyExpanded] = useState(false);
+  const [serialBuyEnabled, setSerialBuyEnabled] = useState(false);
+  const [fundAmount, setFundAmount] = useState("");
+  const [profitTarget, setProfitTarget] = useState("");
+  const [autoCardCount, setAutoCardCount] = useState(1);
   const [quantity, setQuantity] = useState(() => {
     const safeInitial = initialQuantity ?? minQuantity;
     return Math.min(Math.max(safeInitial, minQuantity), maxQuantity);
   });
 
+  const autoBuyRunning = Boolean(autoBuy?.running);
+  const autoBuyAvailable = Boolean(autoBuy?.available);
+
   useEffect(() => {
     setQuantity((prev) => Math.min(Math.max(prev, minQuantity), maxQuantity));
   }, [minQuantity, maxQuantity]);
+
+  useEffect(() => {
+    if (autoBuyRunning) {
+      setAutoBuyExpanded(true);
+    }
+  }, [autoBuyRunning]);
+
+  useEffect(() => {
+    if (!autoBuy?.snapshot) return;
+    if (autoBuyRunning) {
+      if (autoBuy.snapshot.cardCount) {
+        setAutoCardCount(autoBuy.snapshot.cardCount);
+      }
+      if (autoBuy.snapshot.fundInitial) {
+        setFundAmount(formatNumericInput(autoBuy.snapshot.fundInitial));
+      }
+      if (autoBuy.snapshot.profitTarget) {
+        setProfitTarget(formatNumericInput(autoBuy.snapshot.profitTarget));
+      }
+      if (autoBuy.snapshot.serialBuyEnabled != null) {
+        setSerialBuyEnabled(autoBuy.snapshot.serialBuyEnabled);
+      }
+    }
+  }, [
+    autoBuy?.snapshot?.cardCount,
+    autoBuy?.snapshot?.fundInitial,
+    autoBuy?.snapshot?.profitTarget,
+    autoBuy?.snapshot?.serialBuyEnabled,
+    autoBuyRunning,
+    autoBuy?.snapshot,
+  ]);
+
+  const serialSwitchOn =
+    autoBuyRunning && autoBuy?.snapshot?.serialBuyEnabled != null
+      ? autoBuy.snapshot.serialBuyEnabled
+      : serialBuyEnabled;
 
   const isCancelMode = mode === "cancel";
   const showPasswordField = requiresPassword && !isCancelMode;
@@ -100,6 +173,63 @@ export default function BuyCardsPanel({
     setShowConfirmModal(true);
   };
 
+  const fundNumeric = parseNumericInput(fundAmount);
+  const profitNumeric = parseNumericInput(profitTarget);
+  const roundCost = price * autoCardCount;
+
+  const autoBuyFormValid = useMemo(() => {
+    return (
+      fundNumeric >= roundCost &&
+      profitNumeric > fundNumeric &&
+      autoCardCount >= 1 &&
+      autoCardCount <= maxQuantity
+    );
+  }, [autoCardCount, fundNumeric, maxQuantity, profitNumeric, roundCost]);
+
+  const handleAutoBuyToggle = () => {
+    if (!autoBuyAvailable || autoBuyRunning) return;
+    setAutoBuyExpanded((prev) => !prev);
+  };
+
+  const handleAutoCardDecrease = () => {
+    if (autoBuyRunning) return;
+    setAutoCardCount((prev) => Math.max(1, prev - 1));
+  };
+
+  const handleAutoCardIncrease = () => {
+    if (autoBuyRunning) return;
+    setAutoCardCount((prev) => Math.min(maxQuantity, prev + 1));
+  };
+
+  const handleAutoBuyAction = async () => {
+    if (!autoBuy || autoBuySubmitting) return;
+
+    if (autoBuyRunning) {
+      try {
+        setAutoBuySubmitting(true);
+        await autoBuy.onStop();
+        setAutoBuyExpanded(false);
+      } finally {
+        setAutoBuySubmitting(false);
+      }
+      return;
+    }
+
+    if (!autoBuyFormValid) return;
+
+    try {
+      setAutoBuySubmitting(true);
+      await autoBuy.onStart({
+        fundAmount: fundNumeric,
+        cardCount: autoCardCount,
+        profitTarget: profitNumeric,
+        serialBuyEnabled,
+      });
+    } finally {
+      setAutoBuySubmitting(false);
+    }
+  };
+
   const totalPrice = quantity * price;
   const controlsDisabled = disabled || isCancelMode;
   const purchaseButtonStyle = !isCancelMode
@@ -116,9 +246,14 @@ export default function BuyCardsPanel({
   const passwordMissing = showPasswordField && !roomPassword.trim();
   const buttonDisabled = disabled || isSubmitting || passwordMissing;
 
+  const showAutoBuySection =
+    autoBuyAvailable && (autoBuyExpanded || autoBuyRunning);
+
   return (
     <div
-      className={`${panelStyles.panelSurface} rounded-2xl p-3 space-y-3`}
+      className={`${panelStyles.panelSurface} ${
+        showAutoBuySection ? panelStyles.panelSurfaceAutoBuyOpen : ""
+      } rounded-2xl p-3 space-y-3`}
       data-tour-id="game-room-buy-panel"
     >
       <div className={panelStyles.buyPanelTopRow}>
@@ -190,6 +325,24 @@ export default function BuyCardsPanel({
                 )}
               </button>
             </div>
+          )}
+
+          {autoBuyAvailable && (
+            <button
+              type="button"
+              className={`${panelStyles.autoBuyToggle} ${
+                autoBuyExpanded || autoBuyRunning ? panelStyles.autoBuyToggleActive : ""
+              }`}
+              onClick={handleAutoBuyToggle}
+              disabled={autoBuyRunning}
+              aria-pressed={autoBuyExpanded || autoBuyRunning}
+              data-tour-id="game-room-auto-buy-toggle"
+            >
+              <span className={panelStyles.autoBuyToggleLabel}>خرید اتوماتیک</span>
+              <span className={panelStyles.autoBuyToggleIcon} aria-hidden="true">
+                {autoBuyRunning ? "●" : autoBuyExpanded ? "▾" : "▸"}
+              </span>
+            </button>
           )}
 
           <div className={panelStyles.quantityBadge}>
@@ -264,6 +417,156 @@ export default function BuyCardsPanel({
           </button>
         )}
       </div>
+
+      {showAutoBuySection && autoBuy && (
+        <div className={panelStyles.autoBuySection} data-tour-id="game-room-auto-buy-panel">
+          <div className={panelStyles.autoBuyFieldRow}>
+            <span className={panelStyles.autoBuyFieldLabel}>صندوق</span>
+            <div className={panelStyles.autoBuyFieldControl}>
+              <input
+                type="text"
+                inputMode="numeric"
+                dir="ltr"
+                className={panelStyles.autoBuyNumericInput}
+                placeholder="500,000"
+                value={fundAmount}
+                onChange={(event) =>
+                  setFundAmount(formatNumericInput(parseNumericInput(event.target.value)))
+                }
+                disabled={autoBuyRunning || autoBuySubmitting}
+                aria-label="مبلغ صندوق"
+              />
+              <span className="text-xs text-white/70">تومن</span>
+            </div>
+          </div>
+
+          <div className={panelStyles.autoBuyFieldRow}>
+            <span className={panelStyles.autoBuyFieldLabel}>تعداد کارت</span>
+            <div className={panelStyles.autoBuyFieldControl}>
+              <button
+                type="button"
+                className={panelStyles.autoBuyStepperButton}
+                onClick={handleAutoCardDecrease}
+                disabled={autoBuyRunning || autoBuySubmitting || autoCardCount <= 1}
+                aria-label="کاهش تعداد کارت اتوماتیک"
+              >
+                −
+              </button>
+              <span className={panelStyles.autoBuyCardCountValue} dir="ltr">
+                {autoCardCount}
+              </span>
+              <button
+                type="button"
+                className={panelStyles.autoBuyStepperButton}
+                onClick={handleAutoCardIncrease}
+                disabled={
+                  autoBuyRunning || autoBuySubmitting || autoCardCount >= maxQuantity
+                }
+                aria-label="افزایش تعداد کارت اتوماتیک"
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          <div className={panelStyles.autoBuyFieldRow}>
+            <span className={panelStyles.autoBuyFieldLabel}>حاشیه سود</span>
+            <div className={panelStyles.autoBuyFieldControl}>
+              <input
+                type="text"
+                inputMode="numeric"
+                dir="ltr"
+                className={panelStyles.autoBuyNumericInput}
+                placeholder="600,000"
+                value={profitTarget}
+                onChange={(event) =>
+                  setProfitTarget(formatNumericInput(parseNumericInput(event.target.value)))
+                }
+                disabled={autoBuyRunning || autoBuySubmitting}
+                aria-label="هدف موجودی صندوق"
+              />
+              <span className="text-xs text-white/70">تومن</span>
+            </div>
+          </div>
+
+          <div className={panelStyles.autoBuyFieldRow}>
+            <span className={panelStyles.autoBuyFieldLabel}>خرید سریالی</span>
+            <div className={panelStyles.autoBuyFieldControl}>
+              <button
+                type="button"
+                role="switch"
+                className={`${panelStyles.autoBuySerialSwitch} ${
+                  serialSwitchOn ? panelStyles.autoBuySerialSwitchOn : ""
+                }`}
+                onClick={() => setSerialBuyEnabled((prev) => !prev)}
+                disabled={autoBuyRunning || autoBuySubmitting}
+                aria-checked={serialSwitchOn}
+                aria-label={`خرید سریالی ${serialSwitchOn ? "فعال" : "غیرفعال"}`}
+                data-tour-id="game-room-auto-buy-serial"
+              >
+                <span className={panelStyles.autoBuySerialSwitchThumb} aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+
+          {autoBuyRunning && autoBuy.snapshot?.fundRemaining != null && (
+            <p className={panelStyles.autoBuyStatusLine}>
+              باقی صندوق:{" "}
+              <span className={panelStyles.autoBuyStatusValue} dir="ltr">
+                {autoBuy.snapshot.fundRemaining.toLocaleString("en-US")}
+              </span>{" "}
+              / هدف{" "}
+              <span className={panelStyles.autoBuyStatusValue} dir="ltr">
+                {(autoBuy.snapshot.profitTarget ?? 0).toLocaleString("en-US")}
+              </span>
+            </p>
+          )}
+
+          {!autoBuyRunning && autoBuy.hasReservedCards && !serialBuyEnabled && (
+            <p className={panelStyles.autoBuyStatusLine}>
+              با استارت، از بازی بعد برای همین سایز اتاق خرید خودکار انجام می‌شود.
+            </p>
+          )}
+
+          {!autoBuyRunning && serialBuyEnabled && (
+            <p className={panelStyles.autoBuyStatusLine}>
+              با استارت بازی، ثبت‌نام خودکار برای دور بعد همین میز انجام می‌شود.
+            </p>
+          )}
+
+          {autoBuyRunning && autoBuy.snapshot?.serialBuyEnabled && (
+            <p className={panelStyles.autoBuyStatusLine}>
+              خرید سریالی فعال است — پس از استارت بازی، در صف همین میز قرار می‌گیرید.
+            </p>
+          )}
+
+          {!autoBuyRunning && (
+            <p className={panelStyles.autoBuyStatusLine}>
+              با خروج از حساب هم بازی در سرور ادامه پیدا می‌کند تا استاپ بزنید یا صندوق
+              تمام شود.
+            </p>
+          )}
+
+          <button
+            type="button"
+            className={`${panelStyles.autoBuyStartButton} ${
+              autoBuyRunning ? panelStyles.autoBuyStartButtonRunning : ""
+            }`}
+            onClick={() => void handleAutoBuyAction()}
+            disabled={
+              autoBuySubmitting ||
+              disabled ||
+              (!autoBuyRunning && !autoBuyFormValid)
+            }
+          >
+            {autoBuySubmitting
+              ? "در حال پردازش..."
+              : autoBuyRunning
+                ? "استاپ"
+                : "استارت"}
+          </button>
+        </div>
+      )}
 
       {hasSecondary && (
         <div className="flex gap-2">

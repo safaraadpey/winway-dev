@@ -3,6 +3,7 @@ import type { ThemeId } from "@/lib/theme/types";
 
 export const GAME_ROOM_ASSET_FILES = {
   buyCardsPanelBg: "TicktBuy_BG.png",
+  buyCardsPanelExpandedBg: "ActiveopenCardsBG.png",
   activeCardsPanelBg: "ActiveCardsBG.png",
 } as const;
 
@@ -18,6 +19,11 @@ export function getGameRoomAssetPath(
 /** Buy-cards panel background (`public/themes/{id}/assets/TicktBuy_BG.png`). */
 export function themeBuyCardsPanelBgImage(themeId: ThemeId): string {
   return `url(${getGameRoomAssetPath(themeId, "buyCardsPanelBg")})`;
+}
+
+/** Expanded buy-cards / auto-buy panel background (`public/themes/{id}/assets/ActiveopenCardsBG.png`). */
+export function themeBuyCardsPanelExpandedBgImage(themeId: ThemeId): string {
+  return `url(${getGameRoomAssetPath(themeId, "buyCardsPanelExpandedBg")})`;
 }
 
 /** Active cards / tables panel background (`public/themes/{id}/assets/ActiveCardsBG.png`). */

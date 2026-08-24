@@ -1,6 +1,6 @@
 import type { ThemeDefinition } from "@/lib/theme/types";
 import { themeHeaderFrameImage, themeDingBalanceBgImage, themeTomanBalanceBgImage } from "@/lib/theme/assetPaths";
-import { themeActiveCardsPanelBgImage, themeBuyCardsPanelBgImage } from "@/lib/theme/gameRoomAssets";
+import { themeActiveCardsPanelBgImage, themeBuyCardsPanelBgImage, themeBuyCardsPanelExpandedBgImage } from "@/lib/theme/gameRoomAssets";
 import {
   IMAGE_MENU_PRESENTATIONS,
   SHARED_IMAGE_MENU_TOKENS,
@@ -33,6 +33,7 @@ export const lightTheme: ThemeDefinition = {
       activeGameChipBgImage: "none",
       activeGameChipRadius: "12px",
       buyCardsPanelBgImage: themeBuyCardsPanelBgImage("light"),
+      buyCardsPanelExpandedBgImage: themeBuyCardsPanelExpandedBgImage("light"),
       buyCardsPanelBgColor: "#ffffff",
       activeCardsPanelBgImage: themeActiveCardsPanelBgImage("light"),
       activeCardsPanelBgColor: "#ffffff",

@@ -7,6 +7,10 @@
   background-size: 100% 100%;
 }
 
+.panelSurfaceAutoBuyOpen {
+  background-image: var(--player-buy-cards-panel-expanded-bg-image, none);
+}
+
 .activeCardsPanelSurface {
   border: 1px solid transparent;
   background-color: var(--player-active-cards-panel-bg-color, #161a26);
@@ -547,7 +551,7 @@
   opacity: 0.5;
 }
 
-:global(html[data-theme="light"]) .panelSurface,
+:global(html[data-theme="light"]) .panelSurface:not(.panelSurfaceAutoBuyOpen),
 :global(html[data-theme="light"]) .activeCardsPanelSurface {
   background-image: none !important;
   background-color: #ffffff;
@@ -699,4 +703,187 @@
 
 :global(html[data-theme="light"]) .activeTablesTitleGreen {
   color: #059669;
+}
+
+.autoBuyToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  border: 1px solid #4b5563;
+  padding: 0 0.75rem;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+
+.autoBuyToggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.autoBuyToggleActive {
+  border-color: rgba(251, 191, 36, 0.75);
+}
+
+.autoBuyToggleLabel {
+  font-size: 0.875rem;
+  line-height: 1.25;
+}
+
+.autoBuyToggleIcon {
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.autoBuySection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 10px;
+}
+
+.autoBuyFieldRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.autoBuyFieldLabel {
+  font-size: 13px;
+  line-height: 1.25;
+  color: rgba(255, 255, 255, 0.92);
+  white-space: nowrap;
+}
+
+.autoBuyFieldControl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.autoBuyNumericInput {
+  composes: numeric-text numeric-text--14 from global;
+  width: 120px;
+  height: 36px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  border: 1px solid #4b5563;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 0 8px;
+  color: #ffffff;
+  text-align: left;
+}
+
+.autoBuyNumericInput:disabled {
+  opacity: 0.55;
+}
+
+.autoBuyStepperButton {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  border: 1px solid #4b5563;
+  background: rgba(0, 0, 0, 0.35);
+  color: #ffffff;
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.autoBuyStepperButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.autoBuyCardCountValue {
+  composes: numeric-text numeric-text--16 from global;
+  min-width: 28px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.autoBuyStartButton {
+  width: 100%;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(251, 191, 36, 0.65);
+  background: rgba(251, 191, 36, 0.15);
+  color: #fcd34d;
+  font-size: 16px;
+  font-weight: 700;
+  transition: opacity 0.15s ease;
+}
+
+.autoBuyStartButtonRunning {
+  border-color: rgba(239, 68, 68, 0.65);
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+}
+
+.autoBuyStartButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.autoBuyStatusLine {
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.78);
+  text-align: right;
+}
+
+.autoBuyStatusValue {
+  composes: numeric-text numeric-text--13 from global;
+  font-weight: 700;
+  color: #fcd34d;
+}
+
+.autoBuySerialSwitch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(75, 85, 99, 0.95);
+  padding: 0;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.autoBuySerialSwitchOn {
+  border-color: rgba(252, 211, 77, 0.75);
+  background: rgba(252, 211, 77, 0.42);
+}
+
+.autoBuySerialSwitchThumb {
+  position: absolute;
+  top: 2px;
+  inset-inline-start: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: inset-inline-start 0.2s ease, transform 0.2s ease;
+}
+
+.autoBuySerialSwitchOn .autoBuySerialSwitchThumb {
+  inset-inline-start: calc(100% - 20px);
+}
+
+.autoBuySerialSwitch:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }

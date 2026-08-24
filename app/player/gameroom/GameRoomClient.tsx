@@ -9,6 +9,9 @@ import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useTour } from "@/lib/contexts/TourContext";
 import { rememberGameRoomPath } from "@/lib/tour/lastGameRoomPath";
 import { GAME_ROOM_TOUR_ID } from "@/lib/tour/configs/gameRoomTour";
+import { fetchAutoBuySnapshot } from "@/lib/autoBuy/client";
+import { fetchGameRoomView } from "@/services/rooms";
+import { isHardExiting } from "@/lib/auth/hardExit";
 
 export default function GameRoomClient() {
   const searchParams = useSearchParams();
@@ -17,8 +20,13 @@ export default function GameRoomClient() {
   const roomId = searchParams.get("roomId") ?? undefined;
   const templateId = searchParams.get("templateId") ?? undefined;
   const [liveRoomId, setLiveRoomId] = useState<string | null>(null);
+  const liveRoomIdRef = useRef<string | null>(null);
   const { activeTourId } = useTour();
   const pendingLiveRoomIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    liveRoomIdRef.current = liveRoomId;
+  }, [liveRoomId]);
 
   const handleEnterLive = useCallback(
     (nextRoomId: string) => {
@@ -93,6 +101,53 @@ export default function GameRoomClient() {
       router.push("/player/lobby");
     }
   }, [roomId, templateId, router]);
+
+  useEffect(() => {
+    if (!roomId || typeof document === "undefined") return;
+
+    const syncLiveAfterForeground = async () => {
+      if (isHardExiting()) return;
+      if (document.visibilityState !== "visible") return;
+      if (liveRoomIdRef.current !== roomId) return;
+
+      try {
+        const view = await fetchGameRoomView({ roomId });
+        const templateIdForRoom = view.room.template_id;
+        if (!templateIdForRoom) return;
+
+        const snapshot = await fetchAutoBuySnapshot(templateIdForRoom);
+        if (!snapshot.active || !snapshot.lastRoomId) return;
+        if (snapshot.lastRoomId === roomId) return;
+
+        setLiveRoomId(null);
+        router.replace(`/player/gameroom?roomId=${snapshot.lastRoomId}`);
+      } catch (err) {
+        console.warn("[Room] live foreground auto-buy sync failed", err);
+      }
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void syncLiveAfterForeground();
+      }
+    };
+
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        void syncLiveAfterForeground();
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("focus", onVisible);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [roomId, router]);
 
   if (!roomId && !templateId) {
     return <PageLoading />;

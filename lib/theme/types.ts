@@ -72,6 +72,7 @@ export interface PlayerTokens {
   activeGameChipBgImage: string;
   activeGameChipRadius: string;
   buyCardsPanelBgImage: string;
+  buyCardsPanelExpandedBgImage: string;
   buyCardsPanelBgColor: string;
   activeCardsPanelBgImage: string;
   activeCardsPanelBgColor: string;

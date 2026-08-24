@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { manageWaitingRooms } from "../../domain/room/index.js";
 import { repairUnsettledFinishedRooms } from "../../domain/room/janitorRepair.js";
+import { recoverDueAutoBuySessions } from "../../finance/autoBuyRecover.js";
 import { GameRepo } from "../../repositories/index.js";
 import { redisKeysV2 } from "../../redis/keysV2.js";
 import { acquireLeaderLock, releaseLeaderLock } from "../../redis/leaderLock.js";
@@ -79,6 +80,7 @@ export function startRoomScheduler(ctx: WorkerContext): () => void {
       if (executesBusinessLogic(config.runtime)) {
         await manageWaitingRooms(repo, log, 50, ctx.roomState);
         await maybeRunJanitor();
+        await recoverDueAutoBuySessions(supabase, log);
       } else {
         await callDbScheduler(ctx);
       }

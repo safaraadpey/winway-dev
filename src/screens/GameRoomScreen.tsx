@@ -30,6 +30,12 @@ import { isMusicEnabled as readMusicEnabled, setMusicEnabled } from "@/lib/audio
 import { isHardExiting } from "@/lib/auth/hardExit";
 import { useAutoStartTour } from "@/lib/hooks/useAutoStartTour";
 import { GAME_ROOM_TOUR_ID } from "@/lib/tour/configs/gameRoomTour";
+import {
+  fetchAutoBuySnapshot,
+  startAutoBuy,
+  stopAutoBuy,
+} from "@/lib/autoBuy/client";
+import type { AutoBuySnapshot } from "@/lib/autoBuy/types";
 import styles from "./GameRoomScreen.module.css";
 
 interface GameRoomScreenProps {
@@ -211,6 +217,8 @@ export default function GameRoomScreen({
   const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
   const [gameMode, setGameMode] = useState<GameRoomView["mode"]>("preview");
   const enteredLiveRef = useRef(false);
+  const autoBuyLastRoomRef = useRef<string | null>(null);
+  const roomInfoRef = useRef<RoomInfo | null>(null);
   const fetchRoomDataRef = useRef<(isInitial: boolean) => Promise<void>>(async () => {});
   const pollIntervalMsRef = useRef(LOBBY_POLL_MS);
   const [loading, setLoading] = useState(true);
@@ -231,6 +239,9 @@ export default function GameRoomScreen({
 
   // State برای شناسه کاربر فعلی
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [autoBuySnapshot, setAutoBuySnapshot] = useState<AutoBuySnapshot>({
+    active: false,
+  });
 
 // Music toggle for real rooms (roomId mode only)
 const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
@@ -254,6 +265,15 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     enteredLiveRef.current = true;
     onEnterLive?.(roomId);
   };
+
+  useEffect(() => {
+    enteredLiveRef.current = false;
+    autoBuyLastRoomRef.current = null;
+  }, [roomId]);
+
+  useEffect(() => {
+    roomInfoRef.current = roomInfo;
+  }, [roomInfo]);
 
   // بارگذاری اطلاعات روم یا تمپلیت
   useEffect(() => {
@@ -856,6 +876,187 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     totalPlayersWithCards === 1
   );
 
+  const refreshAutoBuySnapshot = async (
+    templateId?: string | null
+  ): Promise<AutoBuySnapshot | null> => {
+    if (!templateId || isHardExiting()) return null;
+    try {
+      const snapshot = await fetchAutoBuySnapshot(templateId);
+      setAutoBuySnapshot(snapshot);
+      return snapshot;
+    } catch (err) {
+      console.warn("[AutoBuy] snapshot refresh failed", err);
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    if (!roomInfo?.templateId) {
+      setAutoBuySnapshot({ active: false });
+      return;
+    }
+    void refreshAutoBuySnapshot(roomInfo.templateId);
+  }, [roomInfo?.templateId]);
+
+  useEffect(() => {
+    if (!autoBuySnapshot.active || !roomInfo?.templateId) {
+      return;
+    }
+    const timer = setInterval(() => {
+      void refreshAutoBuySnapshot(roomInfo.templateId);
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [autoBuySnapshot.active, roomInfo?.templateId]);
+
+  useEffect(() => {
+    if (!autoBuySnapshot.active || !autoBuySnapshot.lastRoomId) return;
+
+    const nextLastRoom = autoBuySnapshot.lastRoomId;
+    const prevLastRoom = autoBuyLastRoomRef.current;
+    autoBuyLastRoomRef.current = nextLastRoom;
+
+    // Only follow auto-buy when the server rebuys into a new room — not when the
+    // player intentionally opens another waiting room from the lobby.
+    if (!prevLastRoom || prevLastRoom === nextLastRoom) return;
+    if (!roomId || nextLastRoom === roomId) return;
+
+    router.replace(`/player/gameroom?roomId=${nextLastRoom}`);
+  }, [autoBuySnapshot.active, autoBuySnapshot.lastRoomId, roomId, router]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    const syncAfterForeground = async () => {
+      if (isHardExiting()) return;
+      if (document.visibilityState !== "visible") return;
+
+      void fetchRoomDataRef.current(false);
+      invalidateActiveGames?.();
+
+      const info = roomInfoRef.current;
+      const templateId = info?.templateId;
+      if (!templateId || !roomId) return;
+
+      const snapshot = await refreshAutoBuySnapshot(templateId);
+      if (!snapshot?.active || !snapshot.lastRoomId) return;
+      if (snapshot.lastRoomId === roomId) return;
+
+      const currentStatus = (info?.status ?? "").toLowerCase();
+      const stuckOnLiveRoom =
+        currentStatus === "playing" ||
+        currentStatus === "running" ||
+        currentStatus === "settling";
+
+      if (!stuckOnLiveRoom) return;
+
+      autoBuyLastRoomRef.current = snapshot.lastRoomId;
+      router.replace(`/player/gameroom?roomId=${snapshot.lastRoomId}`);
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void syncAfterForeground();
+      }
+    };
+
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        void syncAfterForeground();
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("focus", onVisible);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [roomId, router, invalidateActiveGames]);
+
+  const handleAutoBuyStart = async (params: {
+    fundAmount: number;
+    cardCount: number;
+    profitTarget: number;
+    serialBuyEnabled: boolean;
+  }) => {
+    if (!roomInfo?.templateId) {
+      toast.error("اطلاعات اتاق ناقص است");
+      return;
+    }
+
+    if (params.serialBuyEnabled && !roomId) {
+      toast.error("برای خرید سریالی باید داخل همان گیم‌روم باشید");
+      return;
+    }
+
+    try {
+      const result = await startAutoBuy({
+        templateId: roomInfo.templateId,
+        fundAmount: params.fundAmount,
+        cardCount: params.cardCount,
+        profitTarget: params.profitTarget,
+        skipFirstJoin: hasReservedCardsForCurrentUser,
+        serialBuyEnabled: params.serialBuyEnabled,
+        anchorRoomId: params.serialBuyEnabled ? roomId ?? undefined : undefined,
+        idempotencyKey:
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Date.now()}`,
+      });
+
+      setAutoBuySnapshot({
+        active: result.status === "running",
+        sessionId: result.sessionId,
+        templateId: roomInfo.templateId,
+        status: result.status,
+        cardCount: result.cardCount,
+        fundInitial: result.fundInitial,
+        fundRemaining: result.fundRemaining,
+        profitTarget: result.profitTarget,
+        lastRoomId: result.lastRoomId,
+        serialBuyEnabled: result.serialBuyEnabled,
+        anchorRoomId: result.anchorRoomId,
+        serialNextRoomId: result.serialNextRoomId,
+      });
+
+      toast.success("خرید اتوماتیک شروع شد");
+
+      void Promise.resolve(refreshWalletBalances?.()).catch(() => {});
+      invalidateActiveGames?.();
+
+      if (result.lastRoomId && result.lastRoomId !== roomId) {
+        router.replace(`/player/gameroom?roomId=${result.lastRoomId}`);
+      }
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "خطا در شروع خرید اتوماتیک";
+      toast.error(message);
+      throw err;
+    }
+  };
+
+  const handleAutoBuyStop = async () => {
+    if (!roomInfo?.templateId) {
+      toast.error("اطلاعات اتاق ناقص است");
+      return;
+    }
+
+    try {
+      await stopAutoBuy({ templateId: roomInfo.templateId });
+      await refreshAutoBuySnapshot(roomInfo.templateId);
+      toast.success("خرید اتوماتیک متوقف شد");
+      void Promise.resolve(refreshWalletBalances?.()).catch(() => {});
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "خطا در توقف خرید اتوماتیک";
+      toast.error(message);
+      throw err;
+    }
+  };
+
   // مدیریت افزودن به لیست (خرید کارت) یا لغو رزرو
   const handleAddToList = async (
     selectedQuantity: number,
@@ -995,6 +1196,11 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     return <PageLoading />;
   }
 
+  const autoBuyPanelAvailable =
+    !isTournamentRoom &&
+    !roomInfo.requiresPassword &&
+    !purchaseLockedByAdmin;
+
   // استفاده از cardsToRenderForCancel که قبلاً تعریف شده
   const cardsToRender = cardsToRenderForCancel;
 
@@ -1032,6 +1238,18 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
                 : purchaseLockedByAdmin
                   ? "ثبت نام قفل است"
                   : undefined
+            }
+            autoBuy={
+              autoBuyPanelAvailable || autoBuySnapshot.active
+                ? {
+                    available: autoBuyPanelAvailable,
+                    running: autoBuySnapshot.active,
+                    snapshot: autoBuySnapshot,
+                    hasReservedCards: hasReservedCardsForCurrentUser,
+                    onStart: handleAutoBuyStart,
+                    onStop: handleAutoBuyStop,
+                  }
+                : undefined
             }
           />
         )}
