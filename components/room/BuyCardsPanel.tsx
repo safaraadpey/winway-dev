@@ -470,7 +470,7 @@ export default function BuyCardsPanel({
           </div>
 
           <div className={panelStyles.autoBuyFieldRow}>
-            <span className={panelStyles.autoBuyFieldLabel}>حاشیه سود</span>
+            <span className={panelStyles.autoBuyFieldLabel}>سقف برد</span>
             <div className={panelStyles.autoBuyFieldControl}>
               <input
                 type="text"
@@ -483,7 +483,7 @@ export default function BuyCardsPanel({
                   setProfitTarget(formatNumericInput(parseNumericInput(event.target.value)))
                 }
                 disabled={autoBuyRunning || autoBuySubmitting}
-                aria-label="هدف موجودی صندوق"
+                aria-label="مبلغ سقف برد"
               />
               <span className="text-xs text-white/70">تومن</span>
             </div>
