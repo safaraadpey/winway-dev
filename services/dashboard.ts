@@ -575,6 +575,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
     return {
       user: null,
       summaries: DEFAULT_SUMMARIES,
+      activeRoomsCount: 0,
     };
   }
 
@@ -623,7 +624,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
   const dayStart = getPeriodStart("day");
 
   if (user.role !== "admin" && user.role !== "super" && user.role !== "agent") {
-    const data: DashboardData = { user, summaries };
+    const data: DashboardData = { user, summaries, activeRoomsCount: 0 };
     const cacheKey = `v10|${user.id}|${user.role}|${user.id}`;
     dashboardCache = { key: cacheKey, fetchedAtMs: Date.now(), data };
     return data;
@@ -903,6 +904,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
   const data: DashboardData = {
     user,
     summaries,
+    activeRoomsCount: 0,
   };
   dashboardCache = { key: cacheKey, fetchedAtMs: Date.now(), data };
   return data;

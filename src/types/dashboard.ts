@@ -36,6 +36,8 @@ export interface FinancialSummary {
 export interface DashboardData {
   user: DashboardUserInfo | null;
   summaries: Record<DashboardPeriod, FinancialSummary>;
+  /** Rooms currently in waiting / playing / live (point-in-time, not period-scoped). */
+  activeRoomsCount: number;
 }
 
 

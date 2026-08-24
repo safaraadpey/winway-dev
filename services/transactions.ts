@@ -509,9 +509,9 @@ export async function loadTransactionHistory(
     if (dateFilter === "day") {
       dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     } else if (dateFilter === "week") {
-      const dayOfWeek = now.getDay();
-      const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Monday
-      dateFrom = new Date(now.getFullYear(), now.getMonth(), diff);
+      // Last 7 days (inclusive) — matches financial-reports and avoids empty results
+      // at the start of a calendar week / timezone boundary (local midnight → UTC).
+      dateFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     } else {
       // month
       dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);

@@ -232,6 +232,10 @@ export default function AdminDashboardPage() {
         <span className="text-right font-mono">{summary.deposits.toLocaleString("en-US")}</span>
         <span>برداشت</span>
         <span className="text-right font-mono">{summary.withdrawals.toLocaleString("en-US")}</span>
+        <span>تعداد اتاق فعال</span>
+        <span className="text-right font-mono">
+          {(data?.activeRoomsCount ?? 0).toLocaleString("en-US")}
+        </span>
       </div>
     );
   };

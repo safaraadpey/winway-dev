@@ -145,6 +145,20 @@ async function fetchAdminCommissionSummary(supabase: SupabaseClient) {
   };
 }
 
+async function fetchActiveRoomsCount(supabase: SupabaseClient): Promise<number> {
+  const { count, error } = await supabase
+    .from("rooms")
+    .select("id", { count: "exact", head: true })
+    .in("status", ["waiting", "playing", "live"]);
+
+  if (error) {
+    console.error("[DashboardSnapshot] active rooms count error:", error.message);
+    return 0;
+  }
+
+  return count ?? 0;
+}
+
 async function fetchAdminGuaranteeSummary(supabase: SupabaseClient) {
   const { data, error } = await supabase.rpc("fn_dashboard_admin_tournament_guarantee_summary");
   if (error) {
@@ -201,6 +215,7 @@ export async function loadAdminDashboardSnapshot(
     return {
       user: null,
       summaries: DEFAULT_SUMMARIES,
+      activeRoomsCount: 0,
     };
   }
 
@@ -215,10 +230,17 @@ export async function loadAdminDashboardSnapshot(
   const weekIso = iso(weekStart);
   const dayIso = iso(dayStart);
 
-  const [commissionSummary, guaranteeSummary, manualPanelTxsRes, transferTxsRes, gatewayDepositTxsRes] =
-    await Promise.all([
+  const [
+    commissionSummary,
+    guaranteeSummary,
+    activeRoomsCount,
+    manualPanelTxsRes,
+    transferTxsRes,
+    gatewayDepositTxsRes,
+  ] = await Promise.all([
       fetchAdminCommissionSummary(supabase),
       fetchAdminGuaranteeSummary(supabase),
+      fetchActiveRoomsCount(supabase),
       supabase
         .from("transactions")
         .select("amount, type, created_at")
@@ -370,5 +392,6 @@ export async function loadAdminDashboardSnapshot(
   return {
     user,
     summaries,
+    activeRoomsCount,
   };
 }
