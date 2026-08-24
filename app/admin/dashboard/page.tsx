@@ -244,13 +244,6 @@ export default function AdminDashboardPage() {
             )}
           />
         </span>
-        <span>کانیات پنل‌ها</span>
-        <span className="text-right">
-          <DashboardAmount
-            value={Math.max(0, summary.ticketsVolumeTotal - summary.ticketsVolume)}
-          />
-        </span>
-        <PanelOperatorsBreakdown operators={summary.panelOperators ?? []} />
         <span>کانیات من</span>
         <span className="text-right">
           <DashboardAmount value={summary.ticketsVolume} />
@@ -259,6 +252,13 @@ export default function AdminDashboardPage() {
         <span className="text-right">
           <DashboardAmount value={summary.directPlayerCommission ?? 0} />
         </span>
+        <span>کانیات پنل‌ها</span>
+        <span className="text-right">
+          <DashboardAmount
+            value={Math.max(0, summary.ticketsVolumeTotal - summary.ticketsVolume)}
+          />
+        </span>
+        <PanelOperatorsBreakdown operators={summary.panelOperators ?? []} />
         <span>کانیات از تورنومنت</span>
         <span className="text-right">
           <DashboardAmount value={summary.tournamentCommission ?? 0} />
