@@ -14,6 +14,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { getCachedAdminPermissions, getCurrentAdminPermissions } from "@/lib/admin-permissions";
 import AdminDashboardReportSkeleton from "@/components/admin/AdminDashboardReportSkeleton";
 import type { DashboardPeriod, DashboardData, DashboardPanelOperator } from "@/src/types/dashboard";
+import type { DashboardRangeSummary } from "@/services/dashboard";
 import type { AdminPermissions } from "@/src/types/admins";
 import InstallAppButton from "@/components/InstallAppButton";
 import ReferralRegistrationLink from "@/components/admin/ReferralRegistrationLink";
@@ -41,13 +42,29 @@ function DashboardAmount({
   );
 }
 
+const PANEL_OPERATOR_VISIBLE_ROWS = 10;
+/** py-0.5 row + text-xs line box (~20px) */
+const PANEL_OPERATOR_ROW_PX = 20;
+/** py-2 container padding (~16px) */
+const PANEL_OPERATOR_PADDING_PX = 16;
+
 function PanelOperatorsBreakdown({ operators }: { operators: DashboardPanelOperator[] }) {
   if (operators.length === 0) {
     return null;
   }
 
+  const scrolls = operators.length > PANEL_OPERATOR_VISIBLE_ROWS;
+  const maxHeightPx = scrolls
+    ? PANEL_OPERATOR_PADDING_PX + PANEL_OPERATOR_ROW_PX * PANEL_OPERATOR_VISIBLE_ROWS
+    : undefined;
+
   return (
-    <div className="col-span-2 mb-1 max-h-48 overflow-y-auto rounded-lg border border-gray-800 bg-black/30 px-2 py-2">
+    <div
+      className={`col-span-2 mb-1 rounded-lg border border-gray-800 bg-black/30 px-2 py-2${
+        scrolls ? " overflow-y-auto" : ""
+      }`}
+      style={maxHeightPx ? { maxHeight: `${maxHeightPx}px` } : undefined}
+    >
       {operators.map((op) => (
         <div key={op.userId} className="grid grid-cols-2 py-0.5 text-xs text-gray-300">
           <span>
@@ -73,17 +90,7 @@ export default function AdminDashboardPage() {
   const [rangeFrom, setRangeFrom] = useState("");
   const [rangeTo, setRangeTo] = useState("");
   const [rangeLoading, setRangeLoading] = useState(false);
-  const [rangeSummary, setRangeSummary] = useState<{
-    ticketsVolume: number;
-    ticketsVolumeTotal: number;
-    tournamentTicketsVolumeTotal: number;
-    tournamentCommission: number;
-    tournamentGuaranteePayout: number;
-    gatewayPurchases: number;
-    deposits: number;
-    withdrawals: number;
-    panelOperators?: DashboardPanelOperator[];
-  } | null>(null);
+  const [rangeSummary, setRangeSummary] = useState<DashboardRangeSummary | null>(null);
   const [permissions, setPermissions] = useState<AdminPermissions | null>(() =>
     getCachedAdminPermissions()
   );
@@ -190,17 +197,7 @@ export default function AdminDashboardPage() {
         from: rangeFrom,
         to: rangeTo,
       });
-      setRangeSummary({
-        ticketsVolume: result.ticketsVolume,
-        ticketsVolumeTotal: result.ticketsVolumeTotal,
-        tournamentTicketsVolumeTotal: result.tournamentTicketsVolumeTotal,
-        tournamentCommission: result.tournamentCommission,
-        tournamentGuaranteePayout: result.tournamentGuaranteePayout,
-        gatewayPurchases: result.gatewayPurchases,
-        deposits: result.deposits,
-        withdrawals: result.withdrawals,
-        panelOperators: result.panelOperators ?? [],
-      });
+      setRangeSummary(result);
     } catch (error) {
       console.error("Error loading range dashboard summary:", error);
       setRangeSummary(null);
@@ -257,6 +254,10 @@ export default function AdminDashboardPage() {
         <span>کانیات من</span>
         <span className="text-right">
           <DashboardAmount value={summary.ticketsVolume} />
+        </span>
+        <span>کانیات پلیر مستقیم</span>
+        <span className="text-right">
+          <DashboardAmount value={summary.directPlayerCommission ?? 0} />
         </span>
         <span>کانیات از تورنومنت</span>
         <span className="text-right">

@@ -34,6 +34,8 @@ export interface FinancialSummary {
   tournamentTicketsVolumeTotal: number;
   /** کمیسیون تورنومنت (نمایش جداگانه در داشبورد) */
   tournamentCommission: number;
+  /** کانیات پلیر مستقیم ادمین (بدون ایجنت/سوپر در snapshot کمیسیون) */
+  directPlayerCommission: number;
   /** مبلغ پرداختی گارانتی تورنومنت‌ها (تاپ‌آپ ضمانت) */
   tournamentGuaranteePayout: number;
   /** مجموع خریدهای درگاه (deposit_domain، بدون تتر) */

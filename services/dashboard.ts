@@ -27,6 +27,7 @@ export interface DashboardRangeSummary {
   ticketsVolumeTotal: number;
   tournamentTicketsVolumeTotal: number;
   tournamentCommission: number;
+  directPlayerCommission: number;
   tournamentGuaranteePayout: number;
   gatewayPurchases: number;
   deposits: number;
@@ -53,6 +54,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     ticketsVolumeTotal: 0,
     tournamentTicketsVolumeTotal: 0,
     tournamentCommission: 0,
+    directPlayerCommission: 0,
     tournamentGuaranteePayout: 0,
     gatewayPurchases: 0,
     deposits: 0,
@@ -65,6 +67,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     ticketsVolumeTotal: 0,
     tournamentTicketsVolumeTotal: 0,
     tournamentCommission: 0,
+    directPlayerCommission: 0,
     tournamentGuaranteePayout: 0,
     gatewayPurchases: 0,
     deposits: 0,
@@ -77,6 +80,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     ticketsVolumeTotal: 0,
     tournamentTicketsVolumeTotal: 0,
     tournamentCommission: 0,
+    directPlayerCommission: 0,
     tournamentGuaranteePayout: 0,
     gatewayPurchases: 0,
     deposits: 0,
@@ -89,6 +93,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     ticketsVolumeTotal: 0,
     tournamentTicketsVolumeTotal: 0,
     tournamentCommission: 0,
+    directPlayerCommission: 0,
     tournamentGuaranteePayout: 0,
     gatewayPurchases: 0,
     deposits: 0,
@@ -114,7 +119,7 @@ async function loadDashboardDataFromAdminSnapshot(options?: {
   force?: boolean;
 }): Promise<DashboardData> {
   const maxAgeMs = options?.maxAgeMs ?? 30_000;
-  const cacheKey = "admin-snapshot|v2";
+  const cacheKey = "admin-snapshot|v4";
 
   if (!options?.force && dashboardCache?.key === cacheKey) {
     const ageMs = Date.now() - dashboardCache.fetchedAtMs;
@@ -158,6 +163,9 @@ async function fetchAdminCommissionSummary(): Promise<{
   dayTournament: number;
   weekTournament: number;
   monthTournament: number;
+  dayDirect: number;
+  weekDirect: number;
+  monthDirect: number;
 }> {
   const { data, error } = await supabase.rpc("fn_dashboard_admin_commission_summary");
   if (error) {
@@ -182,6 +190,9 @@ async function fetchAdminCommissionSummary(): Promise<{
     dayTournament: Number((row as any).day_tournament_amount || 0),
     weekTournament: Number((row as any).week_tournament_amount || 0),
     monthTournament: Number((row as any).month_tournament_amount || 0),
+    dayDirect: Number((row as any).day_direct_amount || 0),
+    weekDirect: Number((row as any).week_direct_amount || 0),
+    monthDirect: Number((row as any).month_direct_amount || 0),
   };
 }
 
@@ -194,6 +205,7 @@ async function fetchAdminCommissionSummaryRange(
   total: number;
   tournamentAmount: number;
   tournamentTotal: number;
+  directAmount: number;
 }> {
   const { data, error } = await supabase.rpc("fn_dashboard_admin_commission_summary_range", {
     p_from: fromIso,
@@ -212,6 +224,7 @@ async function fetchAdminCommissionSummaryRange(
     total: Number((row as any).total || 0),
     tournamentAmount: Number((row as any).tournament_amount || 0),
     tournamentTotal: Number((row as any).tournament_total || 0),
+    directAmount: Number((row as any).direct_amount || 0),
   };
 }
 
@@ -272,6 +285,7 @@ export async function loadDashboardRangeSummary(params: {
       ticketsVolumeTotal: 0,
       tournamentTicketsVolumeTotal: 0,
       tournamentCommission: 0,
+      directPlayerCommission: 0,
       tournamentGuaranteePayout: 0,
       gatewayPurchases: 0,
       deposits: 0,
@@ -400,6 +414,7 @@ export async function loadDashboardRangeSummary(params: {
       ticketsVolumeTotal: admin.total,
       tournamentTicketsVolumeTotal: admin.tournamentTotal,
       tournamentCommission: admin.tournamentAmount,
+      directPlayerCommission: admin.directAmount,
       tournamentGuaranteePayout: guarantee.amount,
       gatewayPurchases,
       deposits,
@@ -420,6 +435,7 @@ export async function loadDashboardRangeSummary(params: {
     ticketsVolumeTotal: commissionTotals.commissionBase,
     tournamentTicketsVolumeTotal: commissionTotals.tournamentCommissionBase,
     tournamentCommission: commissionTotals.tournamentEarnedAmount,
+    directPlayerCommission: 0,
     tournamentGuaranteePayout: 0,
     gatewayPurchases: 0,
     deposits,
@@ -574,6 +590,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
       ticketsVolumeTotal: 0,
       tournamentTicketsVolumeTotal: 0,
       tournamentCommission: 0,
+      directPlayerCommission: 0,
       tournamentGuaranteePayout: 0,
       gatewayPurchases: 0,
       deposits: 0,
@@ -586,6 +603,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
       ticketsVolumeTotal: 0,
       tournamentTicketsVolumeTotal: 0,
       tournamentCommission: 0,
+      directPlayerCommission: 0,
       tournamentGuaranteePayout: 0,
       gatewayPurchases: 0,
       deposits: 0,
@@ -598,6 +616,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
       ticketsVolumeTotal: 0,
       tournamentTicketsVolumeTotal: 0,
       tournamentCommission: 0,
+      directPlayerCommission: 0,
       tournamentGuaranteePayout: 0,
       gatewayPurchases: 0,
       deposits: 0,
@@ -610,6 +629,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
       ticketsVolumeTotal: 0,
       tournamentTicketsVolumeTotal: 0,
       tournamentCommission: 0,
+      directPlayerCommission: 0,
       tournamentGuaranteePayout: 0,
       gatewayPurchases: 0,
       deposits: 0,
@@ -652,6 +672,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
         total: Record<Exclude<DashboardPeriod, "overall">, number>;
         tournamentTotal: Record<Exclude<DashboardPeriod, "overall">, number>;
         tournament: Record<Exclude<DashboardPeriod, "overall">, number>;
+        direct: Record<Exclude<DashboardPeriod, "overall">, number>;
       }
     | null =
     user.role === "admin"
@@ -675,6 +696,11 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
             day: s.dayTournament,
             week: s.weekTournament,
             month: s.monthTournament,
+          },
+          direct: {
+            day: s.dayDirect,
+            week: s.weekDirect,
+            month: s.monthDirect,
           },
         }))
       : null;
@@ -790,6 +816,10 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
     if (period === "overall") return 0;
     return adminCommissionMap?.tournament[period] ?? 0;
   };
+  const directPlayerCommissionFor = (period: DashboardPeriod) => {
+    if (user.role !== "admin" || period === "overall") return 0;
+    return adminCommissionMap?.direct[period] ?? 0;
+  };
 
   for (const [period, startDate] of [
     ["day", dayIso.slice(0, 10)],
@@ -813,6 +843,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
       ticketsVolumeTotal: commissionBase,
       tournamentTicketsVolumeTotal: tournamentCommissionBaseFor(period, startDate),
       tournamentCommission: tournamentCommissionFor(period, startDate),
+      directPlayerCommission: directPlayerCommissionFor(period),
       tournamentGuaranteePayout:
         user.role === "admin" && period !== "overall"
           ? adminGuaranteeMap?.[period] ?? 0

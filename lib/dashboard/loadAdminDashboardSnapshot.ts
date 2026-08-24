@@ -25,6 +25,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     ticketsVolumeTotal: 0,
     tournamentTicketsVolumeTotal: 0,
     tournamentCommission: 0,
+    directPlayerCommission: 0,
     tournamentGuaranteePayout: 0,
     gatewayPurchases: 0,
     deposits: 0,
@@ -38,6 +39,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     ticketsVolumeTotal: 0,
     tournamentTicketsVolumeTotal: 0,
     tournamentCommission: 0,
+    directPlayerCommission: 0,
     tournamentGuaranteePayout: 0,
     gatewayPurchases: 0,
     deposits: 0,
@@ -51,6 +53,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     ticketsVolumeTotal: 0,
     tournamentTicketsVolumeTotal: 0,
     tournamentCommission: 0,
+    directPlayerCommission: 0,
     tournamentGuaranteePayout: 0,
     gatewayPurchases: 0,
     deposits: 0,
@@ -64,6 +67,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     ticketsVolumeTotal: 0,
     tournamentTicketsVolumeTotal: 0,
     tournamentCommission: 0,
+    directPlayerCommission: 0,
     tournamentGuaranteePayout: 0,
     gatewayPurchases: 0,
     deposits: 0,
@@ -160,6 +164,9 @@ async function fetchAdminCommissionSummary(supabase: SupabaseClient) {
     dayTournament: Number((row as { day_tournament_amount?: number }).day_tournament_amount || 0),
     weekTournament: Number((row as { week_tournament_amount?: number }).week_tournament_amount || 0),
     monthTournament: Number((row as { month_tournament_amount?: number }).month_tournament_amount || 0),
+    dayDirect: Number((row as { day_direct_amount?: number }).day_direct_amount || 0),
+    weekDirect: Number((row as { week_direct_amount?: number }).week_direct_amount || 0),
+    monthDirect: Number((row as { month_direct_amount?: number }).month_direct_amount || 0),
   };
 }
 
@@ -316,6 +323,11 @@ export async function loadAdminDashboardSnapshot(
       week: commissionSummary.weekTournament,
       month: commissionSummary.monthTournament,
     },
+    direct: {
+      day: commissionSummary.dayDirect,
+      week: commissionSummary.weekDirect,
+      month: commissionSummary.monthDirect,
+    },
   };
 
   const adminGuaranteeMap = {
@@ -390,6 +402,12 @@ export async function loadAdminDashboardSnapshot(
         : startIso === weekIso
         ? adminCommissionMap.tournament.week
         : adminCommissionMap.tournament.month;
+    const directPlayerCommission =
+      startIso === dayIso
+        ? adminCommissionMap.direct.day
+        : startIso === weekIso
+        ? adminCommissionMap.direct.week
+        : adminCommissionMap.direct.month;
     const deposits = depositsFor(startIso);
     const withdrawals = withdrawalsFor(startIso);
     const gatewayPurchases = sumGatewayPurchasesSince(gatewayDepositTxs, startIso);
@@ -400,6 +418,7 @@ export async function loadAdminDashboardSnapshot(
       ticketsVolumeTotal: commissionBase,
       tournamentTicketsVolumeTotal: tournamentCommissionBase,
       tournamentCommission,
+      directPlayerCommission,
       tournamentGuaranteePayout: adminGuaranteeMap[period],
       gatewayPurchases,
       deposits,
