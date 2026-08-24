@@ -1,5 +1,10 @@
 import { supabase } from "@/lib/supabaseClient";
-import type { AdminGamesReportResult, LoadAdminGamesReportParams } from "@/src/types/games-report";
+import type {
+  AdminGamesReportResult,
+  LoadAdminGamesReportParams,
+  LoadPlayerGamesReportParams,
+  PlayerGamesReportResult,
+} from "@/src/types/games-report";
 
 type GamesReportCacheEntry = {
   key: string;
@@ -91,6 +96,94 @@ export async function loadAdminGamesReport(
   };
 
   gamesReportCache.set(key, {
+    key,
+    fetchedAtMs: Date.now(),
+    data: result,
+  });
+
+  return result;
+}
+
+type PlayerGamesReportCacheEntry = {
+  key: string;
+  fetchedAtMs: number;
+  data: PlayerGamesReportResult;
+};
+
+const playerGamesReportCache = new Map<string, PlayerGamesReportCacheEntry>();
+
+function makePlayerCacheKey(params: LoadPlayerGamesReportParams) {
+  return [String(params.page || 1), String(params.pageSize || 20)].join("|");
+}
+
+export function clearPlayerGamesReportCache() {
+  playerGamesReportCache.clear();
+}
+
+export async function loadPlayerGamesReport(
+  params: LoadPlayerGamesReportParams = {}
+): Promise<PlayerGamesReportResult> {
+  const { page = 1, pageSize = 20, maxAgeMs = 30_000, force = false } = params;
+  const key = makePlayerCacheKey({ page, pageSize });
+
+  if (!force) {
+    const cached = playerGamesReportCache.get(key);
+    if (cached) {
+      const ageMs = Date.now() - cached.fetchedAtMs;
+      if (ageMs >= 0 && ageMs <= maxAgeMs) {
+        return cached.data;
+      }
+    }
+  }
+
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+
+  if (sessionError || !session) {
+    throw new Error("خطا در احراز هویت");
+  }
+
+  const qs = new URLSearchParams();
+  qs.set("page", String(page));
+  qs.set("pageSize", String(pageSize));
+
+  const response = await fetch(`/api/player/games/report?${qs.toString()}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+    },
+  });
+
+  let payload: unknown = null;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error("خطا در پاسخ سرور");
+  }
+
+  const body = payload as {
+    ok?: boolean;
+    message?: string;
+    error?: string;
+    data?: PlayerGamesReportResult;
+  };
+
+  if (!response.ok || body?.ok === false) {
+    throw new Error(body?.message || body?.error || "خطا در دریافت گزارش بازی‌ها");
+  }
+
+  const result: PlayerGamesReportResult = {
+    items: body?.data?.items || [],
+    totalCount: Number(body?.data?.totalCount || 0),
+    page: Number(body?.data?.page || page),
+    pageSize: Number(body?.data?.pageSize || pageSize),
+    windowFrom: String(body?.data?.windowFrom || ""),
+    windowTo: String(body?.data?.windowTo || ""),
+  };
+
+  playerGamesReportCache.set(key, {
     key,
     fetchedAtMs: Date.now(),
     data: result,
