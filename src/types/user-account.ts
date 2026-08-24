@@ -2,7 +2,7 @@
 
 import type { AdminSubRole } from "@/lib/auth-helpers";
 
-export type UserAccountPeriod = "day" | "week" | "month";
+export type UserAccountPeriod = "day" | "week" | "month" | "overall";
 
 export interface UserAccountInfo {
   id: string;
@@ -41,6 +41,8 @@ export interface UserAccountActivity {
   withdrawals: number; // برداشت
   net: number; // بیلان
 }
+
+export type UserAccountActivityMetrics = Omit<UserAccountActivity, "period">;
 
 export type UserAccountTransactionCategory =
   | "panel"

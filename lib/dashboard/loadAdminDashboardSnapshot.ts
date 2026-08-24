@@ -5,7 +5,9 @@ import type {
   DashboardUserInfo,
   FinancialSummary,
 } from "@/src/types/dashboard";
+import { getRollingWeekStart, getRollingMonthStart } from "@/lib/dashboard/loadCommissionDailyStats";
 import { sumGatewayPurchasesSince } from "@/lib/dashboard/gatewayPurchases";
+import { loadPanelCommissionBreakdownByPeriod } from "@/lib/dashboard/loadPanelCommissionBreakdown";
 
 function makeShortIdFromUuid(id: string): string {
   let hash = 0;
@@ -28,6 +30,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     deposits: 0,
     withdrawals: 0,
     net: 0,
+    panelOperators: [],
   },
   week: {
     period: "week",
@@ -40,6 +43,7 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     deposits: 0,
     withdrawals: 0,
     net: 0,
+    panelOperators: [],
   },
   month: {
     period: "month",
@@ -52,6 +56,20 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     deposits: 0,
     withdrawals: 0,
     net: 0,
+    panelOperators: [],
+  },
+  overall: {
+    period: "overall",
+    ticketsVolume: 0,
+    ticketsVolumeTotal: 0,
+    tournamentTicketsVolumeTotal: 0,
+    tournamentCommission: 0,
+    tournamentGuaranteePayout: 0,
+    gatewayPurchases: 0,
+    deposits: 0,
+    withdrawals: 0,
+    net: 0,
+    panelOperators: [],
   },
 };
 
@@ -183,12 +201,10 @@ function getPeriodStart(period: DashboardPeriod): Date {
     return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   }
   if (period === "week") {
-    const dayOfWeek = now.getUTCDay();
-    const diff = now.getUTCDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), diff));
+    return getRollingWeekStart(now);
   }
 
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  return getRollingMonthStart(now);
 }
 
 function iso(d: Date) {
@@ -233,6 +249,7 @@ export async function loadAdminDashboardSnapshot(
   const [
     commissionSummary,
     guaranteeSummary,
+    panelOperatorsByPeriod,
     activeRoomsCount,
     manualPanelTxsRes,
     transferTxsRes,
@@ -240,6 +257,7 @@ export async function loadAdminDashboardSnapshot(
   ] = await Promise.all([
       fetchAdminCommissionSummary(supabase),
       fetchAdminGuaranteeSummary(supabase),
+      loadPanelCommissionBreakdownByPeriod(supabase),
       fetchActiveRoomsCount(supabase),
       supabase
         .from("transactions")
@@ -340,13 +358,14 @@ export async function loadAdminDashboardSnapshot(
     day: { ...DEFAULT_SUMMARIES.day },
     week: { ...DEFAULT_SUMMARIES.week },
     month: { ...DEFAULT_SUMMARIES.month },
+    overall: { ...DEFAULT_SUMMARIES.overall },
   };
 
   for (const [period, startIso] of [
     ["day", dayIso],
     ["week", weekIso],
     ["month", monthIso],
-  ] as Array<[DashboardPeriod, string]>) {
+  ] as Array<[Exclude<DashboardPeriod, "overall">, string]>) {
     const commission =
       startIso === dayIso
         ? adminCommissionMap.admin.day
@@ -386,6 +405,7 @@ export async function loadAdminDashboardSnapshot(
       deposits,
       withdrawals,
       net: deposits - withdrawals,
+      panelOperators: panelOperatorsByPeriod[period],
     };
   }
 

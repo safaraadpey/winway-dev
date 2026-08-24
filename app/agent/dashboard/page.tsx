@@ -16,7 +16,22 @@ const PERIOD_LABELS: Record<DashboardPeriod, string> = {
   day: "روز",
   week: "هفته",
   month: "ماه",
+  overall: "کل",
 };
+
+function DashboardAmount({
+  value,
+  size = "14",
+}: {
+  value: number;
+  size?: "12" | "13" | "14";
+}) {
+  return (
+    <span className={`numeric-text numeric-text--${size}`} dir="ltr">
+      {value.toLocaleString("en-US")}
+    </span>
+  );
+}
 
 export default function AgentDashboardPage() {
   type PeriodTab = DashboardPeriod | "range";
@@ -148,8 +163,8 @@ export default function AgentDashboardPage() {
 
         {/* تب‌های بازه زمانی و کارت آمار مالی */}
         <div className="rounded-2xl bg-[#151515] border border-gray-800 mb-6">
-          <div className="grid grid-cols-4 text-center text-sm font-semibold">
-            {(["day", "week", "month"] as DashboardPeriod[]).map((period) => (
+          <div className="grid grid-cols-5 text-center text-sm font-semibold">
+            {(["day", "week", "month", "overall"] as DashboardPeriod[]).map((period) => (
               <button
                 key={period}
                 onClick={() => setActivePeriod(period)}
@@ -192,31 +207,33 @@ export default function AgentDashboardPage() {
             ) : (
               <div className="grid grid-cols-2 gap-y-1">
                 <span>کانیات من</span>
-                <span className="text-right font-mono">
-                  {summary.ticketsVolume.toLocaleString("en-US")}
+                <span className="text-right">
+                  <DashboardAmount value={summary.ticketsVolume} />
                 </span>
                 <span>کانیات کل</span>
-                <span className="text-right font-mono">
-                  {summary.ticketsVolumeTotal.toLocaleString("en-US")}
+                <span className="text-right">
+                  <DashboardAmount value={summary.ticketsVolumeTotal} />
                 </span>
                 <span>کانیات از تورنومنت</span>
-                <span className="text-right font-mono">
-                  {(summary.tournamentCommission ?? 0).toLocaleString("en-US")}
+                <span className="text-right">
+                  <DashboardAmount value={summary.tournamentCommission ?? 0} />
                 </span>
                 <span>کانیات از بازی</span>
-                <span className="text-right font-mono">
-                  {Math.max(
-                    0,
-                    summary.ticketsVolume - (summary.tournamentCommission ?? 0)
-                  ).toLocaleString("en-US")}
+                <span className="text-right">
+                  <DashboardAmount
+                    value={Math.max(
+                      0,
+                      summary.ticketsVolume - (summary.tournamentCommission ?? 0)
+                    )}
+                  />
                 </span>
                 <span>واریز</span>
-                <span className="text-right font-mono">
-                  {summary.deposits.toLocaleString("en-US")}
+                <span className="text-right">
+                  <DashboardAmount value={summary.deposits} />
                 </span>
                 <span>برداشت</span>
-                <span className="text-right font-mono">
-                  {summary.withdrawals.toLocaleString("en-US")}
+                <span className="text-right">
+                  <DashboardAmount value={summary.withdrawals} />
                 </span>
               </div>
             )}

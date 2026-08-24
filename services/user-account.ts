@@ -3,9 +3,19 @@
 // Service helpers for user account detail page (admin / agent / super).
 
 import { supabase } from "@/lib/supabaseClient";
+import {
+  commissionStatFromDateForPeriod,
+  getRollingWeekStart,
+  getRollingMonthStart,
+  loadCommissionDailyStatRows,
+  loadCommissionDailyTotals,
+  sumCommissionDailyRows,
+  type CommissionDailyStatRow,
+} from "@/lib/dashboard/loadCommissionDailyStats";
 import type { AdminSubRole } from "@/lib/auth-helpers";
 import type {
   UserAccountData,
+  UserAccountActivityMetrics,
   UserAccountInfo,
   UserAccountActivity,
   UserAccountPeriod,
@@ -94,20 +104,182 @@ async function loadNicknameViaApi(userId: string): Promise<string | null> {
 /**
  * محاسبه تاریخ شروع برای یک دوره
  */
-function getPeriodStart(period: UserAccountPeriod): Date {
+function getPeriodStart(period: UserAccountPeriod): Date | null {
+  if (period === "overall") return null;
+
+  if (period === "week") {
+    return getRollingWeekStart();
+  }
+
+  if (period === "month") {
+    return getRollingMonthStart();
+  }
+
   const now = new Date();
   now.setHours(0, 0, 0, 0);
 
   if (period === "day") {
     return now;
-  } else if (period === "week") {
-    const dayOfWeek = now.getDay();
-    const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Monday
-    return new Date(now.getFullYear(), now.getMonth(), diff);
-  } else {
-    // month
-    return new Date(now.getFullYear(), now.getMonth(), 1);
   }
+
+  return null;
+}
+
+type PanelCashflowRow = {
+  created_at: string;
+  depositAmount: number;
+  withdrawAmount: number;
+};
+
+async function loadPanelCashflowRows(
+  userId: string,
+  userRole: UserAccountInfo["role"],
+  options?: { fromIso?: string; toIso?: string }
+): Promise<PanelCashflowRow[]> {
+  let manualQuery = supabase
+    .from("transactions")
+    .select("amount, type, created_at")
+    .eq("source_kind", "manual_panel")
+    .eq("source_ref", userId)
+    .in("type", ["deposit", "withdraw"]);
+
+  if (options?.fromIso) {
+    manualQuery = manualQuery.gte("created_at", options.fromIso);
+  }
+  if (options?.toIso) {
+    manualQuery = manualQuery.lte("created_at", options.toIso);
+  }
+
+  if (userRole === "player") {
+    let transferInQuery = supabase
+      .from("transactions")
+      .select("amount, created_at")
+      .eq("source_kind", "admin_panel_transfer")
+      .eq("user_id", userId)
+      .eq("type", "transfer_in")
+      .filter("meta->>action", "eq", "deposit");
+    let transferOutQuery = supabase
+      .from("transactions")
+      .select("amount, created_at")
+      .eq("source_kind", "admin_panel_transfer")
+      .eq("user_id", userId)
+      .eq("type", "transfer_out")
+      .filter("meta->>action", "eq", "withdraw");
+
+    if (options?.fromIso) {
+      transferInQuery = transferInQuery.gte("created_at", options.fromIso);
+      transferOutQuery = transferOutQuery.gte("created_at", options.fromIso);
+    }
+    if (options?.toIso) {
+      transferInQuery = transferInQuery.lte("created_at", options.toIso);
+      transferOutQuery = transferOutQuery.lte("created_at", options.toIso);
+    }
+
+    const [manualRes, transferInRes, transferOutRes] = await Promise.all([
+      manualQuery,
+      transferInQuery,
+      transferOutQuery,
+    ]);
+
+    if (manualRes.error) {
+      console.error("[UserAccount] panel manual cashflow error", manualRes.error);
+    }
+    if (transferInRes.error) {
+      console.error("[UserAccount] panel transfer_in cashflow error", transferInRes.error);
+    }
+    if (transferOutRes.error) {
+      console.error("[UserAccount] panel transfer_out cashflow error", transferOutRes.error);
+    }
+
+    const rows: PanelCashflowRow[] = [];
+    for (const row of manualRes.data || []) {
+      rows.push({
+        created_at: row.created_at,
+        depositAmount: row.type === "deposit" ? Number(row.amount || 0) : 0,
+        withdrawAmount: row.type === "withdraw" ? Number(row.amount || 0) : 0,
+      });
+    }
+    for (const row of transferInRes.data || []) {
+      rows.push({
+        created_at: row.created_at,
+        depositAmount: Number(row.amount || 0),
+        withdrawAmount: 0,
+      });
+    }
+    for (const row of transferOutRes.data || []) {
+      rows.push({
+        created_at: row.created_at,
+        depositAmount: 0,
+        withdrawAmount: Number(row.amount || 0),
+      });
+    }
+    return rows;
+  }
+
+  let transferQuery = supabase
+    .from("transactions")
+    .select("amount, meta, created_at")
+    .eq("source_kind", "admin_panel_transfer")
+    .eq("type", "transfer_out")
+    .filter("meta->>actor_id", "eq", userId);
+
+  if (options?.fromIso) {
+    transferQuery = transferQuery.gte("created_at", options.fromIso);
+  }
+  if (options?.toIso) {
+    transferQuery = transferQuery.lte("created_at", options.toIso);
+  }
+
+  const [manualRes, transferRes] = await Promise.all([manualQuery, transferQuery]);
+
+  if (manualRes.error) {
+    console.error("[UserAccount] panel manual cashflow error", manualRes.error);
+  }
+  if (transferRes.error) {
+    console.error("[UserAccount] panel transfer cashflow error", transferRes.error);
+  }
+
+  const rows: PanelCashflowRow[] = [];
+  for (const row of manualRes.data || []) {
+    rows.push({
+      created_at: row.created_at,
+      depositAmount: row.type === "deposit" ? Number(row.amount || 0) : 0,
+      withdrawAmount: row.type === "withdraw" ? Number(row.amount || 0) : 0,
+    });
+  }
+  for (const row of transferRes.data || []) {
+    const action = String((row.meta as { action?: string } | null)?.action ?? "");
+    const amount = Number(row.amount || 0);
+    rows.push({
+      created_at: row.created_at,
+      depositAmount: action === "deposit" ? amount : 0,
+      withdrawAmount: action === "withdraw" ? amount : 0,
+    });
+  }
+  return rows;
+}
+
+function sumPanelCashflow(
+  rows: PanelCashflowRow[],
+  startMs: number | null
+): { deposits: number; withdrawals: number; net: number } {
+  let deposits = 0;
+  let withdrawals = 0;
+  for (const row of rows) {
+    const ms = Date.parse(row.created_at);
+    if (startMs !== null && ms < startMs) continue;
+    deposits += row.depositAmount;
+    withdrawals += row.withdrawAmount;
+  }
+  return { deposits, withdrawals, net: deposits - withdrawals };
+}
+
+function sumPanelCashflowAll(rows: PanelCashflowRow[]): {
+  deposits: number;
+  withdrawals: number;
+  net: number;
+} {
+  return sumPanelCashflow(rows, null);
 }
 
 type TicketActivityRow = { room_id: string; created_at: string };
@@ -117,14 +289,21 @@ type MonthlyActivitySource =
       kind: "commissions_log";
       resultsRows: Array<{ win_type: string; created_at: string }>;
       commissionRows: Array<Record<string, any>>;
-      manualRows: Array<{ amount: any; type: string; created_at: string }>;
+      panelCashflowRows: PanelCashflowRow[];
+      ticketRows: TicketActivityRow[];
+    }
+  | {
+      kind: "commission_daily_stats";
+      resultsRows: Array<{ win_type: string; created_at: string }>;
+      commissionDailyRows: CommissionDailyStatRow[];
+      panelCashflowRows: PanelCashflowRow[];
       ticketRows: TicketActivityRow[];
     }
   | {
       kind: "admin_commission_tx";
       resultsRows: Array<{ win_type: string; created_at: string }>;
       commissionTxRows: Array<{ amount: any; created_at: string }>;
-      manualRows: Array<{ amount: any; type: string; created_at: string }>;
+      panelCashflowRows: PanelCashflowRow[];
       ticketRows: TicketActivityRow[];
     };
 
@@ -132,21 +311,16 @@ async function loadMonthlyActivitySource(
   userId: string,
   userRole: UserAccountInfo["role"]
 ): Promise<MonthlyActivitySource> {
-  const monthStart = getPeriodStart("month").toISOString();
+  const monthStart = getPeriodStart("month");
+  const monthStartIso = monthStart ? monthStart.toISOString() : null;
 
   const resultsPromise = supabase
     .from("results")
     .select("win_type, created_at")
     .eq("user_id", userId)
-    .gte("created_at", monthStart);
+    .gte("created_at", monthStartIso ?? "1970-01-01T00:00:00.000Z");
 
-  const manualPromise = supabase
-    .from("transactions")
-    .select("amount, type, created_at")
-    .eq("user_id", userId)
-    .eq("source_kind", "manual_panel")
-    .in("type", ["deposit", "withdraw"])
-    .gte("created_at", monthStart);
+  const panelCashflowPromise = loadPanelCashflowRows(userId, userRole);
 
   const ticketsPromise =
     userRole === "player"
@@ -155,7 +329,7 @@ async function loadMonthlyActivitySource(
           .select("room_id, created_at")
           .eq("player_user_id", userId)
           .in("reservation_status", ["confirmed", "consumed"])
-          .gte("created_at", monthStart)
+          .gte("created_at", monthStartIso ?? "1970-01-01T00:00:00.000Z")
       : Promise.resolve({ data: [] as TicketActivityRow[], error: null });
 
   if (userRole === "admin") {
@@ -165,20 +339,17 @@ async function loadMonthlyActivitySource(
       .eq("user_id", userId)
       .eq("type", "fee_admin")
       .eq("source_kind", "ticket_commission")
-      .gte("created_at", monthStart);
+      .gte("created_at", monthStartIso ?? "1970-01-01T00:00:00.000Z");
 
-    const [resultsRes, manualRes, commRes, ticketsRes] = await Promise.all([
+    const [resultsRes, panelCashflowRows, commRes, ticketsRes] = await Promise.all([
       resultsPromise,
-      manualPromise,
+      panelCashflowPromise,
       adminCommissionPromise,
       ticketsPromise,
     ]);
 
     if (resultsRes.error) {
       console.error("loadMonthlyActivitySource: results error", resultsRes.error);
-    }
-    if (manualRes.error) {
-      console.error("loadMonthlyActivitySource: manual tx error", manualRes.error);
     }
     if (commRes.error) {
       console.error("loadMonthlyActivitySource: admin commission tx error", commRes.error);
@@ -190,48 +361,57 @@ async function loadMonthlyActivitySource(
     return {
       kind: "admin_commission_tx",
       resultsRows: (resultsRes.data || []) as any,
-      manualRows: (manualRes.data || []) as any,
+      panelCashflowRows,
       commissionTxRows: (commRes.data || []) as any,
       ticketRows: (ticketsRes.data || []) as TicketActivityRow[],
     };
   }
 
-  // commissions_log (player/agent/super)
-  // IMPORTANT: build query in one go to keep TS types stable (Supabase query builder
-  // encodes selected columns in the type).
-  let selectCols = "commission_base, created_at";
-  let filterCol: "player_id" | "agent_id" | "super_id" = "player_id";
+  if (userRole === "agent" || userRole === "super") {
+    const [resultsRes, panelCashflowRows, commissionDailyRes, ticketsRes] = await Promise.all([
+      resultsPromise,
+      panelCashflowPromise,
+      loadCommissionDailyStatRows({
+        supabase,
+        userId,
+        role: userRole,
+      }).then((rows) => ({ data: rows, error: null })),
+      ticketsPromise,
+    ]);
 
-  if (userRole === "player") {
-    selectCols = "agent_amount, super_amount, admin_amount, commission_base, created_at";
-    filterCol = "player_id";
-  } else if (userRole === "agent") {
-    selectCols = "agent_amount, commission_base, created_at";
-    filterCol = "agent_id";
-  } else if (userRole === "super") {
-    selectCols = "super_amount, commission_base, created_at";
-    filterCol = "super_id";
+    if (resultsRes.error) {
+      console.error("loadMonthlyActivitySource: results error", resultsRes.error);
+    }
+    if (ticketsRes.error) {
+      console.error("loadMonthlyActivitySource: tickets error", ticketsRes.error);
+    }
+
+    return {
+      kind: "commission_daily_stats",
+      resultsRows: (resultsRes.data || []) as any,
+      panelCashflowRows,
+      commissionDailyRows: (commissionDailyRes.data || []) as CommissionDailyStatRow[],
+      ticketRows: (ticketsRes.data || []) as TicketActivityRow[],
+    };
   }
 
+  // commissions_log (player)
   const commissionsQuery = supabase
     .from("commissions_log")
-    .select(selectCols)
-    .eq(filterCol, userId)
+    .select("agent_amount, super_amount, admin_amount, commission_base, created_at")
+    .eq("player_id", userId)
     .eq("status", "settled")
-    .gte("created_at", monthStart);
+    .gte("created_at", monthStartIso ?? "1970-01-01T00:00:00.000Z");
 
-  const [resultsRes, manualRes, commRes, ticketsRes] = await Promise.all([
+  const [resultsRes, panelCashflowRows, commRes, ticketsRes] = await Promise.all([
     resultsPromise,
-    manualPromise,
+    panelCashflowPromise,
     commissionsQuery,
     ticketsPromise,
   ]);
 
   if (resultsRes.error) {
     console.error("loadMonthlyActivitySource: results error", resultsRes.error);
-  }
-  if (manualRes.error) {
-    console.error("loadMonthlyActivitySource: manual tx error", manualRes.error);
   }
   if (commRes.error) {
     console.error("loadMonthlyActivitySource: commissions_log error", commRes.error);
@@ -243,7 +423,7 @@ async function loadMonthlyActivitySource(
   return {
     kind: "commissions_log",
     resultsRows: (resultsRes.data || []) as any,
-    manualRows: (manualRes.data || []) as any,
+    panelCashflowRows,
     commissionRows: (commRes.data || []) as any,
     ticketRows: (ticketsRes.data || []) as TicketActivityRow[],
   };
@@ -253,9 +433,9 @@ function buildActivitiesFromMonthlySource(
   source: MonthlyActivitySource,
   userRole: UserAccountInfo["role"]
 ): Record<UserAccountPeriod, UserAccountActivity> {
-  const dayStartMs = getPeriodStart("day").getTime();
-  const weekStartMs = getPeriodStart("week").getTime();
-  const monthStartMs = getPeriodStart("month").getTime();
+  const dayStartMs = getPeriodStart("day")?.getTime() ?? 0;
+  const weekStartMs = getPeriodStart("week")?.getTime() ?? 0;
+  const monthStartMs = getPeriodStart("month")?.getTime() ?? 0;
 
   const results = (source.resultsRows || []).map((r) => ({
     ms: Date.parse(r.created_at),
@@ -267,56 +447,50 @@ function buildActivitiesFromMonthlySource(
     roomId: t.room_id,
   }));
 
-  const manual = (source.manualRows || []).map((t) => ({
-    ms: Date.parse(t.created_at),
-    amount: Number(t.amount || 0),
-    type: t.type,
-  }));
-
-  const getGamesPlayed = (startMs: number) => {
+  const getGamesPlayed = (startMs: number | null) => {
     const rooms = new Set<string>();
     for (const t of tickets) {
-      if (t.ms >= startMs && t.roomId) rooms.add(t.roomId);
+      if (startMs !== null && t.ms < startMs) continue;
+      if (t.roomId) rooms.add(t.roomId);
     }
     return rooms.size;
   };
 
-  const getLineFullWins = (startMs: number) => {
+  const getLineFullWins = (startMs: number | null) => {
     let lineWins = 0;
     let fullWins = 0;
     for (const r of results) {
-      if (r.ms >= startMs) {
-        if (r.winType === "line") lineWins += 1;
-        else if (r.winType === "full") fullWins += 1;
-      }
+      if (startMs !== null && r.ms < startMs) continue;
+      if (r.winType === "line") lineWins += 1;
+      else if (r.winType === "full") fullWins += 1;
     }
     return { lineWins, fullWins };
   };
 
-  const getDepositsWithdrawals = (startMs: number) => {
-    let deposits = 0;
-    let withdrawals = 0;
-    for (const t of manual) {
-      if (t.ms >= startMs) {
-        if (t.type === "deposit") deposits += t.amount;
-        else if (t.type === "withdraw") withdrawals += t.amount;
-      }
-    }
-    return { deposits, withdrawals, net: deposits - withdrawals };
-  };
+  const getDepositsWithdrawals = (startMs: number | null) =>
+    sumPanelCashflow(source.panelCashflowRows || [], startMs);
 
-  const getCommission = (startMs: number) => {
+  const getCommission = (period: UserAccountPeriod, startMs: number | null) => {
     let commission = 0;
     let commissionTotal: number | null = null;
 
     if (userRole === "admin" && source.kind === "admin_commission_tx") {
       commission = (source.commissionTxRows || []).reduce((sum, row) => {
         const ms = Date.parse(row.created_at);
-        if (ms < startMs) return sum;
+        if (startMs !== null && ms < startMs) return sum;
         return sum + Number(row.amount || 0);
       }, 0);
       commissionTotal = null;
       return { commission, commissionTotal };
+    }
+
+    if (source.kind === "commission_daily_stats") {
+      const fromDate = commissionStatFromDateForPeriod(period);
+      const totals = sumCommissionDailyRows(source.commissionDailyRows, { fromDate });
+      return {
+        commission: totals.earnedAmount,
+        commissionTotal: totals.commissionBase,
+      };
     }
 
     if (source.kind !== "commissions_log") {
@@ -326,30 +500,23 @@ function buildActivitiesFromMonthlySource(
     commissionTotal = 0;
     for (const row of source.commissionRows || []) {
       const ms = Date.parse(String((row as any).created_at));
-      if (ms < startMs) continue;
+      if (startMs !== null && ms < startMs) continue;
 
-      if (userRole === "player") {
-        commission +=
-          Number((row as any).agent_amount || 0) +
-          Number((row as any).super_amount || 0) +
-          Number((row as any).admin_amount || 0);
-      } else if (userRole === "agent") {
-        commission += Number((row as any).agent_amount || 0);
-      } else if (userRole === "super") {
-        commission += Number((row as any).super_amount || 0);
-      }
-
+      commission +=
+        Number((row as any).agent_amount || 0) +
+        Number((row as any).super_amount || 0) +
+        Number((row as any).admin_amount || 0);
       commissionTotal += Number((row as any).commission_base || 0);
     }
 
     return { commission, commissionTotal };
   };
 
-  const buildOne = (period: UserAccountPeriod, startMs: number): UserAccountActivity => {
+  const buildOne = (period: UserAccountPeriod, startMs: number | null): UserAccountActivity => {
     const gamesPlayed = getGamesPlayed(startMs);
     const { lineWins, fullWins } = getLineFullWins(startMs);
     const { deposits, withdrawals, net } = getDepositsWithdrawals(startMs);
-    const { commission, commissionTotal } = getCommission(startMs);
+    const { commission, commissionTotal } = getCommission(period, startMs);
     return {
       period,
       gamesPlayed,
@@ -367,6 +534,7 @@ function buildActivitiesFromMonthlySource(
     day: buildOne("day", dayStartMs),
     week: buildOne("week", weekStartMs),
     month: buildOne("month", monthStartMs),
+    overall: buildOne("overall", null),
   };
 }
 
@@ -793,13 +961,13 @@ async function calculateUserActivity(
 ): Promise<UserAccountActivity> {
   try {
     const periodStart = getPeriodStart(period);
+    const periodStartIso = periodStart?.toISOString() ?? null;
 
-    // محاسبه تعداد برد خطی و پر از results
-    const { data: resultsData, error: resultsError } = await supabase
-      .from("results")
-      .select("win_type")
-      .eq("user_id", userId)
-      .gte("created_at", periodStart.toISOString());
+    let resultsQuery = supabase.from("results").select("win_type").eq("user_id", userId);
+    if (periodStartIso) {
+      resultsQuery = resultsQuery.gte("created_at", periodStartIso);
+    }
+    const { data: resultsData, error: resultsError } = await resultsQuery;
 
     if (resultsError) {
       console.error("calculateUserActivity: results error", resultsError);
@@ -811,12 +979,15 @@ async function calculateUserActivity(
     // تعداد بازی = اتاق‌های متمایزی که پلیر تیکت معتبر خریده
     let gamesPlayed = 0;
     if (userRole === "player") {
-      const { data: ticketsData, error: ticketsError } = await supabase
+      let ticketsQuery = supabase
         .from("tickets")
         .select("room_id")
         .eq("player_user_id", userId)
-        .in("reservation_status", ["confirmed", "consumed"])
-        .gte("created_at", periodStart.toISOString());
+        .in("reservation_status", ["confirmed", "consumed"]);
+      if (periodStartIso) {
+        ticketsQuery = ticketsQuery.gte("created_at", periodStartIso);
+      }
+      const { data: ticketsData, error: ticketsError } = await ticketsQuery;
 
       if (ticketsError) {
         console.error("calculateUserActivity: tickets error", ticketsError);
@@ -837,12 +1008,15 @@ async function calculateUserActivity(
     let commission = 0;
     let commissionTotal: number | null = null;
     if (userRole === "player") {
-      const { data: commissionData, error: commissionError } = await supabase
+      let commissionQuery = supabase
         .from("commissions_log")
         .select("agent_amount, super_amount, admin_amount, commission_base")
         .eq("player_id", userId)
-        .eq("status", "settled")
-        .gte("created_at", periodStart.toISOString());
+        .eq("status", "settled");
+      if (periodStartIso) {
+        commissionQuery = commissionQuery.gte("created_at", periodStartIso);
+      }
+      const { data: commissionData, error: commissionError } = await commissionQuery;
 
       if (commissionError) {
         console.error("calculateUserActivity: commissions_log(player) error", commissionError);
@@ -860,54 +1034,26 @@ async function calculateUserActivity(
         (sum: number, row: any) => sum + Number(row.commission_base || 0),
         0
       );
-    } else if (userRole === "agent") {
-      const { data: commissionData, error: commissionError } = await supabase
-        .from("commissions_log")
-        .select("agent_amount, commission_base")
-        .eq("agent_id", userId)
-        .eq("status", "settled")
-        .gte("created_at", periodStart.toISOString());
-
-      if (commissionError) {
-        console.error("calculateUserActivity: commissions_log(agent) error", commissionError);
-      }
-
-      commission = (commissionData || []).reduce(
-        (sum: number, row: any) => sum + Number(row.agent_amount || 0),
-        0
-      );
-      commissionTotal = (commissionData || []).reduce(
-        (sum: number, row: any) => sum + Number(row.commission_base || 0),
-        0
-      );
-    } else if (userRole === "super") {
-      const { data: commissionData, error: commissionError } = await supabase
-        .from("commissions_log")
-        .select("super_amount, commission_base")
-        .eq("super_id", userId)
-        .eq("status", "settled")
-        .gte("created_at", periodStart.toISOString());
-
-      if (commissionError) {
-        console.error("calculateUserActivity: commissions_log(super) error", commissionError);
-      }
-
-      commission = (commissionData || []).reduce(
-        (sum: number, row: any) => sum + Number(row.super_amount || 0),
-        0
-      );
-      commissionTotal = (commissionData || []).reduce(
-        (sum: number, row: any) => sum + Number(row.commission_base || 0),
-        0
-      );
+    } else if (userRole === "agent" || userRole === "super") {
+      const totals = await loadCommissionDailyTotals({
+        supabase,
+        userId,
+        role: userRole,
+        fromDate: commissionStatFromDateForPeriod(period),
+      });
+      commission = totals.earnedAmount;
+      commissionTotal = totals.commissionBase;
     } else if (userRole === "admin") {
-      const { data: commissionTxs, error: commissionTxErr } = await supabase
+      let commissionTxQuery = supabase
         .from("transactions")
         .select("amount")
         .eq("user_id", userId)
         .eq("type", "fee_admin")
-        .eq("source_kind", "ticket_commission")
-        .gte("created_at", periodStart.toISOString());
+        .eq("source_kind", "ticket_commission");
+      if (periodStartIso) {
+        commissionTxQuery = commissionTxQuery.gte("created_at", periodStartIso);
+      }
+      const { data: commissionTxs, error: commissionTxErr } = await commissionTxQuery;
 
       if (commissionTxErr) {
         console.error("calculateUserActivity: transactions(admin commission) error", commissionTxErr);
@@ -920,34 +1066,11 @@ async function calculateUserActivity(
       commissionTotal = null; // commissions_log doesn't track admin_id; requires org tree aggregation
     }
 
-    // محاسبه واریز و برداشت از transactions
-    const { data: depositsData, error: depositsError } = await supabase
-      .from("transactions")
-      .select("amount")
-      .eq("user_id", userId)
-      .eq("type", "deposit")
-      .eq("source_kind", "manual_panel")
-      .gte("created_at", periodStart.toISOString());
-
-    if (depositsError) {
-      console.error("calculateUserActivity: deposits error", depositsError);
-    }
-
-    const { data: withdrawalsData, error: withdrawalsError } = await supabase
-      .from("transactions")
-      .select("amount")
-      .eq("user_id", userId)
-      .eq("type", "withdraw")
-      .eq("source_kind", "manual_panel")
-      .gte("created_at", periodStart.toISOString());
-
-    if (withdrawalsError) {
-      console.error("calculateUserActivity: withdrawals error", withdrawalsError);
-    }
-
-    const deposits = (depositsData || []).reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-    const withdrawals = (withdrawalsData || []).reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
-    const net = deposits - withdrawals;
+    // محاسبه واریز و برداشت پنلی (manual_panel + admin_panel_transfer)
+    const panelCashflowRows = await loadPanelCashflowRows(userId, userRole, {
+      fromIso: periodStartIso ?? undefined,
+    });
+    const { deposits, withdrawals, net } = sumPanelCashflowAll(panelCashflowRows);
 
     return {
       period,
@@ -1397,6 +1520,144 @@ export async function saveUserCommission(
   }
 }
 
+function parseUtcDateRange(params: { from: string; to: string }): {
+  fromIso: string;
+  toIso: string;
+  fromDate: string;
+  toDate: string;
+} {
+  const from = new Date(`${params.from}T00:00:00.000Z`);
+  const to = new Date(`${params.to}T23:59:59.999Z`);
+  if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from > to) {
+    throw new Error("بازه تاریخ نامعتبر است");
+  }
+  return {
+    fromIso: from.toISOString(),
+    toIso: to.toISOString(),
+    fromDate: params.from,
+    toDate: params.to,
+  };
+}
+
+export async function loadUserAccountRangeActivity(
+  userId: string,
+  userRole: UserAccountInfo["role"],
+  params: { from: string; to: string }
+): Promise<UserAccountActivityMetrics> {
+  const { fromIso, toIso, fromDate, toDate } = parseUtcDateRange(params);
+
+  const resultsPromise = supabase
+    .from("results")
+    .select("win_type")
+    .eq("user_id", userId)
+    .gte("created_at", fromIso)
+    .lte("created_at", toIso);
+
+  const ticketsPromise =
+    userRole === "player"
+      ? supabase
+          .from("tickets")
+          .select("room_id")
+          .eq("player_user_id", userId)
+          .in("reservation_status", ["confirmed", "consumed"])
+          .gte("created_at", fromIso)
+          .lte("created_at", toIso)
+      : Promise.resolve({ data: [] as { room_id: string }[], error: null });
+
+  const panelCashflowPromise = loadPanelCashflowRows(userId, userRole, {
+    fromIso,
+    toIso,
+  });
+
+  const [resultsRes, ticketsRes, panelCashflowRows] = await Promise.all([
+    resultsPromise,
+    ticketsPromise,
+    panelCashflowPromise,
+  ]);
+
+  let commission = 0;
+  let commissionTotal: number | null = null;
+  if (userRole === "player") {
+    const { data, error } = await supabase
+      .from("commissions_log")
+      .select("agent_amount, super_amount, admin_amount, commission_base")
+      .eq("player_id", userId)
+      .eq("status", "settled")
+      .gte("created_at", fromIso)
+      .lte("created_at", toIso);
+    if (error) {
+      console.error("[UserAccount] range commissions_log(player) error", error);
+    }
+    const rows = data || [];
+    commission = rows.reduce(
+      (sum, row) =>
+        sum +
+        Number(row.agent_amount || 0) +
+        Number(row.super_amount || 0) +
+        Number(row.admin_amount || 0),
+      0
+    );
+    commissionTotal = rows.reduce(
+      (sum, row) => sum + Number(row.commission_base || 0),
+      0
+    );
+  } else if (userRole === "agent" || userRole === "super") {
+    const totals = await loadCommissionDailyTotals({
+      supabase,
+      userId,
+      role: userRole,
+      fromDate,
+      toDate,
+    });
+    commission = totals.earnedAmount;
+    commissionTotal = totals.commissionBase;
+  } else {
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("amount")
+      .eq("user_id", userId)
+      .eq("type", "fee_admin")
+      .eq("source_kind", "ticket_commission")
+      .gte("created_at", fromIso)
+      .lte("created_at", toIso);
+    if (error) {
+      console.error("[UserAccount] range transactions(admin commission) error", error);
+    }
+    commission = (data || []).reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    commissionTotal = null;
+  }
+
+  if (resultsRes.error) {
+    console.error("[UserAccount] range results error", resultsRes.error);
+  }
+  if (ticketsRes.error) {
+    console.error("[UserAccount] range tickets error", ticketsRes.error);
+  }
+
+  const { deposits, withdrawals, net } = sumPanelCashflowAll(panelCashflowRows);
+  const lineWins = (resultsRes.data || []).filter((r) => r.win_type === "line").length;
+  const fullWins = (resultsRes.data || []).filter((r) => r.win_type === "full").length;
+  const gamesPlayed =
+    userRole === "player"
+      ? new Set(
+          (ticketsRes.data || [])
+            .map((t) => t.room_id)
+            .filter((id): id is string => typeof id === "string" && id.length > 0)
+        ).size
+      : 0;
+
+  return {
+    gamesPlayed,
+    lineWins,
+    fullWins,
+    commission,
+    commissionTotal,
+    deposits,
+    withdrawals,
+    net,
+  };
+}
+
 /**
  * بارگذاری کامل اطلاعات حساب کاربر
  */
@@ -1429,6 +1690,7 @@ export async function loadUserAccountData(
         day: await calculateUserActivity(userId, "day", user.role),
         week: await calculateUserActivity(userId, "week", user.role),
         month: await calculateUserActivity(userId, "month", user.role),
+        overall: await calculateUserActivity(userId, "overall", user.role),
       };
     }
 

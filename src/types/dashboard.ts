@@ -2,7 +2,7 @@
 //
 // Types used by admin/agent dashboards (financial overview, user info, etc.)
 
-export type DashboardPeriod = "day" | "week" | "month";
+export type DashboardPeriod = "day" | "week" | "month" | "overall";
 
 export interface DashboardUserInfo {
   id: string;
@@ -15,11 +15,21 @@ export interface DashboardUserInfo {
   adminSubRole?: "manager" | "finance" | "support" | "room" | "dev_panel" | null; // فقط برای role="admin"
 }
 
+export interface DashboardPanelOperator {
+  userId: string;
+  displayName: string;
+  role: "agent" | "super";
+  /** کمیسیون همان پنل (کانیات من ایجنت/سوپر) در بازه انتخاب‌شده */
+  amount: number;
+}
+
 export interface FinancialSummary {
   period: DashboardPeriod;
   ticketsVolume: number; // مجموع مبلغ بلیت‌ها / فروش
   /** مجموع commission_base تیکت‌های settle‌شده (فقط کمیسیون پرداخت‌شده) */
   ticketsVolumeTotal: number;
+  /** تفکیک کانیات پنل‌ها بر اساس ایجنت/سوپر */
+  panelOperators?: DashboardPanelOperator[];
   /** مجموع commission_base تورنومنت‌ها */
   tournamentTicketsVolumeTotal: number;
   /** کمیسیون تورنومنت (نمایش جداگانه در داشبورد) */

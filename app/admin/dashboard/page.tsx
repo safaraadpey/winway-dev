@@ -13,7 +13,7 @@ import ShamsiDateInput from "@/components/common/ShamsiDateInput";
 import { supabase } from "@/lib/supabaseClient";
 import { getCachedAdminPermissions, getCurrentAdminPermissions } from "@/lib/admin-permissions";
 import AdminDashboardReportSkeleton from "@/components/admin/AdminDashboardReportSkeleton";
-import type { DashboardPeriod, DashboardData } from "@/src/types/dashboard";
+import type { DashboardPeriod, DashboardData, DashboardPanelOperator } from "@/src/types/dashboard";
 import type { AdminPermissions } from "@/src/types/admins";
 import InstallAppButton from "@/components/InstallAppButton";
 import ReferralRegistrationLink from "@/components/admin/ReferralRegistrationLink";
@@ -24,7 +24,44 @@ const PERIOD_LABELS: Record<DashboardPeriod, string> = {
   day: "روز",
   week: "هفته",
   month: "ماه",
+  overall: "کل",
 };
+
+function DashboardAmount({
+  value,
+  size = "14",
+}: {
+  value: number;
+  size?: "12" | "13" | "14";
+}) {
+  return (
+    <span className={`numeric-text numeric-text--${size}`} dir="ltr">
+      {value.toLocaleString("en-US")}
+    </span>
+  );
+}
+
+function PanelOperatorsBreakdown({ operators }: { operators: DashboardPanelOperator[] }) {
+  if (operators.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="col-span-2 mb-1 max-h-48 overflow-y-auto rounded-lg border border-gray-800 bg-black/30 px-2 py-2">
+      {operators.map((op) => (
+        <div key={op.userId} className="grid grid-cols-2 py-0.5 text-xs text-gray-300">
+          <span>
+            {op.displayName}
+            <span className="text-gray-500"> ({op.role === "super" ? "سوپر" : "ایجنت"})</span>
+          </span>
+          <span className="text-right">
+            <DashboardAmount value={op.amount} size="12" />
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function AdminDashboardPage() {
   type PeriodTab = DashboardPeriod | "range";
@@ -45,6 +82,7 @@ export default function AdminDashboardPage() {
     gatewayPurchases: number;
     deposits: number;
     withdrawals: number;
+    panelOperators?: DashboardPanelOperator[];
   } | null>(null);
   const [permissions, setPermissions] = useState<AdminPermissions | null>(() =>
     getCachedAdminPermissions()
@@ -161,6 +199,7 @@ export default function AdminDashboardPage() {
         gatewayPurchases: result.gatewayPurchases,
         deposits: result.deposits,
         withdrawals: result.withdrawals,
+        panelOperators: result.panelOperators ?? [],
       });
     } catch (error) {
       console.error("Error loading range dashboard summary:", error);
@@ -192,49 +231,62 @@ export default function AdminDashboardPage() {
     return (
       <div className="grid grid-cols-2 gap-y-1">
         <span>کانیات کل</span>
-        <span className="text-right font-mono">{summary.ticketsVolumeTotal.toLocaleString("en-US")}</span>
+        <span className="text-right">
+          <DashboardAmount value={summary.ticketsVolumeTotal} />
+        </span>
         <span>کانیات کل تورنومنت‌ها</span>
-        <span className="text-right font-mono">
-          {(summary.tournamentTicketsVolumeTotal ?? 0).toLocaleString("en-US")}
+        <span className="text-right">
+          <DashboardAmount value={summary.tournamentTicketsVolumeTotal ?? 0} />
         </span>
         <span>کانیات کل بازی‌ها</span>
-        <span className="text-right font-mono">
-          {Math.max(
-            0,
-            summary.ticketsVolumeTotal - (summary.tournamentTicketsVolumeTotal ?? 0)
-          ).toLocaleString("en-US")}
+        <span className="text-right">
+          <DashboardAmount
+            value={Math.max(
+              0,
+              summary.ticketsVolumeTotal - (summary.tournamentTicketsVolumeTotal ?? 0)
+            )}
+          />
         </span>
         <span>کانیات پنل‌ها</span>
-        <span className="text-right font-mono">
-          {Math.max(0, summary.ticketsVolumeTotal - summary.ticketsVolume).toLocaleString("en-US")}
+        <span className="text-right">
+          <DashboardAmount
+            value={Math.max(0, summary.ticketsVolumeTotal - summary.ticketsVolume)}
+          />
         </span>
+        <PanelOperatorsBreakdown operators={summary.panelOperators ?? []} />
         <span>کانیات من</span>
-        <span className="text-right font-mono">{summary.ticketsVolume.toLocaleString("en-US")}</span>
+        <span className="text-right">
+          <DashboardAmount value={summary.ticketsVolume} />
+        </span>
         <span>کانیات از تورنومنت</span>
-        <span className="text-right font-mono">
-          {(summary.tournamentCommission ?? 0).toLocaleString("en-US")}
+        <span className="text-right">
+          <DashboardAmount value={summary.tournamentCommission ?? 0} />
         </span>
         <span>کانیات از بازی‌ها</span>
-        <span className="text-right font-mono">
-          {Math.max(0, summary.ticketsVolume - (summary.tournamentCommission ?? 0)).toLocaleString(
-            "en-US"
-          )}
+        <span className="text-right">
+          <DashboardAmount
+            value={Math.max(0, summary.ticketsVolume - (summary.tournamentCommission ?? 0))}
+          />
         </span>
         <span>تاپ آپ گارانتی</span>
-        <span className="text-right font-mono">
-          {(summary.tournamentGuaranteePayout ?? 0).toLocaleString("en-US")}
+        <span className="text-right">
+          <DashboardAmount value={summary.tournamentGuaranteePayout ?? 0} />
         </span>
         <span>خرید از درگاه</span>
-        <span className="text-right font-mono">
-          {(summary.gatewayPurchases ?? 0).toLocaleString("en-US")}
+        <span className="text-right">
+          <DashboardAmount value={summary.gatewayPurchases ?? 0} />
         </span>
         <span>واریز</span>
-        <span className="text-right font-mono">{summary.deposits.toLocaleString("en-US")}</span>
+        <span className="text-right">
+          <DashboardAmount value={summary.deposits} />
+        </span>
         <span>برداشت</span>
-        <span className="text-right font-mono">{summary.withdrawals.toLocaleString("en-US")}</span>
+        <span className="text-right">
+          <DashboardAmount value={summary.withdrawals} />
+        </span>
         <span>تعداد اتاق فعال</span>
-        <span className="text-right font-mono">
-          {(data?.activeRoomsCount ?? 0).toLocaleString("en-US")}
+        <span className="text-right">
+          <DashboardAmount value={data?.activeRoomsCount ?? 0} />
         </span>
       </div>
     );

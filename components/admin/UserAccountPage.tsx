@@ -6,6 +6,7 @@ import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import {
   getCachedUserAccountData,
   loadUserAccountData,
+  loadUserAccountRangeActivity,
   primeUserAccountDataCache,
   saveUserCommission,
   toggleUserSuspension,
@@ -18,10 +19,13 @@ import { transferWalletForUsersBulk } from "@/services/transactions";
 import { setUserPassword } from "@/lib/adminApiClient";
 import { supabase } from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
+import ShamsiDateInput from "@/components/common/ShamsiDateInput";
 import type { TransactionAction } from "@/src/types/transactions";
 import type { AdminSubRole } from "@/lib/auth-helpers";
 import type {
   UserAccountData,
+  UserAccountActivityMetrics,
+  UserAccountInfo,
   UserAccountPeriod,
 } from "@/src/types/user-account";
 
@@ -33,7 +37,31 @@ const PERIOD_LABELS: Record<UserAccountPeriod, string> = {
   day: "روز",
   week: "هفته",
   month: "ماه",
+  overall: "کل",
 };
+
+function periodTabsForRole(role: UserAccountData["user"]["role"]): UserAccountPeriod[] {
+  if (role === "agent" || role === "super") {
+    return ["day", "week", "month", "overall"];
+  }
+  return ["day", "week", "month"];
+}
+
+type ActivityPeriodTab = UserAccountPeriod | "range";
+
+function AccountAmount({
+  value,
+  size = "14",
+}: {
+  value: number;
+  size?: "12" | "13" | "14";
+}) {
+  return (
+    <span className={`numeric-text numeric-text--${size}`} dir="ltr">
+      {value.toLocaleString("en-US")}
+    </span>
+  );
+}
 
 function formatShortId(shortId: string | null): string {
   if (!shortId) return "";
@@ -67,11 +95,20 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
   const router = useRouter();
   const { setShowHeader, setShowBackButton, setOnBackClick } = useHeaderVisibility();
   const cached = getCachedUserAccountData(userId, { maxAgeMs: 30_000 });
+  const cachedNeedsOverallRefresh =
+    cached &&
+    cached.user.adminSubRole !== "dev_panel" &&
+    (cached.user.role === "agent" || cached.user.role === "super") &&
+    !cached.activities?.overall;
   const safeCached =
-    cached?.user.adminSubRole === "dev_panel" ? null : cached;
+    cached?.user.adminSubRole === "dev_panel" || cachedNeedsOverallRefresh ? null : cached;
   const [data, setData] = useState<UserAccountData | null>(() => safeCached);
   const [loading, setLoading] = useState(() => safeCached === null);
-  const [activePeriod, setActivePeriod] = useState<UserAccountPeriod>("month");
+  const [activePeriod, setActivePeriod] = useState<ActivityPeriodTab>("month");
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+  const [rangeLoading, setRangeLoading] = useState(false);
+  const [rangeActivity, setRangeActivity] = useState<UserAccountActivityMetrics | null>(null);
   const [commissionPercent, setCommissionPercent] = useState<string>("");
   const [savingCommission, setSavingCommission] = useState(false);
   const [suspending, setSuspending] = useState(false);
@@ -703,6 +740,25 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
     }
   };
 
+  const handleLoadRange = async () => {
+    if (!data?.user) return;
+    if (!rangeFrom || !rangeTo || rangeFrom > rangeTo) return;
+    try {
+      setRangeLoading(true);
+      const result = await loadUserAccountRangeActivity(userId, data.user.role, {
+        from: rangeFrom,
+        to: rangeTo,
+      });
+      setRangeActivity(result);
+    } catch (error) {
+      console.error("[UserAccount] range activity error:", error);
+      setRangeActivity(null);
+      toast.error("خطا در بارگذاری بازه");
+    } finally {
+      setRangeLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0E0E0F] p-4">
@@ -726,7 +782,11 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
   const { user, activities, transactions } = data;
   const headerNickname =
     user.displayName && user.displayName !== user.username ? user.displayName : "";
-  const activity = activities[activePeriod];
+  const periodTabs = periodTabsForRole(user.role);
+  const activity =
+    activePeriod === "range"
+      ? rangeActivity
+      : activities[activePeriod] ?? activities.month;
   const canEditCommission =
     !!currentUserId &&
     (((currentUserRole === "super" || currentUserRole === "agent") &&
@@ -1071,8 +1131,12 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
 
         {/* آمار فعالیت */}
         <div className="rounded-2xl bg-[#151515] border border-gray-800 mb-6">
-          <div className="grid grid-cols-3 text-center text-sm font-semibold">
-            {(["day", "week", "month"] as UserAccountPeriod[]).map((period) => (
+          <div
+            className={`grid ${
+              periodTabs.length === 4 ? "grid-cols-5" : "grid-cols-4"
+            } text-center text-sm font-semibold rounded-2xl overflow-hidden`}
+          >
+            {periodTabs.map((period) => (
               <button
                 key={period}
                 onClick={() => setActivePeriod(period)}
@@ -1083,8 +1147,40 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
                 {PERIOD_LABELS[period]}
               </button>
             ))}
+            <button
+              onClick={() => setActivePeriod("range")}
+              className={`py-3 ${
+                activePeriod === "range" ? "bg-teal-500 text-black" : "text-gray-300"
+              }`}
+            >
+              بازه
+            </button>
           </div>
           <div className="px-4 py-3 text-sm text-gray-100">
+            {activePeriod === "range" && (
+              <div className="mb-3 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <ShamsiDateInput value={rangeFrom} onChange={setRangeFrom} />
+                  <ShamsiDateInput value={rangeTo} onChange={setRangeTo} />
+                </div>
+                <button
+                  onClick={handleLoadRange}
+                  disabled={!rangeFrom || !rangeTo || rangeFrom > rangeTo || rangeLoading}
+                  className="w-full rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                >
+                  {rangeLoading ? "در حال محاسبه..." : "اعمال بازه"}
+                </button>
+              </div>
+            )}
+            {activePeriod === "range" && (!rangeFrom || !rangeTo || rangeFrom > rangeTo) ? (
+              <div className="text-center py-4 text-gray-400">بازه تاریخ معتبر انتخاب کنید</div>
+            ) : activePeriod === "range" && !activity && !rangeLoading ? (
+              <div className="text-center py-4 text-gray-400">بازه را اعمال کنید</div>
+            ) : activePeriod === "range" && rangeLoading ? (
+              <div className="text-center py-4 text-gray-400">در حال محاسبه...</div>
+            ) : !activity ? (
+              <div className="text-center py-4 text-gray-400">در حال بارگذاری...</div>
+            ) : (
             <div className="grid grid-cols-2 gap-y-1">
               {data?.user?.role === "player" && (
                 <>
@@ -1103,32 +1199,33 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
                 </>
               )}
               <span>کانیات</span>
-              <span className="text-right font-mono">
-                {activity.commission.toLocaleString("en-US")}
+              <span className="text-right">
+                <AccountAmount value={activity.commission} />
               </span>
               <span>کانیات کل</span>
-              <span className="text-right font-mono">
-                {activity.commissionTotal === null
-                  ? "—"
-                  : activity.commissionTotal.toLocaleString("en-US")}
+              <span className="text-right">
+                {activity.commissionTotal === null ? (
+                  "—"
+                ) : (
+                  <AccountAmount value={activity.commissionTotal} />
+                )}
               </span>
               <span>واریز</span>
-              <span className="text-right font-mono">
-                {activity.deposits.toLocaleString("en-US")}
+              <span className="text-right">
+                <AccountAmount value={activity.deposits} />
               </span>
               <span>برداشت</span>
-              <span className="text-right font-mono">
-                {activity.withdrawals.toLocaleString("en-US")}
+              <span className="text-right">
+                <AccountAmount value={activity.withdrawals} />
               </span>
               <span>بیلان</span>
               <span
-                className={`text-right font-mono ${
-                  activity.net >= 0 ? "text-green-400" : "text-red-400"
-                }`}
+                className={`text-right ${activity.net >= 0 ? "text-green-400" : "text-red-400"}`}
               >
-                {activity.net.toLocaleString("en-US")}
+                <AccountAmount value={activity.net} />
               </span>
             </div>
+            )}
           </div>
         </div>
 

@@ -6,8 +6,17 @@
 import { supabase } from "@/lib/supabaseClient";
 import { callAdminApi } from "@/lib/adminApiClient";
 import { sumGatewayPurchasesInRange } from "@/lib/dashboard/gatewayPurchases";
+import {
+  getRollingWeekStart,
+  getRollingMonthStart,
+  loadCommissionDailyStatRows,
+  sumCommissionDailyRows,
+  type CommissionDailyStatRow,
+  type CommissionOperatorRole,
+} from "@/lib/dashboard/loadCommissionDailyStats";
 import type {
   DashboardData,
+  DashboardPanelOperator,
   DashboardPeriod,
   DashboardUserInfo,
   FinancialSummary,
@@ -23,6 +32,7 @@ export interface DashboardRangeSummary {
   deposits: number;
   withdrawals: number;
   net: number;
+  panelOperators?: DashboardPanelOperator[];
 }
 
 // helper: تبدیل UUID به یک رشته عددی ۱۰ رقمی پایدار
@@ -73,6 +83,18 @@ const DEFAULT_SUMMARIES: Record<DashboardPeriod, FinancialSummary> = {
     withdrawals: 0,
     net: 0,
   },
+  overall: {
+    period: "overall",
+    ticketsVolume: 0,
+    ticketsVolumeTotal: 0,
+    tournamentTicketsVolumeTotal: 0,
+    tournamentCommission: 0,
+    tournamentGuaranteePayout: 0,
+    gatewayPurchases: 0,
+    deposits: 0,
+    withdrawals: 0,
+    net: 0,
+  },
 };
 
 type DashboardCache = {
@@ -92,7 +114,7 @@ async function loadDashboardDataFromAdminSnapshot(options?: {
   force?: boolean;
 }): Promise<DashboardData> {
   const maxAgeMs = options?.maxAgeMs ?? 30_000;
-  const cacheKey = "admin-snapshot|v1";
+  const cacheKey = "admin-snapshot|v2";
 
   if (!options?.force && dashboardCache?.key === cacheKey) {
     const ageMs = Date.now() - dashboardCache.fetchedAtMs;
@@ -255,6 +277,7 @@ export async function loadDashboardRangeSummary(params: {
       deposits: 0,
       withdrawals: 0,
       net: 0,
+      panelOperators: [],
     };
   }
 
@@ -289,74 +312,27 @@ export async function loadDashboardRangeSummary(params: {
   const commissionQuery =
     user.role === "admin"
       ? null
-      : user.role === "agent"
-      ? supabase
-          .from("commissions_log")
-          .select("agent_amount, commission_base")
-          .eq("agent_id", user.id)
-          .eq("status", "settled")
-          .gte("created_at", fromIso)
-          .lte("created_at", toIso)
-      : supabase
-          .from("commissions_log")
-          .select("super_amount, commission_base")
-          .eq("super_id", user.id)
-          .eq("status", "settled")
-          .gte("created_at", fromIso)
-          .lte("created_at", toIso);
+      : loadCommissionDailyStatRows({
+          supabase,
+          userId: user.id,
+          role: operatorRoleForUser(user.role)!,
+          fromDate: params.from,
+          toDate: params.to,
+        }).then((rows) => ({ data: rows, error: null }));
 
-  const tournamentCommissionQuery =
-    user.role === "admin"
-      ? null
-      : user.role === "agent"
-      ? supabase
-          .from("tournament_commission_snapshots")
-          .select("agent_amount, commission_base")
-          .eq("agent_id", user.id)
-          .gte("created_at", fromIso)
-          .lte("created_at", toIso)
-      : supabase
-          .from("tournament_commission_snapshots")
-          .select("super_amount, commission_base")
-          .eq("super_id", user.id)
-          .gte("created_at", fromIso)
-          .lte("created_at", toIso);
-
-  const tournamentCommissionAmountQuery =
-    user.role === "admin"
-      ? null
-      : supabase
-          .from("transactions")
-          .select("amount")
-          .eq("user_id", user.id)
-          .eq("source_kind", "tournament_commission")
-          .eq("type", "win")
-          .gte("created_at", fromIso)
-          .lte("created_at", toIso);
-
-  const [manualRes, transferRes, commissionRes, tournamentCommissionRes, tournamentCommissionAmountRes] = await Promise.all([
+  const [manualRes, transferRes, commissionRes] = await Promise.all([
     manualPanelQuery,
     transferQuery,
     commissionQuery ? commissionQuery : Promise.resolve({ data: [], error: null } as any),
-    tournamentCommissionQuery
-      ? tournamentCommissionQuery
-      : Promise.resolve({ data: [], error: null } as any),
-    tournamentCommissionAmountQuery
-      ? tournamentCommissionAmountQuery
-      : Promise.resolve({ data: [], error: null } as any),
   ]);
 
   if (manualRes.error) throw new Error("خطا در دریافت واریز/برداشت");
   if (transferRes.error) throw new Error("خطا در دریافت تراکنش‌های پنلی");
-  if (commissionRes.error) throw new Error("خطا در دریافت کمیسیون");
-  if (tournamentCommissionRes.error) throw new Error("خطا در دریافت کمیسیون تورنومنت");
-  if (tournamentCommissionAmountRes.error) throw new Error("خطا در دریافت مبلغ کمیسیون تورنومنت");
+  if ((commissionRes as any).error) throw new Error("خطا در دریافت کمیسیون");
 
   const manualRows = manualRes.data || [];
   const transferRows = transferRes.data || [];
-  const commissionRows = commissionRes.data || [];
-  const tournamentCommissionRows = tournamentCommissionRes.data || [];
-  const tournamentCommissionAmountRows = tournamentCommissionAmountRes.data || [];
+  const commissionRows = ((commissionRes as any).data || []) as CommissionDailyStatRow[];
 
   const deposits =
     manualRows.reduce(
@@ -403,6 +379,22 @@ export async function loadDashboardRangeSummary(params: {
       toIso
     );
 
+    let panelOperators: DashboardPanelOperator[] = [];
+    if (isAdminPanelRoute()) {
+      try {
+        panelOperators = await callAdminApi<DashboardPanelOperator[]>(
+          `/api/admin/dashboard/panel-operators?from=${encodeURIComponent(params.from)}&to=${encodeURIComponent(params.to)}`,
+          { method: "GET" }
+        );
+        if (!Array.isArray(panelOperators)) {
+          panelOperators = [];
+        }
+      } catch (error) {
+        console.error("[Dashboard] panel-operators range error:", error);
+        panelOperators = [];
+      }
+    }
+
     return {
       ticketsVolume: admin.amount,
       ticketsVolumeTotal: admin.total,
@@ -413,36 +405,21 @@ export async function loadDashboardRangeSummary(params: {
       deposits,
       withdrawals,
       net: deposits - withdrawals,
+      panelOperators,
     };
   }
 
-  const ticketCommission =
-    user.role === "agent"
-      ? commissionRows.reduce((sum: number, r: any) => sum + Number(r.agent_amount || 0), 0)
-      : commissionRows.reduce((sum: number, r: any) => sum + Number(r.super_amount || 0), 0);
-
-  const tournamentCommission =
-    tournamentCommissionAmountRows.reduce(
-      (sum: number, r: any) => sum + Number(r.amount || 0),
-      0
-    );
-
-  const commissionBase =
-    commissionRows.reduce((sum: number, r: any) => sum + Number(r.commission_base || 0), 0) +
-    tournamentCommissionRows.reduce(
-      (sum: number, r: any) => sum + Number(r.commission_base || 0),
-      0
-    );
-  const tournamentCommissionBase = tournamentCommissionRows.reduce(
-    (sum: number, r: any) => sum + Number(r.commission_base || 0),
-    0
+  const commissionTotals = commissionTotalsFromDailyRows(
+    commissionRows,
+    params.from,
+    params.to
   );
 
   return {
-    ticketsVolume: ticketCommission + tournamentCommission,
-    ticketsVolumeTotal: commissionBase,
-    tournamentTicketsVolumeTotal: tournamentCommissionBase,
-    tournamentCommission,
+    ticketsVolume: commissionTotals.earnedAmount,
+    ticketsVolumeTotal: commissionTotals.commissionBase,
+    tournamentTicketsVolumeTotal: commissionTotals.tournamentCommissionBase,
+    tournamentCommission: commissionTotals.tournamentEarnedAmount,
     tournamentGuaranteePayout: 0,
     gatewayPurchases: 0,
     deposits,
@@ -534,12 +511,9 @@ function getPeriodStart(period: DashboardPeriod): Date {
   if (period === "day") {
     return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   } else if (period === "week") {
-    const dayOfWeek = now.getUTCDay();
-    const diff = now.getUTCDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Monday
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), diff));
+    return getRollingWeekStart(now);
   } else {
-    // month
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    return getRollingMonthStart(now);
   }
 }
 
@@ -553,6 +527,20 @@ function sumRowsSince(rows: any[], startIso: string, pick: (row: any) => number)
     if (!createdAt || createdAt < startIso) return sum;
     return sum + pick(row);
   }, 0);
+}
+
+function operatorRoleForUser(role: DashboardUserInfo["role"]): CommissionOperatorRole | null {
+  if (role === "agent") return "agent";
+  if (role === "super") return "super";
+  return null;
+}
+
+function commissionTotalsFromDailyRows(
+  rows: CommissionDailyStatRow[],
+  fromDate?: string | null,
+  toDate?: string | null
+) {
+  return sumCommissionDailyRows(rows, { fromDate, toDate });
 }
 
 /**
@@ -616,6 +604,18 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
       withdrawals: 0,
       net: 0,
     },
+    overall: {
+      period: "overall",
+      ticketsVolume: 0,
+      ticketsVolumeTotal: 0,
+      tournamentTicketsVolumeTotal: 0,
+      tournamentCommission: 0,
+      tournamentGuaranteePayout: 0,
+      gatewayPurchases: 0,
+      deposits: 0,
+      withdrawals: 0,
+      net: 0,
+    },
   };
 
   // Optimization: fetch once since month start, derive day/week/month locally.
@@ -648,10 +648,10 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
   // use a server route (service role) so admin sub-roles can see adminzero totals.
   const adminCommissionMap:
     | {
-        admin: Record<DashboardPeriod, number>;
-        total: Record<DashboardPeriod, number>;
-        tournamentTotal: Record<DashboardPeriod, number>;
-        tournament: Record<DashboardPeriod, number>;
+        admin: Record<Exclude<DashboardPeriod, "overall">, number>;
+        total: Record<Exclude<DashboardPeriod, "overall">, number>;
+        tournamentTotal: Record<Exclude<DashboardPeriod, "overall">, number>;
+        tournament: Record<Exclude<DashboardPeriod, "overall">, number>;
       }
     | null =
     user.role === "admin"
@@ -698,8 +698,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
     .select("amount, type, created_at")
     .eq("source_kind", "manual_panel")
     .eq("source_ref", user.id)
-    .in("type", ["deposit", "withdraw"])
-    .gte("created_at", monthIso);
+    .in("type", ["deposit", "withdraw"]);
 
   const transferQuery = supabase
     .from("transactions")
@@ -708,92 +707,36 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
     // Each panel transfer creates TWO rows (transfer_out + transfer_in) with same actor/action.
     // Keep only one side to avoid double counting in dashboard totals.
     .eq("type", "transfer_out")
-    .filter("meta->>actor_id", "eq", user.id)
-    .gte("created_at", monthIso);
+    .filter("meta->>actor_id", "eq", user.id);
 
-  const commissionQuery =
-    user.role === "agent"
-      ? supabase
-          .from("commissions_log")
-          .select("agent_amount, commission_base, created_at")
-          .eq("agent_id", user.id)
-          .eq("status", "settled")
-          .gte("created_at", monthIso)
-      : supabase
-          .from("commissions_log")
-          .select("super_amount, commission_base, created_at")
-          .eq("super_id", user.id)
-          .eq("status", "settled")
-          .gte("created_at", monthIso);
+  const operatorRole = operatorRoleForUser(user.role);
+  let commissionDailyRows: CommissionDailyStatRow[] = [];
+  let manualPanelTxsRes: { data: any[] | null; error: any };
+  let transferTxsRes: { data: any[] | null; error: any };
 
-  const tournamentCommissionQuery =
-    user.role === "admin"
-      ? null
-      : user.role === "agent"
-      ? supabase
-          .from("tournament_commission_snapshots")
-          .select("agent_amount, commission_base, created_at")
-          .eq("agent_id", user.id)
-          .gte("created_at", monthIso)
-      : supabase
-          .from("tournament_commission_snapshots")
-          .select("super_amount, commission_base, created_at")
-          .eq("super_id", user.id)
-          .gte("created_at", monthIso);
-
-  const tournamentCommissionAmountQuery =
-    user.role === "admin"
-      ? null
-      : supabase
-          .from("transactions")
-          .select("amount, created_at")
-          .eq("user_id", user.id)
-          .eq("source_kind", "tournament_commission")
-          .eq("type", "win")
-          .gte("created_at", monthIso);
-
-  const [commissionTxsRes, manualPanelTxsRes, transferTxsRes, tournamentCommissionTxsRes, tournamentCommissionAmountTxsRes] =
-    user.role === "admin"
-      ? ([
-          { data: [], error: null } as any,
-          ...(await Promise.all([manualPanelQuery, transferQuery])),
-          { data: [], error: null } as any,
-          { data: [], error: null } as any,
-        ] as any)
-      : await Promise.all([
-          commissionQuery,
-          manualPanelQuery,
-          transferQuery,
-          tournamentCommissionQuery as any,
-          tournamentCommissionAmountQuery as any,
-        ]);
-
-  if (commissionTxsRes.error) {
-    console.error("loadDashboardData: commission source error:", commissionTxsRes.error);
+  if (user.role === "admin") {
+    [manualPanelTxsRes, transferTxsRes] = await Promise.all([manualPanelQuery, transferQuery]);
+  } else {
+    [commissionDailyRows, manualPanelTxsRes, transferTxsRes] = await Promise.all([
+      loadCommissionDailyStatRows({
+        supabase,
+        userId: user.id,
+        role: operatorRole!,
+      }),
+      manualPanelQuery,
+      transferQuery,
+    ]);
   }
+
   if (manualPanelTxsRes.error) {
     console.error("loadDashboardData: manual_panel tx error:", manualPanelTxsRes.error);
   }
   if (transferTxsRes.error) {
     console.error("loadDashboardData: admin_panel_transfer tx error:", transferTxsRes.error);
   }
-  if (tournamentCommissionTxsRes.error) {
-    console.error(
-      "loadDashboardData: tournament commission source error:",
-      tournamentCommissionTxsRes.error
-    );
-  }
-  if (tournamentCommissionAmountTxsRes.error) {
-    console.error(
-      "loadDashboardData: tournament commission amount tx error:",
-      tournamentCommissionAmountTxsRes.error
-    );
-  }
-  const commissionRows = commissionTxsRes.data || [];
+
   const manualTxs = manualPanelTxsRes.data || [];
   const transferTxs = transferTxsRes.data || [];
-  const tournamentCommissionRows = tournamentCommissionTxsRes.data || [];
-  const tournamentCommissionAmountRows = tournamentCommissionAmountTxsRes.data || [];
 
   const depositsFor = (startIso: string) => {
     const manual = sumRowsSince(manualTxs, startIso, (t) =>
@@ -813,87 +756,67 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
     );
     return manual + transfer;
   };
-  const commissionFor = (startIso: string) => {
+  const commissionFor = (period: DashboardPeriod, startDate: string | null) => {
     if (user.role === "admin") {
-      // values are precomputed by server route
-      if (startIso === dayIso) return adminCommissionMap?.admin.day ?? 0;
-      if (startIso === weekIso) return adminCommissionMap?.admin.week ?? 0;
-      return adminCommissionMap?.admin.month ?? 0;
+      if (period === "overall") return 0;
+      return adminCommissionMap?.admin[period] ?? 0;
     }
 
-    const tournamentPart =
-      sumRowsSince(tournamentCommissionAmountRows, startIso, (t) =>
-        Number((t as any).amount || 0)
-      );
-
-    if (user.role === "agent") {
-      return (
-        sumRowsSince(commissionRows, startIso, (t) => Number((t as any).agent_amount || 0)) +
-        tournamentPart
-      );
-    }
-    // super
-    return (
-      sumRowsSince(commissionRows, startIso, (t) => Number((t as any).super_amount || 0)) +
-      tournamentPart
-    );
+    return commissionTotalsFromDailyRows(commissionDailyRows, startDate).earnedAmount;
   };
 
-  // "کانیات کل" (commission_base): settled rows only (paid ticket commissions).
-  const commissionBaseFor = (startIso: string) => {
+  const commissionBaseFor = (period: DashboardPeriod, startDate: string | null) => {
     if (user.role === "admin") {
-      if (startIso === dayIso) return adminCommissionMap?.total.day ?? 0;
-      if (startIso === weekIso) return adminCommissionMap?.total.week ?? 0;
-      return adminCommissionMap?.total.month ?? 0;
+      if (period === "overall") return 0;
+      return adminCommissionMap?.total[period] ?? 0;
     }
-    return (
-      sumRowsSince(commissionRows, startIso, (t) => Number((t as any).commission_base || 0)) +
-      sumRowsSince(tournamentCommissionRows, startIso, (t) =>
-        Number((t as any).commission_base || 0)
-      )
-    );
+
+    return commissionTotalsFromDailyRows(commissionDailyRows, startDate).commissionBase;
   };
 
-  const tournamentCommissionBaseFor = (startIso: string) => {
+  const tournamentCommissionBaseFor = (period: DashboardPeriod, startDate: string | null) => {
     if (user.role === "admin") {
-      if (startIso === dayIso) return adminCommissionMap?.tournamentTotal.day ?? 0;
-      if (startIso === weekIso) return adminCommissionMap?.tournamentTotal.week ?? 0;
-      return adminCommissionMap?.tournamentTotal.month ?? 0;
+      if (period === "overall") return 0;
+      return adminCommissionMap?.tournamentTotal[period] ?? 0;
     }
-    return sumRowsSince(tournamentCommissionRows, startIso, (t) =>
-      Number((t as any).commission_base || 0)
-    );
+
+    return commissionTotalsFromDailyRows(commissionDailyRows, startDate).tournamentCommissionBase;
   };
 
-  const tournamentCommissionFor = (startIso: string) => {
+  const tournamentCommissionFor = (period: DashboardPeriod, startDate: string | null) => {
     if (user.role === "agent" || user.role === "super") {
-      return sumRowsSince(tournamentCommissionAmountRows, startIso, (t) =>
-        Number((t as any).amount || 0)
-      );
+      return commissionTotalsFromDailyRows(commissionDailyRows, startDate).tournamentEarnedAmount;
     }
-    if (startIso === dayIso) return adminCommissionMap?.tournament.day ?? 0;
-    if (startIso === weekIso) return adminCommissionMap?.tournament.week ?? 0;
-    return adminCommissionMap?.tournament.month ?? 0;
+    if (period === "overall") return 0;
+    return adminCommissionMap?.tournament[period] ?? 0;
   };
 
-  for (const [period, startIso] of [
-    ["day", dayIso],
-    ["week", weekIso],
-    ["month", monthIso],
-  ] as Array<[DashboardPeriod, string]>) {
-    const commission = commissionFor(startIso);
-    const commissionBase = commissionBaseFor(startIso);
-    const deposits = depositsFor(startIso);
-    const withdrawals = withdrawalsFor(startIso);
+  for (const [period, startDate] of [
+    ["day", dayIso.slice(0, 10)],
+    ["week", weekIso.slice(0, 10)],
+    ["month", monthIso.slice(0, 10)],
+    ["overall", null],
+  ] as Array<[DashboardPeriod, string | null]>) {
+    const commission = commissionFor(period, startDate);
+    const commissionBase = commissionBaseFor(period, startDate);
+    const deposits = startDate
+      ? depositsFor(startDate + "T00:00:00.000Z")
+      : depositsFor("1970-01-01T00:00:00.000Z");
+    const withdrawals = startDate
+      ? withdrawalsFor(startDate + "T00:00:00.000Z")
+      : withdrawalsFor("1970-01-01T00:00:00.000Z");
     const net = deposits - withdrawals;
 
     summaries[period] = {
       period,
       ticketsVolume: commission,
       ticketsVolumeTotal: commissionBase,
-      tournamentTicketsVolumeTotal: tournamentCommissionBaseFor(startIso),
-      tournamentCommission: tournamentCommissionFor(startIso),
-      tournamentGuaranteePayout: user.role === "admin" ? adminGuaranteeMap?.[period] ?? 0 : 0,
+      tournamentTicketsVolumeTotal: tournamentCommissionBaseFor(period, startDate),
+      tournamentCommission: tournamentCommissionFor(period, startDate),
+      tournamentGuaranteePayout:
+        user.role === "admin" && period !== "overall"
+          ? adminGuaranteeMap?.[period] ?? 0
+          : 0,
       gatewayPurchases: 0,
       deposits,
       withdrawals,
