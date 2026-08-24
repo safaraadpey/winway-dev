@@ -53,7 +53,62 @@ export async function GET(request: NextRequest) {
     await assertFeature(user.id, AUTO_BUY_FEATURE);
 
     const templateId = request.nextUrl.searchParams.get("templateId");
+    const scope = request.nextUrl.searchParams.get("scope");
     const supabase = createServiceClient();
+
+    if (scope === "lobby") {
+      try {
+        await assertFeature(user.id, AUTO_BUY_FEATURE);
+      } catch (err) {
+        if (err instanceof Error && err.name === "FeatureDisabledError") {
+          return NextResponse.json({ ok: true, data: { sessions: {} } });
+        }
+        throw err;
+      }
+
+      const { data, error } = await supabase
+        .from("player_auto_buy_sessions")
+        .select(
+          "id, template_id, status, card_count, fund_initial, fund_remaining, profit_target, last_room_id, serial_buy_enabled, anchor_room_id, serial_next_room_id, stop_reason, started_at, stopped_at"
+        )
+        .eq("user_id", user.id)
+        .eq("status", "running");
+
+      if (error) {
+        console.error("[AutoBuy] lobby snapshots error:", error);
+        return NextResponse.json(
+          { ok: false, error: "snapshot_failed", message: error.message },
+          { status: 500 }
+        );
+      }
+
+      const sessions: Record<string, ReturnType<typeof parseAutoBuySnapshot>> = {};
+      for (const row of data ?? []) {
+        const snapshot = parseAutoBuySnapshot({
+          active: true,
+          session_id: row.id,
+          template_id: row.template_id,
+          status: row.status,
+          card_count: row.card_count,
+          fund_initial: row.fund_initial,
+          fund_remaining: row.fund_remaining,
+          profit_target: row.profit_target,
+          last_room_id: row.last_room_id,
+          serial_buy_enabled: row.serial_buy_enabled,
+          anchor_room_id: row.anchor_room_id,
+          serial_next_room_id: row.serial_next_room_id,
+          stop_reason: row.stop_reason,
+          started_at: row.started_at,
+          stopped_at: row.stopped_at,
+        });
+        if (snapshot.templateId) {
+          sessions[snapshot.templateId] = snapshot;
+        }
+      }
+
+      return NextResponse.json({ ok: true, data: { sessions } });
+    }
+
     const { data, error } = await supabase.rpc("fn_player_auto_buy_snapshot", {
       p_user_id: user.id,
       p_template_id: templateId || null,

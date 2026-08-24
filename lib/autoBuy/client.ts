@@ -36,6 +36,26 @@ export async function fetchAutoBuySnapshot(
   return payload.data as AutoBuySnapshot;
 }
 
+export async function fetchAutoBuyLobbySnapshots(): Promise<
+  Record<string, AutoBuySnapshot>
+> {
+  const headers = await authHeaders();
+  const response = await fetch("/api/player/auto-buy?scope=lobby", {
+    method: "GET",
+    headers,
+    cache: "no-store",
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.message || "Failed to load auto-buy lobby snapshots");
+  }
+  const sessions = (payload.data?.sessions ?? {}) as Record<
+    string,
+    AutoBuySnapshot
+  >;
+  return sessions;
+}
+
 export async function startAutoBuy(options: {
   templateId: string;
   fundAmount: number;

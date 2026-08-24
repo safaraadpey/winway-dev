@@ -15,6 +15,9 @@ import { useSession } from "@/lib/contexts/SessionContext";
 import { traceFetch } from "@/lib/debug/netTrace";
 import { isHardExiting } from "@/lib/auth/hardExit";
 import { getLobby, isGameEngineEnabled } from "@/lib/gameEngineClient";
+import { fetchAutoBuyLobbySnapshots } from "@/lib/autoBuy/client";
+import type { AutoBuySnapshot } from "@/lib/autoBuy/types";
+import { formatAutoBuyFundDisplay } from "@/lib/autoBuy/formatFundDisplay";
 import { useAutoStartTour } from "@/lib/hooks/useAutoStartTour";
 import { GAME_BROWSER_TOUR_ID } from "@/lib/tour/configs/gameBrowserTour";
 
@@ -42,6 +45,9 @@ export default function LobbyPage() {
   const sessionSnap = useSession();
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
   const [roomGroups, setRoomGroups] = useState<RoomPriceGroup[]>([]);
+  const [autoBuyByTemplate, setAutoBuyByTemplate] = useState<
+    Record<string, AutoBuySnapshot>
+  >({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   useAutoStartTour(
@@ -180,6 +186,16 @@ export default function LobbyPage() {
         const sortedGroups = [...groups].sort((a, b) => a.price - b.price);
         setRoomGroups(sortedGroups);
 
+        void fetchAutoBuyLobbySnapshots()
+          .then((sessions) => {
+            if (!stopped) {
+              setAutoBuyByTemplate(sessions);
+            }
+          })
+          .catch((autoBuyErr) => {
+            console.warn("[AutoBuy] lobby snapshot refresh failed", autoBuyErr);
+          });
+
         // Backoff logic based on snapshot stability
         const hash = computeSnapshotHash(sortedGroups);
         const prev = lastSnapshotHashRef.current;
@@ -315,7 +331,22 @@ export default function LobbyPage() {
             <p className={styles.emptyText}>هیچ روم فعالی وجود ندارد</p>
           </div>
         ) : (
-          roomGroups.map((group, index) => (
+          roomGroups.map((group, index) => {
+            const autoBuySession =
+              group.templateId != null
+                ? autoBuyByTemplate[group.templateId]
+                : undefined;
+            const autoBuyFundDisplay =
+              autoBuySession?.active &&
+              autoBuySession.fundInitial != null &&
+              autoBuySession.fundRemaining != null
+                ? formatAutoBuyFundDisplay(
+                    autoBuySession.fundInitial,
+                    autoBuySession.fundRemaining
+                  )
+                : null;
+
+            return (
             <LobbyRoomCard
               key={`${group.price}_${group.currency}`}
               listIndex={index}
@@ -330,6 +361,7 @@ export default function LobbyPage() {
               playingPlayers={group.playingPlayers}
               templateId={group.templateId}
               entryRoomId={group.entryRoomId}
+              autoBuyFundDisplay={autoBuyFundDisplay}
               variant="minimal" // TODO: از تنظیمات ادمین بگیرید
               onClick={handleRoomClick}
               dataTourId={
@@ -339,7 +371,8 @@ export default function LobbyPage() {
                 index === 0 ? "game-browser-first-room-stats" : undefined
               }
             />
-          ))
+            );
+          })
         )}
 
         <FeatureGate featureKey={BACKGAMMON_FEATURE_KEY}>

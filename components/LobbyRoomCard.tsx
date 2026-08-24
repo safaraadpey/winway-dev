@@ -3,6 +3,7 @@
 import React from 'react';
 import Image from 'next/image';
 import styles from './LobbyRoomCard.module.css';
+import type { AutoBuyFundDisplay } from '@/lib/autoBuy/formatFundDisplay';
 
 // Import room images
 import room5 from '@/src/assets/room/5.png';
@@ -48,6 +49,7 @@ export interface LobbyRoomCardProps {
   /** ترتیب کارت در لیست لابی (۰ = اولین، برای انتخاب تصویر پس‌زمینه) */
   listIndex?: number;
   variant?: LobbyRoomCardVariant; // حالت نمایش: minimal (فقط عکس) یا expanded (همه اطلاعات)
+  autoBuyFundDisplay?: AutoBuyFundDisplay | null;
   onClick?: (price: number, templateId?: string | null, entryRoomId?: string | null) => void;
   dataTourId?: string;
   statsDataTourId?: string;
@@ -71,6 +73,7 @@ export default function LobbyRoomCard({
   entryRoomId,
   listIndex = 0,
   variant = 'minimal', // حالت پیش‌فرض: minimal
+  autoBuyFundDisplay = null,
   onClick,
   dataTourId,
   statsDataTourId,
@@ -151,6 +154,24 @@ export default function LobbyRoomCard({
             <span className={styles.badgeCount}>{playingRooms}</span>
           </div>
         </div>
+        {autoBuyFundDisplay ? (
+          <div
+            className={`${styles.autoBuyFundBadge} ${
+              autoBuyFundDisplay.tone === "gain"
+                ? styles.autoBuyFundBadgeGain
+                : styles.autoBuyFundBadgeLoss
+            }`}
+            aria-label={
+              autoBuyFundDisplay.tone === "gain"
+                ? `مانده صندوق خرید اتوماتیک ${autoBuyFundDisplay.value}`
+                : `مصرف از سقف خرید ${autoBuyFundDisplay.value}`
+            }
+          >
+            <span className={styles.autoBuyFundValue} dir="ltr">
+              {autoBuyFundDisplay.value}
+            </span>
+          </div>
+        ) : null}
         {/* قیمت — بالا راست (هم‌تراز با topBadges)؛ نام اتاق — پایین راست */}
         {!isExpanded && (
           <>

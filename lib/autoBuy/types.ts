@@ -4,6 +4,8 @@ export type AutoBuyStatus =
   | "fund_empty"
   | "profit_hit";
 
+export type AutoBuyLobbySnapshots = Record<string, AutoBuySnapshot>;
+
 export type AutoBuySnapshot = {
   active: boolean;
   sessionId?: string;

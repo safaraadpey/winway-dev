@@ -81,6 +81,43 @@
   color: #ffffff;
 }
 
+.autoBuyFundBadge {
+  position: absolute;
+  bottom: 0.5rem;
+  left: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(4px);
+  padding: 0.27rem 0.495rem;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  max-width: calc(100% - 1rem);
+}
+
+.autoBuyFundValue {
+  composes: numeric-text numeric-text--13 from global;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.autoBuyFundBadgeGain {
+  border-color: rgba(74, 222, 128, 0.45);
+}
+
+.autoBuyFundBadgeGain .autoBuyFundValue {
+  color: #4ade80;
+}
+
+.autoBuyFundBadgeLoss {
+  border-color: rgba(248, 113, 113, 0.45);
+}
+
+.autoBuyFundBadgeLoss .autoBuyFundValue {
+  color: #f87171;
+}
+
 .priceStack {
   position: absolute;
   bottom: 0.5rem;
