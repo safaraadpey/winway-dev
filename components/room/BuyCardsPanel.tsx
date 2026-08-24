@@ -421,7 +421,7 @@ export default function BuyCardsPanel({
       {showAutoBuySection && autoBuy && (
         <div className={panelStyles.autoBuySection} data-tour-id="game-room-auto-buy-panel">
           <div className={panelStyles.autoBuyFieldRow}>
-            <span className={panelStyles.autoBuyFieldLabel}>صندوق</span>
+            <span className={panelStyles.autoBuyFieldLabel}>سقف خرید</span>
             <div className={panelStyles.autoBuyFieldControl}>
               <input
                 type="text"
@@ -434,7 +434,7 @@ export default function BuyCardsPanel({
                   setFundAmount(formatNumericInput(parseNumericInput(event.target.value)))
                 }
                 disabled={autoBuyRunning || autoBuySubmitting}
-                aria-label="مبلغ صندوق"
+                aria-label="مبلغ سقف خرید"
               />
               <span className="text-xs text-white/70">تومن</span>
             </div>
