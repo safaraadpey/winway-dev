@@ -31,6 +31,8 @@ interface BuyCardsPanelProps {
   maxQuantity?: number;
   maxBuy?: number;
   disabled?: boolean;
+  /** Locks auto-buy start/stop separately from manual card purchase. */
+  autoBuyDisabled?: boolean;
   requiresPassword?: boolean;
   mode?: PanelMode;
   actionLabel?: string;
@@ -62,6 +64,7 @@ export default function BuyCardsPanel({
   maxQuantity = 10,
   maxBuy,
   disabled = false,
+  autoBuyDisabled,
   requiresPassword = false,
   mode = "purchase",
   actionLabel,
@@ -177,6 +180,8 @@ export default function BuyCardsPanel({
   const profitNumeric = parseNumericInput(profitTarget);
   const roundCost = price * autoCardCount;
 
+  const autoBuyLocked = autoBuyDisabled ?? disabled;
+
   const autoBuyFormValid = useMemo(() => {
     return (
       fundNumeric >= roundCost &&
@@ -188,7 +193,18 @@ export default function BuyCardsPanel({
 
   const handleAutoBuyToggle = () => {
     if (!autoBuyAvailable || autoBuyRunning) return;
-    setAutoBuyExpanded((prev) => !prev);
+    setAutoBuyExpanded((prev) => {
+      const next = !prev;
+      if (next && !autoBuyRunning && !fundAmount && price > 0) {
+        const defaultFund = Math.max(roundCost * 10, price * 10);
+        setFundAmount(formatNumericInput(defaultFund));
+      }
+      if (next && !autoBuyRunning && !profitTarget && price > 0) {
+        const defaultFund = Math.max(roundCost * 10, price * 10);
+        setProfitTarget(formatNumericInput(Math.round(defaultFund * 1.25)));
+      }
+      return next;
+    });
   };
 
   const handleAutoCardDecrease = () => {
@@ -540,6 +556,16 @@ export default function BuyCardsPanel({
             </p>
           )}
 
+          {!autoBuyRunning && !autoBuyFormValid && (
+            <p className={panelStyles.autoBuyStatusLine}>
+              سقف خرید حداقل{" "}
+              <span className={panelStyles.autoBuyStatusValue} dir="ltr">
+                {roundCost.toLocaleString("en-US")}
+              </span>{" "}
+              تومن (یک دور) و سقف برد باید بیشتر از سقف خرید باشد.
+            </p>
+          )}
+
           {!autoBuyRunning && (
             <p className={panelStyles.autoBuyStatusLine}>
               با خروج از حساب هم بازی در سرور ادامه پیدا می‌کند تا استاپ بزنید یا صندوق
@@ -555,7 +581,7 @@ export default function BuyCardsPanel({
             onClick={() => void handleAutoBuyAction()}
             disabled={
               autoBuySubmitting ||
-              disabled ||
+              autoBuyLocked ||
               (!autoBuyRunning && !autoBuyFormValid)
             }
           >

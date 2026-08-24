@@ -85,6 +85,65 @@ function computeCountdownSeconds(startsAt: string | null, serverNowIso: string):
   return Math.max(0, Math.floor(diffMs / 1000));
 }
 
+function isWaitingCountdownElapsed(
+  status: string | null,
+  startsAt: string | null,
+  serverNowIso: string
+): boolean {
+  if ((status || "").toLowerCase() !== "waiting") return false;
+  if (!startsAt) return false;
+  const startsMs = Date.parse(startsAt);
+  const nowMs = Date.parse(serverNowIso);
+  return Number.isFinite(startsMs) && Number.isFinite(nowMs) && startsMs <= nowMs;
+}
+
+/** Safety-net when pg_cron heartbeat is off and the bingo engine scheduler is not running. */
+async function nudgeWaitingRoomScheduler(roomId: string): Promise<void> {
+  if (!pgPool) return;
+  try {
+    await pgPool.query(`SELECT game_core.fn_manage_waiting_rooms(10, false)`);
+    console.info("[Scheduler] gameroom snapshot nudged waiting rooms", { roomId });
+  } catch (err) {
+    console.warn("[Scheduler] gameroom waiting nudge failed", {
+      roomId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+async function loadRoomRowAndLifecycle(
+  supabase: ReturnType<typeof createServiceClient>,
+  roomId: string
+) {
+  const [{ data: room, error: roomError }, pgLifecycle] = await Promise.all([
+    supabase
+      .from("rooms")
+      .select(
+        `
+        id,
+        room_template_id,
+        room_code,
+        title,
+        status,
+        card_price,
+        currency,
+        min_players,
+        max_players,
+        max_cards_per_player,
+        starts_at,
+        ends_at,
+        waiting_started_at,
+        updated_at
+      `
+      )
+      .eq("id", roomId)
+      .single(),
+    loadRoomLifecycleFromPg(roomId),
+  ]);
+
+  return { room, roomError, pgLifecycle };
+}
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -187,43 +246,34 @@ async function buildViewFromRoomId(
   currentUserId: string,
   globalRegistrationLockState: GlobalRegistrationLockState
 ): Promise<GameRoomView | null> {
-  const [{ data: room, error: roomError }, pgLifecycle] = await Promise.all([
-    supabase
-      .from("rooms")
-      .select(
-        `
-        id,
-        room_template_id,
-        room_code,
-        title,
-        status,
-        card_price,
-        currency,
-        min_players,
-        max_players,
-        max_cards_per_player,
-        starts_at,
-        ends_at,
-        waiting_started_at,
-        updated_at
-      `
-      )
-      .eq("id", roomId)
-      .single(),
-    loadRoomLifecycleFromPg(roomId),
-  ]);
+  let { room, roomError, pgLifecycle } = await loadRoomRowAndLifecycle(supabase, roomId);
 
   if (roomError || !room) {
     console.error("buildViewFromRoomId: rooms error", roomError);
     return null;
   }
 
-  const lifecycle = resolveRoomLifecycleFields(
+  let lifecycle = resolveRoomLifecycleFields(
     roomId,
     room,
     pgLifecycle,
     "buildViewFromRoomId"
   );
+
+  if (isWaitingCountdownElapsed(lifecycle.status, lifecycle.starts_at, serverNow)) {
+    await nudgeWaitingRoomScheduler(roomId);
+    const refreshed = await loadRoomRowAndLifecycle(supabase, roomId);
+    if (!refreshed.roomError && refreshed.room) {
+      room = refreshed.room;
+      pgLifecycle = refreshed.pgLifecycle;
+      lifecycle = resolveRoomLifecycleFields(
+        roomId,
+        room,
+        pgLifecycle,
+        "buildViewFromRoomId:afterNudge"
+      );
+    }
+  }
 
   const mode = mapRoomStatusToMode(lifecycle.status);
   const roomType = await getRoomTemplateType(

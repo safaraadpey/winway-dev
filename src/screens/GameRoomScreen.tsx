@@ -876,6 +876,13 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     totalPlayersWithCards === 1
   );
 
+  // Countdown 0 with no starts_at = open waiting room (first buy). Only lock once timer was set and elapsed.
+  const waitingCountdownElapsed = Boolean(
+    roomInfo?.startsAt &&
+    roomInfo.status === "waiting" &&
+    countdownSeconds === 0
+  );
+
   const refreshAutoBuySnapshot = async (
     templateId?: string | null
   ): Promise<AutoBuySnapshot | null> => {
@@ -1227,9 +1234,14 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
             onConfirm={handleAddToList}
             disabled={
               purchaseLockedByAdmin ||
-              (roomId && !canCancel
-                ? countdownSeconds === 0 || roomInfo.status !== "waiting"
-                : false)
+              Boolean(
+                roomId &&
+                  !canCancel &&
+                  (roomInfo.status !== "waiting" || waitingCountdownElapsed)
+              )
+            }
+            autoBuyDisabled={
+              purchaseLockedByAdmin || roomInfo.status !== "waiting"
             }
             mode={canCancel ? "cancel" : "purchase"}
             actionLabel={
