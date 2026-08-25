@@ -20,6 +20,9 @@ export interface ActiveRoom {
   cardCount: number;
   prize: number;
   roomType?: string; // نوع روم: 'normal' | 'tournament' | ...
+  templateId?: string | null;
+  /** 1-based index among currently active rooms of the same template. */
+  templateTableIndex?: number;
 }
 
 export interface ActiveGames {
@@ -257,6 +260,11 @@ export function useActiveGames(): ActiveGames {
         cardCount,
         prize: Number(room.prize ?? cardPrice * cardCount),
         roomType: room.roomType || "normal",
+        templateId: room.templateId ?? null,
+        templateTableIndex:
+          typeof room.templateTableIndex === "number" && room.templateTableIndex > 0
+            ? room.templateTableIndex
+            : undefined,
       };
       const idx = prev.findIndex((r) => r.roomId === nextRoom.roomId);
       let next: ActiveRoom[];
@@ -272,9 +280,23 @@ export function useActiveGames(): ActiveGames {
             Number(room.prize ?? 0) > 0
               ? nextRoom.prize
               : nextRoom.cardPrice * mergedCount,
+          templateId: nextRoom.templateId ?? existing.templateId ?? null,
+          templateTableIndex:
+            nextRoom.templateTableIndex ?? existing.templateTableIndex ?? 1,
         };
       } else {
-        next = [...prev, nextRoom];
+        const siblingCount = prev.filter(
+          (r) =>
+            (nextRoom.templateId && r.templateId === nextRoom.templateId) ||
+            (!nextRoom.templateId && r.cardPrice === nextRoom.cardPrice)
+        ).length;
+        next = [
+          ...prev,
+          {
+            ...nextRoom,
+            templateTableIndex: nextRoom.templateTableIndex ?? siblingCount + 1,
+          },
+        ];
       }
       roomsRef.current = next;
       trackedRoomIdsRef.current = new Set(next.map((r) => r.roomId).filter(Boolean));

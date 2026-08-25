@@ -31,10 +31,10 @@
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  height: 32px;
-  min-height: 32px;
-  max-height: 32px;
-  padding: 0 12px;
+  height: 27.5px;
+  min-height: 27.5px;
+  max-height: 27.5px;
+  padding: 0 7.2px;
   min-width: fit-content;
   box-sizing: border-box;
   border-radius: var(--player-active-game-chip-radius, 999px);
@@ -74,11 +74,33 @@
 }
 
 .chipText {
-  composes: numeric-text numeric-text--14 from global;
+  display: inline-flex;
+  align-items: baseline;
+  flex-direction: row;
+  direction: ltr;
+  unicode-bidi: isolate;
   color: var(--player-active-game-chip-text-color, #e5e7eb);
   font-weight: 600;
+  font-size: 12.32px;
+  line-height: 12.32px;
+  white-space: nowrap;
+}
+
+.chipNum {
+  composes: numeric-text from global;
+  font-size: 12.32px;
+  line-height: 12.32px;
+  font-weight: 600;
   direction: ltr;
-  text-align: left;
+  unicode-bidi: isolate;
+}
+
+.chipUnit {
+  font-family: "Vazirmatn", sans-serif;
+  font-size: 12.32px;
+  line-height: 12.32px;
+  font-weight: 600;
+  unicode-bidi: isolate;
 }
 
 :global(html[data-theme="light"]) .chip {
@@ -180,31 +202,31 @@
 }
 
 .playIcon {
-  width: 18px;
-  height: 18px;
+  width: 15.84px;
+  height: 15.84px;
   flex-shrink: 0;
   display: block;
   object-fit: contain;
 }
 
 .waitingIcon {
-  width: 14px;
-  height: 14px;
+  width: 12.32px;
+  height: 12.32px;
   flex-shrink: 0;
   display: block;
   object-fit: contain;
 }
 
 .settlingIcon {
-  width: 14px;
-  height: 14px;
+  width: 12.32px;
+  height: 12.32px;
   color: #60a5fa; /* آبی */
   flex-shrink: 0;
 }
 
 .trophyIcon {
-  width: 16px;
-  height: 16px;
+  width: 14.08px;
+  height: 14.08px;
   color: #fbbf24; /* طلایی */
   flex-shrink: 0;
   margin-right: 3px;

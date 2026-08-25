@@ -18,6 +18,8 @@ export type CachedActiveRoom = {
   cardCount: number;
   prize: number;
   roomType: string;
+  templateId: string | null;
+  templateTableIndex: number;
 };
 
 type CacheEntry = {

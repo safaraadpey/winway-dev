@@ -364,6 +364,8 @@ function createOrchestrator(): ActiveGamesOrchestrator {
           String(r.cardCount ?? ""),
           String(r.prize ?? ""),
           r.currency ?? "",
+          r.templateId ?? "",
+          String(r.templateTableIndex ?? ""),
         ].join("|")
       )
       .join(";");
@@ -1071,6 +1073,11 @@ function createOrchestrator(): ActiveGamesOrchestrator {
         cardCount,
         prize: Number(room.prize ?? cardPrice * cardCount),
         roomType: room.roomType || "normal",
+        templateId: room.templateId ?? null,
+        templateTableIndex:
+          typeof room.templateTableIndex === "number" && room.templateTableIndex > 0
+            ? room.templateTableIndex
+            : undefined,
       };
 
       const rooms = [...store.data.rooms];
@@ -1086,9 +1093,20 @@ function createOrchestrator(): ActiveGamesOrchestrator {
             Number(room.prize ?? 0) > 0
               ? nextRoom.prize
               : nextRoom.cardPrice * mergedCount,
+          templateId: nextRoom.templateId ?? prev.templateId ?? null,
+          templateTableIndex:
+            nextRoom.templateTableIndex ?? prev.templateTableIndex ?? 1,
         };
       } else {
-        rooms.push(nextRoom);
+        const siblingCount = rooms.filter(
+          (r) =>
+            (nextRoom.templateId && r.templateId === nextRoom.templateId) ||
+            (!nextRoom.templateId && r.cardPrice === nextRoom.cardPrice)
+        ).length;
+        rooms.push({
+          ...nextRoom,
+          templateTableIndex: nextRoom.templateTableIndex ?? siblingCount + 1,
+        });
       }
 
       publishActiveRooms(rooms, "optimistic:upsert");

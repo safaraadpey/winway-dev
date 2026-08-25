@@ -45,8 +45,8 @@ export default function MyActiveGames() {
             src={getActiveGameIconPath(themeId, "play")}
             className={styles.playIcon}
             alt="play"
-            width={24}
-            height={24}
+            width={21}
+            height={21}
             priority={false}
           />
         );
@@ -56,8 +56,8 @@ export default function MyActiveGames() {
             src={getActiveGameIconPath(themeId, "waiting")}
             className={styles.waitingIcon}
             alt="waiting"
-            width={16}
-            height={16}
+            width={14}
+            height={14}
             priority={false}
           />
         );
@@ -85,14 +85,28 @@ export default function MyActiveGames() {
     return Math.trunc(Number(cardPrice || 0) / 1000);
   };
 
-  const getDisplayText = (room: {
-    roomCode: string | null;
-    cardPrice: number;
-  }): string => {
-    const code = room.roomCode?.trim() || null;
+  const getTemplateTableIndex = (
+    room: { roomId: string; templateId?: string | null; templateTableIndex?: number; cardPrice: number },
+    allRooms: typeof rooms
+  ): number => {
+    if (room.templateTableIndex && room.templateTableIndex > 0) {
+      return room.templateTableIndex;
+    }
+    const key = room.templateId || `__price:${room.cardPrice}`;
+    const siblings = allRooms
+      .filter((r) => (r.templateId || `__price:${r.cardPrice}`) === key)
+      .sort((a, b) => a.roomId.localeCompare(b.roomId));
+    const idx = siblings.findIndex((r) => r.roomId === room.roomId);
+    return idx >= 0 ? idx + 1 : 1;
+  };
+
+  const getDisplayText = (room: (typeof rooms)[number]): string => {
     const priceK = getPriceInThousands(room.cardPrice);
-    if (code) return `${code}-${priceK}`;
-    return formatPrice(room.cardPrice);
+    const tableIndex = getTemplateTableIndex(room, rooms);
+    if (priceK > 0) {
+      return `${priceK.toLocaleString("en-US")}هزار/${tableIndex}`;
+    }
+    return `${formatPrice(room.cardPrice)}/${tableIndex}`;
   };
 
   const isTournament = (room: { roomType?: string }): boolean => {
@@ -120,6 +134,8 @@ export default function MyActiveGames() {
             const isCurrentRoom = Boolean(
               currentRoomId && room.roomId === currentRoomId
             );
+            const priceK = getPriceInThousands(room.cardPrice);
+            const tableIndex = getTemplateTableIndex(room, rooms);
 
             return (
             <button
@@ -139,7 +155,15 @@ export default function MyActiveGames() {
                   <path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94A5.01 5.01 0 0 0 11 15.9V19H7v2h10v-2h-4v-3.1a5.01 5.01 0 0 0 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z" />
                 </svg>
               )}
-              <span className={styles.chipText}>{getDisplayText(room)}</span>
+              <span className={styles.chipText}>
+                <span className={styles.chipNum} dir="ltr">
+                  {priceK > 0 ? priceK.toLocaleString("en-US") : formatPrice(room.cardPrice)}
+                </span>
+                {priceK > 0 ? <span className={styles.chipUnit}>هزار</span> : null}
+                <span className={styles.chipNum} dir="ltr">
+                  /{tableIndex}
+                </span>
+              </span>
               {getStatusIcon(room.status)}
             </button>
             );

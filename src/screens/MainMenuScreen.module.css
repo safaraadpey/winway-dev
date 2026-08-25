@@ -81,7 +81,7 @@
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding-top: 0.75rem;
+  padding-top: 0;
   padding-left: 4px;
   padding-right: 4px;
   width: 100%;

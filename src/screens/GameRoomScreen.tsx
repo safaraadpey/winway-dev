@@ -1164,6 +1164,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           cardCount: nextCardCount,
           prize: roomInfo.cardPrice * nextCardCount,
           roomType: roomInfo.roomType || "normal",
+          templateId: roomInfo.templateId || null,
         });
       } else {
         invalidateActiveGames?.();
