@@ -104,9 +104,9 @@ export default function MyActiveGames() {
     const priceK = getPriceInThousands(room.cardPrice);
     const tableIndex = getTemplateTableIndex(room, rooms);
     if (priceK > 0) {
-      return `${priceK.toLocaleString("en-US")}هزار/${tableIndex}`;
+      return `${priceK.toLocaleString("en-US")} هزار / ${tableIndex}`;
     }
-    return `${formatPrice(room.cardPrice)}/${tableIndex}`;
+    return `${formatPrice(room.cardPrice)} / ${tableIndex}`;
   };
 
   const isTournament = (room: { roomType?: string }): boolean => {
@@ -156,12 +156,17 @@ export default function MyActiveGames() {
                 </svg>
               )}
               <span className={styles.chipText}>
-                <span className={styles.chipNum} dir="ltr">
-                  {priceK > 0 ? priceK.toLocaleString("en-US") : formatPrice(room.cardPrice)}
+                <span className={styles.chipPriceGroup}>
+                  {priceK > 0 ? <span className={styles.chipUnit}>هزار</span> : null}
+                  <span className={styles.chipNum} dir="ltr">
+                    {priceK > 0 ? priceK.toLocaleString("en-US") : formatPrice(room.cardPrice)}
+                  </span>
                 </span>
-                {priceK > 0 ? <span className={styles.chipUnit}>هزار</span> : null}
                 <span className={styles.chipNum} dir="ltr">
-                  /{tableIndex}
+                  /
+                </span>
+                <span className={styles.chipNum} dir="ltr">
+                  {tableIndex}
                 </span>
               </span>
               {getStatusIcon(room.status)}

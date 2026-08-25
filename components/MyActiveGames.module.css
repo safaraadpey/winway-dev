@@ -77,8 +77,9 @@
   display: inline-flex;
   align-items: baseline;
   flex-direction: row;
-  direction: ltr;
+  direction: rtl;
   unicode-bidi: isolate;
+  gap: 0.3em;
   color: var(--player-active-game-chip-text-color, #e5e7eb);
   font-weight: 600;
   font-size: 12.32px;
@@ -93,6 +94,15 @@
   font-weight: 600;
   direction: ltr;
   unicode-bidi: isolate;
+}
+
+.chipPriceGroup {
+  display: inline-flex;
+  align-items: baseline;
+  flex-direction: row;
+  direction: ltr;
+  unicode-bidi: isolate;
+  gap: 0.3em;
 }
 
 .chipUnit {
