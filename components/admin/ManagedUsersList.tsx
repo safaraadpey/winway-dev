@@ -205,7 +205,7 @@ export default function ManagedUsersList({ pageTitle }: ManagedUsersListProps) {
         style={{ paddingRight }}
       >
         {/* سمت چپ: علامت زیرمجموعه + آواتار + نام + ID */}
-        <div className="flex items-center gap-1">
+        <div className="flex min-w-0 flex-1 items-center gap-1">
           {indentLevel > 0 && (
             <div
               className={`w-2 h-2 rounded-full ${
@@ -226,10 +226,20 @@ export default function ManagedUsersList({ pageTitle }: ManagedUsersListProps) {
           >
             {u.displayName?.[0]?.toUpperCase() || "U"}
           </div>
-          <div className="flex flex-col">
+          <div className="flex min-w-0 flex-col items-start text-left">
             <span className="text-sm font-semibold">
               {renderUserTitle()}
             </span>
+            {u.role === "player" && (u.agentUsername || u.superUsername) ? (
+              <span className="text-[11px] text-gray-400 leading-tight">
+                {[
+                  u.agentUsername ? `ایجنت: ${u.agentUsername}` : null,
+                  u.superUsername ? `سوپر: ${u.superUsername}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            ) : null}
           </div>
         </div>
 

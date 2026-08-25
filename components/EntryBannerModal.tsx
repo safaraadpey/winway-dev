@@ -10,6 +10,8 @@ import {
   filterEntryBannersForToday,
   snoozeEntryBannerForToday,
 } from "@/lib/entry-banner-snooze";
+import buyCardButtonBg from "@/src/assets/logo/BuyCardBotton.png";
+import panelStyles from "@/components/room/gameRoomPanels.module.css";
 
 type EntryBannerModalProps = {
   visibleOnPaths?: string[];
@@ -105,30 +107,38 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
       <div className="bg-[#0b1120] rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-white">{currentBanner.title}</h2>
-          {!currentBanner.requireConfirmation && (
-            <button
-              onClick={handleClose}
-              className="text-gray-400 hover:text-white transition-colors"
-              aria-label="بستن بنر"
-            >
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+        {(currentBanner.showTitle || !currentBanner.requireConfirmation) && (
+          <div
+            className={`flex items-center mb-4 ${
+              currentBanner.showTitle ? "justify-between" : "justify-end"
+            }`}
+          >
+            {currentBanner.showTitle && (
+              <h2 className="text-xl font-semibold text-white">{currentBanner.title}</h2>
+            )}
+            {!currentBanner.requireConfirmation && (
+              <button
+                onClick={handleClose}
+                className="text-gray-400 hover:text-white transition-colors"
+                aria-label="بستن بنر"
               >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          )}
-        </div>
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="mb-4">
           {currentBanner.contentType === "text" ? (
@@ -179,7 +189,12 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
         <button
           onClick={handleConfirm}
           disabled={currentBanner.requireConfirmation && !confirmed}
-          className="w-full py-3 rounded-xl bg-teal-600 text-white font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className={panelStyles.confirmButton}
+          style={{
+            backgroundImage: `url(${buyCardButtonBg.src})`,
+            width: "100%",
+            flex: "none",
+          }}
         >
           {currentBanner.requireConfirmation
             ? confirmed

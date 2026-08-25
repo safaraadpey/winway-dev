@@ -21,6 +21,29 @@ function normalizeTargetAudience(value: unknown): BannerTargetAudience[] {
   );
 }
 
+function mapEntryBanner(banner: any): EntryBanner {
+  return {
+    id: banner.id,
+    title: banner.title,
+    contentType: banner.content_type as "text" | "image",
+    textContent: banner.text_content || null,
+    imageUrl: banner.image_url || null,
+    imageSize: banner.image_size || null,
+    imageWidth: banner.image_width || null,
+    imageHeight: banner.image_height || null,
+    startDate: banner.start_date || null,
+    endDate: banner.end_date || null,
+    targetAudience: normalizeTargetAudience(banner.target_audience),
+    requireConfirmation: banner.require_confirmation || false,
+    confirmationText: banner.confirmation_text || null,
+    showTitle: banner.show_title !== false,
+    isActive: banner.is_active !== false,
+    createdAt: banner.created_at,
+    updatedAt: banner.updated_at,
+    createdBy: banner.created_by || null,
+  };
+}
+
 /**
  * بارگذاری لیست بنرهای ورودی
  */
@@ -36,25 +59,7 @@ export async function loadEntryBanners(): Promise<EntryBannerListResult> {
       return { banners: [], totalCount: 0 };
     }
 
-    const banners: EntryBanner[] = (bannersData || []).map((banner: any) => ({
-      id: banner.id,
-      title: banner.title,
-      contentType: banner.content_type as "text" | "image",
-      textContent: banner.text_content || null,
-      imageUrl: banner.image_url || null,
-      imageSize: banner.image_size || null,
-      imageWidth: banner.image_width || null,
-      imageHeight: banner.image_height || null,
-      startDate: banner.start_date || null,
-      endDate: banner.end_date || null,
-      targetAudience: normalizeTargetAudience(banner.target_audience),
-      requireConfirmation: banner.require_confirmation || false,
-      confirmationText: banner.confirmation_text || null,
-      isActive: banner.is_active !== false,
-      createdAt: banner.created_at,
-      updatedAt: banner.updated_at,
-      createdBy: banner.created_by || null,
-    }));
+    const banners: EntryBanner[] = (bannersData || []).map(mapEntryBanner);
 
     return {
       banners,
@@ -82,25 +87,7 @@ export async function loadEntryBanner(bannerId: string): Promise<EntryBanner | n
       return null;
     }
 
-    return {
-      id: bannerData.id,
-      title: bannerData.title,
-      contentType: bannerData.content_type as "text" | "image",
-      textContent: bannerData.text_content || null,
-      imageUrl: bannerData.image_url || null,
-      imageSize: bannerData.image_size || null,
-      imageWidth: bannerData.image_width || null,
-      imageHeight: bannerData.image_height || null,
-      startDate: bannerData.start_date || null,
-      endDate: bannerData.end_date || null,
-      targetAudience: normalizeTargetAudience(bannerData.target_audience),
-      requireConfirmation: bannerData.require_confirmation || false,
-      confirmationText: bannerData.confirmation_text || null,
-      isActive: bannerData.is_active !== false,
-      createdAt: bannerData.created_at,
-      updatedAt: bannerData.updated_at,
-      createdBy: bannerData.created_by || null,
-    };
+    return mapEntryBanner(bannerData);
   } catch (err) {
     console.error("loadEntryBanner unexpected error:", err);
     return null;
@@ -224,9 +211,16 @@ export async function createEntryBanner(
       target_audience: formData.targetAudience,
       require_confirmation: formData.requireConfirmation,
       confirmation_text: formData.requireConfirmation ? formData.confirmationText : null,
+      show_title: formData.showTitle !== false,
       is_active: true,
       created_by: currentUser.id,
     };
+
+    console.log("[Banner] create", {
+      title: formData.title,
+      showTitle: formData.showTitle !== false,
+      contentType: formData.contentType,
+    });
 
     const { data: insertedBanner, error: insertError } = await supabase
       .from("entry_banners")
@@ -281,7 +275,15 @@ export async function updateEntryBanner(
       target_audience: formData.targetAudience,
       require_confirmation: formData.requireConfirmation,
       confirmation_text: formData.requireConfirmation ? formData.confirmationText : null,
+      show_title: formData.showTitle !== false,
     };
+
+    console.log("[Banner] update", {
+      bannerId,
+      title: formData.title,
+      showTitle: formData.showTitle !== false,
+      contentType: formData.contentType,
+    });
 
     // اگر تصویر جدید آپلود شده، فیلدهای تصویر را به‌روزرسانی کن
     if (formData.contentType === "image" && imageUrl) {
@@ -386,25 +388,7 @@ export async function loadActiveBannersForUser(): Promise<EntryBanner[]> {
         if (!userRole) return false;
         return targetAudience.includes(userRole);
       })
-      .map((banner: any) => ({
-        id: banner.id,
-        title: banner.title,
-        contentType: banner.content_type as "text" | "image",
-        textContent: banner.text_content || null,
-        imageUrl: banner.image_url || null,
-        imageSize: banner.image_size || null,
-        imageWidth: banner.image_width || null,
-        imageHeight: banner.image_height || null,
-        startDate: banner.start_date || null,
-        endDate: banner.end_date || null,
-        targetAudience: normalizeTargetAudience(banner.target_audience),
-        requireConfirmation: banner.require_confirmation || false,
-        confirmationText: banner.confirmation_text || null,
-        isActive: banner.is_active !== false,
-        createdAt: banner.created_at,
-        updatedAt: banner.updated_at,
-        createdBy: banner.created_by || null,
-      }));
+      .map(mapEntryBanner);
 
     return banners;
   } catch (err) {

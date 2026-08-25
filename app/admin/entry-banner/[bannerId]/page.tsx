@@ -28,6 +28,7 @@ export default function EditEntryBannerPage() {
     targetAudience: [],
     requireConfirmation: false,
     confirmationText: "",
+    showTitle: true,
   });
 
   useEffect(() => {
@@ -58,6 +59,7 @@ export default function EditEntryBannerPage() {
             targetAudience: banner.targetAudience,
             requireConfirmation: banner.requireConfirmation,
             confirmationText: banner.confirmationText || "",
+            showTitle: banner.showTitle !== false,
           });
         } else {
           toast.error("بنر یافت نشد");
@@ -190,6 +192,17 @@ export default function EditEntryBannerPage() {
               placeholder="عنوان بنر"
               required
             />
+            <label className="block text-sm text-gray-400 mt-3 mb-2">نمایش تیتر در بنر</label>
+            <select
+              value={formData.showTitle ? "show" : "hide"}
+              onChange={(e) =>
+                setFormData({ ...formData, showTitle: e.target.value === "show" })
+              }
+              className="w-full rounded-xl bg-[#1f2933] text-white px-4 py-3 outline-none border border-transparent focus:border-teal-500"
+            >
+              <option value="show">نمایش</option>
+              <option value="hide">عدم نمایش</option>
+            </select>
           </div>
 
           {/* بازه تاریخ نمایش */}
@@ -349,7 +362,9 @@ export default function EditEntryBannerPage() {
           {/* پیش نمایش */}
           {showPreview && (
             <div className="rounded-xl bg-[#1f2933] p-4 border border-gray-700">
-              <h3 className="text-lg font-semibold mb-2">{formData.title || "تیتر بنر"}</h3>
+              {formData.showTitle && (
+                <h3 className="text-lg font-semibold mb-2">{formData.title || "تیتر بنر"}</h3>
+              )}
               {formData.contentType === "text" ? (
                 <div className="text-gray-300 whitespace-pre-wrap">
                   {formData.textContent || "محتوای متن..."}

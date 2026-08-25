@@ -35,7 +35,7 @@ type ManagedUsersBaseCache = {
   usersAll: ManagedUserSummary[];
 };
 
-const MANAGED_USERS_CACHE_VERSION = 3;
+const MANAGED_USERS_CACHE_VERSION = 4;
 
 let managedUsersBaseCache: ManagedUsersBaseCache | null = null;
 
@@ -436,9 +436,98 @@ export async function loadManagedUsers(
 
   // map نقش هر کاربر برای استفاده در منطق parent
   const roleById = new Map<string, ManagedUserRole>();
+  const parentById = new Map<string, string | null>();
+  const usernameById = new Map<string, string>();
   (visibleUsersData || []).forEach((u: any) => {
-    roleById.set(u.id as string, (u.role || "player") as ManagedUserRole);
+    const id = u.id as string;
+    roleById.set(id, (u.role || "player") as ManagedUserRole);
+    parentById.set(id, (u.parent_id as string | null) || null);
+    const shortId = makeShortIdFromUuid(id);
+    usernameById.set(id, (u.username || u.referral_code || shortId) as string);
   });
+
+  const uplineIds = new Set<string>();
+  affiliationMap.forEach((aff) => {
+    if (aff.agent_id) uplineIds.add(aff.agent_id);
+    if (aff.super_id) uplineIds.add(aff.super_id);
+  });
+  (visibleUsersData || []).forEach((u: any) => {
+    if (u.parent_id) uplineIds.add(u.parent_id as string);
+  });
+
+  const mergeUplineRows = (rows: any[] | null) => {
+    (rows || []).forEach((row: any) => {
+      const id = row.id as string;
+      roleById.set(id, (row.role || "player") as ManagedUserRole);
+      parentById.set(id, (row.parent_id as string | null) || null);
+      const shortId = makeShortIdFromUuid(id);
+      usernameById.set(id, (row.username || row.referral_code || shortId) as string);
+    });
+  };
+
+  const missingUplineIds = [...uplineIds].filter((id) => !usernameById.has(id));
+  if (missingUplineIds.length > 0) {
+    const { data: uplineUsers, error: uplineError } = await supabase
+      .from("users")
+      .select("id, username, role, referral_code, parent_id")
+      .in("id", missingUplineIds);
+    if (uplineError) {
+      console.warn("[Users] loadManagedUsers upline names error", uplineError.message);
+    } else {
+      mergeUplineRows(uplineUsers);
+      const missingParents = [
+        ...new Set(
+          (uplineUsers || [])
+            .map((row: any) => row.parent_id as string | null)
+            .filter((id: string | null): id is string => Boolean(id) && !usernameById.has(id))
+        ),
+      ];
+      if (missingParents.length > 0) {
+        const { data: parentUsers, error: parentError } = await supabase
+          .from("users")
+          .select("id, username, role, referral_code, parent_id")
+          .in("id", missingParents);
+        if (parentError) {
+          console.warn("[Users] loadManagedUsers upline parent names error", parentError.message);
+        } else {
+          mergeUplineRows(parentUsers);
+        }
+      }
+    }
+  }
+
+  function resolveUplineUsernames(u: any): {
+    agentUsername: string | null;
+    superUsername: string | null;
+  } {
+    const userId = u.id as string;
+    const userRole = (u.role || "player") as ManagedUserRole;
+    const parentId = (u.parent_id as string | null) || null;
+    const aff = affiliationMap.get(userId) || null;
+
+    let agentId: string | null = null;
+    let superId: string | null = null;
+
+    if (userRole === "player") {
+      if (aff?.agent_id) agentId = aff.agent_id;
+      else if (parentId && roleById.get(parentId) === "agent") agentId = parentId;
+
+      if (aff?.super_id) superId = aff.super_id;
+      if (!superId && agentId) {
+        const agentParent = parentById.get(agentId) || null;
+        if (agentParent && roleById.get(agentParent) === "super") superId = agentParent;
+      }
+      if (!superId && parentId && roleById.get(parentId) === "super") superId = parentId;
+    } else if (userRole === "agent") {
+      if (parentId && roleById.get(parentId) === "super") superId = parentId;
+      else if (aff?.super_id) superId = aff.super_id;
+    }
+
+    return {
+      agentUsername: agentId ? usernameById.get(agentId) || null : null,
+      superUsername: superId ? usernameById.get(superId) || null : null,
+    };
+  }
 
   // Helper: تعیین بالاسری (parentUserId) برای هر کاربر بر اساس نقش بیننده
   function resolveParentId(u: any): string | null {
@@ -510,6 +599,7 @@ export async function loadManagedUsers(
       const displayName = nickname || username;
       const tomanBalance = walletMap.get(u.id) || 0;
       const parentUserId = resolveParentId(u);
+      const { agentUsername, superUsername } = resolveUplineUsernames(u);
 
       return {
         id: u.id,
@@ -520,6 +610,8 @@ export async function loadManagedUsers(
         role,
         tomanBalance,
         parentUserId,
+        agentUsername,
+        superUsername,
       };
     });
 

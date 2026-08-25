@@ -27,6 +27,10 @@ export interface ManagedUserSummary {
    * - برای سوپر و ادمین معمولاً null است (ریشه درخت)
    */
   parentUserId: string | null;
+  /** نام ایجنت بالاسری (برای پلیر) */
+  agentUsername: string | null;
+  /** نام سوپر بالاسری (برای پلیر / ایجنت) */
+  superUsername: string | null;
 }
 
 export interface ManagedUsersResult {

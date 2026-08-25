@@ -17,6 +17,8 @@ export interface EntryBanner {
   targetAudience: BannerTargetAudience[];
   requireConfirmation: boolean;
   confirmationText: string | null;
+  /** Whether the title is shown on the player-facing banner. */
+  showTitle: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -33,6 +35,7 @@ export interface EntryBannerFormData {
   targetAudience: BannerTargetAudience[];
   requireConfirmation: boolean;
   confirmationText: string;
+  showTitle: boolean;
 }
 
 export interface EntryBannerListResult {
