@@ -37,6 +37,8 @@ function mapEntryBanner(banner: any): EntryBanner {
     requireConfirmation: banner.require_confirmation || false,
     confirmationText: banner.confirmation_text || null,
     showTitle: banner.show_title !== false,
+    showCloseButton: banner.show_close_button !== false,
+    showDontShowAgain: banner.show_dont_show_again !== false,
     isActive: banner.is_active !== false,
     createdAt: banner.created_at,
     updatedAt: banner.updated_at,
@@ -212,6 +214,8 @@ export async function createEntryBanner(
       require_confirmation: formData.requireConfirmation,
       confirmation_text: formData.requireConfirmation ? formData.confirmationText : null,
       show_title: formData.showTitle !== false,
+      show_close_button: formData.showCloseButton !== false,
+      show_dont_show_again: formData.showDontShowAgain !== false,
       is_active: true,
       created_by: currentUser.id,
     };
@@ -219,6 +223,8 @@ export async function createEntryBanner(
     console.log("[Banner] create", {
       title: formData.title,
       showTitle: formData.showTitle !== false,
+      showCloseButton: formData.showCloseButton !== false,
+      showDontShowAgain: formData.showDontShowAgain !== false,
       contentType: formData.contentType,
     });
 
@@ -276,12 +282,16 @@ export async function updateEntryBanner(
       require_confirmation: formData.requireConfirmation,
       confirmation_text: formData.requireConfirmation ? formData.confirmationText : null,
       show_title: formData.showTitle !== false,
+      show_close_button: formData.showCloseButton !== false,
+      show_dont_show_again: formData.showDontShowAgain !== false,
     };
 
     console.log("[Banner] update", {
       bannerId,
       title: formData.title,
       showTitle: formData.showTitle !== false,
+      showCloseButton: formData.showCloseButton !== false,
+      showDontShowAgain: formData.showDontShowAgain !== false,
       contentType: formData.contentType,
     });
 

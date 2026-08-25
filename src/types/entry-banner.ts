@@ -19,6 +19,10 @@ export interface EntryBanner {
   confirmationText: string | null;
   /** Whether the title is shown on the player-facing banner. */
   showTitle: boolean;
+  /** Whether the bottom close button is shown. When false, an X icon is shown at the top. */
+  showCloseButton: boolean;
+  /** Whether the "don't show this banner again" checkbox is shown (ignored if requireConfirmation). */
+  showDontShowAgain: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -36,6 +40,8 @@ export interface EntryBannerFormData {
   requireConfirmation: boolean;
   confirmationText: string;
   showTitle: boolean;
+  showCloseButton: boolean;
+  showDontShowAgain: boolean;
 }
 
 export interface EntryBannerListResult {

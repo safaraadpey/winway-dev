@@ -29,6 +29,8 @@ export default function EditEntryBannerPage() {
     requireConfirmation: false,
     confirmationText: "",
     showTitle: true,
+    showCloseButton: true,
+    showDontShowAgain: true,
   });
 
   useEffect(() => {
@@ -60,6 +62,8 @@ export default function EditEntryBannerPage() {
             requireConfirmation: banner.requireConfirmation,
             confirmationText: banner.confirmationText || "",
             showTitle: banner.showTitle !== false,
+            showCloseButton: banner.showCloseButton !== false,
+            showDontShowAgain: banner.showDontShowAgain !== false,
           });
         } else {
           toast.error("بنر یافت نشد");
@@ -197,6 +201,30 @@ export default function EditEntryBannerPage() {
               value={formData.showTitle ? "show" : "hide"}
               onChange={(e) =>
                 setFormData({ ...formData, showTitle: e.target.value === "show" })
+              }
+              className="w-full rounded-xl bg-[#1f2933] text-white px-4 py-3 outline-none border border-transparent focus:border-teal-500"
+            >
+              <option value="show">نمایش</option>
+              <option value="hide">عدم نمایش</option>
+            </select>
+            <label className="block text-sm text-gray-400 mt-3 mb-2">نمایش دکمه بستن</label>
+            <select
+              value={formData.showCloseButton ? "show" : "hide"}
+              onChange={(e) =>
+                setFormData({ ...formData, showCloseButton: e.target.value === "show" })
+              }
+              className="w-full rounded-xl bg-[#1f2933] text-white px-4 py-3 outline-none border border-transparent focus:border-teal-500"
+            >
+              <option value="show">نمایش</option>
+              <option value="hide">عدم نمایش</option>
+            </select>
+            <label className="block text-sm text-gray-400 mt-3 mb-2">
+              نمایش گزینه «دیگر این بنر را نمایش نده»
+            </label>
+            <select
+              value={formData.showDontShowAgain ? "show" : "hide"}
+              onChange={(e) =>
+                setFormData({ ...formData, showDontShowAgain: e.target.value === "show" })
               }
               className="w-full rounded-xl bg-[#1f2933] text-white px-4 py-3 outline-none border border-transparent focus:border-teal-500"
             >
@@ -361,9 +389,16 @@ export default function EditEntryBannerPage() {
 
           {/* پیش نمایش */}
           {showPreview && (
-            <div className="rounded-xl bg-[#1f2933] border border-gray-700 overflow-hidden">
+            <div className="relative rounded-xl bg-[#1f2933] border border-gray-700 overflow-hidden">
+              {!formData.showCloseButton && (
+                <div className="absolute top-3 left-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white">
+                  <span className="text-lg leading-none">×</span>
+                </div>
+              )}
               {formData.showTitle && (
-                <h3 className="text-lg font-semibold px-4 pt-4 mb-2">{formData.title || "تیتر بنر"}</h3>
+                <h3 className={`text-lg font-semibold px-4 pt-4 mb-2 ${!formData.showCloseButton ? "pl-12" : ""}`}>
+                  {formData.title || "تیتر بنر"}
+                </h3>
               )}
               {formData.contentType === "text" ? (
                 <div className="text-gray-300 whitespace-pre-wrap p-4">
@@ -394,6 +429,19 @@ export default function EditEntryBannerPage() {
                   <span className="text-sm text-gray-300">
                     {formData.confirmationText || "متن تایید..."}
                   </span>
+                </div>
+              )}
+              {!formData.requireConfirmation && formData.showDontShowAgain && (
+                <div className="mt-2 px-4 pb-2 flex items-center gap-2">
+                  <input type="checkbox" className="w-5 h-5" />
+                  <span className="text-sm text-gray-300">دیگر این بنر را نمایش نده</span>
+                </div>
+              )}
+              {formData.showCloseButton && (
+                <div className="px-4 pb-4">
+                  <div className="w-full h-12 rounded-xl bg-[#2a2a2a]/40 text-white text-lg font-bold flex items-center justify-center">
+                    {formData.requireConfirmation ? "تایید و بستن" : "بستن"}
+                  </div>
                 </div>
               )}
             </div>

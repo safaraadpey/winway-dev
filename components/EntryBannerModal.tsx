@@ -15,6 +15,26 @@ type EntryBannerModalProps = {
   visibleOnPaths?: string[];
 };
 
+function BannerCloseIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
 export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalProps) {
   const pathname = usePathname();
   const { userId } = useSession();
@@ -103,18 +123,47 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
   };
 
   const isImageBanner = currentBanner.contentType === "image" && Boolean(currentBanner.imageUrl);
+  const showCloseButton = currentBanner.showCloseButton !== false;
+  const showDontShowAgain =
+    !currentBanner.requireConfirmation && currentBanner.showDontShowAgain !== false;
+  const closeDisabled = currentBanner.requireConfirmation && !confirmed;
+  const showFooter =
+    currentBanner.requireConfirmation ||
+    showDontShowAgain ||
+    showCloseButton ||
+    banners.length > 1;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
       <div
-        className={`bg-black rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto ${
+        className={`relative bg-black rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto ${
           isImageBanner ? "" : "p-6"
         }`}
       >
+        {!showCloseButton && (
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={closeDisabled}
+            aria-label="بستن"
+            className="absolute top-3 left-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <BannerCloseIcon />
+          </button>
+        )}
+
         {currentBanner.showTitle && (
-          <div className={`flex items-center mb-4 ${isImageBanner ? "px-6 pt-6" : ""}`}>
+          <div
+            className={`flex items-center mb-4 ${isImageBanner ? "px-6 pt-6" : ""} ${
+              !showCloseButton ? "pl-12" : ""
+            }`}
+          >
             <h2 className="text-xl font-semibold text-white">{currentBanner.title}</h2>
           </div>
+        )}
+
+        {!showCloseButton && !currentBanner.showTitle && !isImageBanner && (
+          <div className="h-8 mb-2" />
         )}
 
         {currentBanner.contentType === "text" ? (
@@ -133,55 +182,59 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
           </div>
         ) : null}
 
-        <div className={isImageBanner ? "px-6 pb-6 pt-3" : ""}>
-          {currentBanner.requireConfirmation && (
-            <div className="mb-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={confirmed}
-                  onChange={(e) => setConfirmed(e.target.checked)}
-                  className="w-5 h-5 rounded bg-[#1f2933] border-gray-600 text-teal-600 focus:ring-teal-500"
-                />
-                <span className="text-sm text-gray-300">
-                  {currentBanner.confirmationText}
-                </span>
-              </label>
-            </div>
-          )}
+        {showFooter && (
+          <div className={isImageBanner ? "px-6 pb-6 pt-3" : ""}>
+            {currentBanner.requireConfirmation && (
+              <div className="mb-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={confirmed}
+                    onChange={(e) => setConfirmed(e.target.checked)}
+                    className="w-5 h-5 rounded bg-[#1f2933] border-gray-600 text-teal-600 focus:ring-teal-500"
+                  />
+                  <span className="text-sm text-gray-300">
+                    {currentBanner.confirmationText}
+                  </span>
+                </label>
+              </div>
+            )}
 
-          {!currentBanner.requireConfirmation && (
-            <div className="mb-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={dontShowAgainToday}
-                  onChange={(e) => setDontShowAgainToday(e.target.checked)}
-                  className="w-5 h-5 rounded bg-[#1f2933] border-gray-600 text-teal-600 focus:ring-teal-500"
-                />
-                <span className="text-sm text-gray-300">دوباره نشان نده</span>
-              </label>
-            </div>
-          )}
+            {showDontShowAgain && (
+              <div className="mb-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={dontShowAgainToday}
+                    onChange={(e) => setDontShowAgainToday(e.target.checked)}
+                    className="w-5 h-5 rounded bg-[#1f2933] border-gray-600 text-teal-600 focus:ring-teal-500"
+                  />
+                  <span className="text-sm text-gray-300">دیگر این بنر را نمایش نده</span>
+                </label>
+              </div>
+            )}
 
-          <button
-            onClick={handleConfirm}
-            disabled={currentBanner.requireConfirmation && !confirmed}
-            className="w-full h-12 rounded-xl bg-[#2a2a2a]/40 text-white text-lg font-bold hover:bg-[#2a2a2a]/55 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {currentBanner.requireConfirmation
-              ? confirmed
-                ? "تایید و بستن"
-                : "لطفاً تایید کنید"
-              : "بستن"}
-          </button>
+            {showCloseButton && (
+              <button
+                onClick={handleConfirm}
+                disabled={closeDisabled}
+                className="w-full h-12 rounded-xl bg-[#2a2a2a]/40 text-white text-lg font-bold hover:bg-[#2a2a2a]/55 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {currentBanner.requireConfirmation
+                  ? confirmed
+                    ? "تایید و بستن"
+                    : "لطفاً تایید کنید"
+                  : "بستن"}
+              </button>
+            )}
 
-          {banners.length > 1 && (
-            <div className="mt-3 text-center text-sm text-gray-400">
-              {currentBannerIndex + 1} از {banners.length}
-            </div>
-          )}
-        </div>
+            {banners.length > 1 && (
+              <div className={`${showCloseButton ? "mt-3" : ""} text-center text-sm text-gray-400`}>
+                {currentBannerIndex + 1} از {banners.length}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
