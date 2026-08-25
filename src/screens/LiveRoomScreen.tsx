@@ -60,6 +60,8 @@ const REALTIME_WATCHDOG_TICK_MS = 2_000;
 const DRAW_WATCHDOG_TICK_MS = 1_000;
 /** شمارش معکوس بصری DrawStrip قبل از اولین عدد (جدا از next_draw_at سرور). */
 const VISUAL_PRE_DRAW_COUNTDOWN_START = 5;
+/** بعد از نمایش آخرین عدد در UI، قبل از بنر پایان بازی. */
+const RESULTS_BANNER_DELAY_MS = 6_000;
 
 const ACTIVE_ROOM_STATUSES = new Set([
   "waiting",
@@ -173,6 +175,9 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   const [revealedDrawCount, setRevealedDrawCount] = useState(0);
   const lastRevealAtRef = useRef(0);
   const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resultsDelayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resultsDelayResolveRef = useRef<(() => void) | null>(null);
+  const resultsOpenGenerationRef = useRef(0);
   /** RT draws received while a draw poll is in-flight (merged when poll completes). */
   const pendingRtDrawsRef = useRef<ProcessedDraw[]>([]);
   const winnersSyncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -207,27 +212,54 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     });
     if (hasSeenGameResults(key)) return;
 
+    const generation = ++resultsOpenGenerationRef.current;
     openingResultsRef.current = true;
     resultsRequestedRef.current = true;
     setResultsRequested(true);
 
     const isTournamentRoom = !!dataRef.current?.tournament?.id;
 
+    console.log("[LiveRoom] delaying results banner", {
+      roomId,
+      delayMs: RESULTS_BANNER_DELAY_MS,
+    });
+
+    const delayPromise = new Promise<void>((resolve) => {
+      if (resultsDelayTimerRef.current) {
+        clearTimeout(resultsDelayTimerRef.current);
+      }
+      resultsDelayResolveRef.current = resolve;
+      resultsDelayTimerRef.current = setTimeout(() => {
+        resultsDelayTimerRef.current = null;
+        resultsDelayResolveRef.current = null;
+        resolve();
+      }, RESULTS_BANNER_DELAY_MS);
+    });
+
+    const fetchPromise = fetchRoomResultsWhenPrizesReady(roomId, {
+      maxAttempts: isTournamentRoom ? 10 : 30,
+      delayMs: isTournamentRoom ? 200 : 500,
+    }).then(
+      (res) => ({ ok: true as const, res }),
+      (err: unknown) => ({ ok: false as const, err })
+    );
+
     try {
-      const res = await fetchRoomResultsWhenPrizesReady(roomId, {
-        maxAttempts: isTournamentRoom ? 10 : 30,
-        delayMs: isTournamentRoom ? 200 : 500,
-      });
-      setResults(res);
+      const [fetched] = await Promise.all([fetchPromise, delayPromise]);
+
+      if (generation !== resultsOpenGenerationRef.current) return;
+      if (isHardExiting()) return;
+
+      if (fetched.ok) {
+        setResults(fetched.res);
+      } else {
+        console.error("[LiveRoom] winners fetch error:", fetched.err);
+      }
       setShowResultsDialog(true);
       markSeenGameResults(key);
-      if (!isTournamentRoom) {
+      if (fetched.ok && !isTournamentRoom) {
         scheduleWalletBalanceSync?.(`room-settled:${roomId}`);
       }
-    } catch (err) {
-      console.error("[LiveRoom] winners fetch error:", err);
-      setShowResultsDialog(true);
-      markSeenGameResults(key);
     } finally {
       openingResultsRef.current = false;
     }
@@ -563,6 +595,13 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
       clearTimeout(revealTimerRef.current);
       revealTimerRef.current = null;
     }
+    if (resultsDelayTimerRef.current) {
+      clearTimeout(resultsDelayTimerRef.current);
+      resultsDelayTimerRef.current = null;
+    }
+    resultsDelayResolveRef.current?.();
+    resultsDelayResolveRef.current = null;
+    resultsOpenGenerationRef.current += 1;
     pendingRtDrawsRef.current = [];
     drawsHydratedRef.current = false;
     revealedDrawCountRef.current = 0;
@@ -585,6 +624,13 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
         clearTimeout(revealTimerRef.current);
         revealTimerRef.current = null;
       }
+      if (resultsDelayTimerRef.current) {
+        clearTimeout(resultsDelayTimerRef.current);
+        resultsDelayTimerRef.current = null;
+      }
+      resultsDelayResolveRef.current?.();
+      resultsDelayResolveRef.current = null;
+      resultsOpenGenerationRef.current += 1;
     };
   }, []);
 

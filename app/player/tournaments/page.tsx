@@ -262,6 +262,9 @@ export default function TournamentsPage() {
                             {t.title || "بدون عنوان"}
                           </div>
                           <div className={styles.cardBadges}>
+                            <span className={styles.statusBadge}>
+                              {statusLabel(t.status)}
+                            </span>
                             <span className={styles.dateBadge}>
                               {t.start_at
                                 ? `${new Date(t.start_at).toLocaleDateString("fa-IR")}، ${new Date(
@@ -272,15 +275,16 @@ export default function TournamentsPage() {
                                   })}`
                                 : "نامشخص"}
                             </span>
-                            <span className={styles.statusBadge}>
-                              {statusLabel(t.status)}
-                            </span>
                           </div>
                         </div>
 
                         <div className={styles.detailsGrid}>
                           <div className={styles.field}>
-                            <span className={styles.fieldLabel}>قیمت کارت(تومان)</span>
+                            <span className={styles.fieldLabel}>
+                              {entryCurrency === "DING"
+                                ? "ورودی(دینگ)"
+                                : "قیمت کارت(تومان)"}
+                            </span>
                             <span className={styles.fieldValue}>
                               {t.ticket_price != null
                                 ? t.ticket_price <= 0
