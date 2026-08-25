@@ -10,8 +10,6 @@ import {
   filterEntryBannersForToday,
   snoozeEntryBannerForToday,
 } from "@/lib/entry-banner-snooze";
-import buyCardButtonBg from "@/src/assets/logo/BuyCardBotton.png";
-import panelStyles from "@/components/room/gameRoomPanels.module.css";
 
 type EntryBannerModalProps = {
   visibleOnPaths?: string[];
@@ -109,7 +107,7 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
       <div
-        className={`bg-[#0b1120] rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto ${
+        className={`bg-black rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto ${
           isImageBanner ? "" : "p-6"
         }`}
       >
@@ -169,12 +167,7 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
           <button
             onClick={handleConfirm}
             disabled={currentBanner.requireConfirmation && !confirmed}
-            className={panelStyles.confirmButton}
-            style={{
-              backgroundImage: `url(${buyCardButtonBg.src})`,
-              width: "100%",
-              flex: "none",
-            }}
+            className="w-full h-12 rounded-xl bg-[#2a2a2a]/40 text-white text-lg font-bold hover:bg-[#2a2a2a]/55 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {currentBanner.requireConfirmation
               ? confirmed
