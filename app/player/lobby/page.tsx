@@ -50,6 +50,7 @@ export default function LobbyPage() {
   >({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasSnapshot, setHasSnapshot] = useState(false);
   useAutoStartTour(
     GAME_BROWSER_TOUR_ID,
     !loading && !errorMessage && roomGroups.length > 0,
@@ -141,8 +142,7 @@ export default function LobbyPage() {
           hasToken: false,
         });
         setErrorMessage(null);
-        setLoading(false);
-        schedule(5000, "no-token");
+        schedule(500, "no-token");
         return;
       }
 
@@ -173,7 +173,6 @@ export default function LobbyPage() {
           if (!res.ok) {
             console.error("fetchRooms: lobby-snapshot failed", res.status);
             nextError = "خطا در دریافت اطلاعات لابی";
-            setRoomGroups([]);
             stableCountRef.current = Math.min(stableCountRef.current + 1, 2);
             schedule(stableCountRef.current === 1 ? 30000 : 60000, "error");
             return;
@@ -185,6 +184,7 @@ export default function LobbyPage() {
         const groups = Array.isArray(json?.roomGroups?.groups) ? (json.roomGroups!.groups as RoomPriceGroup[]) : [];
         const sortedGroups = [...groups].sort((a, b) => a.price - b.price);
         setRoomGroups(sortedGroups);
+        setHasSnapshot(true);
 
         void fetchAutoBuyLobbySnapshots()
           .then((sessions) => {
@@ -212,7 +212,6 @@ export default function LobbyPage() {
         }
       } catch (error) {
         console.error('Error in fetchRooms:', error);
-        setRoomGroups([]);
         nextError = 'خطای غیرمنتظره در بارگذاری لابی';
         stableCountRef.current = Math.min(stableCountRef.current + 1, 2);
         schedule(stableCountRef.current === 1 ? 30000 : 60000, "exception");
@@ -302,7 +301,7 @@ export default function LobbyPage() {
     }
   };
 
-  if (loading) {
+  if (loading || !hasSnapshot) {
     return (
       <div className={styles.lobbyContainer}>
         <div className={styles.loadingContainer}>
