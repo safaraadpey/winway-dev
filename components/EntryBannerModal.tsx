@@ -104,110 +104,91 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
     handleClose();
   };
 
+  const isImageBanner = currentBanner.contentType === "image" && Boolean(currentBanner.imageUrl);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-      <div className="bg-[#0b1120] rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-        {(currentBanner.showTitle || !currentBanner.requireConfirmation) && (
-          <div
-            className={`flex items-center mb-4 ${
-              currentBanner.showTitle ? "justify-between" : "justify-end"
-            }`}
-          >
-            {currentBanner.showTitle && (
-              <h2 className="text-xl font-semibold text-white">{currentBanner.title}</h2>
-            )}
-            {!currentBanner.requireConfirmation && (
-              <button
-                onClick={handleClose}
-                className="text-gray-400 hover:text-white transition-colors"
-                aria-label="بستن بنر"
-              >
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            )}
+      <div
+        className={`bg-[#0b1120] rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto ${
+          isImageBanner ? "" : "p-6"
+        }`}
+      >
+        {currentBanner.showTitle && (
+          <div className={`flex items-center mb-4 ${isImageBanner ? "px-6 pt-6" : ""}`}>
+            <h2 className="text-xl font-semibold text-white">{currentBanner.title}</h2>
           </div>
         )}
 
-        <div className="mb-4">
-          {currentBanner.contentType === "text" ? (
+        {currentBanner.contentType === "text" ? (
+          <div className="mb-4">
             <div className="text-gray-300 whitespace-pre-wrap">
               {currentBanner.textContent}
             </div>
-          ) : currentBanner.imageUrl ? (
-            <div>
-              <img
-                src={currentBanner.imageUrl}
-                alt={currentBanner.title}
-                className="w-full rounded-lg"
-              />
+          </div>
+        ) : currentBanner.imageUrl ? (
+          <div style={{ padding: 4 }}>
+            <img
+              src={currentBanner.imageUrl}
+              alt={currentBanner.title}
+              className="w-full rounded-lg"
+            />
+          </div>
+        ) : null}
+
+        <div className={isImageBanner ? "px-6 pb-6 pt-3" : ""}>
+          {currentBanner.requireConfirmation && (
+            <div className="mb-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={confirmed}
+                  onChange={(e) => setConfirmed(e.target.checked)}
+                  className="w-5 h-5 rounded bg-[#1f2933] border-gray-600 text-teal-600 focus:ring-teal-500"
+                />
+                <span className="text-sm text-gray-300">
+                  {currentBanner.confirmationText}
+                </span>
+              </label>
             </div>
-          ) : null}
+          )}
+
+          {!currentBanner.requireConfirmation && (
+            <div className="mb-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={dontShowAgainToday}
+                  onChange={(e) => setDontShowAgainToday(e.target.checked)}
+                  className="w-5 h-5 rounded bg-[#1f2933] border-gray-600 text-teal-600 focus:ring-teal-500"
+                />
+                <span className="text-sm text-gray-300">دوباره نشان نده</span>
+              </label>
+            </div>
+          )}
+
+          <button
+            onClick={handleConfirm}
+            disabled={currentBanner.requireConfirmation && !confirmed}
+            className={panelStyles.confirmButton}
+            style={{
+              backgroundImage: `url(${buyCardButtonBg.src})`,
+              width: "100%",
+              flex: "none",
+            }}
+          >
+            {currentBanner.requireConfirmation
+              ? confirmed
+                ? "تایید و بستن"
+                : "لطفاً تایید کنید"
+              : "بستن"}
+          </button>
+
+          {banners.length > 1 && (
+            <div className="mt-3 text-center text-sm text-gray-400">
+              {currentBannerIndex + 1} از {banners.length}
+            </div>
+          )}
         </div>
-
-        {currentBanner.requireConfirmation && (
-          <div className="mb-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={confirmed}
-                onChange={(e) => setConfirmed(e.target.checked)}
-                className="w-5 h-5 rounded bg-[#1f2933] border-gray-600 text-teal-600 focus:ring-teal-500"
-              />
-              <span className="text-sm text-gray-300">
-                {currentBanner.confirmationText}
-              </span>
-            </label>
-          </div>
-        )}
-
-        {!currentBanner.requireConfirmation && (
-          <div className="mb-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={dontShowAgainToday}
-                onChange={(e) => setDontShowAgainToday(e.target.checked)}
-                className="w-5 h-5 rounded bg-[#1f2933] border-gray-600 text-teal-600 focus:ring-teal-500"
-              />
-              <span className="text-sm text-gray-300">دوباره نشان نده</span>
-            </label>
-          </div>
-        )}
-
-        <button
-          onClick={handleConfirm}
-          disabled={currentBanner.requireConfirmation && !confirmed}
-          className={panelStyles.confirmButton}
-          style={{
-            backgroundImage: `url(${buyCardButtonBg.src})`,
-            width: "100%",
-            flex: "none",
-          }}
-        >
-          {currentBanner.requireConfirmation
-            ? confirmed
-              ? "تایید و بستن"
-              : "لطفاً تایید کنید"
-            : "بستن"}
-        </button>
-
-        {banners.length > 1 && (
-          <div className="mt-3 text-center text-sm text-gray-400">
-            {currentBannerIndex + 1} از {banners.length}
-          </div>
-        )}
       </div>
     </div>
   );

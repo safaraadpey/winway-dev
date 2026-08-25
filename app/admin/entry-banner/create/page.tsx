@@ -278,16 +278,16 @@ export default function CreateEntryBannerPage() {
 
           {/* پیش نمایش */}
           {showPreview && (
-            <div className="rounded-xl bg-[#1f2933] p-4 border border-gray-700">
+            <div className="rounded-xl bg-[#1f2933] border border-gray-700 overflow-hidden">
               {formData.showTitle && (
-                <h3 className="text-lg font-semibold mb-2">{formData.title || "تیتر بنر"}</h3>
+                <h3 className="text-lg font-semibold px-4 pt-4 mb-2">{formData.title || "تیتر بنر"}</h3>
               )}
               {formData.contentType === "text" ? (
-                <div className="text-gray-300 whitespace-pre-wrap">
+                <div className="text-gray-300 whitespace-pre-wrap p-4">
                   {formData.textContent || "محتوای متن..."}
                 </div>
               ) : formData.imageFile ? (
-                <div>
+                <div style={{ padding: 4 }}>
                   <img
                     src={URL.createObjectURL(formData.imageFile)}
                     alt="Preview"
@@ -295,10 +295,10 @@ export default function CreateEntryBannerPage() {
                   />
                 </div>
               ) : (
-                <div className="text-gray-500">تصویری انتخاب نشده</div>
+                <div className="text-gray-500 p-4">تصویری انتخاب نشده</div>
               )}
               {formData.requireConfirmation && (
-                <div className="mt-4 flex items-center gap-2">
+                <div className="mt-2 px-4 pb-4 flex items-center gap-2">
                   <input type="checkbox" className="w-5 h-5" />
                   <span className="text-sm text-gray-300">
                     {formData.confirmationText || "متن تایید..."}
