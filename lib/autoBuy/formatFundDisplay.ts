@@ -6,9 +6,9 @@ export type AutoBuyFundDisplay = {
 };
 
 /**
- * Lobby card delta vs initial auto-buy fund (سقف خرید).
- * Below initial: negative spent amount in red (e.g. -10,000).
- * At/above initial: positive remaining with + prefix in green (e.g. +124,000).
+ * Lobby card profit/loss vs initial auto-buy fund (سقف خرید).
+ * Loss: deficit from capital, red (e.g. -10,000).
+ * Profit: net gain only, green (e.g. +25,000) — not remaining fund.
  */
 export function formatAutoBuyFundDisplay(
   fundInitial: number,
@@ -17,16 +17,16 @@ export function formatAutoBuyFundDisplay(
   if (!Number.isFinite(fundInitial) || fundInitial <= 0) return null;
   if (!Number.isFinite(fundRemaining) || fundRemaining < 0) return null;
 
-  if (fundRemaining < fundInitial) {
-    const delta = fundRemaining - fundInitial;
+  const pnl = fundRemaining - fundInitial;
+  if (pnl < 0) {
     return {
-      value: delta.toLocaleString("en-US"),
+      value: pnl.toLocaleString("en-US"),
       tone: "loss",
     };
   }
 
   return {
-    value: `+${fundRemaining.toLocaleString("en-US")}`,
+    value: `+${pnl.toLocaleString("en-US")}`,
     tone: "gain",
   };
 }

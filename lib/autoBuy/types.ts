@@ -14,6 +14,7 @@ export type AutoBuySnapshot = {
   cardCount?: number;
   fundInitial?: number;
   fundRemaining?: number;
+  /** Net profit cap (سقف برد), not fund_initial + profit. */
   profitTarget?: number;
   lastRoomId?: string | null;
   serialBuyEnabled?: boolean;

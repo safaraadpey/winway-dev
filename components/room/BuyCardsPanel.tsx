@@ -185,7 +185,7 @@ export default function BuyCardsPanel({
   const autoBuyFormValid = useMemo(() => {
     return (
       fundNumeric >= roundCost &&
-      profitNumeric > fundNumeric &&
+      profitNumeric > 0 &&
       autoCardCount >= 1 &&
       autoCardCount <= maxQuantity
     );
@@ -201,7 +201,7 @@ export default function BuyCardsPanel({
       }
       if (next && !autoBuyRunning && !profitTarget && price > 0) {
         const defaultFund = Math.max(roundCost * 10, price * 10);
-        setProfitTarget(formatNumericInput(Math.round(defaultFund * 1.25)));
+        setProfitTarget(formatNumericInput(Math.max(1, Math.round(defaultFund * 0.25))));
       }
       return next;
     });
@@ -493,7 +493,7 @@ export default function BuyCardsPanel({
                 inputMode="numeric"
                 dir="ltr"
                 className={panelStyles.autoBuyNumericInput}
-                placeholder="600,000"
+                placeholder="25,000"
                 value={profitTarget}
                 onChange={(event) =>
                   setProfitTarget(formatNumericInput(parseNumericInput(event.target.value)))
@@ -530,8 +530,17 @@ export default function BuyCardsPanel({
               باقی صندوق:{" "}
               <span className={panelStyles.autoBuyStatusValue} dir="ltr">
                 {autoBuy.snapshot.fundRemaining.toLocaleString("en-US")}
-              </span>{" "}
-              / هدف{" "}
+              </span>
+              {" · "}
+              سود فعلی:{" "}
+              <span className={panelStyles.autoBuyStatusValue} dir="ltr">
+                {Math.max(
+                  0,
+                  (autoBuy.snapshot.fundRemaining ?? 0) -
+                    (autoBuy.snapshot.fundInitial ?? 0)
+                ).toLocaleString("en-US")}
+              </span>
+              {" / سقف برد "}
               <span className={panelStyles.autoBuyStatusValue} dir="ltr">
                 {(autoBuy.snapshot.profitTarget ?? 0).toLocaleString("en-US")}
               </span>
@@ -562,7 +571,7 @@ export default function BuyCardsPanel({
               <span className={panelStyles.autoBuyStatusValue} dir="ltr">
                 {roundCost.toLocaleString("en-US")}
               </span>{" "}
-              تومن (یک دور) و سقف برد باید بیشتر از سقف خرید باشد.
+              تومن (یک دور) و سقف برد باید بیشتر از صفر باشد.
             </p>
           )}
 

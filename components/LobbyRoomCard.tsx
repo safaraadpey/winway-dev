@@ -163,8 +163,8 @@ export default function LobbyRoomCard({
             }`}
             aria-label={
               autoBuyFundDisplay.tone === "gain"
-                ? `مانده صندوق خرید اتوماتیک ${autoBuyFundDisplay.value}`
-                : `مصرف از سقف خرید ${autoBuyFundDisplay.value}`
+                ? `سود خرید اتوماتیک ${autoBuyFundDisplay.value}`
+                : `زیان خرید اتوماتیک ${autoBuyFundDisplay.value}`
             }
           >
             <span className={styles.autoBuyFundValue} dir="ltr">

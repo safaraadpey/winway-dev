@@ -32,7 +32,7 @@ function mapAutoBuyError(message: string): { status: number; message: string } {
     return { status: 409, message: "یک خرید اتوماتیک فعال دارید." };
   }
   if (lower.includes("profit target")) {
-    return { status: 400, message: "هدف سود باید بیشتر از مبلغ صندوق باشد." };
+    return { status: 400, message: "سقف برد باید بیشتر از صفر باشد." };
   }
   if (lower.includes("fund must cover")) {
     return { status: 400, message: "صندوق باید حداقل یک دور بازی را پوشش دهد." };
@@ -232,12 +232,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!Number.isFinite(profitTarget) || profitTarget <= fundAmount) {
+    if (!Number.isFinite(profitTarget) || profitTarget <= 0) {
       return NextResponse.json(
         {
           ok: false,
           error: "invalid_profit_target",
-          message: "profitTarget must exceed fundAmount.",
+          message: "سقف برد باید بیشتر از صفر باشد.",
         },
         { status: 400 }
       );
