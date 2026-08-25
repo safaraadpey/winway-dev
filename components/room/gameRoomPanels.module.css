@@ -759,7 +759,7 @@
   font-size: 13px;
   line-height: 1.25;
   color: rgba(255, 255, 255, 0.92);
-  white-space: nowrap;
+  max-width: 180px;
 }
 
 .autoBuyFieldControl {
@@ -814,24 +814,19 @@
 }
 
 .autoBuyStartButton {
+  composes: confirmButton;
   width: 100%;
-  height: 44px;
-  border-radius: 12px;
-  border: 1px solid rgba(251, 191, 36, 0.65);
-  background: rgba(251, 191, 36, 0.15);
-  color: #fcd34d;
-  font-size: 16px;
-  font-weight: 700;
-  transition: opacity 0.15s ease;
+  flex: none;
 }
 
-.autoBuyStartButtonRunning {
-  border-color: rgba(239, 68, 68, 0.65);
-  background: rgba(239, 68, 68, 0.12);
-  color: #fca5a5;
+.autoBuyStopButton {
+  composes: confirmButtonCancel;
+  width: 100%;
+  flex: none;
 }
 
-.autoBuyStartButton:disabled {
+.autoBuyStartButton:disabled,
+.autoBuyStopButton:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -849,41 +844,10 @@
   color: #fcd34d;
 }
 
-.autoBuySerialSwitch {
-  position: relative;
-  width: 44px;
-  height: 24px;
-  flex-shrink: 0;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 999px;
-  background: rgba(75, 85, 99, 0.95);
-  padding: 0;
-  cursor: pointer;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
+.autoBuyStatusValueGain {
+  color: #4ade80;
 }
 
-.autoBuySerialSwitchOn {
-  border-color: rgba(252, 211, 77, 0.75);
-  background: rgba(252, 211, 77, 0.42);
-}
-
-.autoBuySerialSwitchThumb {
-  position: absolute;
-  top: 2px;
-  inset-inline-start: 2px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-  transition: inset-inline-start 0.2s ease, transform 0.2s ease;
-}
-
-.autoBuySerialSwitchOn .autoBuySerialSwitchThumb {
-  inset-inline-start: calc(100% - 20px);
-}
-
-.autoBuySerialSwitch:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+.autoBuyStatusValueLoss {
+  color: #f87171;
 }
