@@ -14,8 +14,8 @@ DECLARE
   v_entries_players int;
   v_min_players int;
   v_extend_minutes int;
+  v_extend_enabled boolean;
 
-  -- error log details
   v_ctx    text;
   v_detail text;
   v_hint   text;
@@ -28,7 +28,8 @@ BEGIN
       LEAST(
         GREATEST(COALESCE(NULLIF(t.meta->>'registration_extend_minutes','')::int, 60), 1),
         10080
-      ) AS registration_extend_minutes
+      ) AS registration_extend_minutes,
+      tournament.fn_jsonb_bool(t.meta, 'registration_extend_enabled', true) AS registration_extend_enabled
     FROM public.tournaments t
     WHERE
       (t.status = 'registration_open'::public.tournament_status
@@ -43,6 +44,7 @@ BEGIN
       IF r.status = 'registration_open'::public.tournament_status THEN
         v_min_players := COALESCE(r.min_players_to_start, 3);
         v_extend_minutes := COALESCE(r.registration_extend_minutes, 60);
+        v_extend_enabled := COALESCE(r.registration_extend_enabled, true);
 
         SELECT count(DISTINCT te.user_id)
           INTO v_entries_players
@@ -51,11 +53,23 @@ BEGIN
           AND te.status = 'created';
 
         IF COALESCE(v_entries_players, 0) < v_min_players THEN
-          UPDATE public.tournaments
-             SET start_at = now() + make_interval(mins => v_extend_minutes),
-                 updated_at = now()
-           WHERE id = r.id
-             AND status = 'registration_open'::public.tournament_status;
+          IF v_extend_enabled THEN
+            UPDATE public.tournaments
+               SET start_at = now() + make_interval(mins => v_extend_minutes),
+                   updated_at = now()
+             WHERE id = r.id
+               AND status = 'registration_open'::public.tournament_status;
+          ELSE
+            PERFORM tournament.fn_cancel_under_min_players(r.id);
+            INSERT INTO tournament.tournament_tick_log(tournament_id, stage, sqlstate, message, context)
+            VALUES (
+              r.id,
+              'cancel_under_min',
+              NULL,
+              format('players=%s min=%s', COALESCE(v_entries_players, 0), v_min_players),
+              NULL
+            );
+          END IF;
           CONTINUE;
         END IF;
       END IF;

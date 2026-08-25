@@ -18,8 +18,9 @@ export type TournamentFormValues = {
   remainder_policy: string;
   commission_rate: number | null;
   guaranteed_prize: number | null;
-  min_players_for_guarantee: number | null;
   min_players_to_start: number | null;
+  /** When false, under-min tournaments cancel at start_at instead of deferring. */
+  registration_extend_enabled: boolean;
   /** Minutes to push start_at when under min_players_to_start (default 60). */
   registration_extend_minutes: number | null;
   final_winners_count: number | null;
@@ -105,8 +106,8 @@ export function TournamentForm({
       remainder_policy: "adaptive_tables",
       commission_rate: null,
       guaranteed_prize: 0,
-      min_players_for_guarantee: null,
       min_players_to_start: 3,
+      registration_extend_enabled: true,
       registration_extend_minutes: 60,
       final_winners_count: 1,
     }),
@@ -161,14 +162,6 @@ export function TournamentForm({
     const num = val === "" ? null : Number(val);
     handleChange(key, Number.isNaN(num) ? null : num);
   };
-  const isFreeTournament = (values.ticket_price ?? 0) <= 0;
-
-  useEffect(() => {
-    if (isFreeTournament && values.min_players_for_guarantee != null) {
-      setValues((prev) => ({ ...prev, min_players_for_guarantee: null }));
-    }
-  }, [isFreeTournament, values.min_players_for_guarantee]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (readOnly) return;
@@ -223,26 +216,21 @@ export function TournamentForm({
       return;
     }
     if (
-      values.min_players_for_guarantee != null &&
-      values.min_players_for_guarantee < 1
-    ) {
-      setError("حداقل تعداد بازیکن گارانتی باید حداقل 1 باشد.");
-      return;
-    }
-    if (
-      values.min_players_to_start != null &&
+      values.min_players_to_start == null ||
       values.min_players_to_start < 3
     ) {
       setError("حداقل نفرات شروع تورنومنت باید حداقل 3 باشد.");
       return;
     }
-    if (
-      values.registration_extend_minutes != null &&
-      (values.registration_extend_minutes < 1 ||
-        values.registration_extend_minutes > 10080)
-    ) {
-      setError("تمدید زمان ثبت نام باید بین ۱ تا ۱۰۰۸۰ دقیقه باشد.");
-      return;
+    if (values.registration_extend_enabled) {
+      if (
+        values.registration_extend_minutes == null ||
+        values.registration_extend_minutes < 1 ||
+        values.registration_extend_minutes > 10080
+      ) {
+        setError("تمدید زمان ثبت نام باید بین ۱ تا ۱۰۰۸۰ دقیقه باشد.");
+        return;
+      }
     }
     if (startAtValue) {
       const now = new Date();
@@ -254,7 +242,9 @@ export function TournamentForm({
     }
     await onSubmit({
       ...values,
-      min_players_for_guarantee: isFreeTournament ? null : values.min_players_for_guarantee,
+      min_players_to_start: values.min_players_to_start,
+      registration_extend_enabled: values.registration_extend_enabled,
+      registration_extend_minutes: values.registration_extend_minutes ?? 60,
       start_at: startAtValue,
     });
   };
@@ -278,7 +268,7 @@ export function TournamentForm({
         </div>
       )}
 
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid md:grid-cols-2 gap-4 items-start">
         <label className="flex flex-col gap-1 text-sm">
           <span>عنوان</span>
           <input
@@ -434,21 +424,6 @@ export function TournamentForm({
         </label>
 
         <label className="flex flex-col gap-1 text-sm">
-          <span>
-            حداقل بازیکن برای گارانتی
-            {isFreeTournament ? " (در تورنومنت رایگان غیرفعال است)" : ""}
-          </span>
-          <input
-            type="number"
-            min="1"
-            value={values.min_players_for_guarantee ?? ""}
-            onChange={(e) => handleNumber("min_players_for_guarantee", e.target.value)}
-            className={inputClass}
-            disabled={readOnly || isFreeTournament}
-          />
-        </label>
-
-        <label className="flex flex-col gap-1 text-sm">
           <span>حداقل نفرات شروع تورنومنت (حداقل 3)</span>
           <input
             type="number"
@@ -458,6 +433,29 @@ export function TournamentForm({
             className={inputClass}
             disabled={readOnly}
           />
+          <span className="text-xs text-gray-400">
+            اگر به این تعداد برسد تورنومنت شروع می‌شود؛ در صورت داشتن گارانتی،
+            گارانتی هم از همان لحظه فعال است.
+          </span>
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={values.registration_extend_enabled}
+              onChange={(e) =>
+                handleChange("registration_extend_enabled", e.target.checked)
+              }
+              className="h-4 w-4 accent-teal-500"
+              disabled={readOnly}
+            />
+            تمدید خودکار در صورت نرسیدن به حد نصاب
+          </span>
+          <span className="text-xs text-gray-400">
+            اگر خاموش باشد و حد نصاب نرسد، تورنومنت کنسل و ورودی‌ها بازگردانده
+            می‌شوند.
+          </span>
         </label>
 
         <label className="flex flex-col gap-1 text-sm">
@@ -471,11 +469,11 @@ export function TournamentForm({
               handleNumber("registration_extend_minutes", e.target.value)
             }
             className={inputClass}
-            disabled={readOnly}
+            disabled={readOnly || !values.registration_extend_enabled}
           />
           <span className="text-xs text-gray-400">
-            اگر به حد نصاب شروع نرسد، زمان شروع به همین مقدار عقب می‌افتد (پیش‌فرض
-            ۶۰).
+            فقط وقتی تمدید خودکار روشن است استفاده می‌شود (پیش‌فرض ۶۰). سقف تعداد
+            تمدید وجود ندارد.
           </span>
         </label>
 

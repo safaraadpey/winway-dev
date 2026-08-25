@@ -38,7 +38,7 @@ type TournamentRow = {
   table_size_max: number | null;
   meta?: {
     final_winners_count?: number | null;
-    min_players_for_guarantee?: number | null;
+    min_players_to_start?: number | null;
     entry_currency?: string | null;
   } | null;
 };
@@ -423,7 +423,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   const prizePoolGross = entryCurrency === "DING" ? 0 : price * totalTickets;
   const prizePoolNet = Math.max(0, prizePoolGross * (1 - commissionRate));
   // Display: guaranteed tournaments show guarantee while pool is below it.
-  // min_players_for_guarantee is settlement eligibility, not this UI floor.
+  // Guarantee is armed at start once min_players_to_start is met.
   const displayPrize = hasGuarantee
     ? Math.max(guaranteedPrize, prizePoolNet)
     : prizePoolNet;

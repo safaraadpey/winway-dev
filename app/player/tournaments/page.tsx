@@ -16,7 +16,7 @@ type TournamentRow = {
   guaranteed_prize: number | null;
   commission_rate: number | null;
   meta?: {
-    min_players_for_guarantee?: number | null;
+    min_players_to_start?: number | null;
     final_winners_count?: number | null;
     entry_currency?: string | null;
   } | null;
@@ -224,8 +224,8 @@ export default function TournamentsPage() {
                 <div className={styles.cards}>
                   {filteredRows.map((t) => {
                     const entriesCount = entryCounts[t.id] ?? 0;
-                    const minPlayersForGuarantee =
-                      t.meta?.min_players_for_guarantee ?? null;
+                    const minPlayersToStart =
+                      t.meta?.min_players_to_start ?? 3;
                     const finalWinnersCount = t.meta?.final_winners_count ?? null;
                     const entryCurrency = (
                       t.meta?.entry_currency ||
@@ -320,9 +320,7 @@ export default function TournamentsPage() {
                           <div className={styles.field}>
                             <span className={styles.fieldLabel}>حداقل بازیکن</span>
                             <span className={styles.fieldValue}>
-                              {minPlayersForGuarantee != null
-                                ? minPlayersForGuarantee.toLocaleString("en-US")
-                                : "-"}
+                              {minPlayersToStart.toLocaleString("en-US")}
                             </span>
                           </div>
                         </div>

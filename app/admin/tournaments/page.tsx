@@ -45,11 +45,11 @@ function mapToFormValues(row: TournamentRow): TournamentFormValues {
     remainder_policy: row.remainder_policy || "adaptive_tables",
     commission_rate: row.commission_rate ?? 0,
     guaranteed_prize: row.guaranteed_prize ?? 0,
-    min_players_for_guarantee:
-      (row.meta as any)?.min_players_for_guarantee ?? null,
     min_players_to_start:
       (row.meta as any)?.min_players_to_start ?? 3,
     final_winners_count: (row.meta as any)?.final_winners_count ?? 1,
+    registration_extend_enabled:
+      (row.meta as any)?.registration_extend_enabled !== false,
     registration_extend_minutes:
       (row.meta as any)?.registration_extend_minutes ?? 60,
   };

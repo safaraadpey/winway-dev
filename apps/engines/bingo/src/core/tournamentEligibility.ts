@@ -6,15 +6,17 @@
  *   - which tournaments are "due" (registration_open whose start_at has passed,
  *     or already running),
  *   - whether a registration_open tournament has enough players to start,
- *   - and what to do when it does not (defer start_at by registration_extend_minutes).
+ *   - and what to do when it does not (defer start_at, or cancel if auto-extend is off).
  *
  * The per-tournament STATE ADVANCE (fn_tick_tournament) and the heavy seating /
  * cycle operations remain atomic DB RPCs — this module only decides *whether*
  * and *which* of them to invoke, exactly as the SQL outer loop did.
  *
- * Verified against fn_tick_due_tournaments (live DB, 2026-05-31):
  *   min_players_to_start = GREATEST(COALESCE(NULLIF(meta->>'min_players_to_start','')::int, 3), 3)
- *   registration_open & distinct created players < min  → push start_at by extend minutes, skip tick
+ *   registration_extend_enabled defaults true (legacy always-extend)
+ *   registration_open & distinct created players < min:
+ *     extend enabled  → push start_at by extend minutes, skip tick
+ *     extend disabled → cancel + refund
  *   otherwise (eligible registration_open, or running)   → tick
  */
 
@@ -43,6 +45,8 @@ export interface TournamentTickCandidate {
 export type TournamentTickAction =
   /** Not enough players: defer start_at by registration_extend_minutes, do not tick. */
   | { kind: "defer"; deferSeconds: number }
+  /** Not enough players and auto-extend is off: cancel + refund. */
+  | { kind: "cancel" }
   /** Advance the tournament via fn_tick_tournament. */
   | { kind: "tick" }
   /** Not due / not actionable this pass. */
@@ -62,6 +66,29 @@ export function resolveMinPlayersToStart(
     if (Number.isFinite(n)) parsed = n;
   }
   return Math.max(parsed, TOURNAMENT_MIN_PLAYERS_FLOOR);
+}
+
+/**
+ * Resolve auto-extend flag. Missing key defaults true to match legacy
+ * always-extend behavior.
+ */
+export function resolveRegistrationExtendEnabled(
+  meta: Record<string, unknown> | null
+): boolean {
+  const raw = meta?.["registration_extend_enabled"];
+  if (raw === undefined || raw === null || `${raw}`.trim() === "") {
+    return true;
+  }
+  if (raw === true || raw === 1) return true;
+  if (raw === false || raw === 0) return false;
+  const text = `${raw}`.trim().toLowerCase();
+  if (text === "true" || text === "t" || text === "1" || text === "yes") {
+    return true;
+  }
+  if (text === "false" || text === "f" || text === "0" || text === "no") {
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -106,10 +133,13 @@ export function decideTournamentTick(
 
     const minPlayers = resolveMinPlayersToStart(candidate.meta);
     if (distinctCreatedPlayers < minPlayers) {
-      return {
-        kind: "defer",
-        deferSeconds: resolveRegistrationExtendSeconds(candidate.meta),
-      };
+      if (resolveRegistrationExtendEnabled(candidate.meta)) {
+        return {
+          kind: "defer",
+          deferSeconds: resolveRegistrationExtendSeconds(candidate.meta),
+        };
+      }
+      return { kind: "cancel" };
     }
     return { kind: "tick" };
   }

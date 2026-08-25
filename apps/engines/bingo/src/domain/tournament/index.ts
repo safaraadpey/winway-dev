@@ -54,7 +54,9 @@ export async function tickDueTournaments(
  * fn_tick_due_tournaments into TypeScript:
  *   - choose due tournaments (registration_open past start_at, or running),
  *   - decide eligibility (min players, floor 3) for registration_open,
- *   - defer start_at by meta.registration_extend_minutes when under min, otherwise advance.
+ *   - defer start_at when under min and auto-extend is on,
+ *   - cancel + refund when under min and auto-extend is off,
+ *   - otherwise advance.
  *
  * The atomic per-tournament advance stays the DB RPC tournament.fn_tick_tournament
  * (preserves the row lock + seating/cycle atomicity = ownership model + fallback).
@@ -87,13 +89,38 @@ export async function tickDueTournamentsEngine(
 
     if (action.kind === "defer") {
       const newStart = new Date(nowMs + action.deferSeconds * 1000).toISOString();
-      log.info("tournament defer registration", {
+      log.info("[Tournament] defer registration", {
         tournamentId: candidate.id,
         deferSeconds: action.deferSeconds,
         newStart,
         players,
       });
       await repo.deferStart(candidate.id, newStart, nowIso);
+      continue;
+    }
+
+    if (action.kind === "cancel") {
+      log.info("[Tournament] cancel under min players", {
+        tournamentId: candidate.id,
+        players,
+      });
+      try {
+        await repo.cancelUnderMin(candidate.id);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn("[Tournament] cancel under min failed", {
+          tournamentId: candidate.id,
+          error: message,
+        });
+        await repo
+          .logTickError(candidate.id, "cancel_under_min", message)
+          .catch((e) =>
+            log.error("tournament_tick_log insert failed", {
+              tournamentId: candidate.id,
+              error: e instanceof Error ? e.message : String(e),
+            })
+          );
+      }
       continue;
     }
 

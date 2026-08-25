@@ -3,7 +3,8 @@
  *
  * Reads the due-tournament set and player counts (the inputs to the eligibility
  * decision), and performs the two non-advance writes the SQL outer loop owns:
- *   - defer start_at by one hour (when under min players),
+ *   - defer start_at when under min players and auto-extend is on,
+ *   - cancel + refund via RPC when under min and auto-extend is off,
  *   - append a tournament_tick_log row on per-tournament failure.
  *
  * The atomic per-tournament advance (fn_tick_tournament) and seating/cycle stay
@@ -85,7 +86,7 @@ export class TournamentRepo {
     return new Set((data ?? []).map((r: { user_id: string }) => r.user_id)).size;
   }
 
-  /** Push start_at by one hour (the "not enough players" branch). */
+  /** Push start_at (the "not enough players + auto-extend" branch). */
   async deferStart(tournamentId: string, newStartIso: string, nowIso: string): Promise<void> {
     const { error } = await this.db
       .from("tournaments")
@@ -93,6 +94,14 @@ export class TournamentRepo {
       .eq("id", tournamentId)
       .eq("status", "registration_open");
     if (error) fail("deferStart", error.message);
+  }
+
+  /** Cancel a due registration_open tournament that missed quorum. */
+  async cancelUnderMin(tournamentId: string): Promise<void> {
+    const { error } = await this.db.rpc("fn_cancel_under_min_players", {
+      p_tournament_id: tournamentId,
+    });
+    if (error) fail("cancelUnderMin", error.message);
   }
 
   /** Append a failure row to tournament.tournament_tick_log (best-effort). */
