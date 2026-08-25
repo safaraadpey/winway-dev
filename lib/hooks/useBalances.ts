@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
+import { usePathname } from "next/navigation";
 import { supabase } from '../supabaseClient';
 import { getMyDingBalance } from '../features/ding/ding';
 import { isDingEnabled } from "@/lib/audio-settings";
 import { playDingTone } from "@/lib/number-audio";
 import { HARD_EXIT_EVENT, isHardExiting } from "@/lib/auth/hardExit";
+import { isAgentPanelLocation, isAgentPanelPath } from "@/lib/auth/isAgentPanelPath";
 
 export interface Balances {
   dingBalance: number;
@@ -41,6 +43,13 @@ export interface Balances {
  * از Supabase و مدیریت realtime updates
  */
 export function useBalances(): Balances {
+  const pathname = usePathname();
+  const skipDingBalanceRef = useRef(false);
+  const loggedDingSkipRef = useRef(false);
+  skipDingBalanceRef.current =
+    isAgentPanelPath(pathname) || isAgentPanelLocation();
+  const wasAgentPanelRef = useRef(skipDingBalanceRef.current);
+
   const [dingBalance, setDingBalance] = useState<number>(0);
   const [tomanBalance, setTomanBalance] = useState<number>(0);
   const [lockedTomanBalance, setLockedTomanBalance] = useState<number>(0);
@@ -95,6 +104,7 @@ export function useBalances(): Balances {
   const refreshAllBalances = async (): Promise<void> => {
     try {
       await refreshWalletBalances();
+      if (skipDingBalanceRef.current) return;
       const { balance: serverBalance } = await fetchDingBalanceFromApi();
       if (!isMountedRef.current) return;
       setDingBalance(serverBalance);
@@ -105,6 +115,10 @@ export function useBalances(): Balances {
   };
 
   async function fetchDingBalanceFromApi(): Promise<{ balance: number; updated_at: string | null }> {
+    if (skipDingBalanceRef.current || isAgentPanelLocation()) {
+      return { balance: 0, updated_at: null };
+    }
+
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -147,6 +161,23 @@ export function useBalances(): Balances {
       }
     };
   }, []);
+
+  useEffect(() => {
+    const skip = isAgentPanelPath(pathname) || isAgentPanelLocation();
+    const leavingAgentPanel = wasAgentPanelRef.current && !skip;
+    skipDingBalanceRef.current = skip;
+    wasAgentPanelRef.current = skip;
+    if (!leavingAgentPanel || !isMountedRef.current) return;
+
+    loggedDingSkipRef.current = false;
+    void fetchDingBalanceFromApi()
+      .then(({ balance }) => {
+        if (!isMountedRef.current || skipDingBalanceRef.current) return;
+        setDingBalance(balance);
+        currentBalanceRef.current = balance;
+      })
+      .catch(() => {});
+  }, [pathname]);
 
   useEffect(() => {
     async function fetchBalances() {
@@ -207,25 +238,37 @@ export function useBalances(): Balances {
         }
 
         // مرحله 2: دریافت موجودی Ding اولیه (hydration) - best effort
-        try {
-          const ding =
-            (await fetchDingBalanceFromApi()).balance ?? (await getMyDingBalance());
-          console.log('[useBalances] Initial ding balance fetched:', ding);
-
+        // پنل ایجنت دینگ نشان نمی‌دهد؛ از درخواست /api/me/ding-balance صرف‌نظر می‌کنیم.
+        if (skipDingBalanceRef.current) {
           if (isMountedRef.current) {
-            setDingBalance(ding);
-            currentBalanceRef.current = ding;
             hasHydratedRef.current = true;
-            console.log(
-              '[useBalances] ✅ Hydration complete, hasHydratedRef.current = true, balance:',
-              ding
-            );
+            if (!loggedDingSkipRef.current) {
+              loggedDingSkipRef.current = true;
+              console.info("[AgentPanel] Ding balance fetch skipped");
+            }
           }
-        } catch (dingErr) {
-          console.warn('[useBalances] Ding hydration skipped (non-fatal):', dingErr);
-          if (isMountedRef.current) {
-            // keep dingBalance as-is (default 0), but do not fail overall balances
-            hasHydratedRef.current = true;
+        } else {
+          loggedDingSkipRef.current = false;
+          try {
+            const ding =
+              (await fetchDingBalanceFromApi()).balance ?? (await getMyDingBalance());
+            console.log('[useBalances] Initial ding balance fetched:', ding);
+
+            if (isMountedRef.current) {
+              setDingBalance(ding);
+              currentBalanceRef.current = ding;
+              hasHydratedRef.current = true;
+              console.log(
+                '[useBalances] ✅ Hydration complete, hasHydratedRef.current = true, balance:',
+                ding
+              );
+            }
+          } catch (dingErr) {
+            console.warn('[useBalances] Ding hydration skipped (non-fatal):', dingErr);
+            if (isMountedRef.current) {
+              // keep dingBalance as-is (default 0), but do not fail overall balances
+              hasHydratedRef.current = true;
+            }
           }
         }
 

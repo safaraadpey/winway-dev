@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { BalancesProvider } from "@/lib/contexts/BalancesContext";
 import { SessionProvider } from "@/lib/contexts/SessionContext";
 import GameEndResultsListener from "@/components/GameEndResultsListener";
@@ -8,23 +9,37 @@ import { ActiveGamesOrchestratorProvider } from "@/lib/activeGames/ActiveGamesOr
 import { ActiveGamesProvider } from "@/lib/contexts/ActiveGamesContext";
 import { InstallPromptProvider } from "@/lib/contexts/InstallPromptContext";
 import { TourProvider } from "@/lib/contexts/TourContext";
+import { isAgentPanelLocation, isAgentPanelPath } from "@/lib/auth/isAgentPanelPath";
 
 export default function GlobalUserStateClient({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const skipPlayerGameStack =
+    isAgentPanelPath(pathname) || isAgentPanelLocation();
+
+  useEffect(() => {
+    if (!skipPlayerGameStack) return;
+    console.info("[AgentPanel] Player game stack disabled", { pathname });
+  }, [pathname, skipPlayerGameStack]);
+
+  const withPlayerGameStack = (
+    <ActiveGamesOrchestratorProvider>
+      <ActiveGamesProvider>
+        {children}
+        <GameEndResultsListener />
+      </ActiveGamesProvider>
+    </ActiveGamesOrchestratorProvider>
+  );
+
   return (
     <InstallPromptProvider>
       <SessionProvider>
         <TourProvider>
           <BalancesProvider>
-            <ActiveGamesOrchestratorProvider>
-              <ActiveGamesProvider>
-                {children}
-                <GameEndResultsListener />
-              </ActiveGamesProvider>
-            </ActiveGamesOrchestratorProvider>
+            {skipPlayerGameStack ? children : withPlayerGameStack}
           </BalancesProvider>
         </TourProvider>
       </SessionProvider>
