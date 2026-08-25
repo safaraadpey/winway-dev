@@ -19,8 +19,8 @@ function BannerCloseIcon() {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      width="18"
-      height="18"
+      width="27"
+      height="27"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -146,7 +146,7 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
             onClick={handleConfirm}
             disabled={closeDisabled}
             aria-label="بستن"
-            className="absolute top-3 left-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="absolute top-3 left-3 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <BannerCloseIcon />
           </button>
@@ -155,7 +155,7 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
         {currentBanner.showTitle && (
           <div
             className={`flex items-center mb-4 ${isImageBanner ? "px-6 pt-6" : ""} ${
-              !showCloseButton ? "pl-12" : ""
+              !showCloseButton ? "pl-16" : ""
             }`}
           >
             <h2 className="text-xl font-semibold text-white">{currentBanner.title}</h2>
@@ -163,7 +163,7 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
         )}
 
         {!showCloseButton && !currentBanner.showTitle && !isImageBanner && (
-          <div className="h-8 mb-2" />
+          <div className="h-12 mb-2" />
         )}
 
         {currentBanner.contentType === "text" ? (

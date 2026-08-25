@@ -391,12 +391,12 @@ export default function EditEntryBannerPage() {
           {showPreview && (
             <div className="relative rounded-xl bg-[#1f2933] border border-gray-700 overflow-hidden">
               {!formData.showCloseButton && (
-                <div className="absolute top-3 left-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white">
-                  <span className="text-lg leading-none">×</span>
+                <div className="absolute top-3 left-3 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white">
+                  <span className="text-2xl leading-none">×</span>
                 </div>
               )}
               {formData.showTitle && (
-                <h3 className={`text-lg font-semibold px-4 pt-4 mb-2 ${!formData.showCloseButton ? "pl-12" : ""}`}>
+                <h3 className={`text-lg font-semibold px-4 pt-4 mb-2 ${!formData.showCloseButton ? "pl-16" : ""}`}>
                   {formData.title || "تیتر بنر"}
                 </h3>
               )}
