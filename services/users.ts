@@ -479,7 +479,7 @@ export async function loadManagedUsers(
         ...new Set(
           (uplineUsers || [])
             .map((row: any) => row.parent_id as string | null)
-            .filter((id: string | null): id is string => Boolean(id) && !usernameById.has(id))
+            .filter((id: string | null): id is string => typeof id === "string" && !usernameById.has(id))
         ),
       ];
       if (missingParents.length > 0) {
