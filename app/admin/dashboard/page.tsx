@@ -42,6 +42,23 @@ function DashboardAmount({
   );
 }
 
+/** کانیات کل = کانیات من + کانیات پلیر مستقیم + کانیات پنل‌ها */
+function getAdminCommissionDisplay(summary: {
+  ticketsVolume: number;
+  ticketsVolumeTotal: number;
+  directPlayerCommission?: number;
+}) {
+  const myCommission = summary.ticketsVolume;
+  const directCommission = summary.directPlayerCommission ?? 0;
+  const panelCommission = Math.max(0, summary.ticketsVolumeTotal - summary.ticketsVolume);
+  return {
+    myCommission,
+    directCommission,
+    panelCommission,
+    totalCommission: myCommission + directCommission + panelCommission,
+  };
+}
+
 const PANEL_OPERATOR_VISIBLE_ROWS = 10;
 /** py-0.5 row + text-xs line box (~20px) */
 const PANEL_OPERATOR_ROW_PX = 20;
@@ -225,11 +242,13 @@ export default function AdminDashboardPage() {
       return <div className="text-center py-4 text-gray-400">داده‌ای موجود نیست</div>;
     }
 
+    const commission = getAdminCommissionDisplay(summary);
+
     return (
       <div className="grid grid-cols-2 gap-y-1">
         <span>کانیات کل</span>
         <span className="text-right">
-          <DashboardAmount value={summary.ticketsVolumeTotal} />
+          <DashboardAmount value={commission.totalCommission} />
         </span>
         <span>کانیات کل تورنومنت‌ها</span>
         <span className="text-right">
@@ -246,17 +265,15 @@ export default function AdminDashboardPage() {
         </span>
         <span>کانیات من</span>
         <span className="text-right">
-          <DashboardAmount value={summary.ticketsVolume} />
+          <DashboardAmount value={commission.myCommission} />
         </span>
         <span>کانیات پلیر مستقیم</span>
         <span className="text-right">
-          <DashboardAmount value={summary.directPlayerCommission ?? 0} />
+          <DashboardAmount value={commission.directCommission} />
         </span>
         <span>کانیات پنل‌ها</span>
         <span className="text-right">
-          <DashboardAmount
-            value={Math.max(0, summary.ticketsVolumeTotal - summary.ticketsVolume)}
-          />
+          <DashboardAmount value={commission.panelCommission} />
         </span>
         <PanelOperatorsBreakdown operators={summary.panelOperators ?? []} />
         <span>کانیات از تورنومنت</span>
