@@ -82,8 +82,28 @@ export async function GET(request: NextRequest) {
         );
       }
 
+      const rows = data ?? [];
+      const inPlayCosts = await Promise.all(
+        rows.map(async (row) => {
+          if (!row.template_id || !row.started_at) return 0;
+          const { data: cost, error: costError } = await supabase.rpc(
+            "fn_auto_buy_in_play_cost",
+            {
+              p_user_id: user.id,
+              p_template_id: row.template_id,
+              p_started_at: row.started_at,
+            }
+          );
+          if (costError) {
+            console.warn("[AutoBuy] in_play_cost lookup failed", costError);
+            return 0;
+          }
+          return Number(cost ?? 0);
+        })
+      );
+
       const sessions: Record<string, ReturnType<typeof parseAutoBuySnapshot>> = {};
-      for (const row of data ?? []) {
+      rows.forEach((row, index) => {
         const snapshot = parseAutoBuySnapshot({
           active: true,
           session_id: row.id,
@@ -92,6 +112,7 @@ export async function GET(request: NextRequest) {
           card_count: row.card_count,
           fund_initial: row.fund_initial,
           fund_remaining: row.fund_remaining,
+          in_play_cost: inPlayCosts[index] ?? 0,
           profit_target: row.profit_target,
           last_room_id: row.last_room_id,
           serial_buy_enabled: row.serial_buy_enabled,
@@ -104,7 +125,7 @@ export async function GET(request: NextRequest) {
         if (snapshot.templateId) {
           sessions[snapshot.templateId] = snapshot;
         }
-      }
+      });
 
       return NextResponse.json({ ok: true, data: { sessions } });
     }

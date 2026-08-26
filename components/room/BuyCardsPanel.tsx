@@ -8,7 +8,10 @@ import minusButtonImg from "@/src/assets/logo/minusBotton.png";
 import plusButtonImg from "@/src/assets/logo/plusBotton.png";
 import panelStyles from "@/components/room/gameRoomPanels.module.css";
 import type { AutoBuySnapshot } from "@/lib/autoBuy/types";
-import { formatAutoBuyFundDisplay } from "@/lib/autoBuy/formatFundDisplay";
+import {
+  formatAutoBuyFundDisplay,
+  resolveAutoBuyInPlayCost,
+} from "@/lib/autoBuy/formatFundDisplay";
 
 type PanelMode = "purchase" | "cancel";
 
@@ -181,14 +184,28 @@ export default function BuyCardsPanel({
     ) {
       return null;
     }
+    const inPlayCost = resolveAutoBuyInPlayCost({
+      inPlayCost: autoBuy.snapshot.inPlayCost,
+      hasReservedCards: autoBuy.hasReservedCards,
+      lastRoomId: autoBuy.snapshot.lastRoomId,
+      price,
+      cardCount: autoBuy.snapshot.cardCount ?? autoCardCount,
+    });
     return formatAutoBuyFundDisplay(
       autoBuy.snapshot.fundInitial,
-      autoBuy.snapshot.fundRemaining
+      autoBuy.snapshot.fundRemaining,
+      inPlayCost
     );
   }, [
+    autoBuy?.hasReservedCards,
+    autoBuy?.snapshot?.cardCount,
     autoBuy?.snapshot?.fundInitial,
     autoBuy?.snapshot?.fundRemaining,
+    autoBuy?.snapshot?.inPlayCost,
+    autoBuy?.snapshot?.lastRoomId,
     autoBuyRunning,
+    autoCardCount,
+    price,
   ]);
 
   const autoBuyFormValid = useMemo(() => {

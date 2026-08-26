@@ -14,6 +14,8 @@ export type AutoBuySnapshot = {
   cardCount?: number;
   fundInitial?: number;
   fundRemaining?: number;
+  /** Ticket cost still in unfinished rooms, paid from this session. */
+  inPlayCost?: number;
   /** Net profit cap (سقف برد), not fund_initial + profit. */
   profitTarget?: number;
   lastRoomId?: string | null;
@@ -50,6 +52,7 @@ export function parseAutoBuySnapshot(raw: Record<string, unknown>): AutoBuySnaps
     cardCount: raw.card_count != null ? Number(raw.card_count) : undefined,
     fundInitial: raw.fund_initial != null ? Number(raw.fund_initial) : undefined,
     fundRemaining: raw.fund_remaining != null ? Number(raw.fund_remaining) : undefined,
+    inPlayCost: raw.in_play_cost != null ? Number(raw.in_play_cost) : undefined,
     profitTarget: raw.profit_target != null ? Number(raw.profit_target) : undefined,
     lastRoomId: raw.last_room_id != null ? String(raw.last_room_id) : null,
     serialBuyEnabled: raw.serial_buy_enabled != null ? Boolean(raw.serial_buy_enabled) : undefined,

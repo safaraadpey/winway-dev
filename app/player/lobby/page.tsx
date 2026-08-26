@@ -341,7 +341,8 @@ export default function LobbyPage() {
               autoBuySession.fundRemaining != null
                 ? formatAutoBuyFundDisplay(
                     autoBuySession.fundInitial,
-                    autoBuySession.fundRemaining
+                    autoBuySession.fundRemaining,
+                    autoBuySession.inPlayCost ?? 0
                   )
                 : null;
 
