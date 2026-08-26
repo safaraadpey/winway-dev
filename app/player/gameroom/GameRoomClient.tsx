@@ -19,6 +19,7 @@ export default function GameRoomClient() {
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
   const roomId = searchParams.get("roomId") ?? undefined;
   const templateId = searchParams.get("templateId") ?? undefined;
+  const spectate = searchParams.get("spectate") === "1";
   const [liveRoomId, setLiveRoomId] = useState<string | null>(null);
   const liveRoomIdRef = useRef<string | null>(null);
   const { activeTourId } = useTour();
@@ -166,6 +167,7 @@ export default function GameRoomClient() {
     <GameRoomScreen
       roomId={roomId}
       templateId={templateId}
+      spectate={spectate}
       onEnterLive={handleEnterLive}
     />
   );

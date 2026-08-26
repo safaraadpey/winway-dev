@@ -42,6 +42,8 @@ import styles from "./GameRoomScreen.module.css";
 interface GameRoomScreenProps {
   roomId?: string;
   templateId?: string;
+  /** Explicit watch of a live table (active-table click). Do not bounce to buy page. */
+  spectate?: boolean;
   onEnterLive?: (roomId: string) => void;
 }
 
@@ -75,10 +77,13 @@ function isWaitingViewElapsed(view: GameRoomView): boolean {
 function spectatorShouldLeaveRoom(
   userHasCards: boolean,
   view: GameRoomView,
-  hadTimer: boolean
+  hadTimer: boolean,
+  waitingSpectator: boolean
 ): boolean {
   if (userHasCards) return false;
-  if (shouldEnterLiveRoom(view.mode, view.room.status)) return true;
+  if (shouldEnterLiveRoom(view.mode, view.room.status)) {
+    return waitingSpectator;
+  }
   if (isWaitingViewElapsed(view)) return true;
   if (view.mode === "waiting" && (view.countdown_seconds ?? 0) <= 0 && hadTimer) {
     return true;
@@ -248,6 +253,7 @@ function applyTicketEventToActiveCards(
 export default function GameRoomScreen({
   roomId,
   templateId,
+  spectate = false,
   onEnterLive,
 }: GameRoomScreenProps) {
   const router = useRouter();
@@ -263,6 +269,9 @@ export default function GameRoomScreen({
   const enteredLiveRef = useRef(false);
   const releasedTemplateIdRef = useRef<string | null>(null);
   const spectatorLeftRef = useRef(false);
+  const waitingSpectatorRef = useRef(false);
+  const liveSpectateRef = useRef(false);
+  const [waitingSpectator, setWaitingSpectator] = useState(false);
   const hadPositiveCountdownRef = useRef(false);
   const countdownDeadlineRef = useRef<number | null>(null);
   const autoBuyLastRoomRef = useRef<string | null>(null);
@@ -387,12 +396,15 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     }
 
     const userHasCards = opts?.userHasCards ?? hasCardsRef.current;
-    if (userHasCards) {
+    if (userHasCards || spectate || liveSpectateRef.current) {
+      if (!userHasCards) {
+        console.log("[Room] Enter live as spectator", { roomId, spectate });
+      }
       enterLive();
       return;
     }
 
-    console.log("[Room] Skip live enter; no reserved cards", { roomId });
+    console.log("[Room] Skip live enter; waiting spectator has no cards", { roomId });
     bounceSpectatorToTemplate(opts?.templateId);
   };
 
@@ -400,6 +412,9 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     enteredLiveRef.current = false;
     releasedTemplateIdRef.current = null;
     spectatorLeftRef.current = false;
+    waitingSpectatorRef.current = false;
+    liveSpectateRef.current = false;
+    setWaitingSpectator(false);
     hadPositiveCountdownRef.current = false;
     autoBuyLastRoomRef.current = null;
   }, [roomId]);
@@ -465,10 +480,24 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           userIdRef.current,
           view.active_cards
         );
+        if (
+          roomId &&
+          userIdRef.current &&
+          !snapshotHasUserCards &&
+          !spectate
+        ) {
+          if (shouldEnterLiveRoom(view.mode, view.room.status)) {
+            liveSpectateRef.current = true;
+          } else if (view.mode === "waiting") {
+            waitingSpectatorRef.current = true;
+            setWaitingSpectator(true);
+          }
+        }
         const leaveAsSpectator = spectatorShouldLeaveRoom(
           snapshotHasUserCards,
           view,
-          hadPositiveCountdownRef.current || countdownDeadlineRef.current != null
+          hadPositiveCountdownRef.current || countdownDeadlineRef.current != null,
+          waitingSpectatorRef.current
         );
         if (
           !releasedTid &&
@@ -627,16 +656,17 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     void fetchRoomDataRef.current(false);
   }, [resolvedUserId, roomId, templateId]);
 
-  // Enter live only when the room actually started (not when lobby countdown hits 0).
-  // Spectators watching a waiting room bounce back to the template instead.
+  // Enter live when the room started, or when the user opened a live table to watch.
+  // Waiting-room spectators without cards bounce back to the template instead.
   useEffect(() => {
     if (!roomId || enteredLiveRef.current) return;
 
-    if (shouldEnterLiveRoom(gameMode, roomInfo?.status)) {
+    if (spectate || shouldEnterLiveRoom(gameMode, roomInfo?.status)) {
       tryEnterLive({ templateId: roomInfo?.templateId });
     }
   }, [
     roomId,
+    spectate,
     gameMode,
     roomInfo?.status,
     roomInfo?.templateId,
@@ -1074,6 +1104,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     roomId &&
     resolvedUserId &&
     !hasReservedCardsForCurrentUser &&
+    waitingSpectator &&
     countdownSeconds === 0 &&
     (waitingCountdownElapsed ||
       hadPositiveCountdownRef.current ||
@@ -1401,7 +1432,9 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
   
   // مدیریت کلیک روی میز
   const handleTableClick = (tableId: string) => {
-    router.push(`/player/gameroom?roomId=${tableId}`);
+    router.push(
+      `/player/gameroom?roomId=${encodeURIComponent(tableId)}&spectate=1`
+    );
   };
 
   const isTournamentRoom =

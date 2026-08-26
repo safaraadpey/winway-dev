@@ -778,7 +778,9 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   }, [remainingQty, minQty]);
 
   const handleTableClick = (roomId: string) => {
-    router.push(`/player/gameroom?roomId=${roomId}`);
+    router.push(
+      `/player/gameroom?roomId=${encodeURIComponent(roomId)}&spectate=1`
+    );
   };
 
   const isRegistrationOpen = tournament?.status === "registration_open";
