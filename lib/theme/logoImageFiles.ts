@@ -5,7 +5,7 @@ export const LOGO_IMAGE_FILES: Record<LogoImageKey, string> = {
   logo: "logo.png",
   ingameLogo: "ingamelogo.png",
   playerHeaderLogo: "playerheaderlogo.png",
-  ogPreview: "ding_money_preview.jpg",
+  ogPreview: "tournament_preview.jpg",
   brand: "ding_money.jpg",
 };
 
