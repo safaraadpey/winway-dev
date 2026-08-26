@@ -90,7 +90,7 @@ function PanelOperatorsBreakdown({ operators }: { operators: DashboardPanelOpera
               <span className="text-gray-500"> ({op.role === "super" ? "سوپر" : "ایجنت"})</span>
             </span>
             <span className="shrink-0" title="یکتا در بازه - در بازی همین حالا">
-              <span className="numeric-text numeric-text--11" dir="ltr">
+              <span className="numeric-text numeric-text--13" dir="ltr">
                 <span
                   className={(op.playedPlayersCount ?? 0) > 0 ? "text-[#fcd34d]" : "text-gray-600"}
                 >
