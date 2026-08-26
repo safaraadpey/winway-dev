@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { loadActiveBannersForUser } from "@/services/entry-banner";
+import {
+  peekCachedActiveBanners,
+  prefetchActiveBannersForUser,
+} from "@/services/entry-banner";
 import type { EntryBanner } from "@/src/types/entry-banner";
 import { useSession } from "@/lib/contexts/SessionContext";
 import {
@@ -14,6 +17,30 @@ import {
 type EntryBannerModalProps = {
   visibleOnPaths?: string[];
 };
+
+const IMAGE_PRELOAD_TIMEOUT_MS = 2000;
+
+function preloadImage(url: string, timeoutMs = IMAGE_PRELOAD_TIMEOUT_MS): Promise<void> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    const timer = window.setTimeout(done, timeoutMs);
+    img.onload = () => {
+      window.clearTimeout(timer);
+      done();
+    };
+    img.onerror = () => {
+      window.clearTimeout(timer);
+      done();
+    };
+    img.src = url;
+  });
+}
 
 function BannerCloseIcon() {
   return (
@@ -37,12 +64,16 @@ function BannerCloseIcon() {
 
 export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalProps) {
   const pathname = usePathname();
-  const { userId } = useSession();
-  const [banners, setBanners] = useState<EntryBanner[]>([]);
+  const { userId, authReady } = useSession();
+  const cached = peekCachedActiveBanners();
+  const [banners, setBanners] = useState<EntryBanner[]>(() =>
+    cached ? filterEntryBannersForToday(userId, cached) : []
+  );
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [confirmed, setConfirmed] = useState(false);
   const [dontShowAgainToday, setDontShowAgainToday] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => cached == null);
+  const revealedRef = useRef(cached != null);
   const shouldShowOnThisPath =
     !visibleOnPaths ||
     visibleOnPaths.some(
@@ -50,30 +81,48 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
     );
 
   useEffect(() => {
-    if (!shouldShowOnThisPath) {
-      setLoading(false);
-      return;
-    }
+    void prefetchActiveBannersForUser();
+  }, []);
+
+  useEffect(() => {
+    if (!authReady) return;
 
     let isMounted = true;
 
     async function fetchBanners() {
       try {
-        setLoading(true);
-        const activeBanners = await loadActiveBannersForUser();
-
+        if (!revealedRef.current) {
+          console.log("[EntryBanner] Started");
+        }
+        const activeBanners = await prefetchActiveBannersForUser();
         if (!isMounted) return;
 
         const visibleBanners = filterEntryBannersForToday(userId, activeBanners);
+        const first = visibleBanners[0];
+        if (
+          !revealedRef.current &&
+          first?.contentType === "image" &&
+          first.imageUrl
+        ) {
+          await preloadImage(first.imageUrl);
+        }
+        if (!isMounted) return;
 
         setBanners(visibleBanners);
-        if (visibleBanners.length > 0) {
+        if (!revealedRef.current && visibleBanners.length > 0) {
           setCurrentBannerIndex(0);
           setConfirmed(false);
           setDontShowAgainToday(false);
         }
+        if (!revealedRef.current) {
+          console.log("[EntryBanner] Loaded", {
+            count: visibleBanners.length,
+            source: "supabase",
+          });
+        }
+        revealedRef.current = true;
       } catch (error) {
-        console.error("EntryBannerModal: error fetching banners", error);
+        console.error("[EntryBanner] Load failed", error);
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -81,20 +130,35 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
       }
     }
 
-    const timeoutId = setTimeout(() => {
-      void fetchBanners();
-    }, 300);
+    void fetchBanners();
 
     return () => {
       isMounted = false;
-      clearTimeout(timeoutId);
     };
-  }, [shouldShowOnThisPath, userId]);
+  }, [authReady, userId]);
+
+  useEffect(() => {
+    const nextBanner = banners[currentBannerIndex + 1];
+    if (nextBanner?.contentType === "image" && nextBanner.imageUrl) {
+      void preloadImage(nextBanner.imageUrl);
+    }
+  }, [banners, currentBannerIndex]);
 
   const currentBanner = banners[currentBannerIndex];
 
-  if (!shouldShowOnThisPath || loading || !currentBanner || banners.length === 0) {
+  if (!shouldShowOnThisPath) {
     return null;
+  }
+
+  if (!currentBanner || banners.length === 0) {
+    if (!loading) return null;
+    return (
+      <div
+        className="fixed inset-0 z-50 bg-black/95"
+        aria-busy="true"
+        aria-hidden="true"
+      />
+    );
   }
 
   const handleClose = () => {
@@ -178,6 +242,10 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
               src={currentBanner.imageUrl}
               alt={currentBanner.title}
               className="w-full rounded-lg"
+              fetchPriority="high"
+              decoding="async"
+              width={currentBanner.imageWidth || undefined}
+              height={currentBanner.imageHeight || undefined}
             />
           </div>
         ) : null}

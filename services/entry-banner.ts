@@ -326,42 +326,42 @@ export async function updateEntryBanner(
   }
 }
 
+let activeBannersCache: EntryBanner[] | null = null;
+let activeBannersInflight: Promise<EntryBanner[]> | null = null;
+
 /**
  * بارگذاری بنرهای فعال برای کاربر فعلی
  * بر اساس role کاربر، target_audience، تاریخ و وضعیت فعال
  */
 export async function loadActiveBannersForUser(): Promise<EntryBanner[]> {
   try {
-    // گرفتن نقش کاربر فعلی و بنرها به صورت موازی
-    const [userResult, bannersResult] = await Promise.all([
-      supabase.auth.getUser(),
-      supabase
-        .from("entry_banners")
-        .select("*")
-        .eq("is_active", true)
-        .order("created_at", { ascending: false })
-    ]);
-
-    const { data: { user: currentUser } } = userResult;
+    // Session is local; banners + role go out in one round-trip.
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const currentUser = session?.user;
     if (!currentUser) {
       return [];
     }
 
+    const [bannersResult, userResult] = await Promise.all([
+      supabase
+        .from("entry_banners")
+        .select("*")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false }),
+      supabase.from("users").select("role").eq("id", currentUser.id).single(),
+    ]);
+
     const { data: bannersData, error: bannersError } = bannersResult;
     if (bannersError) {
-      console.error("loadActiveBannersForUser: banners error", bannersError);
+      console.error("[EntryBanner] banners error", bannersError);
       return [];
     }
 
-    // گرفتن نقش کاربر
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", currentUser.id)
-      .single();
-
+    const { data: userData, error: userError } = userResult;
     if (userError || !userData) {
-      console.error("loadActiveBannersForUser: user error", userError);
+      console.error("[EntryBanner] user error", userError);
       return [];
     }
 
@@ -374,15 +374,8 @@ export async function loadActiveBannersForUser(): Promise<EntryBanner[]> {
         ? userRoleRaw
         : null;
 
-    if (bannersError) {
-      console.error("loadActiveBannersForUser: banners error", bannersError);
-      return [];
-    }
-
-    // فیلتر بر اساس target_audience و بررسی دقیق تاریخ
     const banners: EntryBanner[] = (bannersData || [])
       .filter((banner: any) => {
-        // بررسی تاریخ: باید بین start_date و end_date باشد
         const startDate = banner.start_date ? new Date(banner.start_date) : null;
         const endDate = banner.end_date ? new Date(banner.end_date) : null;
         const nowDate = new Date();
@@ -390,11 +383,8 @@ export async function loadActiveBannersForUser(): Promise<EntryBanner[]> {
         if (startDate && nowDate < startDate) return false;
         if (endDate && nowDate > endDate) return false;
 
-        // بررسی target_audience
         const targetAudience = normalizeTargetAudience(banner.target_audience);
-        // اگر target_audience خالی باشد، برای همه است
         if (targetAudience.length === 0) return true;
-        // بررسی اینکه role کاربر در target_audience باشد
         if (!userRole) return false;
         return targetAudience.includes(userRole);
       })
@@ -402,9 +392,37 @@ export async function loadActiveBannersForUser(): Promise<EntryBanner[]> {
 
     return banners;
   } catch (err) {
-    console.error("loadActiveBannersForUser unexpected error:", err);
+    console.error("[EntryBanner] unexpected error:", err);
     return [];
   }
+}
+
+export function peekCachedActiveBanners(): EntryBanner[] | null {
+  return activeBannersCache;
+}
+
+/** Deduped in-flight fetch so layout mount can start loading before the modal effect. */
+export function prefetchActiveBannersForUser(): Promise<EntryBanner[]> {
+  if (activeBannersCache) {
+    return Promise.resolve(activeBannersCache);
+  }
+  if (!activeBannersInflight) {
+    activeBannersInflight = loadActiveBannersForUser()
+      .then(async (banners) => {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        // Do not cache a miss from a race before session exists.
+        if (session?.user) {
+          activeBannersCache = banners;
+        }
+        return banners;
+      })
+      .finally(() => {
+        activeBannersInflight = null;
+      });
+  }
+  return activeBannersInflight;
 }
 
 /**
