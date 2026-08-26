@@ -15,6 +15,10 @@ export type TournamentFormValues = {
   table_size_fixed: number | null;
   table_size_min: number | null;
   table_size_max: number | null;
+  later_round_table_size_mode: string;
+  later_round_table_size_fixed: number | null;
+  later_round_table_size_min: number | null;
+  later_round_table_size_max: number | null;
   remainder_policy: string;
   commission_rate: number | null;
   guaranteed_prize: number | null;
@@ -24,6 +28,8 @@ export type TournamentFormValues = {
   /** Minutes to push start_at when under min_players_to_start (default 60). */
   registration_extend_minutes: number | null;
   final_winners_count: number | null;
+  /** Prize share per rank (1..N); must sum to 100 when N > 1. */
+  prize_percentages: number[];
 };
 
 export type TournamentFormProps = {
@@ -54,6 +60,32 @@ const REMAINDER_POLICY_OPTIONS = [
   { value: "uniform_with_bye", label: "یکنواخت + بای" },
   { value: "uniform_with_ghost", label: "یکنواخت + گوست" },
 ];
+
+const FINAL_WINNERS_OPTIONS = Array.from({ length: 8 }, (_, i) => i + 1);
+
+const RANK_LABELS = [
+  "نفر اول",
+  "نفر دوم",
+  "نفر سوم",
+  "نفر چهارم",
+  "نفر پنجم",
+  "نفر ششم",
+  "نفر هفتم",
+  "نفر هشتم",
+];
+
+/** Equal split with remainder assigned to rank 1 (e.g. 3 → 34/33/33). */
+export function buildEqualPrizePercents(count: number): number[] {
+  if (count <= 0) return [];
+  if (count === 1) return [100];
+  const base = Math.floor(100 / count);
+  const remainder = 100 - base * count;
+  return Array.from({ length: count }, (_, i) => (i === 0 ? base + remainder : base));
+}
+
+function rankLabel(rank: number): string {
+  return RANK_LABELS[rank - 1] ?? `نفر ${rank}`;
+}
 
 const pad2 = (n: number) => n.toString().padStart(2, "0");
 
@@ -99,10 +131,14 @@ export function TournamentForm({
       ticket_price: null,
       min_tickets_per_player: 1,
       max_tickets_per_player: 1,
-      table_size_mode: "fixed",
+      table_size_mode: "range",
       table_size_fixed: 10,
       table_size_min: 8,
-      table_size_max: 12,
+      table_size_max: 10,
+      later_round_table_size_mode: "range",
+      later_round_table_size_fixed: 5,
+      later_round_table_size_min: 4,
+      later_round_table_size_max: 6,
       remainder_policy: "adaptive_tables",
       commission_rate: null,
       guaranteed_prize: 0,
@@ -110,14 +146,21 @@ export function TournamentForm({
       registration_extend_enabled: true,
       registration_extend_minutes: 60,
       final_winners_count: 1,
+      prize_percentages: [100],
     }),
     []
   );
 
-  const [values, setValues] = useState<TournamentFormValues>({
-    ...defaults,
-    ...initialValues,
-  });
+  const mergedInitial = useMemo(() => {
+    const count = initialValues?.final_winners_count ?? 1;
+    const percents =
+      initialValues?.prize_percentages && initialValues.prize_percentages.length === count
+        ? initialValues.prize_percentages
+        : buildEqualPrizePercents(count);
+    return { ...defaults, ...initialValues, prize_percentages: percents };
+  }, [defaults, initialValues]);
+
+  const [values, setValues] = useState<TournamentFormValues>(mergedInitial);
   const [error, setError] = useState<string | null>(null);
   const startInputRef = useRef<HTMLInputElement | null>(null);
   const minDateLocal = useMemo(() => toDateLocal(new Date()), []);
@@ -141,7 +184,7 @@ export function TournamentForm({
   };
 
   useEffect(() => {
-    setValues((prev) => ({ ...prev, ...initialValues }));
+    setValues(mergedInitial);
     if (initialValues?.start_at) {
       const parsed = new Date(initialValues.start_at);
       setStartDateLocal(toDateLocal(parsed));
@@ -152,11 +195,36 @@ export function TournamentForm({
       setStartHour("");
       setStartMinute("");
     }
-  }, [initialValues]);
+  }, [initialValues, mergedInitial]);
 
-  const handleChange = (key: keyof TournamentFormValues, val: any) => {
+  const handleChange = (key: keyof TournamentFormValues, val: unknown) => {
     setValues((prev) => ({ ...prev, [key]: val }));
   };
+
+  const handleFinalWinnersCountChange = (raw: string) => {
+    const count = Number(raw);
+    if (Number.isNaN(count) || count < 1 || count > 8) return;
+    setValues((prev) => ({
+      ...prev,
+      final_winners_count: count,
+      prize_percentages: buildEqualPrizePercents(count),
+    }));
+  };
+
+  const handlePrizePercentChange = (index: number, raw: string) => {
+    const num = raw === "" ? 0 : Number(raw);
+    if (Number.isNaN(num)) return;
+    setValues((prev) => {
+      const next = [...prev.prize_percentages];
+      next[index] = num;
+      return { ...prev, prize_percentages: next };
+    });
+  };
+
+  const prizePercentSum = useMemo(
+    () => values.prize_percentages.reduce((sum, p) => sum + (Number(p) || 0), 0),
+    [values.prize_percentages]
+  );
 
   const handleNumber = (key: keyof TournamentFormValues, val: string) => {
     const num = val === "" ? null : Number(val);
@@ -192,7 +260,7 @@ export function TournamentForm({
       return;
     }
     if (values.table_size_mode === "fixed" && (!values.table_size_fixed || values.table_size_fixed <= 0)) {
-      setError("سایز ثابت میز باید بیشتر از صفر باشد.");
+      setError("سایز ثابت میز (راند اول) باید بیشتر از صفر باشد.");
       return;
     }
     if (
@@ -201,15 +269,43 @@ export function TournamentForm({
       values.table_size_max &&
       values.table_size_min > values.table_size_max
     ) {
-      setError("حداقل سایز میز نمی‌تواند بیشتر از حداکثر باشد.");
+      setError("حداقل سایز میز (راند اول) نمی‌تواند بیشتر از حداکثر باشد.");
       return;
     }
     if (
-      values.final_winners_count != null &&
-      (values.final_winners_count < 1 || values.final_winners_count > 4)
+      values.later_round_table_size_mode === "fixed" &&
+      (!values.later_round_table_size_fixed || values.later_round_table_size_fixed <= 0)
     ) {
-      setError("تعداد برنده‌های نهایی باید بین 1 تا 4 باشد.");
+      setError("سایز ثابت میز (راند دوم به بعد) باید بیشتر از صفر باشد.");
       return;
+    }
+    if (
+      values.later_round_table_size_mode === "range" &&
+      values.later_round_table_size_min &&
+      values.later_round_table_size_max &&
+      values.later_round_table_size_min > values.later_round_table_size_max
+    ) {
+      setError("حداقل سایز میز (راند دوم به بعد) نمی‌تواند بیشتر از حداکثر باشد.");
+      return;
+    }
+    const winnersCount = values.final_winners_count ?? 1;
+    if (winnersCount < 1 || winnersCount > 8) {
+      setError("تعداد برنده‌های نهایی باید بین 1 تا 8 باشد.");
+      return;
+    }
+    if (values.prize_percentages.length !== winnersCount) {
+      setError("تعداد درصدهای جایزه با تعداد برندگان هم‌خوان نیست.");
+      return;
+    }
+    if (winnersCount > 1) {
+      if (values.prize_percentages.some((p) => p <= 0)) {
+        setError("هر درصد جایزه باید بیشتر از صفر باشد.");
+        return;
+      }
+      if (prizePercentSum !== 100) {
+        setError("جمع درصدهای جایزه باید دقیقاً 100 باشد.");
+        return;
+      }
     }
     if (values.commission_rate != null && (values.commission_rate < 0 || values.commission_rate > 100)) {
       setError("کمیسیون باید بین 0 تا 100 باشد.");
@@ -240,8 +336,13 @@ export function TournamentForm({
         return;
       }
     }
+    const prizePercentages =
+      winnersCount === 1 ? [100] : values.prize_percentages.slice(0, winnersCount);
+
     await onSubmit({
       ...values,
+      final_winners_count: winnersCount,
+      prize_percentages: prizePercentages,
       min_players_to_start: values.min_players_to_start,
       registration_extend_enabled: values.registration_extend_enabled,
       registration_extend_minutes: values.registration_extend_minutes ?? 60,
@@ -250,6 +351,7 @@ export function TournamentForm({
   };
 
   const isRange = values.table_size_mode === "range";
+  const isLaterRange = values.later_round_table_size_mode === "range";
 
   const inputClass =
     "rounded-lg bg-[#1f1f1f] border border-gray-700 px-3 py-2 text-white disabled:opacity-60 disabled:cursor-not-allowed";
@@ -515,62 +617,129 @@ export function TournamentForm({
           />
         </label>
 
-        <label className="flex flex-col gap-1 text-sm">
-          <span>مد سایز میز</span>
-          <select
-            value={values.table_size_mode}
-            onChange={(e) => handleChange("table_size_mode", e.target.value)}
-            className={inputClass}
-            disabled={readOnly}
-          >
-            {TABLE_SIZE_MODE_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        {!isRange && (
-          <label className="flex flex-col gap-1 text-sm">
-            <span>سایز ثابت میز</span>
-            <input
-              type="number"
-              min="1"
-              value={values.table_size_fixed ?? ""}
-              onChange={(e) => handleNumber("table_size_fixed", e.target.value)}
-              className={inputClass}
-              disabled={readOnly}
-            />
-          </label>
-        )}
-
-        {isRange && (
-          <>
+        <div className="md:col-span-2 rounded-lg border border-gray-700 bg-[#161616] p-4 space-y-3">
+          <div className="text-sm font-semibold text-gray-200">سایز میز — راند اول</div>
+          <div className="grid md:grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm">
-              <span>حداقل سایز میز</span>
-              <input
-                type="number"
-                min="1"
-                value={values.table_size_min ?? ""}
-                onChange={(e) => handleNumber("table_size_min", e.target.value)}
-              className={inputClass}
-              disabled={readOnly}
-              />
+              <span>مد سایز میز (راند اول)</span>
+              <select
+                value={values.table_size_mode}
+                onChange={(e) => handleChange("table_size_mode", e.target.value)}
+                className={inputClass}
+                disabled={readOnly}
+              >
+                {TABLE_SIZE_MODE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             </label>
+
+            {!isRange && (
+              <label className="flex flex-col gap-1 text-sm">
+                <span>سایز ثابت میز (راند اول)</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={values.table_size_fixed ?? ""}
+                  onChange={(e) => handleNumber("table_size_fixed", e.target.value)}
+                  className={inputClass}
+                  disabled={readOnly}
+                />
+              </label>
+            )}
+
+            {isRange && (
+              <>
+                <label className="flex flex-col gap-1 text-sm">
+                  <span>حداقل سایز میز (راند اول)</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={values.table_size_min ?? ""}
+                    onChange={(e) => handleNumber("table_size_min", e.target.value)}
+                    className={inputClass}
+                    disabled={readOnly}
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  <span>حداکثر سایز میز (راند اول)</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={values.table_size_max ?? ""}
+                    onChange={(e) => handleNumber("table_size_max", e.target.value)}
+                    className={inputClass}
+                    disabled={readOnly}
+                  />
+                </label>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="md:col-span-2 rounded-lg border border-gray-700 bg-[#161616] p-4 space-y-3">
+          <div className="text-sm font-semibold text-gray-200">سایز میز — راند دوم به بعد</div>
+          <div className="grid md:grid-cols-2 gap-3">
             <label className="flex flex-col gap-1 text-sm">
-              <span>حداکثر سایز میز</span>
-              <input
-                type="number"
-                min="1"
-                value={values.table_size_max ?? ""}
-                onChange={(e) => handleNumber("table_size_max", e.target.value)}
-              className={inputClass}
-              disabled={readOnly}
-              />
+              <span>مد سایز میز (راند دوم به بعد)</span>
+              <select
+                value={values.later_round_table_size_mode}
+                onChange={(e) => handleChange("later_round_table_size_mode", e.target.value)}
+                className={inputClass}
+                disabled={readOnly}
+              >
+                {TABLE_SIZE_MODE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             </label>
-          </>
-        )}
+
+            {!isLaterRange && (
+              <label className="flex flex-col gap-1 text-sm">
+                <span>سایز ثابت میز (راند دوم به بعد)</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={values.later_round_table_size_fixed ?? ""}
+                  onChange={(e) => handleNumber("later_round_table_size_fixed", e.target.value)}
+                  className={inputClass}
+                  disabled={readOnly}
+                />
+              </label>
+            )}
+
+            {isLaterRange && (
+              <>
+                <label className="flex flex-col gap-1 text-sm">
+                  <span>حداقل سایز میز (راند دوم به بعد)</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={values.later_round_table_size_min ?? ""}
+                    onChange={(e) => handleNumber("later_round_table_size_min", e.target.value)}
+                    className={inputClass}
+                    disabled={readOnly}
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  <span>حداکثر سایز میز (راند دوم به بعد)</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={values.later_round_table_size_max ?? ""}
+                    onChange={(e) => handleNumber("later_round_table_size_max", e.target.value)}
+                    className={inputClass}
+                    disabled={readOnly}
+                  />
+                </label>
+              </>
+            )}
+          </div>
+        </div>
 
         <label className="flex flex-col gap-1 text-sm">
           <span>سیاست باقی‌مانده</span>
@@ -589,19 +758,60 @@ export function TournamentForm({
         </label>
 
         <label className="flex flex-col gap-1 text-sm">
-          <span>تعداد برنده‌های نهایی (۱ تا ۴)</span>
-          <input
-            type="number"
-            min="1"
-            max="4"
-            step="1"
-            value={values.final_winners_count ?? ""}
-            onChange={(e) => handleNumber("final_winners_count", e.target.value)}
+          <span>تعداد برنده‌های نهایی</span>
+          <select
+            value={values.final_winners_count ?? 1}
+            onChange={(e) => handleFinalWinnersCountChange(e.target.value)}
             className={inputClass}
             disabled={readOnly}
-          />
+          >
+            {FINAL_WINNERS_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                {n} نفر
+              </option>
+            ))}
+          </select>
         </label>
       </div>
+
+      {(values.final_winners_count ?? 1) > 1 && (
+        <div className="rounded-lg border border-gray-700 bg-[#161616] p-4 space-y-3">
+          <div className="text-sm font-semibold text-gray-200">تخصیص درصد جایزه</div>
+          <div className="grid md:grid-cols-2 gap-3">
+            {values.prize_percentages.map((pct, index) => (
+              <label key={index} className="flex flex-col gap-1 text-sm">
+                <span>{rankLabel(index + 1)}</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    step="1"
+                    value={pct || ""}
+                    onChange={(e) => handlePrizePercentChange(index, e.target.value)}
+                    className={inputClass}
+                    disabled={readOnly}
+                  />
+                  <span className="numeric-text numeric-text--14 text-gray-400" dir="ltr">
+                    %
+                  </span>
+                </div>
+              </label>
+            ))}
+          </div>
+          <div
+            className={`text-sm ${
+              prizePercentSum === 100 ? "text-teal-400" : "text-amber-400"
+            }`}
+          >
+            جمع درصدها:{" "}
+            <span className="numeric-text numeric-text--14" dir="ltr">
+              {prizePercentSum.toLocaleString("en-US")}%
+            </span>
+            {prizePercentSum !== 100 && " (باید دقیقاً 100 باشد)"}
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-3">
         <button

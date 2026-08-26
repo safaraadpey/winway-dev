@@ -90,6 +90,8 @@ export async function processEngineDrawJob(
     }
 
     const state = roomState;
+    // Ding credits go to rpc_finalize_engine_draw_job → rpc_apply_ding_credits_for_draw;
+    // tournament rooms also accumulate tournament_player_ding_totals in PostgreSQL.
     const dingPayload = state
       ? prepareDingCreditsFromState(state, job.draw_number, persistence.marks)
       : {

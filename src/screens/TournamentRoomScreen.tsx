@@ -36,6 +36,10 @@ type TournamentRow = {
   table_size_fixed: number | null;
   table_size_min: number | null;
   table_size_max: number | null;
+  later_round_table_size_mode?: string | null;
+  later_round_table_size_fixed?: number | null;
+  later_round_table_size_min?: number | null;
+  later_round_table_size_max?: number | null;
   meta?: {
     final_winners_count?: number | null;
     min_players_to_start?: number | null;
@@ -80,6 +84,15 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
       name: string;
       rank: number | null;
       amount: number | null;
+    }[]
+  >([]);
+  const [dingLeaderboardLoading, setDingLeaderboardLoading] = useState(false);
+  const [dingLeaderboard, setDingLeaderboard] = useState<
+    {
+      userId: string;
+      name: string;
+      rank: number;
+      dingTotal: number;
     }[]
   >([]);
   const [entries, setEntries] = useState<
@@ -168,7 +181,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
         supabase
           .from("tournaments")
           .select(
-            "id,title,status,start_at,currency,ticket_price,guaranteed_prize,commission_rate,min_tickets_per_player,max_tickets_per_player,table_size_mode,table_size_fixed,table_size_min,table_size_max,meta"
+            "id,title,status,start_at,currency,ticket_price,guaranteed_prize,commission_rate,min_tickets_per_player,max_tickets_per_player,table_size_mode,table_size_fixed,table_size_min,table_size_max,later_round_table_size_mode,later_round_table_size_fixed,later_round_table_size_min,later_round_table_size_max,meta"
           )
           .eq("id", tournamentId)
           .single(),
@@ -309,6 +322,70 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     };
 
     void loadWinner();
+    return () => {
+      active = false;
+    };
+  }, [pickHumanName, tournament?.id, tournament?.status]);
+
+  useEffect(() => {
+    const shouldShowLeaderboard =
+      tournament?.status === "finished" || tournament?.status === "settling";
+
+    if (!tournament?.id || !shouldShowLeaderboard) {
+      setDingLeaderboard([]);
+      return;
+    }
+
+    let active = true;
+
+    const loadDingLeaderboard = async () => {
+      setDingLeaderboardLoading(true);
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const token = session?.access_token || null;
+        const search = new URLSearchParams({ tournamentId: tournament.id });
+        const res = await fetch(
+          `/api/player/tournament-ding-leaderboard?${search.toString()}`,
+          {
+            method: "GET",
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            cache: "no-store",
+          }
+        );
+
+        if (!res.ok) {
+          if (active) setDingLeaderboard([]);
+          return;
+        }
+
+        const payload = (await res.json()) as {
+          leaderboard?: Array<{
+            userId?: string;
+            name?: string;
+            rank?: number;
+            dingTotal?: number;
+          }>;
+        };
+
+        const mapped = (payload.leaderboard || []).map((row) => ({
+          userId: row.userId || "",
+          name: pickHumanName(row.name),
+          rank: row.rank ?? 0,
+          dingTotal: row.dingTotal != null ? Number(row.dingTotal) : 0,
+        }));
+
+        if (active) setDingLeaderboard(mapped);
+      } catch (err) {
+        console.error("[Tournament] load ding leaderboard error", err);
+        if (active) setDingLeaderboard([]);
+      } finally {
+        if (active) setDingLeaderboardLoading(false);
+      }
+    };
+
+    void loadDingLeaderboard();
     return () => {
       active = false;
     };
@@ -463,17 +540,42 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     };
   }, [tournament?.start_at]);
 
+  const formatTableSizePhase = (
+    mode: string | null | undefined,
+    fixed: number | null | undefined,
+    min: number | null | undefined,
+    max: number | null | undefined
+  ) => {
+    if (mode === "fixed" && fixed) return `${fixed} نفره`;
+    if (mode === "range") {
+      const minLabel = min ?? "?";
+      const maxLabel = max ?? "?";
+      return `${minLabel} تا ${maxLabel} نفر`;
+    }
+    return mode || "-";
+  };
+
   const tableSizeLabel = useMemo(() => {
     if (!tournament) return "-";
-    if (tournament.table_size_mode === "fixed" && tournament.table_size_fixed) {
-      return `${tournament.table_size_fixed} نفره`;
-    }
-    if (tournament.table_size_mode === "range") {
-      const min = tournament.table_size_min ?? "?";
-      const max = tournament.table_size_max ?? "?";
-      return `${min} تا ${max} نفر`;
-    }
-    return tournament.table_size_mode || "-";
+    const round1 = formatTableSizePhase(
+      tournament.table_size_mode,
+      tournament.table_size_fixed,
+      tournament.table_size_min,
+      tournament.table_size_max
+    );
+    const hasLaterSettings =
+      tournament.later_round_table_size_mode != null ||
+      tournament.later_round_table_size_fixed != null ||
+      tournament.later_round_table_size_min != null ||
+      tournament.later_round_table_size_max != null;
+    if (!hasLaterSettings) return round1;
+    const later = formatTableSizePhase(
+      tournament.later_round_table_size_mode ?? tournament.table_size_mode,
+      tournament.later_round_table_size_fixed ?? tournament.table_size_fixed,
+      tournament.later_round_table_size_min ?? tournament.table_size_min,
+      tournament.later_round_table_size_max ?? tournament.table_size_max
+    );
+    return `راند ۱: ${round1} | بعد: ${later}`;
   }, [tournament]);
 
   const handleRegister = async (qty: number) => {
@@ -754,6 +856,10 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
               {Number.isFinite(winnersCount) ? winnersCount.toLocaleString("fa-IR") : "-"}
             </span>
           </div>
+          <div className={screenStyles.infoRow}>
+            <span className={screenStyles.infoLabel}>سایز میز</span>
+            <span className={screenStyles.infoValueDefault}>{tableSizeLabel}</span>
+          </div>
         </div>
 
         {(tournament?.status === "finished" || tournament?.status === "settling") && (
@@ -776,6 +882,39 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
                     <div className={screenStyles.winnerAmount}>
                       {winner.amount != null ? winner.amount.toLocaleString("fa-IR") : "-"}
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {(tournament?.status === "finished" || tournament?.status === "settling") && (
+          <div className={`${panelStyles.panelSurface} ${screenStyles.dingRankPanel}`}>
+            <div className={screenStyles.dingRankTitle}>رتبه‌بندی DING</div>
+            {dingLeaderboardLoading ? (
+              <div className={screenStyles.dingRankLoading}>در حال دریافت رتبه‌بندی...</div>
+            ) : dingLeaderboard.length === 0 ? (
+              <div className={screenStyles.dingRankEmpty}>رتبه‌بندی DING ثبت نشده است.</div>
+            ) : (
+              <div className="mt-2 space-y-2">
+                {dingLeaderboard.map((entry, index) => (
+                  <div
+                    key={`${entry.userId}-${index}`}
+                    className={screenStyles.dingRankRow}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={screenStyles.dingRankNumber}>
+                        {entry.rank}.
+                      </span>
+                      <span>{entry.name}</span>
+                    </div>
+                    <span
+                      className={screenStyles.dingRankTotal}
+                      dir="ltr"
+                    >
+                      {entry.dingTotal.toLocaleString("en-US")}
+                    </span>
                   </div>
                 ))}
               </div>

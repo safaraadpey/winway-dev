@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { supabase } from "@/lib/supabaseClient";
-import { TournamentForm, TournamentFormValues } from "../../TournamentForm";
+import { TournamentForm, TournamentFormValues, buildEqualPrizePercents } from "../../TournamentForm";
 
 export default function AdminTournamentEditPage() {
   const router = useRouter();
@@ -19,31 +19,52 @@ export default function AdminTournamentEditPage() {
 
   const tournamentId = typeof params?.id === "string" ? params.id : Array.isArray(params?.id) ? params?.id[0] : null;
 
-  const mapRowToValues = useCallback((data: any): TournamentFormValues => {
-    return {
-      title: data.title || "",
-      status: data.status || "draft",
-      start_at: data.start_at,
-      currency: data.currency || "IRR",
-      entry_currency: data?.meta?.entry_currency || "IRR",
-      ticket_price: data.ticket_price ?? null,
-      min_tickets_per_player: data.min_tickets_per_player ?? 1,
-      max_tickets_per_player: data.max_tickets_per_player ?? 1,
-      table_size_mode: data.table_size_mode || "fixed",
-      table_size_fixed: data.table_size_fixed ?? null,
-      table_size_min: data.table_size_min ?? null,
-      table_size_max: data.table_size_max ?? null,
-      remainder_policy: data.remainder_policy || "adaptive_tables",
-      commission_rate: data.commission_rate ?? null,
-      guaranteed_prize: data.guaranteed_prize ?? 0,
-      min_players_to_start: data?.meta?.min_players_to_start ?? 3,
-      registration_extend_enabled:
-        data?.meta?.registration_extend_enabled !== false,
-      registration_extend_minutes:
-        data?.meta?.registration_extend_minutes ?? 60,
-      final_winners_count: data?.meta?.final_winners_count ?? 1,
-    };
-  }, []);
+  const mapRowToValues = useCallback(
+    (data: any, prizeRules?: { rank: number; payout_type: string; payout_value: number }[]): TournamentFormValues => {
+      const finalWinnersCount = data?.meta?.final_winners_count ?? 1;
+      const percentRules = (prizeRules ?? [])
+        .filter((r) => r.payout_type === "percent")
+        .sort((a, b) => a.rank - b.rank);
+      const prizePercentages =
+        percentRules.length === finalWinnersCount
+          ? percentRules.map((r) => Number(r.payout_value))
+          : buildEqualPrizePercents(finalWinnersCount);
+
+      return {
+        title: data.title || "",
+        status: data.status || "draft",
+        start_at: data.start_at,
+        currency: data.currency || "IRR",
+        entry_currency: data?.meta?.entry_currency || "IRR",
+        ticket_price: data.ticket_price ?? null,
+        min_tickets_per_player: data.min_tickets_per_player ?? 1,
+        max_tickets_per_player: data.max_tickets_per_player ?? 1,
+        table_size_mode: data.table_size_mode || "fixed",
+        table_size_fixed: data.table_size_fixed ?? null,
+        table_size_min: data.table_size_min ?? null,
+        table_size_max: data.table_size_max ?? null,
+        later_round_table_size_mode:
+          data.later_round_table_size_mode || data.table_size_mode || "fixed",
+        later_round_table_size_fixed:
+          data.later_round_table_size_fixed ?? data.table_size_fixed ?? null,
+        later_round_table_size_min:
+          data.later_round_table_size_min ?? data.table_size_min ?? null,
+        later_round_table_size_max:
+          data.later_round_table_size_max ?? data.table_size_max ?? null,
+        remainder_policy: data.remainder_policy || "adaptive_tables",
+        commission_rate: data.commission_rate ?? null,
+        guaranteed_prize: data.guaranteed_prize ?? 0,
+        min_players_to_start: data?.meta?.min_players_to_start ?? 3,
+        registration_extend_enabled:
+          data?.meta?.registration_extend_enabled !== false,
+        registration_extend_minutes:
+          data?.meta?.registration_extend_minutes ?? 60,
+        final_winners_count: finalWinnersCount,
+        prize_percentages: prizePercentages,
+      };
+    },
+    []
+  );
 
   useEffect(() => {
     setShowHeader(true);
@@ -70,7 +91,13 @@ export default function AdminTournamentEditPage() {
       if (error || !data) {
         setError(error?.message || "تورنومنت یافت نشد");
       } else {
-        setInitialValues(mapRowToValues(data));
+        const { data: prizeRules } = await supabase
+          .from("tournament_prize_rules")
+          .select("rank, payout_type, payout_value")
+          .eq("tournament_id", tournamentId)
+          .order("rank", { ascending: true });
+        if (!active) return;
+        setInitialValues(mapRowToValues(data, prizeRules ?? []));
       }
       setLoading(false);
     };
@@ -102,9 +129,14 @@ export default function AdminTournamentEditPage() {
       table_size_fixed: values.table_size_fixed,
       table_size_min: values.table_size_min,
       table_size_max: values.table_size_max,
+      later_round_table_size_mode: values.later_round_table_size_mode,
+      later_round_table_size_fixed: values.later_round_table_size_fixed,
+      later_round_table_size_min: values.later_round_table_size_min,
+      later_round_table_size_max: values.later_round_table_size_max,
       remainder_policy: values.remainder_policy,
       commission_rate: values.commission_rate,
       guaranteed_prize: values.guaranteed_prize,
+      prize_percentages: values.prize_percentages,
       meta: {
         final_winners_count: values.final_winners_count,
         min_players_to_start: values.min_players_to_start,
@@ -141,7 +173,12 @@ export default function AdminTournamentEditPage() {
     }
 
     if (result?.data) {
-      setInitialValues(mapRowToValues(result.data));
+      const { data: prizeRules } = await supabase
+        .from("tournament_prize_rules")
+        .select("rank, payout_type, payout_value")
+        .eq("tournament_id", tournamentId)
+        .order("rank", { ascending: true });
+      setInitialValues(mapRowToValues(result.data, prizeRules ?? []));
     }
     router.push("/admin/tournaments");
   };

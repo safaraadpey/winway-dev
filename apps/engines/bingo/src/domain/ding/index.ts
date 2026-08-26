@@ -3,6 +3,10 @@
  *
  * Engine path uses in-memory marks (no tickets/card_numbers join). Credits are
  * persisted in one RPC (rpc_apply_ding_credits_for_draw).
+ *
+ * Tournament rooms: rpc_apply_ding_credits_for_draw also upserts
+ * tournament_player_ding_totals via tournament.fn_accumulate_player_ding (used
+ * for ranks 2+ payout; champion is the final-table winner).
  */
 
 import { computeDingCredits, resolveDingPerCard } from "../../core/index.js";

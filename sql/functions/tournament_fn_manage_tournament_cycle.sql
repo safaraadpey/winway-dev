@@ -36,11 +36,6 @@ BEGIN
   WHERE id = p_tournament_id
   FOR UPDATE;
 
-  v_table_mode  := COALESCE(v_t.table_size_mode, 'range');
-  v_table_fixed := COALESCE(v_t.table_size_fixed, 0);
-  v_table_min   := COALESCE(v_t.table_size_min, 8);
-  v_table_max   := COALESCE(v_t.table_size_max, 12);
-
   -- bump status to running on first orchestration
   IF v_t.status = 'registration_open'::public.tournament_status THEN
     UPDATE public.tournaments
@@ -127,6 +122,34 @@ BEGIN
   IF v_count_players = 0 THEN
     RAISE NOTICE 'no participants found for tournament % round %', p_tournament_id, v_next_round;
     RETURN;
+  END IF;
+
+  IF v_curr_round = 0 THEN
+    v_table_mode  := COALESCE(v_t.table_size_mode, 'range');
+    v_table_fixed := COALESCE(v_t.table_size_fixed, 0);
+    v_table_min   := COALESCE(v_t.table_size_min, 8);
+    v_table_max   := COALESCE(v_t.table_size_max, 12);
+  ELSE
+    v_table_mode  := COALESCE(
+      v_t.later_round_table_size_mode,
+      v_t.table_size_mode,
+      'range'::public.tournament_table_size_mode
+    );
+    v_table_fixed := COALESCE(
+      v_t.later_round_table_size_fixed,
+      v_t.table_size_fixed,
+      0
+    );
+    v_table_min   := COALESCE(
+      v_t.later_round_table_size_min,
+      v_t.table_size_min,
+      8
+    );
+    v_table_max   := COALESCE(
+      v_t.later_round_table_size_max,
+      v_t.table_size_max,
+      12
+    );
   END IF;
 
   -- Determine table sizing
