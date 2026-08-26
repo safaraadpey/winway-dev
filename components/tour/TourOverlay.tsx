@@ -507,9 +507,33 @@ export function TourOverlay({
                 />
               </div>
             ) : null}
-            <h2 id={titleId} className={styles.title}>
-              {step.title}
-            </h2>
+            <div className={styles.tooltipHeader}>
+              <h2 id={titleId} className={styles.title}>
+                {step.title}
+              </h2>
+              <button
+                type="button"
+                className={styles.closeButton}
+                aria-label="بستن راهنما"
+                onClick={() => void onSkip()}
+              >
+                <svg
+                  xmlns="http://www.w3.org/1999/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
             {step.mediaSrc ? (
               <div className={styles.stepMediaWrap}>
                 <img

@@ -151,9 +151,6 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
 
   useLayoutEffect(() => {
     setEntryBannerGate({ settled: true, blocking: blockingOnThisPath });
-    return () => {
-      setEntryBannerGate({ settled: true, blocking: false });
-    };
   }, [blockingOnThisPath]);
 
   if (!shouldShowOnThisPath) {
@@ -164,7 +161,8 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
     if (!loading) return null;
     return (
       <div
-        className="fixed inset-0 z-50 bg-black/95"
+        className="fixed inset-0 z-[10050] bg-black/95"
+        data-entry-banner-open="true"
         aria-busy="true"
         aria-hidden="true"
       />
@@ -208,7 +206,10 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
     banners.length > 1;
 
   return (
-    <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-50 p-4">
+    <div
+      className="fixed inset-0 z-[10050] bg-black/95 flex items-center justify-center p-4"
+      data-entry-banner-open="true"
+    >
       <div
         className={`relative bg-black rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto ${
           isImageBanner ? "" : "p-6"

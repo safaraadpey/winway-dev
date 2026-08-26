@@ -84,9 +84,26 @@ function PanelOperatorsBreakdown({ operators }: { operators: DashboardPanelOpera
     >
       {operators.map((op) => (
         <div key={op.userId} className="grid grid-cols-2 py-0.5 text-xs text-gray-300">
-          <span>
-            {op.displayName}
-            <span className="text-gray-500"> ({op.role === "super" ? "سوپر" : "ایجنت"})</span>
+          <span className="flex min-w-0 items-center gap-1">
+            <span className="min-w-0 truncate">
+              {op.displayName}
+              <span className="text-gray-500"> ({op.role === "super" ? "سوپر" : "ایجنت"})</span>
+            </span>
+            <span className="shrink-0" title="یکتا در بازه - در بازی همین حالا">
+              <span className="numeric-text numeric-text--11" dir="ltr">
+                <span
+                  className={(op.playedPlayersCount ?? 0) > 0 ? "text-[#fcd34d]" : "text-gray-600"}
+                >
+                  {(op.playedPlayersCount ?? 0).toLocaleString("en-US")}
+                </span>
+                <span className="text-gray-500">-</span>
+                <span
+                  className={(op.playingPlayersCount ?? 0) > 0 ? "text-emerald-400" : "text-gray-600"}
+                >
+                  {(op.playingPlayersCount ?? 0).toLocaleString("en-US")}
+                </span>
+              </span>
+            </span>
           </span>
           <span className="text-right">
             <DashboardAmount value={op.amount} size="12" />

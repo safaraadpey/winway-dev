@@ -56,10 +56,48 @@
 
 .title {
   margin: 0;
+  min-width: 0;
+  flex: 1;
   color: #fde68a;
   font-size: 18px;
   font-weight: 800;
   line-height: 1.45;
+}
+
+.tooltipHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.closeButton {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-top: 1px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.86);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.closeButton:hover,
+.closeButton:focus-visible {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  outline: 2px solid rgba(251, 191, 36, 0.75);
+  outline-offset: 2px;
+}
+
+.closeButton:active {
+  transform: translateY(1px);
 }
 
 .stepMediaWrap {

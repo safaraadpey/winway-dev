@@ -14,7 +14,8 @@ import { usePathname } from "next/navigation";
 import { TourOverlay } from "@/components/tour/TourOverlay";
 import { useSession } from "@/lib/contexts/SessionContext";
 import { HARD_EXIT_EVENT } from "@/lib/auth/hardExit";
-import { useEntryBannerGate } from "@/lib/entry-banner-gate";
+import { useEntryBannerGate, getEntryBannerGate } from "@/lib/entry-banner-gate";
+import { MAIN_PAGE_TOUR_ID } from "@/lib/tour/configs/mainPageTour";
 import { getTourConfig } from "@/lib/tour/registry";
 import { tourStorage } from "@/lib/tour/storage";
 import type {
@@ -160,6 +161,13 @@ export function TourProvider({ children }: { children: ReactNode }) {
       const config = getTourConfig(tourId);
       if (!config || !userId || active || config.steps.length === 0) return;
       if (autoStartLockRef.current) return;
+      if (tourId === MAIN_PAGE_TOUR_ID) {
+        const bannerGate = getEntryBannerGate();
+        if (!bannerGate.settled || bannerGate.blocking) {
+          console.info("[Tour] Deferred until entry banner closes", { tourId });
+          return;
+        }
+      }
 
       autoStartLockRef.current = true;
       try {

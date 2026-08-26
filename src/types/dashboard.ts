@@ -21,6 +21,16 @@ export interface DashboardPanelOperator {
   role: "agent" | "super";
   /** کمیسیون همان پنل (کانیات من ایجنت/سوپر) در بازه انتخاب‌شده */
   amount: number;
+  /**
+   * تعداد یکتای پلیرهای زیرمجموعه که در بازه انتخاب‌شده بازی کرده‌اند
+   * (از جدول روزانه operator_player_play_days).
+   */
+  playedPlayersCount?: number;
+  /**
+   * تعداد پلیرهای زیرمجموعه که الان در روم فعال هستند
+   * (waiting / playing / live). لحظه‌ای است، وابسته به بازه مالی نیست.
+   */
+  playingPlayersCount?: number;
 }
 
 export interface FinancialSummary {

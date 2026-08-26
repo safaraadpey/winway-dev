@@ -1,6 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { pgPool } from "@/lib/pg";
 import { getRollingWeekStart, getRollingMonthStart } from "@/lib/dashboard/loadCommissionDailyStats";
+import {
+  loadOperatorPlayedPlayerCountsByPeriod,
+  loadOperatorPlayedPlayerCountsInRange,
+  type OperatorPlayedCount,
+} from "@/lib/dashboard/loadOperatorPlayedPlayerCounts";
+import { loadOperatorPlayingPlayerCounts } from "@/lib/dashboard/loadOperatorPlayingPlayerCounts";
 import type { DashboardPanelOperator, DashboardPeriod } from "@/src/types/dashboard";
 
 type PeriodAmountRow = {
@@ -29,9 +35,15 @@ function normalizeRole(role: string): "agent" | "super" {
 
 function sortOperators(list: DashboardPanelOperator[]): DashboardPanelOperator[] {
   return [...list]
-    .filter((op) => op.amount > 0)
+    .filter(
+      (op) =>
+        op.amount > 0 || (op.playedPlayersCount ?? 0) > 0 || (op.playingPlayersCount ?? 0) > 0
+    )
     .sort(
-      (a, b) => b.amount - a.amount || a.displayName.localeCompare(b.displayName, "fa")
+      (a, b) =>
+        b.amount - a.amount ||
+        (b.playedPlayersCount ?? 0) - (a.playedPlayersCount ?? 0) ||
+        a.displayName.localeCompare(b.displayName, "fa")
     );
 }
 
@@ -39,13 +51,79 @@ function toOperator(
   userId: string,
   role: string,
   displayName: string,
-  amount: string | number
+  amount: string | number,
+  playedPlayersCount = 0
 ): DashboardPanelOperator {
   return {
     userId,
     displayName: displayName?.trim() || "پنل",
     role: normalizeRole(role),
     amount: Number(amount || 0),
+    playedPlayersCount,
+    playingPlayersCount: 0,
+  };
+}
+
+function mergePlayedCounts(
+  operators: DashboardPanelOperator[],
+  played: OperatorPlayedCount[]
+): DashboardPanelOperator[] {
+  const byId = new Map<string, DashboardPanelOperator>();
+  for (const op of operators) {
+    byId.set(op.userId, { ...op, playedPlayersCount: op.playedPlayersCount ?? 0 });
+  }
+  for (const row of played) {
+    if (row.count <= 0) continue;
+    const existing = byId.get(row.userId);
+    if (existing) {
+      existing.playedPlayersCount = row.count;
+      continue;
+    }
+    byId.set(row.userId, {
+      userId: row.userId,
+      displayName: row.displayName,
+      role: row.role,
+      amount: 0,
+      playedPlayersCount: row.count,
+      playingPlayersCount: 0,
+    });
+  }
+  return sortOperators([...byId.values()]);
+}
+
+function attachPlayingCounts(
+  operators: DashboardPanelOperator[],
+  counts: Map<string, number>
+): DashboardPanelOperator[] {
+  return sortOperators(
+    operators.map((op) => ({
+      ...op,
+      playingPlayersCount: counts.get(op.userId) ?? 0,
+    }))
+  );
+}
+
+function mergePlayedCountsByPeriod(
+  byPeriod: Record<DashboardPeriod, DashboardPanelOperator[]>,
+  played: Record<"day" | "week" | "month", OperatorPlayedCount[]>
+): Record<DashboardPeriod, DashboardPanelOperator[]> {
+  return {
+    day: mergePlayedCounts(byPeriod.day, played.day),
+    week: mergePlayedCounts(byPeriod.week, played.week),
+    month: mergePlayedCounts(byPeriod.month, played.month),
+    overall: mergePlayedCounts(byPeriod.overall, []),
+  };
+}
+
+function attachPlayingCountsByPeriod(
+  byPeriod: Record<DashboardPeriod, DashboardPanelOperator[]>,
+  counts: Map<string, number>
+): Record<DashboardPeriod, DashboardPanelOperator[]> {
+  return {
+    day: attachPlayingCounts(byPeriod.day, counts),
+    week: attachPlayingCounts(byPeriod.week, counts),
+    month: attachPlayingCounts(byPeriod.month, counts),
+    overall: attachPlayingCounts(byPeriod.overall, counts),
   };
 }
 
@@ -340,6 +418,8 @@ function operatorsFromAmountMap(
       displayName: meta.displayName,
       role: meta.role,
       amount: entry.amount,
+      playedPlayersCount: 0,
+      playingPlayersCount: 0,
     });
   }
   return sortOperators(list);
@@ -385,6 +465,15 @@ async function loadRangeFromSupabase(
 export async function loadPanelCommissionBreakdownByPeriod(
   supabase?: SupabaseClient
 ): Promise<Record<DashboardPeriod, DashboardPanelOperator[]>> {
+  const playedPromise = loadOperatorPlayedPlayerCountsByPeriod(supabase);
+  const empty: Record<DashboardPeriod, DashboardPanelOperator[]> = {
+    day: [],
+    week: [],
+    month: [],
+    overall: [],
+  };
+
+  let breakdown = empty;
   try {
     const fromPg = await loadPeriodFromPostgres();
     if (fromPg) {
@@ -394,30 +483,36 @@ export async function loadPanelCommissionBreakdownByPeriod(
         week: fromPg.week.length,
         month: fromPg.month.length,
       });
-      return { ...fromPg, overall: [] };
+      breakdown = { ...fromPg, overall: [] };
     }
   } catch (err) {
     console.error("[Dashboard] panel breakdown postgres period error:", err);
   }
 
-  if (!supabase) {
-    console.warn("[Dashboard] panel breakdown fallback skipped: no supabase client");
-    return { day: [], week: [], month: [], overall: [] };
+  if (breakdown === empty) {
+    if (!supabase) {
+      console.warn("[Dashboard] panel breakdown fallback skipped: no supabase client");
+    } else {
+      try {
+        const fromSupabase = await loadPeriodFromSupabase(supabase);
+        console.log("[Dashboard] panel breakdown loaded", {
+          source: "supabase",
+          day: fromSupabase.day.length,
+          week: fromSupabase.week.length,
+          month: fromSupabase.month.length,
+        });
+        breakdown = { ...fromSupabase, overall: [] };
+      } catch (err) {
+        console.error("[Dashboard] panel breakdown supabase period error:", err);
+      }
+    }
   }
 
-  try {
-    const fromSupabase = await loadPeriodFromSupabase(supabase);
-    console.log("[Dashboard] panel breakdown loaded", {
-      source: "supabase",
-      day: fromSupabase.day.length,
-      week: fromSupabase.week.length,
-      month: fromSupabase.month.length,
-    });
-    return { ...fromSupabase, overall: [] };
-  } catch (err) {
-    console.error("[Dashboard] panel breakdown supabase period error:", err);
-    return { day: [], week: [], month: [], overall: [] };
-  }
+  const [played, playingCounts] = await Promise.all([
+    playedPromise,
+    loadOperatorPlayingPlayerCounts(supabase),
+  ]);
+  return attachPlayingCountsByPeriod(mergePlayedCountsByPeriod(breakdown, played), playingCounts);
 }
 
 export async function loadPanelCommissionBreakdownInRange(
@@ -425,6 +520,9 @@ export async function loadPanelCommissionBreakdownInRange(
   toIso: string,
   supabase?: SupabaseClient
 ): Promise<DashboardPanelOperator[]> {
+  const playedPromise = loadOperatorPlayedPlayerCountsInRange(fromIso, toIso, supabase);
+  let list: DashboardPanelOperator[] | null = null;
+
   try {
     const fromPg = await loadRangeFromPostgres(fromIso, toIso);
     if (fromPg) {
@@ -434,28 +532,36 @@ export async function loadPanelCommissionBreakdownInRange(
         fromIso,
         toIso,
       });
-      return fromPg;
+      list = fromPg;
     }
   } catch (err) {
     console.error("[Dashboard] panel breakdown postgres range error:", err);
   }
 
-  if (!supabase) {
-    console.warn("[Dashboard] panel breakdown range fallback skipped: no supabase client");
-    return [];
+  if (!list) {
+    if (!supabase) {
+      console.warn("[Dashboard] panel breakdown range fallback skipped: no supabase client");
+      list = [];
+    } else {
+      try {
+        const fromSupabase = await loadRangeFromSupabase(supabase, fromIso, toIso);
+        console.log("[Dashboard] panel breakdown range loaded", {
+          source: "supabase",
+          count: fromSupabase.length,
+          fromIso,
+          toIso,
+        });
+        list = fromSupabase;
+      } catch (err) {
+        console.error("[Dashboard] panel breakdown supabase range error:", err);
+        list = [];
+      }
+    }
   }
 
-  try {
-    const fromSupabase = await loadRangeFromSupabase(supabase, fromIso, toIso);
-    console.log("[Dashboard] panel breakdown range loaded", {
-      source: "supabase",
-      count: fromSupabase.length,
-      fromIso,
-      toIso,
-    });
-    return fromSupabase;
-  } catch (err) {
-    console.error("[Dashboard] panel breakdown supabase range error:", err);
-    return [];
-  }
+  const [played, playingCounts] = await Promise.all([
+    playedPromise,
+    loadOperatorPlayingPlayerCounts(supabase),
+  ]);
+  return attachPlayingCounts(mergePlayedCounts(list, played), playingCounts);
 }

@@ -7,32 +7,61 @@ type EntryBannerGate = {
   blocking: boolean;
 };
 
-const listeners = new Set<(gate: EntryBannerGate) => void>();
+type GateStore = {
+  state: EntryBannerGate;
+  listeners: Set<(state: EntryBannerGate) => void>;
+};
 
-let gate: EntryBannerGate = {
+const INITIAL_GATE: EntryBannerGate = {
   settled: false,
   blocking: false,
 };
 
+declare global {
+  interface Window {
+    __wwEntryBannerGate?: GateStore;
+  }
+}
+
+function getStore(): GateStore | null {
+  if (typeof window === "undefined") return null;
+  if (!window.__wwEntryBannerGate) {
+    window.__wwEntryBannerGate = {
+      state: { ...INITIAL_GATE },
+      listeners: new Set(),
+    };
+  }
+  return window.__wwEntryBannerGate;
+}
+
 export function getEntryBannerGate(): EntryBannerGate {
-  return gate;
+  return getStore()?.state ?? INITIAL_GATE;
 }
 
 export function setEntryBannerGate(next: EntryBannerGate) {
-  if (gate.settled === next.settled && gate.blocking === next.blocking) return;
-  gate = next;
-  listeners.forEach((listener) => listener(gate));
+  const store = getStore();
+  if (!store) return;
+  if (
+    store.state.settled === next.settled &&
+    store.state.blocking === next.blocking
+  ) {
+    return;
+  }
+  store.state = next;
+  store.listeners.forEach((listener) => listener(store.state));
 }
 
 export function useEntryBannerGate(): EntryBannerGate {
   const [value, setValue] = useState<EntryBannerGate>(getEntryBannerGate);
 
   useLayoutEffect(() => {
-    setValue(getEntryBannerGate());
+    const store = getStore();
+    if (!store) return;
+    setValue(store.state);
     const listener = (next: EntryBannerGate) => setValue(next);
-    listeners.add(listener);
+    store.listeners.add(listener);
     return () => {
-      listeners.delete(listener);
+      store.listeners.delete(listener);
     };
   }, []);
 
