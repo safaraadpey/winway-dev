@@ -9,14 +9,14 @@ function resolveFirstLobbyRoomPath(): string | null {
   const card = document.querySelector<HTMLElement>(FIRST_LOBBY_ROOM_SELECTOR);
   if (!card) return null;
 
-  const entryRoomId = card.getAttribute("data-entry-room-id");
-  if (entryRoomId) {
-    return `/player/gameroom?roomId=${encodeURIComponent(entryRoomId)}`;
-  }
-
   const templateId = card.getAttribute("data-template-id");
   if (templateId) {
     return `/player/gameroom?templateId=${encodeURIComponent(templateId)}`;
+  }
+
+  const entryRoomId = card.getAttribute("data-entry-room-id");
+  if (entryRoomId) {
+    return `/player/gameroom?roomId=${encodeURIComponent(entryRoomId)}`;
   }
 
   return null;

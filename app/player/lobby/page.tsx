@@ -8,7 +8,6 @@ import LobbyRoomCard from '@/components/LobbyRoomCard';
 import MenuItem from "@/components/theme/MenuItem";
 import FeatureGate from "@/components/features/FeatureGate";
 import { BACKGAMMON_FEATURE_KEY } from "@/lib/backgammon/constants";
-import toast from 'react-hot-toast';
 import styles from './lobby.module.css';
 import { supabase } from "@/lib/supabaseClient";
 import { useSession } from "@/lib/contexts/SessionContext";
@@ -282,23 +281,17 @@ export default function LobbyPage() {
     templateId?: string | null,
     entryRoomId?: string | null
   ) => {
+    if (templateId) {
+      router.push(`/player/gameroom?templateId=${templateId}`);
+      return;
+    }
+
     if (entryRoomId) {
       router.push(`/player/gameroom?roomId=${entryRoomId}`);
       return;
     }
 
-    if (!templateId) {
-      console.error("Template ID is required");
-      return;
-    }
-
-    try {
-      // Fallback: اگر روم waiting پیدا نشود، resolver در API مسیر درست را انتخاب می‌کند
-      router.push(`/player/gameroom?templateId=${templateId}`);
-    } catch (error: any) {
-      console.error("Error in handleRoomClick:", error);
-      toast.error(error.message || "خطا در ورود به اتاق");
-    }
+    console.error("Template ID is required");
   };
 
   if (loading || !hasSnapshot) {

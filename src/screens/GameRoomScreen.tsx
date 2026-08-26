@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "@/lib/contexts/SessionContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 import useScreenWakeLock from "@/lib/hooks/useScreenWakeLock";
@@ -58,6 +59,23 @@ function shouldEnterLiveRoom(
   if (mode === "running") return true;
   const normalized = (status || "").trim().toLowerCase();
   return LIVE_ENTER_STATUSES.has(normalized);
+}
+
+function playerHasReservedCards(
+  userId: string | null | undefined,
+  cards: Array<{
+    id?: string;
+    user_id?: string;
+    count?: number;
+    card_count?: number;
+  }>
+): boolean {
+  if (!userId) return false;
+  return cards.some((card) => {
+    const owner = card.id || card.user_id;
+    const count = card.count ?? card.card_count ?? 0;
+    return owner === userId && count > 0;
+  });
 }
 
 const LOBBY_POLL_MS = 3000;
@@ -208,6 +226,7 @@ export default function GameRoomScreen({
   onEnterLive,
 }: GameRoomScreenProps) {
   const router = useRouter();
+  const { userId: sessionUserId } = useSession();
   const { refreshWalletBalances } = useBalancesContext();
   const { invalidate: invalidateActiveGames, upsertOptimistic: upsertOptimisticActiveRoom } =
     useActiveGamesContext();
@@ -217,10 +236,13 @@ export default function GameRoomScreen({
   const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
   const [gameMode, setGameMode] = useState<GameRoomView["mode"]>("preview");
   const enteredLiveRef = useRef(false);
+  const releasedTemplateIdRef = useRef<string | null>(null);
   const autoBuyLastRoomRef = useRef<string | null>(null);
   const roomInfoRef = useRef<RoomInfo | null>(null);
   const fetchRoomDataRef = useRef<(isInitial: boolean) => Promise<void>>(async () => {});
   const pollIntervalMsRef = useRef(LOBBY_POLL_MS);
+  const userIdRef = useRef<string | null>(null);
+  const hasCardsRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [globalRegistrationLocked, setGlobalRegistrationLocked] = useState(false);
   const [globalRegistrationLockReason, setGlobalRegistrationLockReason] = useState<string | null>(null);
@@ -239,6 +261,18 @@ export default function GameRoomScreen({
 
   // State برای شناسه کاربر فعلی
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const resolvedUserId = sessionUserId || currentUserId;
+  const cardsToRenderForCancel = mergeActiveCardStatuses(
+    activeCards,
+    realtimeActiveCards
+  );
+  const hasReservedCardsForCurrentUser = playerHasReservedCards(
+    resolvedUserId,
+    cardsToRenderForCancel
+  );
+  userIdRef.current = resolvedUserId;
+  hasCardsRef.current = hasReservedCardsForCurrentUser;
+
   const [autoBuySnapshot, setAutoBuySnapshot] = useState<AutoBuySnapshot>({
     active: false,
   });
@@ -263,11 +297,83 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
   const enterLive = () => {
     if (!roomId || enteredLiveRef.current) return;
     enteredLiveRef.current = true;
+    console.log("[Room] Enter live", { roomId });
     onEnterLive?.(roomId);
+  };
+
+  const bounceSpectatorToTemplate = (nextTemplateId?: string | null) => {
+    const tid = (
+      nextTemplateId ||
+      roomInfoRef.current?.templateId ||
+      templateId ||
+      ""
+    ).trim();
+    if (!tid) {
+      console.warn("[Room] Spectator release missing templateId", { roomId });
+      return;
+    }
+    if (releasedTemplateIdRef.current === tid) return;
+    releasedTemplateIdRef.current = tid;
+    enteredLiveRef.current = true;
+
+    setGameMode("preview");
+    setActiveCards([]);
+    setRealtimeActiveCards([]);
+    setCountdownDeadline(null);
+    setCountdownSeconds(0);
+    setRoomInfo((prev) =>
+      prev
+        ? {
+            ...prev,
+            id: tid,
+            roomCode: "",
+            status: "waiting",
+            startsAt: undefined,
+            endsAt: undefined,
+            currentPlayers: 0,
+            canCancel: false,
+            templateId: tid,
+          }
+        : prev
+    );
+
+    const nextUrl = `/player/gameroom?templateId=${encodeURIComponent(tid)}`;
+    console.log("[Room] Spectator stay on template", { roomId, templateId: tid });
+    router.replace(nextUrl);
+    void fetchRoomDataRef.current(false);
+
+    window.setTimeout(() => {
+      if (isHardExiting()) return;
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("roomId")) {
+        window.location.replace(nextUrl);
+      }
+    }, 300);
+  };
+
+  const tryEnterLive = (opts?: {
+    userHasCards?: boolean;
+    templateId?: string | null;
+  }) => {
+    if (!roomId || enteredLiveRef.current) return;
+    if (!userIdRef.current) {
+      console.log("[Room] Defer live enter until user id is ready", { roomId });
+      return;
+    }
+
+    const userHasCards = opts?.userHasCards ?? hasCardsRef.current;
+    if (userHasCards) {
+      enterLive();
+      return;
+    }
+
+    console.log("[Room] Skip live enter; no reserved cards", { roomId });
+    bounceSpectatorToTemplate(opts?.templateId);
   };
 
   useEffect(() => {
     enteredLiveRef.current = false;
+    releasedTemplateIdRef.current = null;
     autoBuyLastRoomRef.current = null;
   }, [roomId]);
 
@@ -284,7 +390,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           setLoading(true);
         }
 
-        if (!roomId && !templateId) {
+        if (!roomId && !templateId && !releasedTemplateIdRef.current) {
           console.warn("[GAME_ROOM][INVALID_STATE]: No roomId and no templateId");
           toast.error("ورود به اتاق نامعتبر است");
           if (isInitial) {
@@ -293,13 +399,17 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           return;
         }
 
-        // گرفتن GameRoomView از API
-        const view: GameRoomView = await fetchGameRoomView({
-          roomId,
-          templateId,
-        });
+        const releasedTid = releasedTemplateIdRef.current;
+        const view: GameRoomView = await fetchGameRoomView(
+          releasedTid ? { templateId: releasedTid } : { roomId, templateId }
+        );
 
-        if (roomId && view.room.id && view.room.id !== roomId) {
+        if (
+          !releasedTid &&
+          roomId &&
+          view.room.id &&
+          view.room.id !== roomId
+        ) {
           console.warn("[GAME_ROOM][ROOM_ID_MISMATCH]", {
             requestedRoomId: roomId,
             returnedRoomId: view.room.id,
@@ -308,10 +418,13 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           return;
         }
 
-        // اگر با templateId وارد شده‌ایم و سرور روم واقعی برگردانده، redirect به roomId
+        // اگر با templateId وارد شده‌ایم و خودمان در روم waiting کارت داریم، به roomId برو.
+        // بیننده بدون کارت روی template می‌ماند تا با استارت بازی به live نرود.
         if (!roomId && templateId && view.mode !== "preview" && view.room.id) {
-          router.replace(`/player/gameroom?roomId=${view.room.id}`);
-          return;
+          if (playerHasReservedCards(userIdRef.current, view.active_cards)) {
+            router.replace(`/player/gameroom?roomId=${view.room.id}`);
+            return;
+          }
         }
 
         // نگاشت GameRoomView به RoomInfo (برای سازگاری UI فعلی)
@@ -376,10 +489,31 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           return;
         }
 
+        const snapshotHasUserCards = playerHasReservedCards(
+          userIdRef.current,
+          view.active_cards
+        );
+        if (
+          !releasedTid &&
+          roomId &&
+          userIdRef.current &&
+          !snapshotHasUserCards &&
+          shouldEnterLiveRoom(view.mode, view.room.status)
+        ) {
+          bounceSpectatorToTemplate(view.room.template_id);
+          return;
+        }
+
         setRoomInfo(mappedRoom);
         setGameMode(view.mode);
-        if (view.mode === "running") {
-          enterLive();
+        if (!releasedTemplateIdRef.current && view.mode === "running") {
+          tryEnterLive({
+            userHasCards: snapshotHasUserCards,
+            templateId: view.room.template_id,
+          });
+        }
+        if (releasedTemplateIdRef.current && !releasedTid) {
+          return;
         }
 
         // محاسبه server offset و deadline برای countdown
@@ -450,25 +584,39 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     };
   }, [roomId, templateId, router]);
 
+  useEffect(() => {
+    if (!resolvedUserId || roomId || !templateId) return;
+    void fetchRoomDataRef.current(false);
+  }, [resolvedUserId, roomId, templateId]);
+
   // Enter live only when the room actually started (not when lobby countdown hits 0).
+  // Spectators watching a waiting room bounce back to the template instead.
   useEffect(() => {
     if (!roomId || enteredLiveRef.current) return;
 
     if (shouldEnterLiveRoom(gameMode, roomInfo?.status)) {
-      enterLive();
+      tryEnterLive({ templateId: roomInfo?.templateId });
     }
-  }, [roomId, gameMode, roomInfo?.status]);
+  }, [
+    roomId,
+    gameMode,
+    roomInfo?.status,
+    roomInfo?.templateId,
+    resolvedUserId,
+    hasReservedCardsForCurrentUser,
+  ]);
 
   useEffect(() => {
     if (!roomId || enteredLiveRef.current) return;
 
     const onDrawRow = (payload: { new: Record<string, unknown> }) => {
+      if (releasedTemplateIdRef.current) return;
       if (!payload.new?.processed_at) return;
       setGameMode("running");
       setRoomInfo((prev) =>
         prev ? { ...prev, status: "playing" } : prev
       );
-      enterLive();
+      tryEnterLive({ templateId: roomInfoRef.current?.templateId });
     };
 
     const channel = supabase
@@ -537,8 +685,9 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
         return;
       }
 
-      // به محض ساخته شدن روم واقعی، همه‌ی کلاینت‌ها به آن روم redirect می‌شوند
-      router.push(`/player/gameroom?roomId=${newRoomId}`);
+      // بیننده را به روم جدید هل نده؛ خریدار بعد از RPC خودش به roomId می‌رود.
+      // snapshot تمپلیت را تازه کن تا صف waiting دیده شود.
+      void fetchRoomDataRef.current(false);
     };
 
     const channel = supabase
@@ -558,7 +707,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [roomId, templateId, router, supabase]);
+  }, [roomId, templateId, supabase]);
 
   // دریافت شناسه کاربر فعلی
   useEffect(() => {
@@ -646,6 +795,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     if (!roomId) return;
   
     const handler = (payload: any) => {
+      if (releasedTemplateIdRef.current) return;
       const newRoomId = (payload.new as any)?.room_id ?? null;
       const oldRoomId = (payload.old as any)?.room_id ?? null;
 
@@ -772,6 +922,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     if (!roomId) return;
 
     const handler = (payload: any) => {
+      if (releasedTemplateIdRef.current) return;
       const newRoom = payload.new as any;
       const oldRoom = payload.old as any;
 
@@ -782,26 +933,35 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
         at: new Date().toISOString(),
       });
 
-      // بروزرسانی roomInfo از روی payload جدید
+      const nextStatus = (newRoom.status ?? "") as string;
+      const becameLive =
+        nextStatus === "playing" ||
+        nextStatus === "running" ||
+        nextStatus === "live";
+
       setRoomInfo((prev) => {
         if (!prev) return prev;
         if (prev.id !== newRoom.id) return prev;
 
-        const nextStatus = newRoom.status ?? prev.status;
-        if (nextStatus === "playing" || nextStatus === "running" || nextStatus === "live") {
+        if (becameLive) {
           setGameMode("running");
-          enterLive();
         } else if (nextStatus === "finished" || nextStatus === "settling") {
           setGameMode("finished");
         }
 
         return {
           ...prev,
-          status: nextStatus,
+          status: nextStatus || prev.status,
           startsAt: newRoom.starts_at ?? prev.startsAt,
           endsAt: newRoom.ends_at ?? prev.endsAt,
         };
       });
+
+      if (becameLive) {
+        tryEnterLive({
+          templateId: newRoom.room_template_id ?? roomInfoRef.current?.templateId,
+        });
+      }
 
       // چک کردن لغو روم و redirect به template
       if (newRoom.status === "cancelled" || newRoom.status === "canceled") {
@@ -853,17 +1013,6 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     };
   }, [roomId, supabase, router, roomInfo?.templateId]);
 
-  // محاسبه cardsToRender برای استفاده در محاسبه canCancel
-  const cardsToRenderForCancel = mergeActiveCardStatuses(
-    activeCards,
-    realtimeActiveCards
-  );
-
-  // بررسی اینکه آیا کاربر فعلی کارت فعال دارد
-  const hasReservedCardsForCurrentUser = Boolean(
-    currentUserId &&
-    cardsToRenderForCancel.some((card) => card.id === currentUserId && card.count > 0)
-  );
   const totalPlayersWithCards =
   cardsToRenderForCancel.filter((card) => card.count > 0).length;
   // بازیکن فقط در 8 ثانیه آخر countdown و فقط اگر کارت فعال داشته باشد اجازه لغو رزرو دارد
@@ -1153,8 +1302,8 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
       // چیپ فعال را فوری نشان بده؛ snapshot بعدی لیست را اصلاح می‌کند.
       if (targetRoomId) {
         const prevUserCards =
-          targetRoomId === roomId && currentUserId
-            ? cardsToRenderForCancel.find((c) => c.id === currentUserId)?.count ?? 0
+          targetRoomId === roomId && resolvedUserId
+            ? cardsToRenderForCancel.find((c) => c.id === resolvedUserId)?.count ?? 0
             : 0;
         const nextCardCount = Math.max(1, prevUserCards + selectedQuantity);
         upsertOptimisticActiveRoom?.({

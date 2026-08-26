@@ -55,8 +55,13 @@ export default function GameRoomClient() {
 
   // roomId in URL changed → leave live view for the new lobby session
   useEffect(() => {
+    if (!roomId) {
+      setLiveRoomId(null);
+      pendingLiveRoomIdRef.current = null;
+      return;
+    }
     setLiveRoomId((current) =>
-      current && roomId && current !== roomId ? null : current
+      current && current !== roomId ? null : current
     );
     pendingLiveRoomIdRef.current = null;
   }, [roomId]);
