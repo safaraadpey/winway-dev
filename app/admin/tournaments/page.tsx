@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { supabase } from "@/lib/supabaseClient";
-import { TournamentFormValues } from "./TournamentForm";
+import { TournamentFormValues, buildEqualPrizePercents } from "./TournamentForm";
 
 type TournamentRow = {
   id: string;
@@ -19,6 +19,10 @@ type TournamentRow = {
   table_size_fixed: number | null;
   table_size_min: number | null;
   table_size_max: number | null;
+  later_round_table_size_mode?: string | null;
+  later_round_table_size_fixed?: number | null;
+  later_round_table_size_min?: number | null;
+  later_round_table_size_max?: number | null;
   remainder_policy: string | null;
   commission_rate: number | null;
   guaranteed_prize: number | null;
@@ -29,6 +33,7 @@ type TournamentRow = {
 };
 
 function mapToFormValues(row: TournamentRow): TournamentFormValues {
+  const finalWinnersCount = (row.meta as any)?.final_winners_count ?? 1;
   return {
     title: row.title || "",
     status: row.status || "draft",
@@ -42,12 +47,21 @@ function mapToFormValues(row: TournamentRow): TournamentFormValues {
     table_size_fixed: row.table_size_fixed ?? null,
     table_size_min: row.table_size_min ?? null,
     table_size_max: row.table_size_max ?? null,
+    later_round_table_size_mode:
+      row.later_round_table_size_mode || row.table_size_mode || "fixed",
+    later_round_table_size_fixed:
+      row.later_round_table_size_fixed ?? row.table_size_fixed ?? null,
+    later_round_table_size_min:
+      row.later_round_table_size_min ?? row.table_size_min ?? null,
+    later_round_table_size_max:
+      row.later_round_table_size_max ?? row.table_size_max ?? null,
     remainder_policy: row.remainder_policy || "adaptive_tables",
     commission_rate: row.commission_rate ?? 0,
     guaranteed_prize: row.guaranteed_prize ?? 0,
     min_players_to_start:
       (row.meta as any)?.min_players_to_start ?? 3,
-    final_winners_count: (row.meta as any)?.final_winners_count ?? 1,
+    final_winners_count: finalWinnersCount,
+    prize_percentages: buildEqualPrizePercents(finalWinnersCount),
     registration_extend_enabled:
       (row.meta as any)?.registration_extend_enabled !== false,
     registration_extend_minutes:
