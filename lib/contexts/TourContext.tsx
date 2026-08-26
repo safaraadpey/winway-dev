@@ -14,6 +14,7 @@ import { usePathname } from "next/navigation";
 import { TourOverlay } from "@/components/tour/TourOverlay";
 import { useSession } from "@/lib/contexts/SessionContext";
 import { HARD_EXIT_EVENT } from "@/lib/auth/hardExit";
+import { useEntryBannerGate } from "@/lib/entry-banner-gate";
 import { getTourConfig } from "@/lib/tour/registry";
 import { tourStorage } from "@/lib/tour/storage";
 import type {
@@ -79,6 +80,10 @@ function tourNavigationPath(config: TourConfig): string {
 export function TourProvider({ children }: { children: ReactNode }) {
   const { userId, authReady } = useSession();
   const pathname = usePathname();
+  const entryBannerGate = useEntryBannerGate();
+  const bannerBlocksHomeTour =
+    (pathname === "/player/home" || pathname.startsWith("/player/home/")) &&
+    (!entryBannerGate.settled || entryBannerGate.blocking);
   const [active, setActive] = useState<ActiveTour | null>(null);
   const autoStartLockRef = useRef(false);
   const customActionLockRef = useRef(false);
@@ -360,6 +365,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!authReady || !userId || typeof window === "undefined") return;
+    if (bannerBlocksHomeTour) return;
     const raw = window.sessionStorage.getItem(PENDING_TOUR_KEY);
     if (!raw) return;
 
@@ -383,7 +389,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
     } catch {
       window.sessionStorage.removeItem(PENDING_TOUR_KEY);
     }
-  }, [activate, authReady, userId]);
+  }, [activate, authReady, bannerBlocksHomeTour, userId]);
 
   useEffect(() => {
     if (!active?.config.route || !pathname) return;
@@ -444,7 +450,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
   return (
     <TourContext.Provider value={value}>
       {children}
-      {active ? (
+      {active && !bannerBlocksHomeTour ? (
         <TourOverlay
           tour={active.config}
           stepIndex={active.stepIndex}

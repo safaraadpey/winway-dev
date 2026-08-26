@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   peekCachedActiveBanners,
@@ -13,6 +13,7 @@ import {
   filterEntryBannersForToday,
   snoozeEntryBannerForToday,
 } from "@/lib/entry-banner-snooze";
+import { setEntryBannerGate } from "@/lib/entry-banner-gate";
 
 type EntryBannerModalProps = {
   visibleOnPaths?: string[];
@@ -145,6 +146,15 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
   }, [banners, currentBannerIndex]);
 
   const currentBanner = banners[currentBannerIndex];
+  const blockingOnThisPath =
+    shouldShowOnThisPath && (loading || banners.length > 0);
+
+  useLayoutEffect(() => {
+    setEntryBannerGate({ settled: true, blocking: blockingOnThisPath });
+    return () => {
+      setEntryBannerGate({ settled: true, blocking: false });
+    };
+  }, [blockingOnThisPath]);
 
   if (!shouldShowOnThisPath) {
     return null;

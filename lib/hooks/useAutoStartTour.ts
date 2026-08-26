@@ -17,7 +17,11 @@ export function useAutoStartTour(
   const attemptedRef = useRef(false);
 
   useEffect(() => {
-    if (!ready || attemptedRef.current) return;
+    if (!ready) {
+      attemptedRef.current = false;
+      return;
+    }
+    if (attemptedRef.current) return;
     attemptedRef.current = true;
 
     void (async () => {
