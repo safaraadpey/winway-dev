@@ -86,6 +86,18 @@ function computeCountdownSeconds(
   return Math.max(0, Math.floor((starts - now) / 1000));
 }
 
+function isWaitingCountdownElapsed(
+  status: string | null,
+  startsAt: string | null,
+  serverNowIso: string
+): boolean {
+  if ((status || "").toLowerCase() !== "waiting") return false;
+  if (!startsAt) return false;
+  const startsMs = Date.parse(startsAt);
+  const nowMs = Date.parse(serverNowIso);
+  return Number.isFinite(startsMs) && Number.isFinite(nowMs) && startsMs <= nowMs;
+}
+
 function templateRequiresPassword(password: string | null | undefined): boolean {
   return typeof password === "string" && password.trim().length > 0;
 }
@@ -460,8 +472,13 @@ async function buildViewFromTemplateId(
     const myActiveRooms = roomRows
       .filter((room) => myRoomIds.has(room.id))
       .sort(sortByPriority);
-    const selectedRoom =
-      myActiveRooms[0] ?? roomRows.slice().sort(sortByPriority)[0];
+    const spectatorJoinableRooms = roomRows
+      .filter(
+        (room) =>
+          !isWaitingCountdownElapsed(room.status, room.starts_at, serverNow)
+      )
+      .sort(sortByPriority);
+    const selectedRoom = myActiveRooms[0] ?? spectatorJoinableRooms[0];
 
     if (selectedRoom?.id) {
       return buildViewFromRoomId(

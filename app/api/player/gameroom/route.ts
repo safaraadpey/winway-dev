@@ -450,8 +450,14 @@ async function buildViewFromTemplateId(
 
     const myRoomIds = new Set(((myTickets || []) as Array<{ room_id: string | null }>).map((t) => t.room_id).filter((id): id is string => Boolean(id)));
     const myActiveRooms = roomRows.filter((room) => myRoomIds.has(room.id)).sort(sortByPriority);
+    const spectatorJoinableRooms = roomRows
+      .filter(
+        (room) =>
+          !isWaitingCountdownElapsed(room.status, room.starts_at, serverNow)
+      )
+      .sort(sortByPriority);
 
-    const selectedRoom = myActiveRooms[0] ?? roomRows.slice().sort(sortByPriority)[0];
+    const selectedRoom = myActiveRooms[0] ?? spectatorJoinableRooms[0];
 
     if (selectedRoom?.id) {
       return buildViewFromRoomId(
