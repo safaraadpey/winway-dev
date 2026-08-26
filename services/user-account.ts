@@ -4,14 +4,20 @@
 
 import { supabase } from "@/lib/supabaseClient";
 import {
-  commissionStatFromDateForPeriod,
   getRollingWeekStart,
   getRollingMonthStart,
   loadCommissionDailyStatRows,
   loadCommissionDailyTotals,
   sumCommissionDailyRows,
   type CommissionDailyStatRow,
+  type CommissionDailyTotals,
 } from "@/lib/dashboard/loadCommissionDailyStats";
+import {
+  emptyCommissionTotals,
+  loadOperatorCommissionSummaryRange,
+  loadOperatorPeriodCommissionSummary,
+  type OperatorPeriodCommissionMap,
+} from "@/lib/dashboard/loadOperatorCommissionSummary";
 import type { AdminSubRole } from "@/lib/auth-helpers";
 import type {
   UserAccountData,
@@ -293,9 +299,10 @@ type MonthlyActivitySource =
       ticketRows: TicketActivityRow[];
     }
   | {
-      kind: "commission_daily_stats";
+      kind: "operator_commission";
       resultsRows: Array<{ win_type: string; created_at: string }>;
       commissionDailyRows: CommissionDailyStatRow[];
+      periodTotals: OperatorPeriodCommissionMap;
       panelCashflowRows: PanelCashflowRow[];
       ticketRows: TicketActivityRow[];
     }
@@ -368,16 +375,22 @@ async function loadMonthlyActivitySource(
   }
 
   if (userRole === "agent" || userRole === "super") {
-    const [resultsRes, panelCashflowRows, commissionDailyRes, ticketsRes] = await Promise.all([
-      resultsPromise,
-      panelCashflowPromise,
-      loadCommissionDailyStatRows({
-        supabase,
-        userId,
-        role: userRole,
-      }).then((rows) => ({ data: rows, error: null })),
-      ticketsPromise,
-    ]);
+    const [resultsRes, panelCashflowRows, commissionDailyRows, periodTotals, ticketsRes] =
+      await Promise.all([
+        resultsPromise,
+        panelCashflowPromise,
+        loadCommissionDailyStatRows({
+          supabase,
+          userId,
+          role: userRole,
+        }),
+        loadOperatorPeriodCommissionSummary({
+          supabase,
+          userId,
+          role: userRole,
+        }),
+        ticketsPromise,
+      ]);
 
     if (resultsRes.error) {
       console.error("loadMonthlyActivitySource: results error", resultsRes.error);
@@ -387,10 +400,11 @@ async function loadMonthlyActivitySource(
     }
 
     return {
-      kind: "commission_daily_stats",
+      kind: "operator_commission",
       resultsRows: (resultsRes.data || []) as any,
       panelCashflowRows,
-      commissionDailyRows: (commissionDailyRes.data || []) as CommissionDailyStatRow[],
+      commissionDailyRows,
+      periodTotals,
       ticketRows: (ticketsRes.data || []) as TicketActivityRow[],
     };
   }
@@ -484,9 +498,15 @@ function buildActivitiesFromMonthlySource(
       return { commission, commissionTotal };
     }
 
-    if (source.kind === "commission_daily_stats") {
-      const fromDate = commissionStatFromDateForPeriod(period);
-      const totals = sumCommissionDailyRows(source.commissionDailyRows, { fromDate });
+    if (source.kind === "operator_commission") {
+      if (period === "overall") {
+        const totals = sumCommissionDailyRows(source.commissionDailyRows);
+        return {
+          commission: totals.earnedAmount,
+          commissionTotal: totals.commissionBase,
+        };
+      }
+      const totals = source.periodTotals[period];
       return {
         commission: totals.earnedAmount,
         commissionTotal: totals.commissionBase,
@@ -1035,12 +1055,25 @@ async function calculateUserActivity(
         0
       );
     } else if (userRole === "agent" || userRole === "super") {
-      const totals = await loadCommissionDailyTotals({
-        supabase,
-        userId,
-        role: userRole,
-        fromDate: commissionStatFromDateForPeriod(period),
-      });
+      let totals: CommissionDailyTotals;
+      if (period === "overall") {
+        totals = await loadCommissionDailyTotals({
+          supabase,
+          userId,
+          role: userRole,
+        });
+      } else if (periodStartIso) {
+        const toIso = new Date().toISOString();
+        totals = await loadOperatorCommissionSummaryRange({
+          supabase,
+          userId,
+          role: userRole,
+          fromIso: periodStartIso,
+          toIso,
+        });
+      } else {
+        totals = emptyCommissionTotals();
+      }
       commission = totals.earnedAmount;
       commissionTotal = totals.commissionBase;
     } else if (userRole === "admin") {
@@ -1602,12 +1635,12 @@ export async function loadUserAccountRangeActivity(
       0
     );
   } else if (userRole === "agent" || userRole === "super") {
-    const totals = await loadCommissionDailyTotals({
+    const totals = await loadOperatorCommissionSummaryRange({
       supabase,
       userId,
       role: userRole,
-      fromDate,
-      toDate,
+      fromIso,
+      toIso,
     });
     commission = totals.earnedAmount;
     commissionTotal = totals.commissionBase;

@@ -1,12 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { pgPool } from "@/lib/pg";
-import {
-  dateIsoFromUtcDate,
-  getRollingWeekStart,
-  getRollingMonthStart,
-  loadPanelOperatorDailyRows,
-  type PanelOperatorDailyRow,
-} from "@/lib/dashboard/loadCommissionDailyStats";
+import { getRollingWeekStart, getRollingMonthStart } from "@/lib/dashboard/loadCommissionDailyStats";
 import type { DashboardPanelOperator, DashboardPeriod } from "@/src/types/dashboard";
 
 type PeriodAmountRow = {
@@ -55,46 +49,112 @@ function toOperator(
   };
 }
 
-function monthStartDateUtc(): string {
-  return dateIsoFromUtcDate(getRollingMonthStart());
+type OperatorEarnedEvent = {
+  userId: string;
+  role: "agent" | "super";
+  created_at: string;
+  amount: number;
+};
+
+function addEarned(
+  map: Map<string, { role: "agent" | "super"; amount: number }>,
+  userId: string,
+  role: "agent" | "super",
+  amount: number
+) {
+  if (!userId || amount <= 0) return;
+  const current = map.get(userId);
+  if (current) {
+    current.amount += amount;
+    return;
+  }
+  map.set(userId, { role, amount });
 }
 
-function dayStartDateUtc(): string {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
-    .toISOString()
-    .slice(0, 10);
-}
-
-function weekStartDateUtc(): string {
-  return dateIsoFromUtcDate(getRollingWeekStart());
-}
-
-function collectPanelAmounts(
-  rows: PanelOperatorDailyRow[],
-  fromDate: string,
-  toDate?: string
+function collectAmountsSince(
+  events: OperatorEarnedEvent[],
+  fromIso: string,
+  toIso?: string
 ): Map<string, { role: "agent" | "super"; amount: number }> {
   const map = new Map<string, { role: "agent" | "super"; amount: number }>();
+  for (const event of events) {
+    if (event.created_at < fromIso) continue;
+    if (toIso && event.created_at > toIso) continue;
+    addEarned(map, event.userId, event.role, event.amount);
+  }
+  return map;
+}
 
-  for (const row of rows) {
-    if (row.stat_date < fromDate) continue;
-    if (toDate && row.stat_date > toDate) continue;
+function addEvent(
+  events: OperatorEarnedEvent[],
+  userId: string,
+  role: "agent" | "super",
+  amount: number,
+  createdAt: string
+) {
+  if (!userId || amount <= 0) return;
+  events.push({ userId, role, created_at: createdAt, amount });
+}
 
-    const userId = String(row.user_id);
-    const role = normalizeRole(String(row.role));
-    const amount = Number(row.earned_amount || 0);
-    if (!userId || amount <= 0) continue;
+async function loadOperatorEarnedEventsFromSupabase(
+  supabase: SupabaseClient,
+  fromIso: string,
+  toIso?: string | null
+): Promise<OperatorEarnedEvent[]> {
+  const pageSize = 1000;
+  const events: OperatorEarnedEvent[] = [];
 
-    const current = map.get(userId);
-    if (current) {
-      current.amount += amount;
-      continue;
+  const pushRow = (row: {
+    agent_id?: string | null;
+    super_id?: string | null;
+    agent_amount?: number | null;
+    super_amount?: number | null;
+    created_at?: string | null;
+  }) => {
+    const createdAt = String(row.created_at || "");
+    if (!createdAt) return;
+    addEvent(events, String(row.agent_id || ""), "agent", Number(row.agent_amount || 0), createdAt);
+    addEvent(events, String(row.super_id || ""), "super", Number(row.super_amount || 0), createdAt);
+  };
+
+  for (let from = 0; ; from += pageSize) {
+    let query = supabase
+      .from("commissions_log")
+      .select("agent_id, super_id, agent_amount, super_amount, created_at")
+      .eq("status", "settled")
+      .gte("created_at", fromIso)
+      .order("created_at", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (toIso) query = query.lte("created_at", toIso);
+    const { data, error } = await query;
+    if (error) {
+      console.error("[Dashboard] panel breakdown commissions_log fallback error:", error.message);
+      break;
     }
-    map.set(userId, { role, amount });
+    const rows = data || [];
+    for (const row of rows) pushRow(row);
+    if (rows.length < pageSize) break;
   }
 
-  return map;
+  for (let from = 0; ; from += pageSize) {
+    let query = supabase
+      .from("tournament_commission_snapshots")
+      .select("agent_id, super_id, agent_amount, super_amount, created_at")
+      .gte("created_at", fromIso)
+      .order("created_at", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (toIso) query = query.lte("created_at", toIso);
+    const { data, error } = await query;
+    if (error) {
+      console.error("[Dashboard] panel breakdown tournament fallback error:", error.message);
+      break;
+    }
+    const rows = data || [];
+    for (const row of rows) pushRow(row);
+    if (rows.length < pageSize) break;
+  }
+
+  return events;
 }
 
 async function loadPeriodFromPostgres(): Promise<Record<
@@ -105,20 +165,53 @@ async function loadPeriodFromPostgres(): Promise<Record<
 
   const result = await pgPool.query<PeriodAmountRow>(
     `
+    with b as (
+      select now() as n
+    ),
+    events as (
+      select c.agent_id as user_id, 'agent'::text as role, c.created_at, c.agent_amount as earned
+      from public.commissions_log c
+      cross join b
+      where c.status = 'settled'
+        and c.agent_id is not null
+        and c.agent_amount > 0
+        and c.created_at >= b.n - interval '30 days'
+      union all
+      select c.super_id, 'super', c.created_at, c.super_amount
+      from public.commissions_log c
+      cross join b
+      where c.status = 'settled'
+        and c.super_id is not null
+        and c.super_amount > 0
+        and c.created_at >= b.n - interval '30 days'
+      union all
+      select s.agent_id, 'agent', s.created_at, s.agent_amount
+      from public.tournament_commission_snapshots s
+      cross join b
+      where s.agent_id is not null
+        and s.agent_amount > 0
+        and s.created_at >= b.n - interval '30 days'
+      union all
+      select s.super_id, 'super', s.created_at, s.super_amount
+      from public.tournament_commission_snapshots s
+      cross join b
+      where s.super_id is not null
+        and s.super_amount > 0
+        and s.created_at >= b.n - interval '30 days'
+    )
     select
-      s.user_id::text as user_id,
-      s.role::text as role,
+      e.user_id::text as user_id,
+      e.role::text as role,
       coalesce(nullif(btrim(p.nickname), ''), nullif(btrim(u.username), ''), 'پنل') as display_name,
-      coalesce(sum(s.earned_amount) filter (where s.stat_date >= date_trunc('day', now())::date), 0) as day_amount,
-      coalesce(sum(s.earned_amount) filter (where s.stat_date >= (now() - interval '7 days')::date), 0) as week_amount,
-      coalesce(sum(s.earned_amount) filter (where s.stat_date >= (now() - interval '30 days')::date), 0) as month_amount
-    from public.commission_daily_stats s
-    join public.users u on u.id = s.user_id
-    left join public.user_profiles p on p.user_id = s.user_id
-    where s.stat_date >= (now() - interval '30 days')::date
-      and s.earned_amount > 0
-      and u.role in ('agent', 'super')
-    group by s.user_id, s.role, u.role, p.nickname, u.username
+      coalesce(sum(e.earned) filter (where e.created_at >= date_trunc('day', b.n)), 0) as day_amount,
+      coalesce(sum(e.earned) filter (where e.created_at >= b.n - interval '7 days'), 0) as week_amount,
+      coalesce(sum(e.earned) filter (where e.created_at >= b.n - interval '30 days'), 0) as month_amount
+    from events e
+    cross join b
+    join public.users u on u.id = e.user_id
+    left join public.user_profiles p on p.user_id = e.user_id
+    where u.role in ('agent', 'super')
+    group by e.user_id, e.role, u.role, p.nickname, u.username
     `
   );
 
@@ -144,27 +237,52 @@ async function loadRangeFromPostgres(
 ): Promise<DashboardPanelOperator[] | null> {
   if (!pgPool) return null;
 
-  const fromDate = fromIso.slice(0, 10);
-  const toDate = toIso.slice(0, 10);
-
   const result = await pgPool.query<RangeAmountRow>(
     `
+    with events as (
+      select c.agent_id as user_id, 'agent'::text as role, c.agent_amount as earned
+      from public.commissions_log c
+      where c.status = 'settled'
+        and c.agent_id is not null
+        and c.agent_amount > 0
+        and c.created_at >= $1::timestamptz
+        and c.created_at <= $2::timestamptz
+      union all
+      select c.super_id, 'super', c.super_amount
+      from public.commissions_log c
+      where c.status = 'settled'
+        and c.super_id is not null
+        and c.super_amount > 0
+        and c.created_at >= $1::timestamptz
+        and c.created_at <= $2::timestamptz
+      union all
+      select s.agent_id, 'agent', s.agent_amount
+      from public.tournament_commission_snapshots s
+      where s.agent_id is not null
+        and s.agent_amount > 0
+        and s.created_at >= $1::timestamptz
+        and s.created_at <= $2::timestamptz
+      union all
+      select s.super_id, 'super', s.super_amount
+      from public.tournament_commission_snapshots s
+      where s.super_id is not null
+        and s.super_amount > 0
+        and s.created_at >= $1::timestamptz
+        and s.created_at <= $2::timestamptz
+    )
     select
-      s.user_id::text as user_id,
-      s.role::text as role,
+      e.user_id::text as user_id,
+      e.role::text as role,
       coalesce(nullif(btrim(p.nickname), ''), nullif(btrim(u.username), ''), 'پنل') as display_name,
-      coalesce(sum(s.earned_amount), 0) as amount
-    from public.commission_daily_stats s
-    join public.users u on u.id = s.user_id
-    left join public.user_profiles p on p.user_id = s.user_id
-    where s.stat_date >= $1::date
-      and s.stat_date <= $2::date
-      and s.earned_amount > 0
-      and u.role in ('agent', 'super')
-    group by s.user_id, s.role, u.role, p.nickname, u.username
-    having coalesce(sum(s.earned_amount), 0) > 0
+      coalesce(sum(e.earned), 0) as amount
+    from events e
+    join public.users u on u.id = e.user_id
+    left join public.user_profiles p on p.user_id = e.user_id
+    where u.role in ('agent', 'super')
+    group by e.user_id, e.role, u.role, p.nickname, u.username
+    having coalesce(sum(e.earned), 0) > 0
     `,
-    [fromDate, toDate]
+    [fromIso, toIso]
   );
 
   return sortOperators(
@@ -230,19 +348,19 @@ function operatorsFromAmountMap(
 async function loadPeriodFromSupabase(
   supabase: SupabaseClient
 ): Promise<Record<Exclude<DashboardPeriod, "overall">, DashboardPanelOperator[]>> {
-  const monthDate = monthStartDateUtc();
-  const rows = await loadPanelOperatorDailyRows({
-    supabase,
-    fromDate: monthDate,
-  });
-  const dayDate = dayStartDateUtc();
-  const weekDate = weekStartDateUtc();
-  const monthAmounts = collectPanelAmounts(rows, monthDate);
+  const now = new Date();
+  const dayIso = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  ).toISOString();
+  const weekIso = getRollingWeekStart(now).toISOString();
+  const monthIso = getRollingMonthStart(now).toISOString();
+  const events = await loadOperatorEarnedEventsFromSupabase(supabase, monthIso);
+  const monthAmounts = collectAmountsSince(events, monthIso);
   const names = await resolveOperatorNames(supabase, [...monthAmounts.keys()]);
 
   return {
-    day: operatorsFromAmountMap(collectPanelAmounts(rows, dayDate), names),
-    week: operatorsFromAmountMap(collectPanelAmounts(rows, weekDate), names),
+    day: operatorsFromAmountMap(collectAmountsSince(events, dayIso), names),
+    week: operatorsFromAmountMap(collectAmountsSince(events, weekIso), names),
     month: operatorsFromAmountMap(monthAmounts, names),
   };
 }
@@ -252,12 +370,8 @@ async function loadRangeFromSupabase(
   fromIso: string,
   toIso: string
 ): Promise<DashboardPanelOperator[]> {
-  const rows = await loadPanelOperatorDailyRows({
-    supabase,
-    fromDate: fromIso.slice(0, 10),
-    toDate: toIso.slice(0, 10),
-  });
-  const amounts = collectPanelAmounts(rows, fromIso.slice(0, 10), toIso.slice(0, 10));
+  const events = await loadOperatorEarnedEventsFromSupabase(supabase, fromIso, toIso);
+  const amounts = collectAmountsSince(events, fromIso, toIso);
   const names = await resolveOperatorNames(supabase, [...amounts.keys()]);
   return operatorsFromAmountMap(amounts, names);
 }
@@ -265,7 +379,8 @@ async function loadRangeFromSupabase(
 /**
  * Per-agent / per-super commission that makes up admin "کانیات پنل‌ها".
  *
- * Source of truth: public.commission_daily_stats (lifetime-safe rollup).
+ * Week/month use the same timestamp windows as the admin dashboard
+ * (now()-7d / now()-30d on created_at). Overall still lives in daily rollup.
  */
 export async function loadPanelCommissionBreakdownByPeriod(
   supabase?: SupabaseClient
