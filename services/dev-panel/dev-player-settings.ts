@@ -51,3 +51,19 @@ export async function saveDevPlayerJoinPreset(
     body: payload,
   });
 }
+
+export type SaveDevPlayerTemplateJoinSettingPayload = {
+  template_id: string;
+  join_delay_max_seconds: number;
+};
+
+export async function saveDevPlayerTemplateJoinSettings(
+  settings: SaveDevPlayerTemplateJoinSettingPayload[]
+): Promise<Array<{ templateId: string; joinDelayMaxSeconds: number; updatedAt: string | null }>> {
+  return callDevPanelApi<
+    Array<{ templateId: string; joinDelayMaxSeconds: number; updatedAt: string | null }>
+  >("/api/dev-panel/template-join-settings", {
+    method: "PUT",
+    body: { settings },
+  });
+}

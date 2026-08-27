@@ -1,5 +1,10 @@
 import type { SupabaseAdmin } from "../db/supabase-admin.js";
 import { parseSchedulerBehaviorState } from "../domain/dev-players/behaviorState.js";
+import { unionAllowedPricesFromProfiles } from "../domain/dev-players/profileTemplateUnion.js";
+import {
+  DEFAULT_TEMPLATE_JOIN_DELAY_MAX_SECONDS,
+  normalizeJoinDelayMaxSeconds,
+} from "../domain/dev-players/joinDelay.js";
 import type {
   DevPlayerConfigSnapshot,
   DevPlayerJoinPresetSnapshot,
@@ -13,6 +18,28 @@ import type {
   SchedulerBehaviorState,
   TemplateLimitSnapshot,
 } from "../domain/dev-players/types.js";
+
+export interface EngineEnabledProfileSnapshot {
+  id: string;
+  playWindows: PlayWindow[];
+  allowedPrices: number[];
+}
+
+function mapRoomTemplateRow(row: Record<string, unknown>): RoomTemplateSnapshot {
+  return {
+    id: String(row.id),
+    name: String(row.name || ""),
+    price: Number(row.price ?? 0),
+    vip: Boolean(row.vip),
+    roomType: String(row.room_type || "normal"),
+    status: String(row.status || "active"),
+    maxCardsPerPlayer: Math.max(1, Number(row.max_cards_per_player ?? 1)),
+    maxPlayers:
+      row.max_players === null || row.max_players === undefined
+        ? null
+        : Number(row.max_players),
+  };
+}
 
 function fail(op: string, message: string): never {
   throw new Error(`devPlayerRepo ${op}: ${message}`);
@@ -141,25 +168,97 @@ export class DevPlayerRepo {
     };
   }
 
+  async getEngineEnabledProfiles(): Promise<EngineEnabledProfileSnapshot[]> {
+    const { data, error } = await this.db
+      .from("dev_player_profiles")
+      .select("id, play_windows, allowed_prices")
+      .eq("engine_enabled", true);
+    if (error) fail("getEngineEnabledProfiles", error.message);
+
+    return (data ?? []).map((row) => ({
+      id: String(row.id),
+      playWindows: mapPlayWindows(row.play_windows),
+      allowedPrices: Array.isArray(row.allowed_prices)
+        ? row.allowed_prices.map((price: unknown) => Number(price))
+        : [],
+    }));
+  }
+
   async getEnabledPlayerConfigs(): Promise<DevPlayerConfigSnapshot[]> {
     const { data, error } = await this.db
-      .from("dev_player_configs")
-      .select("user_id, play_windows, min_room_price, max_room_price, max_ticket_count")
-      .eq("is_enabled", true);
+      .from("dev_player_profile_members")
+      .select(
+        "user_id, dev_player_profiles!inner(play_windows, allowed_prices, engine_enabled)"
+      )
+      .eq("dev_player_profiles.engine_enabled", true);
     if (error) fail("getEnabledPlayerConfigs", error.message);
-    return (data ?? []).map((row) => ({
-      userId: String(row.user_id),
-      playWindows: mapPlayWindows(row.play_windows),
-      minRoomPrice:
-        row.min_room_price === null || row.min_room_price === undefined
-          ? null
-          : Number(row.min_room_price),
-      maxRoomPrice:
-        row.max_room_price === null || row.max_room_price === undefined
-          ? null
-          : Number(row.max_room_price),
-      maxTicketCount: Number(row.max_ticket_count ?? 1),
-    }));
+
+    const byUserId = new Map<string, DevPlayerConfigSnapshot>();
+
+    for (const row of data ?? []) {
+      const userId = String(row.user_id);
+      const profileRowRaw = (row as { dev_player_profiles?: unknown }).dev_player_profiles;
+      const profileRow = (
+        Array.isArray(profileRowRaw) ? profileRowRaw[0] : profileRowRaw
+      ) as Record<string, unknown> | undefined;
+      if (!profileRow || !Boolean(profileRow.engine_enabled)) continue;
+
+      const snapshot = byUserId.get(userId) ?? { userId, profiles: [] };
+      snapshot.profiles.push({
+        playWindows: mapPlayWindows(profileRow.play_windows),
+        allowedPrices: Array.isArray(profileRow.allowed_prices)
+          ? profileRow.allowed_prices.map((price: unknown) => Number(price))
+          : [],
+      });
+      byUserId.set(userId, snapshot);
+    }
+
+    return Array.from(byUserId.values()).filter((player) => player.profiles.length > 0);
+  }
+
+  async getTemplatesForEnabledProfiles(): Promise<RoomTemplateSnapshot[]> {
+    const profiles = await this.getEngineEnabledProfiles();
+    const allowedPrices = unionAllowedPricesFromProfiles(profiles);
+    if (allowedPrices.length === 0) return [];
+
+    const { data, error } = await this.db
+      .from("room_templates")
+      .select("id, name, price, vip, room_type, status, max_cards_per_player, max_players")
+      .in("status", ["active", "draining"])
+      .in("price", allowedPrices);
+    if (error) fail("getTemplatesForEnabledProfiles", error.message);
+
+    return (data ?? []).map((row) => mapRoomTemplateRow(row as Record<string, unknown>));
+  }
+
+  async getTemplateJoinDelaySettings(): Promise<Map<string, number>> {
+    const { data, error } = await this.db
+      .from("dev_player_template_join_settings")
+      .select("template_id, join_delay_max_seconds");
+    if (error) fail("getTemplateJoinDelaySettings", error.message);
+
+    const settings = new Map<string, number>();
+    for (const row of data ?? []) {
+      settings.set(
+        String(row.template_id),
+        normalizeJoinDelayMaxSeconds(row.join_delay_max_seconds)
+      );
+    }
+    return settings;
+  }
+
+  async hasPendingScheduleForTemplate(templateId: string): Promise<boolean> {
+    const { count, error } = await this.db
+      .from("dev_room_schedules")
+      .select("id", { count: "exact", head: true })
+      .eq("room_template_id", templateId)
+      .in("status", ["draft", "approved", "processing"]);
+    if (error) fail("hasPendingScheduleForTemplate", error.message);
+    return (count ?? 0) > 0;
+  }
+
+  getJoinDelayMaxSeconds(templateId: string, settings: Map<string, number>): number {
+    return settings.get(templateId) ?? DEFAULT_TEMPLATE_JOIN_DELAY_MAX_SECONDS;
   }
 
   async getPresetTemplateLimits(presetId: string): Promise<TemplateLimitSnapshot[]> {
@@ -282,19 +381,7 @@ export class DevPlayerRepo {
       .select("id, name, price, vip, room_type, status, max_cards_per_player, max_players")
       .in("id", templateIds);
     if (error) fail("getTemplatesByIds", error.message);
-    return (data ?? []).map((row) => ({
-      id: String(row.id),
-      name: row.name || "",
-      price: Number(row.price ?? 0),
-      vip: Boolean(row.vip),
-      roomType: row.room_type || "normal",
-      status: row.status || "active",
-      maxCardsPerPlayer: Math.max(1, Number(row.max_cards_per_player ?? 1)),
-      maxPlayers:
-        row.max_players === null || row.max_players === undefined
-          ? null
-          : Number(row.max_players),
-    }));
+    return (data ?? []).map((row) => mapRoomTemplateRow(row as Record<string, unknown>));
   }
 
   async getActiveRoomCountsByTemplate(

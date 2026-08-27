@@ -161,7 +161,7 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
     if (!loading) return null;
     return (
       <div
-        className="fixed inset-0 z-[10050] bg-black/95"
+        className="fixed inset-0 z-[10050] bg-black/65"
         data-entry-banner-open="true"
         aria-busy="true"
         aria-hidden="true"
@@ -207,7 +207,7 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
 
   return (
     <div
-      className="fixed inset-0 z-[10050] bg-black/95 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[10050] bg-black/65 flex items-center justify-center p-4"
       data-entry-banner-open="true"
     >
       <div

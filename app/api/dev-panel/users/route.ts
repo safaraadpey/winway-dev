@@ -24,22 +24,19 @@ function pickDisplayName(
   return profilesMap.get(userId) || user.username || null;
 }
 
-function mapDevPlayerConfig(row: any | null) {
-  if (!row) return null;
+function mapDevPlayerConfig(
+  row: any | null,
+  profileMembershipUserIds: Set<string>
+) {
+  const userId = row?.user_id ? String(row.user_id) : null;
+  const isEnabled = userId ? profileMembershipUserIds.has(userId) : false;
+
+  if (!isEnabled) return null;
+
   return {
-    userId: row.user_id,
-    isEnabled: Boolean(row.is_enabled),
-    playWindows: Array.isArray(row.play_windows) ? row.play_windows : [],
-    minRoomPrice:
-      row.min_room_price === null || row.min_room_price === undefined
-        ? null
-        : Number(row.min_room_price),
-    maxRoomPrice:
-      row.max_room_price === null || row.max_room_price === undefined
-        ? null
-        : Number(row.max_room_price),
-    maxTicketCount: Number(row.max_ticket_count ?? 1),
-    updatedAt: row.updated_at ?? null,
+    userId,
+    isEnabled: true,
+    updatedAt: row?.updated_at ?? null,
   };
 }
 
@@ -79,21 +76,27 @@ export async function GET(request: NextRequest) {
     const userIds = (usersData || []).map((u) => u.id);
     const profilesMap = new Map<string, string>();
     const devPlayerConfigMap = new Map<string, any>();
+    const profileMembershipUserIds = new Set<string>();
     const affiliationMap = new Map<
       string,
       { agent_id: string | null; super_id: string | null }
     >();
 
     if (userIds.length > 0) {
-      const [{ data: profiles }, { data: devPlayerConfigs }, { data: affiliations }] =
-        await Promise.all([
-          supabase.from("user_profiles").select("user_id, nickname").in("user_id", userIds),
-          supabase.from("dev_player_configs").select("*").in("user_id", userIds),
-          supabase
-            .from("player_affiliation")
-            .select("user_id, agent_id, super_id")
-            .in("user_id", userIds),
-        ]);
+      const [
+        { data: profiles },
+        { data: devPlayerConfigs },
+        { data: affiliations },
+        { data: profileMembers },
+      ] = await Promise.all([
+        supabase.from("user_profiles").select("user_id, nickname").in("user_id", userIds),
+        supabase.from("dev_player_configs").select("user_id, updated_at").in("user_id", userIds),
+        supabase
+          .from("player_affiliation")
+          .select("user_id, agent_id, super_id")
+          .in("user_id", userIds),
+        supabase.from("dev_player_profile_members").select("user_id").in("user_id", userIds),
+      ]);
 
       for (const profile of profiles || []) {
         if (profile.nickname) {
@@ -103,6 +106,10 @@ export async function GET(request: NextRequest) {
 
       for (const config of devPlayerConfigs || []) {
         devPlayerConfigMap.set(config.user_id, config);
+      }
+
+      for (const row of profileMembers || []) {
+        profileMembershipUserIds.add(String(row.user_id));
       }
 
       for (const row of affiliations || []) {
@@ -223,7 +230,10 @@ export async function GET(request: NextRequest) {
         status: user.status,
         agentName: pickDisplayName(agentId, uplineUsersMap, profilesMap),
         superName: pickDisplayName(superId, uplineUsersMap, profilesMap),
-        devPlayerConfig: mapDevPlayerConfig(devPlayerConfigMap.get(user.id) || null),
+        devPlayerConfig: mapDevPlayerConfig(
+          devPlayerConfigMap.get(user.id) || null,
+          profileMembershipUserIds
+        ),
       };
     });
 

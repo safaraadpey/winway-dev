@@ -68,12 +68,14 @@ export interface DevPlayerJoinPresetSnapshot {
   autoApproveSchedules: boolean;
 }
 
+export interface DevPlayerProfileSnapshot {
+  playWindows: PlayWindow[];
+  allowedPrices: number[];
+}
+
 export interface DevPlayerConfigSnapshot {
   userId: string;
-  playWindows: PlayWindow[];
-  minRoomPrice: number | null;
-  maxRoomPrice: number | null;
-  maxTicketCount: number;
+  profiles: DevPlayerProfileSnapshot[];
 }
 
 export interface TemplateLimitSnapshot {
@@ -139,6 +141,7 @@ export interface BuildScheduleBatchResult {
     noEligiblePlayer: number;
     noDistinctBot: number;
     dripNotDue: number;
+    templateJoinPending: number;
     insertBudgetExhausted: number;
     cycleIdle: number;
   };

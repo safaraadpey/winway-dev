@@ -1,5 +1,7 @@
 import type { DevPlayWindow } from "./dev-players";
 
+export type { DevPlayWindow };
+
 export type TemplateSelectionMode =
   | "any_in_price_range"
   | "cheapest"
@@ -55,6 +57,16 @@ export interface DevPlayerJoinPresetTemplateLimit {
   quickFillEnabled: boolean;
 }
 
+export interface DevPlayerSettingsResult {
+  settings: DevPlayerSettings;
+  activePlayers: DevPlayerActiveRow[];
+  activePlayerCount: number;
+  runtimeStats: DevPlayerRuntimeStats;
+  templates: DevPlayerTemplateOption[];
+  joinPresets: DevPlayerJoinPreset[];
+}
+
+/** @deprecated Active players are managed via profiles. Kept for API compatibility. */
 export interface DevPlayerActiveRow {
   userId: string;
   username: string;
@@ -79,11 +91,15 @@ export interface DevPlayerTemplateOption {
   maxActiveRooms: number | null;
   joinIntervalSeconds: number | null;
   maxJoinsPerTick: number | null;
+  joinDelayMaxSeconds: number;
 }
 
 export const DEFAULT_TEMPLATE_JOIN_INTERVAL_SECONDS = 300;
 export const MIN_TEMPLATE_JOIN_INTERVAL_SECONDS = 5;
 export const MAX_TEMPLATE_JOIN_INTERVAL_SECONDS = 7200;
+export const DEFAULT_TEMPLATE_JOIN_DELAY_MAX_SECONDS = 20;
+export const MIN_TEMPLATE_JOIN_DELAY_MAX_SECONDS = 0;
+export const MAX_TEMPLATE_JOIN_DELAY_MAX_SECONDS = 7200;
 /** Max dev-player joins per template during each scheduler work phase (before pause). */
 export const DEFAULT_TEMPLATE_MAX_JOINS_PER_TICK = 10;
 
@@ -116,14 +132,6 @@ export const DEFAULT_DEV_PLAYER_RUNTIME_STATS: DevPlayerRuntimeStats = {
   updatedAt: new Date(0).toISOString(),
 };
 
-export interface DevPlayerSettingsResult {
-  settings: DevPlayerSettings;
-  activePlayers: DevPlayerActiveRow[];
-  activePlayerCount: number;
-  runtimeStats: DevPlayerRuntimeStats;
-  templates: DevPlayerTemplateOption[];
-  joinPresets: DevPlayerJoinPreset[];
-}
 
 export const TEMPLATE_SELECTION_LABELS: Record<TemplateSelectionMode, string> = {
   any_in_price_range: "هر میز در بازه قیمت",

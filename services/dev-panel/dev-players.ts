@@ -1,9 +1,5 @@
 import { callDevPanelApi } from "@/lib/devPanelApiClient";
-import type {
-  DevPanelUsersListResult,
-  DevPlayerConfig,
-  DevPlayWindow,
-} from "@/src/types/dev-players";
+import type { DevPanelUsersListResult } from "@/src/types/dev-players";
 
 export async function loadDevPanelUsers(params?: {
   search?: string;
@@ -19,23 +15,4 @@ export async function loadDevPanelUsers(params?: {
 
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return callDevPanelApi<DevPanelUsersListResult>(`/api/dev-panel/users${suffix}`);
-}
-
-export async function saveDevPlayerConfig(
-  userId: string,
-  payload: {
-    is_enabled: boolean;
-    play_windows: DevPlayWindow[];
-    min_room_price: number | null;
-    max_room_price: number | null;
-    max_ticket_count: number;
-  }
-): Promise<{ devPlayerConfig: DevPlayerConfig | null }> {
-  return callDevPanelApi<{ devPlayerConfig: DevPlayerConfig | null }>(
-    `/api/dev-panel/dev-players/${userId}`,
-    {
-      method: "PATCH",
-      body: payload,
-    }
-  );
 }

@@ -5,10 +5,7 @@ import type { DevPlayerConfigSnapshot } from "./types.js";
 
 const player = (userId: string): DevPlayerConfigSnapshot => ({
   userId,
-  playWindows: [],
-  minRoomPrice: null,
-  maxRoomPrice: null,
-  maxTicketCount: 2,
+  profiles: [{ playWindows: [{ start: "10:00", end: "22:00" }], allowedPrices: [1000] }],
 });
 
 describe("pickDevPlayerForJoin", () => {

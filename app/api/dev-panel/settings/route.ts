@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDevPanelContextOrThrow, logAdminAction } from "@/lib/supabaseServer";
+import { DEFAULT_TEMPLATE_JOIN_DELAY_MAX_SECONDS } from "@/src/types/dev-player-settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -187,15 +188,36 @@ async function loadSettingsBundle(supabase: any) {
 
   if (settingsError) throw settingsError;
 
-  const { data: activeConfigs, error: activeError } = await supabase
-    .from("dev_player_configs")
-    .select("user_id, play_windows, min_room_price, max_room_price, max_ticket_count, updated_at")
-    .eq("is_enabled", true)
-    .order("updated_at", { ascending: false });
+  const { data: engineEnabledProfiles, error: engineProfilesError } = await supabase
+    .from("dev_player_profiles")
+    .select("id, allowed_prices")
+    .eq("engine_enabled", true);
 
-  if (activeError) throw activeError;
+  if (engineProfilesError) throw engineProfilesError;
 
-  const userIds = (activeConfigs || []).map((c: any) => c.user_id);
+  const allowedPrices = new Set<number>();
+  for (const profile of engineEnabledProfiles || []) {
+    for (const price of profile.allowed_prices || []) {
+      allowedPrices.add(Number(price));
+    }
+  }
+
+  const { data: engineMemberRows, error: engineMembersError } =
+    (engineEnabledProfiles || []).length > 0
+      ? await supabase
+          .from("dev_player_profile_members")
+          .select("user_id")
+          .in(
+            "profile_id",
+            (engineEnabledProfiles || []).map((row: { id: string }) => row.id)
+          )
+      : { data: [], error: null };
+
+  if (engineMembersError) throw engineMembersError;
+
+  const userIds: string[] = Array.from(
+    new Set((engineMemberRows || []).map((row: { user_id: string }) => String(row.user_id)))
+  );
   const usersMap = new Map<string, { username: string | null }>();
   const profilesMap = new Map<string, string>();
 
@@ -222,6 +244,17 @@ async function loadSettingsBundle(supabase: any) {
     .order("name", { ascending: true });
 
   if (templatesError) throw templatesError;
+
+  const { data: joinDelayRows, error: joinDelayError } = await supabase
+    .from("dev_player_template_join_settings")
+    .select("template_id, join_delay_max_seconds");
+
+  if (joinDelayError) throw joinDelayError;
+
+  const joinDelayByTemplateId = new Map<string, number>();
+  for (const row of joinDelayRows || []) {
+    joinDelayByTemplateId.set(String(row.template_id), Number(row.join_delay_max_seconds ?? 0));
+  }
 
   const { data: presetRows, error: presetsError } = await supabase
     .from("dev_player_join_presets")
@@ -300,34 +333,19 @@ async function loadSettingsBundle(supabase: any) {
       maxJoinsPerTick: limit?.max_joins_per_tick ?? null,
       minNormalPlayersPerRoom: limit?.min_normal_players_per_room ?? null,
       maxDevPlayersPerRoom: limit?.max_dev_players_per_room ?? null,
+      joinDelayMaxSeconds: joinDelayByTemplateId.get(String(row.id)) ?? DEFAULT_TEMPLATE_JOIN_DELAY_MAX_SECONDS,
     };
   });
 
-  const activePlayers = (activeConfigs || []).map((config: any) => {
-    const user = usersMap.get(config.user_id);
-    const nickname = profilesMap.get(config.user_id) ?? null;
-    const username = user?.username || "نامشخص";
-    return {
-      userId: config.user_id,
-      username,
-      nickname,
-      displayName: nickname?.trim() || username,
-      playWindows: Array.isArray(config.play_windows) ? config.play_windows : [],
-      minRoomPrice:
-        config.min_room_price === null || config.min_room_price === undefined
-          ? null
-          : Number(config.min_room_price),
-      maxRoomPrice:
-        config.max_room_price === null || config.max_room_price === undefined
-          ? null
-          : Number(config.max_room_price),
-      maxTicketCount: Number(config.max_ticket_count ?? 1),
-      updatedAt: config.updated_at ?? null,
-    };
-  });
+  const activePlayers: never[] = [];
+  const activePlayerCount = userIds.length;
+
+  const runtimeTemplateIds = (templateRows || [])
+    .filter((row: { price: unknown }) => allowedPrices.has(Number(row.price ?? 0)))
+    .map((row: { id: string }) => String(row.id));
 
   const runtimeStats = await loadDevPlayerRuntimeStats(supabase, {
-    templateIds: activePreset?.templateRoomLimitEnabledIds ?? [],
+    templateIds: runtimeTemplateIds,
     devPlayerUserIds: userIds,
     schedulerEnabled: Boolean(settingsRow.scheduler_enabled),
     schedulerPhase: settingsRow.scheduler_cycle_phase,
@@ -336,7 +354,7 @@ async function loadSettingsBundle(supabase: any) {
   return {
     settings: mapSettingsRow(settingsRow),
     activePlayers,
-    activePlayerCount: activePlayers.length,
+    activePlayerCount,
     runtimeStats,
     templates,
     joinPresets,
