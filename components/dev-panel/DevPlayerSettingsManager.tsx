@@ -347,7 +347,6 @@ export default function DevPlayerSettingsManager() {
   );
   const [refreshingRuntime, setRefreshingRuntime] = useState(false);
   const [templates, setTemplates] = useState<DevPlayerTemplateOption[]>([]);
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
   useEffect(() => {
     setShowHeader(true);
@@ -365,7 +364,6 @@ export default function DevPlayerSettingsManager() {
     setActivePlayerCount(result.activePlayerCount);
     setRuntimeStats(result.runtimeStats ?? DEFAULT_DEV_PLAYER_RUNTIME_STATS);
     setTemplates(result.templates ?? []);
-    setUpdatedAt(result.settings.updatedAt);
   }, []);
 
   const fetchSettings = useCallback(async () => {
@@ -484,22 +482,6 @@ export default function DevPlayerSettingsManager() {
   return (
     <div className="min-h-screen bg-[#0E0E0F] p-4 pb-4">
       <div className="mx-auto max-w-2xl space-y-4">
-        <div>
-          <h1 className="text-xl font-bold text-white">تنظیمات Dev Player</h1>
-          <p className="mt-1 text-sm text-gray-400">
-            کنترل سیستم و رفتار join —{" "}
-            <span className="numeric-text numeric-text--14" dir="ltr">
-              {activePlayerCount.toLocaleString("en-US")}
-            </span>{" "}
-            پلیر در پروفایل‌های فعال موتور
-          </p>
-          {updatedAt && (
-            <p className="mt-1 text-xs text-gray-500">
-              آخرین بروزرسانی: {new Date(updatedAt).toLocaleString("fa-IR")}
-            </p>
-          )}
-        </div>
-
         <SectionCard title="کنترل سیستم">
           <ToggleRow
             label="فعال‌سازی سیستم Dev Player"
