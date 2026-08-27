@@ -83,27 +83,61 @@ export async function GET(request: NextRequest) {
       }
 
       const rows = data ?? [];
-      const inPlayCosts = await Promise.all(
-        rows.map(async (row) => {
-          if (!row.template_id || !row.started_at) return 0;
-          const { data: cost, error: costError } = await supabase.rpc(
-            "fn_auto_buy_in_play_cost",
-            {
-              p_user_id: user.id,
-              p_template_id: row.template_id,
-              p_started_at: row.started_at,
+      const [inPlayCosts, roundStatsList] = await Promise.all([
+        Promise.all(
+          rows.map(async (row) => {
+            if (!row.template_id || !row.started_at) return 0;
+            const { data: cost, error: costError } = await supabase.rpc(
+              "fn_auto_buy_in_play_cost",
+              {
+                p_user_id: user.id,
+                p_template_id: row.template_id,
+                p_started_at: row.started_at,
+              }
+            );
+            if (costError) {
+              console.warn("[AutoBuy] in_play_cost lookup failed", costError);
+              return 0;
             }
-          );
-          if (costError) {
-            console.warn("[AutoBuy] in_play_cost lookup failed", costError);
-            return 0;
-          }
-          return Number(cost ?? 0);
-        })
-      );
+            return Number(cost ?? 0);
+          })
+        ),
+        Promise.all(
+          rows.map(async (row) => {
+            if (!row.id) {
+              return { rounds_total: 0, rounds_won: 0, rounds_lost: 0 };
+            }
+            const { data: stats, error: statsError } = await supabase.rpc(
+              "fn_auto_buy_round_stats",
+              {
+                p_session_id: row.id,
+                p_user_id: user.id,
+              }
+            );
+            if (statsError) {
+              console.warn("[AutoBuy] round_stats lookup failed", statsError);
+              return { rounds_total: 0, rounds_won: 0, rounds_lost: 0 };
+            }
+            return (stats ?? {
+              rounds_total: 0,
+              rounds_won: 0,
+              rounds_lost: 0,
+            }) as {
+              rounds_total: number;
+              rounds_won: number;
+              rounds_lost: number;
+            };
+          })
+        ),
+      ]);
 
       const sessions: Record<string, ReturnType<typeof parseAutoBuySnapshot>> = {};
       rows.forEach((row, index) => {
+        const roundStats = roundStatsList[index] ?? {
+          rounds_total: 0,
+          rounds_won: 0,
+          rounds_lost: 0,
+        };
         const snapshot = parseAutoBuySnapshot({
           active: true,
           session_id: row.id,
@@ -113,6 +147,9 @@ export async function GET(request: NextRequest) {
           fund_initial: row.fund_initial,
           fund_remaining: row.fund_remaining,
           in_play_cost: inPlayCosts[index] ?? 0,
+          rounds_total: roundStats.rounds_total,
+          rounds_won: roundStats.rounds_won,
+          rounds_lost: roundStats.rounds_lost,
           profit_target: row.profit_target,
           last_room_id: row.last_room_id,
           serial_buy_enabled: row.serial_buy_enabled,

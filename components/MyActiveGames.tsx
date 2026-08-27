@@ -7,6 +7,11 @@ import styles from "./MyActiveGames.module.css";
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import { getActiveGameIconPath } from "@/lib/theme/activeGameIconFiles";
+import {
+  buildMyActiveGameRoomHref,
+  dispatchMyActiveGameChip,
+  isLiveActiveGameStatus,
+} from "@/lib/activeGames/myActiveGameNavigation";
 
 /**
  * کامپوننت نمایش روم‌های فعال پلیر
@@ -32,8 +37,27 @@ export default function MyActiveGames() {
     return null;
   }
 
-  const handleRoomClick = (roomId: string) => {
-    router.push(`/player/gameroom?roomId=${roomId}`);
+  const handleRoomClick = (room: (typeof rooms)[number]) => {
+    const href = buildMyActiveGameRoomHref(room.roomId, room.status);
+    const live = isLiveActiveGameStatus(room.status);
+
+    if (isOnGameScreen && currentRoomId === room.roomId) {
+      if (live) {
+        console.info("[MyActiveGames] Re-enter live for current room", {
+          roomId: room.roomId,
+          status: room.status,
+        });
+        dispatchMyActiveGameChip({ roomId: room.roomId, status: room.status });
+      }
+      return;
+    }
+
+    console.info("[MyActiveGames] Navigate to active room", {
+      roomId: room.roomId,
+      status: room.status,
+      enterLive: live,
+    });
+    router.push(href);
   };
 
   const getStatusIcon = (status: string) => {
@@ -148,7 +172,7 @@ export default function MyActiveGames() {
             <button
               key={room.roomId}
               className={`${styles.chip}${isCurrentRoom ? ` ${styles.chipActive}` : ""}`}
-              onClick={() => handleRoomClick(room.roomId)}
+              onClick={() => handleRoomClick(room)}
               aria-label={`رفتن به روم ${getDisplayText(room)}`}
               aria-current={isCurrentRoom ? "true" : undefined}
             >

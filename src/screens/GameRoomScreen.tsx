@@ -1267,6 +1267,9 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           result.lastRoomId && result.cardCount
             ? roomInfo.cardPrice * result.cardCount
             : 0,
+        roundsWon: 0,
+        roundsLost: 0,
+        roundsTotal: 0,
         profitTarget: result.profitTarget,
         lastRoomId: result.lastRoomId,
         serialBuyEnabled: result.serialBuyEnabled,

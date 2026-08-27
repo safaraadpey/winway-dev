@@ -851,3 +851,45 @@
 .autoBuyStatusValueLoss {
   color: #f87171;
 }
+
+.autoBuyRoundBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.autoBuyRoundBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  padding: 4px 10px;
+  font-size: 11px;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.autoBuyRoundBadgeWin {
+  border-color: rgba(74, 222, 128, 0.35);
+  background: rgba(74, 222, 128, 0.12);
+}
+
+.autoBuyRoundBadgeLoss {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.autoBuyRoundBadgeValue {
+  composes: numeric-text numeric-text--13 from global;
+  font-weight: 700;
+}
+
+.autoBuyRoundBadgeValueWin {
+  color: #4ade80;
+}
+
+.autoBuyRoundBadgeValueLoss {
+  color: #f87171;
+}

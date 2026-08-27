@@ -535,7 +535,7 @@ export default function BuyCardsPanel({
 
           {autoBuyRunning && autoBuyPnlDisplay && (
             <p className={panelStyles.autoBuyStatusLine}>
-              سود و زیان:{" "}
+              سود و زیان خالص:{" "}
               <span
                 className={`${panelStyles.autoBuyStatusValue} ${
                   autoBuyPnlDisplay.tone === "gain"
@@ -548,6 +548,33 @@ export default function BuyCardsPanel({
               </span>
             </p>
           )}
+
+          {autoBuyRunning ? (
+            <div className={panelStyles.autoBuyRoundBadges}>
+              <span
+                className={`${panelStyles.autoBuyRoundBadge} ${panelStyles.autoBuyRoundBadgeWin}`}
+              >
+                <span>برد</span>
+                <span
+                  className={`${panelStyles.autoBuyRoundBadgeValue} ${panelStyles.autoBuyRoundBadgeValueWin}`}
+                  dir="ltr"
+                >
+                  {(autoBuy?.snapshot?.roundsWon ?? 0).toLocaleString("en-US")}
+                </span>
+              </span>
+              <span
+                className={`${panelStyles.autoBuyRoundBadge} ${panelStyles.autoBuyRoundBadgeLoss}`}
+              >
+                <span>باخت</span>
+                <span
+                  className={`${panelStyles.autoBuyRoundBadgeValue} ${panelStyles.autoBuyRoundBadgeValueLoss}`}
+                  dir="ltr"
+                >
+                  {(autoBuy?.snapshot?.roundsLost ?? 0).toLocaleString("en-US")}
+                </span>
+              </span>
+            </div>
+          ) : null}
 
           {!autoBuyRunning && autoBuy.hasReservedCards && (
             <p className={panelStyles.autoBuyStatusLine}>

@@ -6,9 +6,10 @@ export type AutoBuyFundDisplay = {
 };
 
 /**
- * Cost of auto-buy tickets still in an unfinished room.
+ * Cost of auto-buy tickets still in an unfinished room with unknown outcome.
  * Prefer the snapshot field from PostgreSQL; fall back to the current
  * room's reserved cards only when auto-buy has already joined (lastRoomId).
+ * Only waiting/playing rooms count — settling outcome is already in fund_remaining.
  */
 export function resolveAutoBuyInPlayCost(options: {
   inPlayCost?: number;

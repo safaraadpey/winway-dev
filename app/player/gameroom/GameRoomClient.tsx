@@ -12,6 +12,13 @@ import { GAME_ROOM_TOUR_ID } from "@/lib/tour/configs/gameRoomTour";
 import { fetchAutoBuySnapshot } from "@/lib/autoBuy/client";
 import { fetchGameRoomView } from "@/services/rooms";
 import { isHardExiting } from "@/lib/auth/hardExit";
+import {
+  ACTIVE_GAME_ENTER_LIVE_PARAM,
+  MY_ACTIVE_GAME_CHIP_EVENT,
+  type MyActiveGameChipDetail,
+  isLiveActiveGameStatus,
+} from "@/lib/activeGames/myActiveGameNavigation";
+import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 
 export default function GameRoomClient() {
   const searchParams = useSearchParams();
@@ -20,6 +27,9 @@ export default function GameRoomClient() {
   const roomId = searchParams.get("roomId") ?? undefined;
   const templateId = searchParams.get("templateId") ?? undefined;
   const spectate = searchParams.get("spectate") === "1";
+  const enterLiveFromChip =
+    searchParams.get(ACTIVE_GAME_ENTER_LIVE_PARAM) === "1";
+  const { rooms: activeRooms } = useActiveGamesContext();
   const [liveRoomId, setLiveRoomId] = useState<string | null>(null);
   const liveRoomIdRef = useRef<string | null>(null);
   const { activeTourId } = useTour();
@@ -101,6 +111,49 @@ export default function GameRoomClient() {
       document.body.style.overflowY = originalOverflowY;
     };
   }, []);
+
+  useEffect(() => {
+    if (!roomId || !enterLiveFromChip) return;
+
+    console.info("[Room] Enter live from active-game chip query", { roomId });
+    handleEnterLive(roomId);
+
+    const cleanUrl = `/player/gameroom?roomId=${encodeURIComponent(roomId)}`;
+    router.replace(cleanUrl, { scroll: false });
+  }, [roomId, enterLiveFromChip, handleEnterLive, router]);
+
+  // When the room transitions to live, leave the buy/waiting screen automatically.
+  useEffect(() => {
+    if (!roomId || liveRoomId === roomId) return;
+
+    const activeRoom = activeRooms.find((room) => room.roomId === roomId);
+    if (!activeRoom || !isLiveActiveGameStatus(activeRoom.status)) return;
+
+    console.info("[Room] Auto enter live from active-games status", {
+      roomId,
+      status: activeRoom.status,
+    });
+    handleEnterLive(roomId);
+  }, [roomId, activeRooms, liveRoomId, handleEnterLive]);
+
+  useEffect(() => {
+    if (!roomId) return;
+
+    const onActiveGameChip = (event: Event) => {
+      const detail = (event as CustomEvent<MyActiveGameChipDetail>).detail;
+      if (!detail || detail.roomId !== roomId) return;
+      if (!isLiveActiveGameStatus(detail.status)) return;
+
+      pendingLiveRoomIdRef.current = null;
+      console.info("[Room] Enter live from active-game chip", { roomId });
+      setLiveRoomId(roomId);
+    };
+
+    window.addEventListener(MY_ACTIVE_GAME_CHIP_EVENT, onActiveGameChip);
+    return () => {
+      window.removeEventListener(MY_ACTIVE_GAME_CHIP_EVENT, onActiveGameChip);
+    };
+  }, [roomId]);
 
   useEffect(() => {
     if (!roomId && !templateId) {
