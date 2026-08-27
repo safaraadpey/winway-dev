@@ -628,8 +628,8 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                           selected ? "text-white" : "text-gray-400 hover:text-gray-200"
                         }`}
                         style={{
-                          borderColor: selected ? item.color : "rgba(255,255,255,0.12)",
-                          backgroundColor: selected ? `${item.color}33` : "transparent",
+                          borderColor: selected ? item.color : `${item.color}40`,
+                          backgroundColor: selected ? `${item.color}4D` : `${item.color}24`,
                         }}
                       >
                         <span
