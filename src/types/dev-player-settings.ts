@@ -117,6 +117,7 @@ export interface DevPlayerTemplateRoomLimitPayload {
 export interface DevPlayerRuntimeStats {
   activeRoomsCount: number;
   busyDevPlayersCount: number;
+  busyNormalPlayersCount: number;
   idleDevPlayersCount: number;
   pendingSchedulesCount: number;
   schedulerPhase: "work" | "pause" | null;
@@ -126,6 +127,7 @@ export interface DevPlayerRuntimeStats {
 export const DEFAULT_DEV_PLAYER_RUNTIME_STATS: DevPlayerRuntimeStats = {
   activeRoomsCount: 0,
   busyDevPlayersCount: 0,
+  busyNormalPlayersCount: 0,
   idleDevPlayersCount: 0,
   pendingSchedulesCount: 0,
   schedulerPhase: null,

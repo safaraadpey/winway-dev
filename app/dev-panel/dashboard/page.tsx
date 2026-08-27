@@ -10,9 +10,6 @@ import { hardExitFromCurrentPanel } from "@/lib/auth/hardExit";
 const DEV_MENU_ITEMS = [
   { label: "گزارش مالی Dev Player", path: "/dev-panel/finance" },
   { label: "تنظیمات Dev Player", path: "/dev-panel/settings" },
-  { label: "کاربران", path: "/dev-panel/users" },
-  { label: "استخر کارت‌ها", path: "/dev-panel/card-pool" },
-  { label: "Runtime و قفل ثبت‌نام", path: "/dev-panel/runtime" },
   { label: "حساب کاربری", path: "/dev-panel/account" },
 ] as const;
 
@@ -90,13 +87,6 @@ export default function DevPanelDashboardPage() {
               خروج
             </button>
           </div>
-        </div>
-
-        <div className="mb-4">
-          <h1 className="text-xl font-bold text-white">پنل توسعه</h1>
-          <p className="mt-1 text-sm text-gray-400">
-            ابزارهای فنی و عملیاتی مخصوص تیم توسعه
-          </p>
         </div>
 
         <div className="space-y-3">

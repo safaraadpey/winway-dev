@@ -112,6 +112,7 @@ async function loadDevPlayerRuntimeStats(
 ): Promise<{
   activeRoomsCount: number;
   busyDevPlayersCount: number;
+  busyNormalPlayersCount: number;
   idleDevPlayersCount: number;
   pendingSchedulesCount: number;
   schedulerPhase: "work" | "pause" | null;
@@ -129,26 +130,43 @@ async function loadDevPlayerRuntimeStats(
     if (!error) activeRoomsCount = count ?? 0;
   }
 
+  const { data: allDevMemberRows, error: allDevMembersError } = await supabase
+    .from("dev_player_profile_members")
+    .select("user_id");
+  const allDevPanelUserIds = new Set<string>(
+    allDevMembersError
+      ? []
+      : (allDevMemberRows ?? []).map((row: { user_id: string }) => String(row.user_id))
+  );
+  const engineDevUserIds = new Set(devPlayerUserIds.map(String));
+
   let busyDevPlayersCount = 0;
-  if (devPlayerUserIds.length > 0) {
-    const { data: rooms, error: roomsError } = await supabase
-      .from("rooms")
-      .select("id")
-      .in("status", ["waiting", "playing"]);
-    if (!roomsError) {
-      const roomIds = (rooms ?? []).map((room: { id: string }) => room.id);
-      if (roomIds.length > 0) {
-        const { data: tickets, error: ticketsError } = await supabase
-          .from("tickets")
-          .select("player_user_id")
-          .in("room_id", roomIds)
-          .in("player_user_id", devPlayerUserIds)
-          .in("reservation_status", ["reserved", "confirmed", "consumed"]);
-        if (!ticketsError) {
-          busyDevPlayersCount = new Set(
-            (tickets ?? []).map((ticket: { player_user_id: string }) => ticket.player_user_id)
-          ).size;
+  let busyNormalPlayersCount = 0;
+  const { data: rooms, error: roomsError } = await supabase
+    .from("rooms")
+    .select("id")
+    .in("status", ["waiting", "playing"]);
+  if (!roomsError) {
+    const roomIds = (rooms ?? []).map((room: { id: string }) => room.id);
+    if (roomIds.length > 0) {
+      const { data: tickets, error: ticketsError } = await supabase
+        .from("tickets")
+        .select("player_user_id")
+        .in("room_id", roomIds)
+        .in("reservation_status", ["reserved", "confirmed", "consumed"]);
+      if (!ticketsError) {
+        const busyDevUserIds = new Set<string>();
+        const busyNormalUserIds = new Set<string>();
+        for (const ticket of tickets ?? []) {
+          const userId = String(ticket.player_user_id);
+          if (engineDevUserIds.has(userId)) {
+            busyDevUserIds.add(userId);
+          } else if (!allDevPanelUserIds.has(userId)) {
+            busyNormalUserIds.add(userId);
+          }
         }
+        busyDevPlayersCount = busyDevUserIds.size;
+        busyNormalPlayersCount = busyNormalUserIds.size;
       }
     }
   }
@@ -170,6 +188,7 @@ async function loadDevPlayerRuntimeStats(
   return {
     activeRoomsCount,
     busyDevPlayersCount,
+    busyNormalPlayersCount,
     idleDevPlayersCount: Math.max(0, devPlayerUserIds.length - busyDevPlayersCount),
     pendingSchedulesCount,
     schedulerPhase: phase,

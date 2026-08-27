@@ -126,7 +126,6 @@ function DevPlayerRuntimeReport({
 }) {
   const statItems = [
     { label: "روم فعال", value: stats.activeRoomsCount },
-    { label: "پلیر مشغول", value: stats.busyDevPlayersCount },
     { label: "پلیر آماده", value: stats.idleDevPlayersCount },
     { label: "job در صف", value: stats.pendingSchedulesCount },
   ];
@@ -156,14 +155,41 @@ function DevPlayerRuntimeReport({
       {systemEnabled ? (
         <>
           <div className="mt-3 grid grid-cols-2 gap-2">
-            {statItems.map((item) => (
+            <div className="rounded-lg border border-gray-800 bg-[#151515] px-3 py-2">
+              <div className="text-[11px] text-gray-400">روم فعال</div>
+              <div className="mt-0.5 text-lg font-semibold text-white">
+                <span className="numeric-text numeric-text--18" dir="ltr">
+                  {stats.activeRoomsCount.toLocaleString("en-US")}
+                </span>
+              </div>
+            </div>
+            <div className="rounded-lg border border-gray-800 bg-[#151515] px-3 py-2">
+              <div className="text-[11px] text-gray-400">پلیر مشغول</div>
+              <div className="mt-1 space-y-1">
+                <div className="flex items-center justify-between gap-2 text-xs text-gray-300">
+                  <span>Dev Panel</span>
+                  <span className="numeric-text numeric-text--14 font-semibold text-white" dir="ltr">
+                    {stats.busyDevPlayersCount.toLocaleString("en-US")}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-xs text-gray-300">
+                  <span>غیر پنل</span>
+                  <span className="numeric-text numeric-text--14 font-semibold text-white" dir="ltr">
+                    {stats.busyNormalPlayersCount.toLocaleString("en-US")}
+                  </span>
+                </div>
+              </div>
+            </div>
+            {statItems.slice(1).map((item) => (
               <div
                 key={item.label}
                 className="rounded-lg border border-gray-800 bg-[#151515] px-3 py-2"
               >
                 <div className="text-[11px] text-gray-400">{item.label}</div>
                 <div className="mt-0.5 text-lg font-semibold text-white">
-                  {item.value.toLocaleString("fa-IR")}
+                  <span className="numeric-text numeric-text--18" dir="ltr">
+                    {item.value.toLocaleString("en-US")}
+                  </span>
                 </div>
               </div>
             ))}
