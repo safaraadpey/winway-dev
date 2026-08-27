@@ -194,17 +194,6 @@
   flex-shrink: 0;
 }
 
-.dateBadge {
-  font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 999px;
-  border: 1px solid rgba(107, 114, 128, 0.6);
-  background: rgba(0, 0, 0, 0.4);
-  color: #f3f4f6;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
 .statusBadge {
   font-size: 0.75rem;
   padding: 0.25rem 0.5rem;
@@ -247,6 +236,21 @@
   background: rgba(0, 0, 0, 0.4);
   color: #f3f4f6;
   font-weight: 500;
+}
+
+.startTimeValue {
+  composes: fieldValue;
+  white-space: nowrap;
+}
+
+.prizePercentsGrid {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(33, 33, 33, 0.18);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px 4px;
+  font-size: 0.875rem;
 }
 
 @keyframes tournamentsSpin {
@@ -340,12 +344,6 @@
   font-size: 1.5rem;
 }
 
-:global(html[data-theme="light"]) .dateBadge {
-  background: #fef3c7;
-  border-color: #fde68a;
-  color: #92400e;
-}
-
 :global(html[data-theme="light"]) .statusBadge {
   background: #dcfce7;
   border-color: #bbf7d0;
@@ -365,4 +363,8 @@
   border: 1px solid #e9d5ff;
   border-radius: 0.75rem;
   color: #6d28d9;
+}
+
+:global(html[data-theme="light"]) .prizePercentsGrid {
+  border-top-color: #ddd6fe;
 }

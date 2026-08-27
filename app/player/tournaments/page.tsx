@@ -22,11 +22,40 @@ type TournamentRow = {
   } | null;
 };
 
+const RANK_LABELS = [
+  "نفر اول",
+  "نفر دوم",
+  "نفر سوم",
+  "نفر چهارم",
+  "نفر پنجم",
+  "نفر ششم",
+  "نفر هفتم",
+  "نفر هشتم",
+];
+
 function normalizeCommissionRate(value: number | null | undefined): number {
   if (value == null || Number.isNaN(value)) return 0;
   if (value < 0) return 0;
   if (value > 1) return value / 100;
   return value;
+}
+
+function buildEqualPrizePercents(count: number): number[] {
+  if (count <= 0) return [];
+  if (count === 1) return [100];
+  const base = Math.floor(100 / count);
+  const remainder = 100 - base * count;
+  return Array.from({ length: count }, (_, i) => (i === 0 ? base + remainder : base));
+}
+
+function rankLabel(rank: number): string {
+  return RANK_LABELS[rank - 1] ?? `نفر ${rank}`;
+}
+
+function formatPercent(value: number): string {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "-";
+  return `${n.toLocaleString("en-US")}%`;
 }
 
 export default function TournamentsPage() {
@@ -38,6 +67,7 @@ export default function TournamentsPage() {
   const [rows, setRows] = useState<TournamentRow[]>([]);
   const [entryCounts, setEntryCounts] = useState<Record<string, number>>({});
   const [ticketTotals, setTicketTotals] = useState<Record<string, number>>({});
+  const [prizePercents, setPrizePercents] = useState<Record<string, number[]>>({});
   const [viewMode, setViewMode] = useState<"active" | "finished">("active");
 
   useEffect(() => {
@@ -83,6 +113,7 @@ export default function TournamentsPage() {
       setRows([]);
       setEntryCounts({});
       setTicketTotals({});
+      setPrizePercents({});
     } else {
       const items = ((data as TournamentRow[]) ?? []).slice();
       const statusPriority: Record<string, number> = {
@@ -107,12 +138,49 @@ export default function TournamentsPage() {
       if (tournamentIds.length === 0) {
         setEntryCounts({});
         setTicketTotals({});
+        setPrizePercents({});
       } else {
-        const { data: entriesData, error: entriesError } = await supabase
-          .from("tournament_entries")
-          .select("tournament_id,user_id,tickets_count")
-          .in("tournament_id", tournamentIds)
-          .eq("status", "created");
+        const [
+          { data: entriesData, error: entriesError },
+          { data: prizeRulesData },
+        ] = await Promise.all([
+          supabase
+            .from("tournament_entries")
+            .select("tournament_id,user_id,tickets_count")
+            .in("tournament_id", tournamentIds)
+            .eq("status", "created"),
+          supabase
+            .from("tournament_prize_rules")
+            .select("tournament_id, rank, payout_type, payout_value")
+            .in("tournament_id", tournamentIds)
+            .eq("payout_type", "percent")
+            .order("rank", { ascending: true }),
+        ]);
+
+        const percentsByTournament: Record<string, number[]> = {};
+        for (const rule of (prizeRulesData as {
+          tournament_id: string;
+          rank: number;
+          payout_type: string;
+          payout_value: number | string | null;
+        }[]) ?? []) {
+          const value = Number(rule.payout_value);
+          if (!Number.isFinite(value)) continue;
+          if (!percentsByTournament[rule.tournament_id]) {
+            percentsByTournament[rule.tournament_id] = [];
+          }
+          percentsByTournament[rule.tournament_id].push(value);
+        }
+        const nextPercents: Record<string, number[]> = {};
+        for (const item of items) {
+          const winnersCount = item.meta?.final_winners_count ?? 1;
+          const fromRules = percentsByTournament[item.id];
+          nextPercents[item.id] =
+            fromRules && fromRules.length > 0
+              ? fromRules
+              : buildEqualPrizePercents(winnersCount);
+        }
+        setPrizePercents(nextPercents);
 
         if (entriesError) {
           setEntryCounts({});
@@ -224,8 +292,6 @@ export default function TournamentsPage() {
                 <div className={styles.cards}>
                   {filteredRows.map((t) => {
                     const entriesCount = entryCounts[t.id] ?? 0;
-                    const minPlayersToStart =
-                      t.meta?.min_players_to_start ?? 3;
                     const finalWinnersCount = t.meta?.final_winners_count ?? null;
                     const entryCurrency = (
                       t.meta?.entry_currency ||
@@ -243,6 +309,7 @@ export default function TournamentsPage() {
                       0,
                       prizePoolGross * (1 - commissionRate)
                     );
+                    const winnerPercents = prizePercents[t.id] ?? [];
                     return (
                       <div
                         key={t.id}
@@ -265,20 +332,18 @@ export default function TournamentsPage() {
                             <span className={styles.statusBadge}>
                               {statusLabel(t.status)}
                             </span>
-                            <span className={styles.dateBadge}>
-                              {t.start_at
-                                ? `${new Date(t.start_at).toLocaleDateString("fa-IR")}، ${new Date(
-                                    t.start_at
-                                  ).toLocaleTimeString("fa-IR", {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}`
-                                : "نامشخص"}
-                            </span>
                           </div>
                         </div>
 
                         <div className={styles.detailsGrid}>
+                          <div className={styles.field}>
+                            <span className={styles.fieldLabel}>جایزه تضمینی</span>
+                            <span className={styles.fieldValue}>
+                              {t.guaranteed_prize != null
+                                ? t.guaranteed_prize.toLocaleString("en-US")
+                                : "-"}
+                            </span>
+                          </div>
                           <div className={styles.field}>
                             <span className={styles.fieldLabel}>
                               {entryCurrency === "DING"
@@ -291,6 +356,25 @@ export default function TournamentsPage() {
                                   ? "رایگان"
                                   : t.ticket_price.toLocaleString("en-US")
                                 : "-"}
+                            </span>
+                          </div>
+                          <div className={styles.field}>
+                            <span className={styles.fieldLabel}>زمان شروع</span>
+                            <span className={styles.startTimeValue}>
+                              {t.start_at
+                                ? `${new Date(t.start_at).toLocaleDateString("fa-IR")}، ${new Date(
+                                    t.start_at
+                                  ).toLocaleTimeString("fa-IR", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}`
+                                : "-"}
+                            </span>
+                          </div>
+                          <div className={styles.field}>
+                            <span className={styles.fieldLabel}>مبلغ جمع شده</span>
+                            <span className={styles.fieldValue} dir="ltr">
+                              {collectedAmount.toLocaleString("en-US")}
                             </span>
                           </div>
                           <div className={styles.field}>
@@ -307,27 +391,22 @@ export default function TournamentsPage() {
                                 : "-"}
                             </span>
                           </div>
-                          <div className={styles.field}>
-                            <span className={styles.fieldLabel}>جایزه تضمینی</span>
-                            <span className={styles.fieldValue}>
-                              {t.guaranteed_prize != null
-                                ? t.guaranteed_prize.toLocaleString("en-US")
-                                : "-"}
-                            </span>
-                          </div>
-                          <div className={styles.field}>
-                            <span className={styles.fieldLabel}>مبلغ جمع شده</span>
-                            <span className={styles.fieldValue} dir="ltr">
-                              {collectedAmount.toLocaleString("en-US")}
-                            </span>
-                          </div>
-                          <div className={styles.field}>
-                            <span className={styles.fieldLabel}>حداقل بازیکن</span>
-                            <span className={styles.fieldValue}>
-                              {minPlayersToStart.toLocaleString("en-US")}
-                            </span>
-                          </div>
                         </div>
+
+                        {winnerPercents.length > 0 && (
+                          <div className={styles.prizePercentsGrid}>
+                            {winnerPercents.map((pct, index) => (
+                              <div key={`${t.id}-prize-${index}`} className={styles.field}>
+                                <span className={styles.fieldLabel}>
+                                  {rankLabel(index + 1)}
+                                </span>
+                                <span className={styles.fieldValue} dir="ltr">
+                                  {formatPercent(pct)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
