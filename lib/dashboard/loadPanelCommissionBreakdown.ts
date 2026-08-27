@@ -127,6 +127,242 @@ function attachPlayingCountsByPeriod(
   };
 }
 
+function uniqueOperatorIds(...lists: DashboardPanelOperator[][]): string[] {
+  return [...new Set(lists.flatMap((list) => list.map((op) => op.userId)))];
+}
+
+/** Same >1-as-percent rule as ticket/tournament commission split. */
+function normalizeCommissionRate(rate: number | null | undefined): number {
+  const value = Number(rate ?? 0);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return value > 1 ? value / 100 : value;
+}
+
+function applyTakesFullSuperCommission(
+  operators: DashboardPanelOperator[],
+  flaggedAgentIds: Set<string>
+): DashboardPanelOperator[] {
+  return operators.map((op) => ({
+    ...op,
+    takesFullSuperCommission: op.role === "agent" && flaggedAgentIds.has(op.userId),
+  }));
+}
+
+function applyTakesFullSuperCommissionByPeriod(
+  byPeriod: Record<DashboardPeriod, DashboardPanelOperator[]>,
+  flaggedAgentIds: Set<string>
+): Record<DashboardPeriod, DashboardPanelOperator[]> {
+  return {
+    day: applyTakesFullSuperCommission(byPeriod.day, flaggedAgentIds),
+    week: applyTakesFullSuperCommission(byPeriod.week, flaggedAgentIds),
+    month: applyTakesFullSuperCommission(byPeriod.month, flaggedAgentIds),
+    overall: applyTakesFullSuperCommission(byPeriod.overall, flaggedAgentIds),
+  };
+}
+
+async function loadTakesFullSuperCommissionIdsFromPostgres(
+  userIds: string[]
+): Promise<Set<string> | null> {
+  if (!pgPool || userIds.length === 0) return userIds.length === 0 ? new Set() : null;
+
+  const result = await pgPool.query<{ agent_id: string }>(
+    `
+    select a.id::text as agent_id
+    from public.users a
+    left join public.users p1 on p1.id = a.parent_id
+    left join public.users p2 on p2.id = p1.parent_id
+    left join public.user_commissions ac on ac.user_id = a.id
+    left join public.user_commissions sc on sc.user_id = case
+      when p1.role = 'super' then p1.id
+      when p2.role = 'super' then p2.id
+      else null
+    end
+    where a.id = any($1::uuid[])
+      and a.role = 'agent'
+      and (
+        case
+          when coalesce(sc.super_commission, 0) > 1 then coalesce(sc.super_commission, 0) / 100
+          else coalesce(sc.super_commission, 0)
+        end
+      ) > 0
+      and (
+        case
+          when coalesce(ac.agent_commission, 0) > 1 then coalesce(ac.agent_commission, 0) / 100
+          else coalesce(ac.agent_commission, 0)
+        end
+      ) = (
+        case
+          when coalesce(sc.super_commission, 0) > 1 then coalesce(sc.super_commission, 0) / 100
+          else coalesce(sc.super_commission, 0)
+        end
+      )
+    `,
+    [userIds]
+  );
+
+  return new Set(result.rows.map((row) => row.agent_id));
+}
+
+async function loadTakesFullSuperCommissionIdsFromSupabase(
+  supabase: SupabaseClient,
+  userIds: string[]
+): Promise<Set<string>> {
+  const flagged = new Set<string>();
+  if (userIds.length === 0) return flagged;
+
+  const { data: users, error: usersError } = await supabase
+    .from("users")
+    .select("id, role, parent_id")
+    .in("id", userIds);
+
+  if (usersError) {
+    console.error("[Dashboard] full-super-commission users lookup error:", usersError.message);
+    return flagged;
+  }
+
+  const agents = (users || []).filter((row) => String(row.role || "").toLowerCase() === "agent");
+  const parentIds = [
+    ...new Set(agents.map((row) => String(row.parent_id || "")).filter(Boolean)),
+  ];
+  if (agents.length === 0) return flagged;
+
+  const parentById = new Map<
+    string,
+    { id: string; role: string; parent_id: string | null }
+  >();
+  if (parentIds.length > 0) {
+    const { data: parents, error: parentsError } = await supabase
+      .from("users")
+      .select("id, role, parent_id")
+      .in("id", parentIds);
+    if (parentsError) {
+      console.error(
+        "[Dashboard] full-super-commission parent lookup error:",
+        parentsError.message
+      );
+    }
+    for (const parent of parents || []) {
+      parentById.set(String(parent.id), {
+        id: String(parent.id),
+        role: String(parent.role || "").toLowerCase(),
+        parent_id: parent.parent_id ? String(parent.parent_id) : null,
+      });
+    }
+
+    const grandparentIds = [
+      ...new Set(
+        [...parentById.values()]
+          .filter((parent) => parent.role !== "super" && parent.parent_id)
+          .map((parent) => parent.parent_id as string)
+      ),
+    ];
+    if (grandparentIds.length > 0) {
+      const { data: grandparents, error: grandparentsError } = await supabase
+        .from("users")
+        .select("id, role, parent_id")
+        .in("id", grandparentIds);
+      if (grandparentsError) {
+        console.error(
+          "[Dashboard] full-super-commission grandparent lookup error:",
+          grandparentsError.message
+        );
+      }
+      for (const parent of grandparents || []) {
+        parentById.set(String(parent.id), {
+          id: String(parent.id),
+          role: String(parent.role || "").toLowerCase(),
+          parent_id: parent.parent_id ? String(parent.parent_id) : null,
+        });
+      }
+    }
+  }
+
+  const superIdByAgentId = new Map<string, string>();
+  for (const agent of agents) {
+    const parent = parentById.get(String(agent.parent_id || ""));
+    if (!parent) continue;
+    const superUser = parent.role === "super" ? parent : parentById.get(parent.parent_id || "");
+    if (!superUser || superUser.role !== "super") continue;
+    superIdByAgentId.set(String(agent.id), superUser.id);
+  }
+
+  const commissionUserIds = [
+    ...new Set([...superIdByAgentId.keys(), ...superIdByAgentId.values()]),
+  ];
+  if (commissionUserIds.length === 0) return flagged;
+
+  const { data: commissions, error: commissionsError } = await supabase
+    .from("user_commissions")
+    .select("user_id, agent_commission, super_commission")
+    .in("user_id", commissionUserIds);
+
+  if (commissionsError) {
+    console.error(
+      "[Dashboard] full-super-commission rates lookup error:",
+      commissionsError.message
+    );
+    return flagged;
+  }
+
+  const rateByUserId = new Map<string, { agent: number; super: number }>();
+  for (const row of commissions || []) {
+    rateByUserId.set(String(row.user_id), {
+      agent: normalizeCommissionRate(Number((row as { agent_commission?: number }).agent_commission)),
+      super: normalizeCommissionRate(Number((row as { super_commission?: number }).super_commission)),
+    });
+  }
+
+  for (const [agentId, superId] of superIdByAgentId) {
+    const agentRate = rateByUserId.get(agentId)?.agent ?? 0;
+    const superRate = rateByUserId.get(superId)?.super ?? 0;
+    if (superRate > 0 && Math.abs(agentRate - superRate) < 1e-9) {
+      flagged.add(agentId);
+    }
+  }
+
+  return flagged;
+}
+
+async function loadTakesFullSuperCommissionIds(
+  userIds: string[],
+  supabase?: SupabaseClient
+): Promise<Set<string>> {
+  const uniqueIds = [...new Set(userIds.filter(Boolean))];
+  if (uniqueIds.length === 0) return new Set();
+
+  try {
+    const fromPg = await loadTakesFullSuperCommissionIdsFromPostgres(uniqueIds);
+    if (fromPg) {
+      console.log("[Dashboard] full-super-commission flags loaded", {
+        source: "postgres",
+        flagged: fromPg.size,
+        operators: uniqueIds.length,
+      });
+      return fromPg;
+    }
+  } catch (err) {
+    console.error("[Dashboard] full-super-commission postgres error:", err);
+  }
+
+  if (!supabase) {
+    console.warn("[Dashboard] full-super-commission fallback skipped: no supabase client");
+    return new Set();
+  }
+
+  try {
+    const fromSupabase = await loadTakesFullSuperCommissionIdsFromSupabase(supabase, uniqueIds);
+    console.log("[Dashboard] full-super-commission flags loaded", {
+      source: "supabase",
+      flagged: fromSupabase.size,
+      operators: uniqueIds.length,
+    });
+    return fromSupabase;
+  } catch (err) {
+    console.error("[Dashboard] full-super-commission supabase error:", err);
+    return new Set();
+  }
+}
+
 type OperatorEarnedEvent = {
   userId: string;
   role: "agent" | "super";
@@ -512,7 +748,15 @@ export async function loadPanelCommissionBreakdownByPeriod(
     playedPromise,
     loadOperatorPlayingPlayerCounts(supabase),
   ]);
-  return attachPlayingCountsByPeriod(mergePlayedCountsByPeriod(breakdown, played), playingCounts);
+  const withPlaying = attachPlayingCountsByPeriod(
+    mergePlayedCountsByPeriod(breakdown, played),
+    playingCounts
+  );
+  const flaggedAgentIds = await loadTakesFullSuperCommissionIds(
+    uniqueOperatorIds(withPlaying.day, withPlaying.week, withPlaying.month, withPlaying.overall),
+    supabase
+  );
+  return applyTakesFullSuperCommissionByPeriod(withPlaying, flaggedAgentIds);
 }
 
 export async function loadPanelCommissionBreakdownInRange(
@@ -563,5 +807,10 @@ export async function loadPanelCommissionBreakdownInRange(
     playedPromise,
     loadOperatorPlayingPlayerCounts(supabase),
   ]);
-  return attachPlayingCounts(mergePlayedCounts(list, played), playingCounts);
+  const withPlaying = attachPlayingCounts(mergePlayedCounts(list, played), playingCounts);
+  const flaggedAgentIds = await loadTakesFullSuperCommissionIds(
+    uniqueOperatorIds(withPlaying),
+    supabase
+  );
+  return applyTakesFullSuperCommission(withPlaying, flaggedAgentIds);
 }

@@ -22,6 +22,11 @@ export interface DashboardPanelOperator {
   /** کمیسیون همان پنل (کانیات من ایجنت/سوپر) در بازه انتخاب‌شده */
   amount: number;
   /**
+   * ایجنتی که نرخ کانیاتش برابر نرخ کل سوپر بالاسری است
+   * (سهم خالص سوپر صفر می‌شود).
+   */
+  takesFullSuperCommission?: boolean;
+  /**
    * تعداد یکتای پلیرهای زیرمجموعه که در بازه انتخاب‌شده بازی کرده‌اند
    * (از جدول روزانه operator_player_play_days).
    */
@@ -53,6 +58,16 @@ export interface FinancialSummary {
   deposits: number; // واریزها
   withdrawals: number; // برداشت‌ها
   net: number; // بیلان (deposits - withdrawals یا عدد ترکیبی)
+  /**
+   * مجموع برد پلیرهای زیرمجموعه در بازه انتخاب‌شده.
+   * همان منطق سوابق لیدربورد: جوایز پرداخت‌شده اتاق‌های عادی.
+   */
+  playerWinnings?: number;
+  /**
+   * مجموع باخت/خرید پلیرهای زیرمجموعه در بازه انتخاب‌شده.
+   * همان «مجموع خرید» سوابق لیدربورد: قیمت کارت بلیت‌های confirmed/consumed.
+   */
+  playerPurchases?: number;
 }
 
 export interface DashboardData {

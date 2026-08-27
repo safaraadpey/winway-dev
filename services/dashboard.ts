@@ -21,6 +21,12 @@ import {
   loadOperatorPeriodCommissionSummary,
   type OperatorPeriodCommissionMap,
 } from "@/lib/dashboard/loadOperatorCommissionSummary";
+import {
+  emptyOperatorPlayerGamePerformanceByPeriod,
+  emptyPlayerGamePerformance,
+  type OperatorPlayerGamePerformanceByPeriod,
+  type PlayerGamePerformance,
+} from "@/lib/dashboard/playerGamePerformance";
 import type {
   DashboardData,
   DashboardPanelOperator,
@@ -40,6 +46,8 @@ export interface DashboardRangeSummary {
   deposits: number;
   withdrawals: number;
   net: number;
+  playerWinnings?: number;
+  playerPurchases?: number;
   panelOperators?: DashboardPanelOperator[];
 }
 
@@ -331,7 +339,7 @@ export async function loadDashboardRangeSummary(params: {
     .lte("created_at", toIso);
 
   const operatorRole = operatorRoleForUser(user.role);
-  const [manualRes, transferRes, operatorRangeTotals] = await Promise.all([
+  const [manualRes, transferRes, operatorRangeTotals, playerGameRange] = await Promise.all([
     manualPanelQuery,
     transferQuery,
     user.role === "admin" || !operatorRole
@@ -343,6 +351,9 @@ export async function loadDashboardRangeSummary(params: {
           fromIso,
           toIso,
         }),
+    operatorRole
+      ? fetchOperatorPlayerGamePerformanceRange(params.from, params.to)
+      : Promise.resolve(emptyPlayerGamePerformance()),
   ]);
 
   if (manualRes.error) throw new Error("خطا در دریافت واریز/برداشت");
@@ -438,6 +449,8 @@ export async function loadDashboardRangeSummary(params: {
     deposits,
     withdrawals,
     net: deposits - withdrawals,
+    playerWinnings: playerGameRange.playerWinnings,
+    playerPurchases: playerGameRange.playerPurchases,
   };
 }
 
@@ -548,6 +561,60 @@ function operatorRoleForUser(role: DashboardUserInfo["role"]): CommissionOperato
   return null;
 }
 
+async function fetchOperatorPlayerGamePerformanceByPeriod(): Promise<OperatorPlayerGamePerformanceByPeriod> {
+  try {
+    const data = await callAdminApi<OperatorPlayerGamePerformanceByPeriod>(
+      "/api/agent/dashboard/player-game-performance",
+      { method: "GET" }
+    );
+    return {
+      day: {
+        playerWinnings: Number(data?.day?.playerWinnings || 0),
+        playerPurchases: Number(data?.day?.playerPurchases || 0),
+        gamesPlayed: Number(data?.day?.gamesPlayed || 0),
+      },
+      week: {
+        playerWinnings: Number(data?.week?.playerWinnings || 0),
+        playerPurchases: Number(data?.week?.playerPurchases || 0),
+        gamesPlayed: Number(data?.week?.gamesPlayed || 0),
+      },
+      month: {
+        playerWinnings: Number(data?.month?.playerWinnings || 0),
+        playerPurchases: Number(data?.month?.playerPurchases || 0),
+        gamesPlayed: Number(data?.month?.gamesPlayed || 0),
+      },
+      overall: {
+        playerWinnings: Number(data?.overall?.playerWinnings || 0),
+        playerPurchases: Number(data?.overall?.playerPurchases || 0),
+        gamesPlayed: Number(data?.overall?.gamesPlayed || 0),
+      },
+    };
+  } catch (error) {
+    console.error("[Dashboard] player game performance fetch error:", error);
+    return emptyOperatorPlayerGamePerformanceByPeriod();
+  }
+}
+
+async function fetchOperatorPlayerGamePerformanceRange(
+  from: string,
+  to: string
+): Promise<PlayerGamePerformance> {
+  try {
+    const data = await callAdminApi<PlayerGamePerformance>(
+      `/api/agent/dashboard/player-game-performance?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      { method: "GET" }
+    );
+    return {
+      playerWinnings: Number(data?.playerWinnings || 0),
+      playerPurchases: Number(data?.playerPurchases || 0),
+      gamesPlayed: Number(data?.gamesPlayed || 0),
+    };
+  } catch (error) {
+    console.error("[Dashboard] player game performance range fetch error:", error);
+    return emptyPlayerGamePerformance();
+  }
+}
+
 function commissionTotalsFromDailyRows(
   rows: CommissionDailyStatRow[],
   fromDate?: string | null,
@@ -642,7 +709,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
 
   if (user.role !== "admin" && user.role !== "super" && user.role !== "agent") {
     const data: DashboardData = { user, summaries, activeRoomsCount: 0 };
-    const cacheKey = `v11|${user.id}|${user.role}|${user.id}`;
+    const cacheKey = `v12|${user.id}|${user.role}|${user.id}`;
     dashboardCache = { key: cacheKey, fetchedAtMs: Date.now(), data };
     return data;
   }
@@ -653,7 +720,7 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
 
   const maxAgeMs = options?.maxAgeMs ?? 30_000;
   // Bump this when cache semantics change.
-  const cacheKey = `v11|${user.id}|${user.role}|${user.parentId ?? ""}`;
+  const cacheKey = `v12|${user.id}|${user.role}|${user.parentId ?? ""}`;
   if (!options?.force && dashboardCache?.key === cacheKey) {
     const ageMs = Date.now() - dashboardCache.fetchedAtMs;
     if (ageMs >= 0 && ageMs <= maxAgeMs) {
@@ -735,27 +802,34 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
   const operatorRole = operatorRoleForUser(user.role);
   let commissionDailyRows: CommissionDailyStatRow[] = [];
   let operatorPeriodTotals: OperatorPeriodCommissionMap | null = null;
+  let playerGameByPeriod = emptyOperatorPlayerGamePerformanceByPeriod();
   let manualPanelTxsRes: { data: any[] | null; error: any };
   let transferTxsRes: { data: any[] | null; error: any };
 
   if (user.role === "admin") {
     [manualPanelTxsRes, transferTxsRes] = await Promise.all([manualPanelQuery, transferQuery]);
   } else {
-    [commissionDailyRows, operatorPeriodTotals, manualPanelTxsRes, transferTxsRes] =
-      await Promise.all([
-        loadCommissionDailyStatRows({
-          supabase,
-          userId: user.id,
-          role: operatorRole!,
-        }),
-        loadOperatorPeriodCommissionSummary({
-          supabase,
-          userId: user.id,
-          role: operatorRole!,
-        }),
-        manualPanelQuery,
-        transferQuery,
-      ]);
+    [
+      commissionDailyRows,
+      operatorPeriodTotals,
+      manualPanelTxsRes,
+      transferTxsRes,
+      playerGameByPeriod,
+    ] = await Promise.all([
+      loadCommissionDailyStatRows({
+        supabase,
+        userId: user.id,
+        role: operatorRole!,
+      }),
+      loadOperatorPeriodCommissionSummary({
+        supabase,
+        userId: user.id,
+        role: operatorRole!,
+      }),
+      manualPanelQuery,
+      transferQuery,
+      fetchOperatorPlayerGamePerformanceByPeriod(),
+    ]);
   }
 
   if (manualPanelTxsRes.error) {
@@ -864,6 +938,8 @@ export async function loadDashboardData(options?: { maxAgeMs?: number; force?: b
       deposits,
       withdrawals,
       net,
+      playerWinnings: playerGameByPeriod[period].playerWinnings,
+      playerPurchases: playerGameByPeriod[period].playerPurchases,
     };
   }
 

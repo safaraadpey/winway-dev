@@ -37,9 +37,19 @@ export interface UserAccountActivity {
   fullWins: number; // تعداد برد پر
   commission: number; // کانیات (کمیسیون)
   commissionTotal: number | null; // کانیات کل (مبنای کمیسیون) - ممکن است برای برخی نقش‌ها قابل محاسبه نباشد
-  deposits: number; // واریز
-  withdrawals: number; // برداشت
-  net: number; // بیلان
+  deposits: number; // واریز (درگاه + رمز ارز + شارژ پنل/ایجنت)
+  withdrawals: number; // برداشت (کلیم مستقیم بالاسری + درخواست برداشت تأییدشده)
+  net: number; // بیلان (واریز - برداشت)
+  /**
+   * مجموع برد همین کاربر (اگر پلیر باشد).
+   * جوایز پرداخت‌شده اتاق‌های عادی — همان منطق سوابق لیدربورد.
+   */
+  playerWinnings?: number;
+  /**
+   * مجموع باخت/خرید همین کاربر (اگر پلیر باشد).
+   * قیمت کارت بلیت‌های confirmed/consumed اتاق عادی.
+   */
+  playerPurchases?: number;
 }
 
 export type UserAccountActivityMetrics = Omit<UserAccountActivity, "period">;

@@ -1185,16 +1185,28 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
               {data?.user?.role === "player" && (
                 <>
                   <span>تعداد بازی</span>
-                  <span className="text-right font-mono">
-                    {(activity.gamesPlayed ?? 0).toLocaleString("en-US")}
+                  <span className="text-right">
+                    <AccountAmount value={activity.gamesPlayed ?? 0} />
                   </span>
-                  <span>تعداد برد خطی</span>
-                  <span className="text-right font-mono">
-                    {activity.lineWins.toLocaleString("en-US")}
+                  <span>مجموع برد پلیر</span>
+                  <span className="text-right">
+                    <AccountAmount value={activity.playerWinnings ?? 0} />
                   </span>
-                  <span>تعداد برد پر</span>
-                  <span className="text-right font-mono">
-                    {activity.fullWins.toLocaleString("en-US")}
+                  <span>مجموع باخت پلیر</span>
+                  <span className="text-right">
+                    <AccountAmount value={activity.playerPurchases ?? 0} />
+                  </span>
+                  <span>عملکرد بازی</span>
+                  <span
+                    className={`text-right ${
+                      (activity.playerWinnings ?? 0) - (activity.playerPurchases ?? 0) >= 0
+                        ? "text-emerald-400"
+                        : "text-rose-400"
+                    }`}
+                  >
+                    <AccountAmount
+                      value={(activity.playerWinnings ?? 0) - (activity.playerPurchases ?? 0)}
+                    />
                   </span>
                 </>
               )}
@@ -1210,11 +1222,11 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
                   <AccountAmount value={activity.commissionTotal} />
                 )}
               </span>
-              <span>واریز</span>
+              <span title="خرید درگاه، خرید رمز ارز و شارژ ایجنت">واریز</span>
               <span className="text-right">
                 <AccountAmount value={activity.deposits} />
               </span>
-              <span>برداشت</span>
+              <span title="کلیم مستقیم بالاسری و درخواست برداشت تأییدشده">برداشت</span>
               <span className="text-right">
                 <AccountAmount value={activity.withdrawals} />
               </span>

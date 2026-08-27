@@ -69,7 +69,9 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
   const { refreshWalletBalances } = useBalancesContext();
   const [tab, setTab] = useState<TabMode>(() => {
     const tabParam = searchParams.get("tab");
-    return tabParam === "withdrawals" ? "withdrawals" : "cashdesk";
+    if (tabParam === "withdrawals") return "withdrawals";
+    if (tabParam === "history") return "history";
+    return "cashdesk";
   });
   const [users, setUsers] = useState<ManagedUserSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,6 +91,9 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
   const [historyDateFilter, setHistoryDateFilter] = useState<DateFilter>("month");
   const [historySearch, setHistorySearch] = useState("");
   const [historySearchDebounced, setHistorySearchDebounced] = useState("");
+  const [historyTypeFilters, setHistoryTypeFilters] = useState<Set<string>>(
+    () => new Set()
+  );
   const [currentUserRole, setCurrentUserRole] = useState<string>("player");
   const [withdrawalRequests, setWithdrawalRequests] = useState<
     WithdrawalRequestItem[]
@@ -204,6 +209,22 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
   const handleHistorySearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setHistorySearch(e.target.value);
   };
+
+  const toggleHistoryTypeFilter = (legendKey: string) => {
+    setHistoryTypeFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(legendKey)) next.delete(legendKey);
+      else next.add(legendKey);
+      return next;
+    });
+  };
+
+  const displayedHistoryTransactions = useMemo(() => {
+    if (historyTypeFilters.size === 0) return historyTransactions;
+    return historyTransactions.filter((tx) =>
+      historyTypeFilters.has(getTransactionHistoryIndicator(tx).legendKey)
+    );
+  }, [historyTransactions, historyTypeFilters]);
 
   // Debounce history search to avoid refetch per keystroke.
   useEffect(() => {
@@ -589,21 +610,37 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                   </button>
                 </div>
 
-                {/* Color legend */}
-                <div className="mb-3 flex flex-wrap gap-x-3 gap-y-1.5 px-1">
-                  {TRANSACTION_HISTORY_LEGEND.map((item) => (
-                    <span
-                      key={item.legendKey}
-                      className="inline-flex items-center gap-1.5 text-[10px] text-gray-400"
-                    >
-                      <span
-                        className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: item.color }}
-                        aria-hidden
-                      />
-                      {item.label}
-                    </span>
-                  ))}
+                {/* Type filters */}
+                <div
+                  className="mb-3 flex flex-wrap gap-x-2 gap-y-1.5 px-1"
+                  role="group"
+                  aria-label="فیلتر نوع تراکنش"
+                >
+                  {TRANSACTION_HISTORY_LEGEND.map((item) => {
+                    const selected = historyTypeFilters.has(item.legendKey);
+                    return (
+                      <button
+                        key={item.legendKey}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => toggleHistoryTypeFilter(item.legendKey)}
+                        className={`inline-flex min-h-[28px] items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] transition-colors ${
+                          selected ? "text-white" : "text-gray-400 hover:text-gray-200"
+                        }`}
+                        style={{
+                          borderColor: selected ? item.color : "rgba(255,255,255,0.12)",
+                          backgroundColor: selected ? `${item.color}33` : "transparent",
+                        }}
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: item.color }}
+                          aria-hidden
+                        />
+                        {item.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -613,12 +650,12 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                   <div className="py-8 text-center text-gray-400 text-sm">
                     در حال بارگذاری...
                   </div>
-                ) : historyTransactions.length === 0 ? (
+                ) : displayedHistoryTransactions.length === 0 ? (
                   <div className="py-8 text-center text-gray-400 text-sm">
                     تراکنشی برای نمایش وجود ندارد
                   </div>
                 ) : (
-                  historyTransactions.map((tx) => {
+                  displayedHistoryTransactions.map((tx) => {
                     const isDepositLike =
                       tx.type === "deposit" ||
                       tx.type === "gateway_deposit" ||

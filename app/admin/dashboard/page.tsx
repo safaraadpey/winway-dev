@@ -85,6 +85,13 @@ function PanelOperatorsBreakdown({ operators }: { operators: DashboardPanelOpera
       {operators.map((op) => (
         <div key={op.userId} className="grid grid-cols-2 py-0.5 text-xs text-gray-300">
           <span className="flex min-w-0 items-center gap-1">
+            {op.role === "agent" && op.takesFullSuperCommission ? (
+              <span
+                className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-red-500"
+                title="کمیسیون این ایجنت برابر کمیسیون کل سوپر است"
+                aria-label="کمیسیون این ایجنت برابر کمیسیون کل سوپر است"
+              />
+            ) : null}
             <span className="min-w-0 truncate">
               {op.displayName}
               <span className="text-gray-500"> ({op.role === "super" ? "سوپر" : "ایجنت"})</span>

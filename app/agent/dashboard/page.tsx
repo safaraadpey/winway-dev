@@ -49,6 +49,8 @@ export default function AgentDashboardPage() {
     tournamentCommission: number;
     deposits: number;
     withdrawals: number;
+    playerWinnings?: number;
+    playerPurchases?: number;
   } | null>(null);
 
   useEffect(() => {
@@ -107,6 +109,8 @@ export default function AgentDashboardPage() {
         tournamentCommission: result.tournamentCommission,
         deposits: result.deposits,
         withdrawals: result.withdrawals,
+        playerWinnings: result.playerWinnings ?? 0,
+        playerPurchases: result.playerPurchases ?? 0,
       });
     } catch (error) {
       console.error("Error loading range dashboard summary:", error);
@@ -225,6 +229,26 @@ export default function AgentDashboardPage() {
                       0,
                       summary.ticketsVolume - (summary.tournamentCommission ?? 0)
                     )}
+                  />
+                </span>
+                <span>مجموع برد پلیر</span>
+                <span className="text-right">
+                  <DashboardAmount value={summary.playerWinnings ?? 0} />
+                </span>
+                <span>مجموع باخت پلیر</span>
+                <span className="text-right">
+                  <DashboardAmount value={summary.playerPurchases ?? 0} />
+                </span>
+                <span>عملکرد بازی</span>
+                <span
+                  className={`text-right ${
+                    (summary.playerWinnings ?? 0) - (summary.playerPurchases ?? 0) >= 0
+                      ? "text-emerald-400"
+                      : "text-rose-400"
+                  }`}
+                >
+                  <DashboardAmount
+                    value={(summary.playerWinnings ?? 0) - (summary.playerPurchases ?? 0)}
                   />
                 </span>
                 <span>واریز</span>

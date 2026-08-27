@@ -3,6 +3,13 @@
 // Service helpers for user account detail page (admin / agent / super).
 
 import { supabase } from "@/lib/supabaseClient";
+import { callAdminApi } from "@/lib/adminApiClient";
+import {
+  emptyOperatorPlayerGamePerformanceByPeriod,
+  emptyPlayerGamePerformance,
+  type OperatorPlayerGamePerformanceByPeriod,
+  type PlayerGamePerformance,
+} from "@/lib/dashboard/playerGamePerformance";
 import {
   getRollingWeekStart,
   getRollingMonthStart,
@@ -27,6 +34,7 @@ import type {
   UserAccountPeriod,
   UserAccountTransaction,
 } from "@/src/types/user-account";
+import { getWithdrawalStatusLabel } from "@/src/types/withdrawal";
 
 // تبدیل UUID به ID ده‌رقمی
 function makeShortIdFromUuid(id: string): string {
@@ -53,12 +61,18 @@ type UserAccountDataCacheEntry = {
 // Note: this runs in the browser only; it resets on full refresh.
 const userAccountDataCache = new Map<string, UserAccountDataCacheEntry>();
 
+const USER_ACCOUNT_CACHE_VERSION = "v3-outbound-withdrawals";
+
+function userAccountCacheKey(userId: string): string {
+  return `${USER_ACCOUNT_CACHE_VERSION}:${userId}`;
+}
+
 export function getCachedUserAccountData(
   userId: string,
   params: { maxAgeMs?: number } = {}
 ): UserAccountData | null {
   const { maxAgeMs = Infinity } = params;
-  const entry = userAccountDataCache.get(userId);
+  const entry = userAccountDataCache.get(userAccountCacheKey(userId));
   if (!entry) return null;
   const ageMs = Date.now() - entry.fetchedAtMs;
   if (ageMs < 0 || ageMs > maxAgeMs) return null;
@@ -66,7 +80,7 @@ export function getCachedUserAccountData(
 }
 
 export function primeUserAccountDataCache(userId: string, data: UserAccountData | null) {
-  userAccountDataCache.set(userId, {
+  userAccountDataCache.set(userAccountCacheKey(userId), {
     userId,
     fetchedAtMs: Date.now(),
     data,
@@ -75,9 +89,66 @@ export function primeUserAccountDataCache(userId: string, data: UserAccountData 
 
 export function clearUserAccountDataCache(userId?: string) {
   if (userId) {
-    userAccountDataCache.delete(userId);
+    userAccountDataCache.delete(userAccountCacheKey(userId));
   } else {
     userAccountDataCache.clear();
+  }
+}
+
+async function fetchPlayerGamePerformanceByPeriod(
+  userId: string
+): Promise<OperatorPlayerGamePerformanceByPeriod> {
+  try {
+    const data = await callAdminApi<OperatorPlayerGamePerformanceByPeriod>(
+      `/api/admin/users/player-game-performance?userId=${encodeURIComponent(userId)}`,
+      { method: "GET" }
+    );
+    return {
+      day: {
+        playerWinnings: Number(data?.day?.playerWinnings || 0),
+        playerPurchases: Number(data?.day?.playerPurchases || 0),
+        gamesPlayed: Number(data?.day?.gamesPlayed || 0),
+      },
+      week: {
+        playerWinnings: Number(data?.week?.playerWinnings || 0),
+        playerPurchases: Number(data?.week?.playerPurchases || 0),
+        gamesPlayed: Number(data?.week?.gamesPlayed || 0),
+      },
+      month: {
+        playerWinnings: Number(data?.month?.playerWinnings || 0),
+        playerPurchases: Number(data?.month?.playerPurchases || 0),
+        gamesPlayed: Number(data?.month?.gamesPlayed || 0),
+      },
+      overall: {
+        playerWinnings: Number(data?.overall?.playerWinnings || 0),
+        playerPurchases: Number(data?.overall?.playerPurchases || 0),
+        gamesPlayed: Number(data?.overall?.gamesPlayed || 0),
+      },
+    };
+  } catch (error) {
+    console.error("[UserAccount] player game performance fetch error:", error);
+    return emptyOperatorPlayerGamePerformanceByPeriod();
+  }
+}
+
+async function fetchPlayerGamePerformanceRange(
+  userId: string,
+  from: string,
+  to: string
+): Promise<PlayerGamePerformance> {
+  try {
+    const data = await callAdminApi<PlayerGamePerformance>(
+      `/api/admin/users/player-game-performance?userId=${encodeURIComponent(userId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      { method: "GET" }
+    );
+    return {
+      playerWinnings: Number(data?.playerWinnings || 0),
+      playerPurchases: Number(data?.playerPurchases || 0),
+      gamesPlayed: Number(data?.gamesPlayed || 0),
+    };
+  } catch (error) {
+    console.error("[UserAccount] player game performance range fetch error:", error);
+    return emptyPlayerGamePerformance();
   }
 }
 
@@ -265,6 +336,103 @@ async function loadPanelCashflowRows(
   return rows;
 }
 
+/** Gateway (deposit_domain) + crypto worker (crypto_deposit) inbound credits. */
+async function loadPurchaseInboundCashflowRows(
+  userId: string,
+  options?: { fromIso?: string; toIso?: string }
+): Promise<PanelCashflowRow[]> {
+  let query = supabase
+    .from("transactions")
+    .select("amount, created_at")
+    .eq("user_id", userId)
+    .eq("type", "deposit")
+    .in("source_kind", ["deposit_domain", "crypto_deposit"]);
+
+  if (options?.fromIso) {
+    query = query.gte("created_at", options.fromIso);
+  }
+  if (options?.toIso) {
+    query = query.lte("created_at", options.toIso);
+  }
+
+  const { data, error } = await query.limit(10000);
+  if (error) {
+    console.error("[UserAccount] purchase inbound cashflow error", error);
+    return [];
+  }
+
+  return (data || []).map((row) => ({
+    created_at: row.created_at,
+    depositAmount: Number(row.amount || 0),
+    withdrawAmount: 0,
+  }));
+}
+
+/**
+ * درخواست برداشت پلیر (ریالی / تتری) که واقعاً از کیف کم شده — فقط approved.
+ * pending/processing هنوز hold هستند و rejected/cancelled برگشت خورده‌اند.
+ */
+async function loadWithdrawalRequestCashflowRows(
+  userId: string,
+  options?: { fromIso?: string; toIso?: string }
+): Promise<PanelCashflowRow[]> {
+  const { data, error } = await supabase
+    .from("withdrawal_requests")
+    .select("amount, created_at, reviewed_at, status")
+    .eq("player_id", userId)
+    .eq("status", "approved")
+    .limit(10000);
+
+  if (error) {
+    console.error("[UserAccount] withdrawal_request cashflow error", error);
+    return [];
+  }
+
+  const fromMs = options?.fromIso ? Date.parse(options.fromIso) : null;
+  const toMs = options?.toIso ? Date.parse(options.toIso) : null;
+  const rows: PanelCashflowRow[] = [];
+
+  for (const row of data || []) {
+    const at = String(row.reviewed_at || row.created_at || "");
+    const ms = Date.parse(at);
+    if (!Number.isFinite(ms)) continue;
+    if (fromMs !== null && ms < fromMs) continue;
+    if (toMs !== null && ms > toMs) continue;
+    rows.push({
+      created_at: at,
+      depositAmount: 0,
+      withdrawAmount: Number(row.amount || 0),
+    });
+  }
+
+  return rows;
+}
+
+/**
+ * واریز: خرید درگاه + خرید رمز ارز + شارژ پنل/ایجنت.
+ * برداشت: کلیم مستقیم بالاسری + درخواست برداشت تأییدشده.
+ */
+async function loadInboundCashflowRows(
+  userId: string,
+  userRole: UserAccountInfo["role"],
+  options?: { fromIso?: string; toIso?: string }
+): Promise<PanelCashflowRow[]> {
+  const [panelRows, purchaseRows, withdrawalRequestRows] = await Promise.all([
+    loadPanelCashflowRows(userId, userRole, options),
+    loadPurchaseInboundCashflowRows(userId, options),
+    loadWithdrawalRequestCashflowRows(userId, options),
+  ]);
+  console.info("[UserAccount] account cashflow loaded", {
+    userId,
+    role: userRole,
+    panelRows: panelRows.length,
+    purchaseRows: purchaseRows.length,
+    withdrawalRequestRows: withdrawalRequestRows.length,
+    source: "supabase",
+  });
+  return [...panelRows, ...purchaseRows, ...withdrawalRequestRows];
+}
+
 function sumPanelCashflow(
   rows: PanelCashflowRow[],
   startMs: number | null
@@ -327,7 +495,7 @@ async function loadMonthlyActivitySource(
     .eq("user_id", userId)
     .gte("created_at", monthStartIso ?? "1970-01-01T00:00:00.000Z");
 
-  const panelCashflowPromise = loadPanelCashflowRows(userId, userRole);
+  const panelCashflowPromise = loadInboundCashflowRows(userId, userRole);
 
   const ticketsPromise =
     userRole === "player"
@@ -1099,8 +1267,8 @@ async function calculateUserActivity(
       commissionTotal = null; // commissions_log doesn't track admin_id; requires org tree aggregation
     }
 
-    // محاسبه واریز و برداشت پنلی (manual_panel + admin_panel_transfer)
-    const panelCashflowRows = await loadPanelCashflowRows(userId, userRole, {
+    // واریز: درگاه + رمز ارز + شارژ پنل/ایجنت — برداشت: کلیم بالاسری + درخواست برداشت تأییدشده
+    const panelCashflowRows = await loadInboundCashflowRows(userId, userRole, {
       fromIso: periodStartIso ?? undefined,
     });
     const { deposits, withdrawals, net } = sumPanelCashflowAll(panelCashflowRows);
@@ -1215,12 +1383,21 @@ async function loadPanelUserTransactions(userId: string): Promise<UserAccountTra
     });
 }
 
-function classifyDepositDomainTitle(idempotencyKey: string | null | undefined): {
+function classifyDepositDomainTitle(
+  idempotencyKey: string | null | undefined,
+  sourceKind?: string | null
+): {
   category: "gateway_deposit" | "crypto_deposit";
   title: string;
 } {
+  if (sourceKind === "crypto_deposit") {
+    return { category: "crypto_deposit", title: "خرید تتری" };
+  }
   const key = String(idempotencyKey ?? "");
-  if (key.startsWith("deposit:tron:")) {
+  if (
+    key.startsWith("deposit:tron:") ||
+    key.startsWith("deposit:crypto:")
+  ) {
     return { category: "crypto_deposit", title: "خرید تتری" };
   }
   if (key.startsWith("deposit:fiat:")) {
@@ -1230,17 +1407,17 @@ function classifyDepositDomainTitle(idempotencyKey: string | null | undefined): 
 }
 
 /**
- * بارگذاری واریزهای درگاه / تتری (deposit_domain)
+ * بارگذاری واریزهای درگاه / تتری (deposit_domain + crypto_deposit)
  */
 async function loadDepositDomainUserTransactions(
   userId: string
 ): Promise<UserAccountTransaction[]> {
   const { data, error } = await supabase
     .from("transactions")
-    .select("id, amount, type, created_at, idempotency_key")
+    .select("id, amount, type, created_at, idempotency_key, source_kind")
     .eq("user_id", userId)
-    .eq("source_kind", "deposit_domain")
     .eq("type", "deposit")
+    .in("source_kind", ["deposit_domain", "crypto_deposit"])
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -1250,7 +1427,10 @@ async function loadDepositDomainUserTransactions(
   }
 
   return (data || []).map((row: any) => {
-    const { category, title } = classifyDepositDomainTitle(row.idempotency_key);
+    const { category, title } = classifyDepositDomainTitle(
+      row.idempotency_key,
+      row.source_kind
+    );
     return {
       id: row.id,
       amount: Number(row.amount || 0),
@@ -1270,7 +1450,7 @@ async function loadWithdrawalUserTransactions(
 ): Promise<UserAccountTransaction[]> {
   const { data, error } = await supabase
     .from("withdrawal_requests")
-    .select("id, amount, kind, created_at, crypto_symbol, network")
+    .select("id, amount, kind, created_at, crypto_symbol, network, status")
     .eq("player_id", userId)
     .order("created_at", { ascending: false })
     .limit(50);
@@ -1284,11 +1464,13 @@ async function loadWithdrawalUserTransactions(
     const isCrypto = row.kind === "crypto";
     const symbol = String(row.crypto_symbol || "USDT").toUpperCase();
     const network = String(row.network || "").toUpperCase();
-    const title = isCrypto
+    const statusLabel = getWithdrawalStatusLabel(row.status);
+    const baseTitle = isCrypto
       ? network
         ? `برداشت ${symbol} (${network})`
         : `برداشت ${symbol}`
-      : "برداشت";
+      : "درخواست برداشت";
+    const title = `${baseTitle} — ${statusLabel}`;
 
     return {
       id: String(row.id),
@@ -1597,7 +1779,7 @@ export async function loadUserAccountRangeActivity(
           .lte("created_at", toIso)
       : Promise.resolve({ data: [] as { room_id: string }[], error: null });
 
-  const panelCashflowPromise = loadPanelCashflowRows(userId, userRole, {
+  const panelCashflowPromise = loadInboundCashflowRows(userId, userRole, {
     fromIso,
     toIso,
   });
@@ -1678,9 +1860,13 @@ export async function loadUserAccountRangeActivity(
             .filter((id): id is string => typeof id === "string" && id.length > 0)
         ).size
       : 0;
+  const playerPerf =
+    userRole === "player"
+      ? await fetchPlayerGamePerformanceRange(userId, params.from, params.to)
+      : emptyPlayerGamePerformance();
 
   return {
-    gamesPlayed,
+    gamesPlayed: userRole === "player" ? playerPerf.gamesPlayed : gamesPlayed,
     lineWins,
     fullWins,
     commission,
@@ -1688,6 +1874,8 @@ export async function loadUserAccountRangeActivity(
     deposits,
     withdrawals,
     net,
+    playerWinnings: playerPerf.playerWinnings,
+    playerPurchases: playerPerf.playerPurchases,
   };
 }
 
@@ -1728,6 +1916,18 @@ export async function loadUserAccountData(
     }
 
     const transactions = await loadUserTransactions(userId);
+
+    if (user.role === "player") {
+      const playerPerf = await fetchPlayerGamePerformanceByPeriod(userId);
+      for (const period of ["day", "week", "month", "overall"] as UserAccountPeriod[]) {
+        activities[period] = {
+          ...activities[period],
+          playerWinnings: playerPerf[period].playerWinnings,
+          playerPurchases: playerPerf[period].playerPurchases,
+          gamesPlayed: playerPerf[period].gamesPlayed,
+        };
+      }
+    }
 
     const result: UserAccountData = {
       user,
