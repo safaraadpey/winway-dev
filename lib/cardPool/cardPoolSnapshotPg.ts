@@ -189,6 +189,90 @@ export async function loadCardPoolDefinitionsFromPg(
   }
 }
 
+export async function loadCardDefinitionByCardNoFromPg(
+  poolId: string,
+  cardNo: number
+): Promise<CardPoolDefinition | null> {
+  if (!pgPool) return null;
+
+  try {
+    const cardsResult = await pgPool.query<{
+      pool_card_id: string;
+      card_no: number;
+      card_data: unknown;
+    }>(
+      `
+      select
+        id::text as pool_card_id,
+        card_no,
+        card_data
+      from public.card_pool_cards
+      where pool_id = $1::uuid
+        and card_no = $2
+      limit 1
+      `,
+      [poolId, cardNo]
+    );
+
+    const row = cardsResult.rows[0];
+    if (row) {
+      const grid = normalizeCardGrid(row.card_data);
+      if (grid) {
+        return {
+          poolCardId: row.pool_card_id,
+          cardNo: row.card_no,
+          card: grid,
+        };
+      }
+    }
+
+    const numbersResult = await pgPool.query<{
+      pool_card_id: string;
+      card_no: number;
+      row_no: number;
+      col_no: number;
+      value: number | null;
+    }>(
+      `
+      select
+        cpc.id::text as pool_card_id,
+        cpc.card_no,
+        cn.row_no,
+        cn.col_no,
+        cn.value
+      from public.card_pool_cards cpc
+      join public.card_numbers cn on cn.pool_card_id = cpc.id
+      where cpc.pool_id = $1::uuid
+        and cpc.card_no = $2
+      order by cn.row_no asc, cn.col_no asc
+      `,
+      [poolId, cardNo]
+    );
+
+    if (numbersResult.rows.length === 0) return null;
+
+    const first = numbersResult.rows[0]!;
+    const definition: CardPoolDefinition = {
+      poolCardId: first.pool_card_id,
+      cardNo: first.card_no,
+      card: Array.from({ length: 3 }, () => Array(9).fill(null) as Array<number | null>),
+    };
+
+    for (const n of numbersResult.rows) {
+      const rowIndex = n.row_no - 1;
+      const colIndex = n.col_no - 1;
+      if (rowIndex >= 0 && rowIndex < 3 && colIndex >= 0 && colIndex < 9) {
+        definition.card[rowIndex]![colIndex] = n.value;
+      }
+    }
+
+    return definition;
+  } catch (err) {
+    console.error("[CardPoolCache] loadCardDefinitionByCardNoFromPg error:", err);
+    return null;
+  }
+}
+
 export async function loadCardPoolMetaForRoomFromPg(
   roomId: string
 ): Promise<CardPoolVersionMeta | null> {

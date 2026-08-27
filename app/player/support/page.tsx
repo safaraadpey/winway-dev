@@ -17,6 +17,10 @@ const supportLinks = [
     href: "/player/support/draw-review",
     title: "بررسی قرعه",
   },
+  {
+    href: "/player/support/cards",
+    title: "مشاهده کارتها",
+  },
 ] as const;
 
 export default function SupportPage() {

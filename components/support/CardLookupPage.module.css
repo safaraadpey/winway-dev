@@ -1,0 +1,173 @@
+.page {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  background-color: #0e0e0f;
+  color: #ffffff;
+  padding: 0.5rem 1rem 2rem;
+  scrollbar-width: none;
+}
+
+.page::-webkit-scrollbar {
+  display: none;
+}
+
+.inner {
+  max-width: 28rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #feeeb4;
+}
+
+.intro {
+  font-size: 13px;
+  line-height: 1.625;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: right;
+  direction: rtl;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  text-align: right;
+}
+
+.inputWrap {
+  overflow: hidden;
+  border-radius: 1rem;
+  border: 1px solid #2a3a52;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.inputWrap:focus-within {
+  border-color: #2a92b2;
+}
+
+.input {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0.75rem 1rem;
+  color: rgba(255, 255, 255, 0.9);
+  outline: none;
+  text-align: center;
+}
+
+.primaryButton {
+  width: 100%;
+  border: none;
+  border-radius: 1rem;
+  background: #2a92b2;
+  padding: 0.75rem 1rem;
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #ffffff;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+.primaryButton:active {
+  opacity: 0.9;
+}
+
+.primaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error {
+  border-radius: 1rem;
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  background: rgba(69, 10, 10, 0.4);
+  padding: 0.75rem 1rem;
+  font-size: 13px;
+  color: #fecaca;
+  text-align: right;
+  direction: rtl;
+}
+
+.hint {
+  font-size: 13px;
+  line-height: 1.625;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: right;
+  direction: rtl;
+}
+
+.cardPreview {
+  width: 100%;
+  overflow: hidden;
+}
+
+:global(html[data-theme="light"]) .page {
+  background: linear-gradient(180deg, #fdfbff 0%, #f5f0ff 52%, #ede9fe 100%);
+  color: #111827;
+}
+
+:global(html[data-theme="light"]) .title {
+  color: #6d28d9;
+}
+
+:global(html[data-theme="light"]) .intro,
+:global(html[data-theme="light"]) .hint {
+  color: #8b7cb5;
+}
+
+:global(html[data-theme="light"]) .label {
+  color: #5b21b6;
+}
+
+:global(html[data-theme="light"]) .inputWrap {
+  border-color: #ddd6fe;
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(124, 58, 237, 0.06);
+}
+
+:global(html[data-theme="light"]) .inputWrap:focus-within {
+  border-color: #a855f7;
+}
+
+:global(html[data-theme="light"]) .input {
+  color: #4c1d95;
+}
+
+:global(html[data-theme="light"]) .primaryButton {
+  background: linear-gradient(135deg, #c084fc 0%, #a855f7 48%, #6366f1 100%);
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.28);
+}
+
+:global(html[data-theme="light"]) .error {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
