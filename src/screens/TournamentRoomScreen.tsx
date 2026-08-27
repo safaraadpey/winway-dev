@@ -899,7 +899,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
             ) : dingLeaderboard.length === 0 ? (
               <div className={screenStyles.dingRankEmpty}>رتبه‌بندی DING ثبت نشده است.</div>
             ) : (
-              <div className="mt-2 space-y-2">
+              <div className={screenStyles.dingRankList}>
                 {dingLeaderboard.map((entry, index) => (
                   <div
                     key={`${entry.userId}-${index}`}
