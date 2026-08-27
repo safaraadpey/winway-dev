@@ -366,6 +366,7 @@ function createOrchestrator(): ActiveGamesOrchestrator {
           r.currency ?? "",
           r.templateId ?? "",
           String(r.templateTableIndex ?? ""),
+          String(r.roundNo ?? ""),
         ].join("|")
       )
       .join(";");
@@ -1078,6 +1079,8 @@ function createOrchestrator(): ActiveGamesOrchestrator {
           typeof room.templateTableIndex === "number" && room.templateTableIndex > 0
             ? room.templateTableIndex
             : undefined,
+        roundNo:
+          typeof room.roundNo === "number" && room.roundNo > 0 ? room.roundNo : null,
       };
 
       const rooms = [...store.data.rooms];
@@ -1096,6 +1099,7 @@ function createOrchestrator(): ActiveGamesOrchestrator {
           templateId: nextRoom.templateId ?? prev.templateId ?? null,
           templateTableIndex:
             nextRoom.templateTableIndex ?? prev.templateTableIndex ?? 1,
+          roundNo: nextRoom.roundNo ?? prev.roundNo ?? null,
         };
       } else {
         const siblingCount = rooms.filter(

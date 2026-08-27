@@ -23,6 +23,8 @@ export interface ActiveRoom {
   templateId?: string | null;
   /** 1-based index among currently active rooms of the same template. */
   templateTableIndex?: number;
+  /** Tournament round number; null for non-tournament rooms. */
+  roundNo?: number | null;
 }
 
 export interface ActiveGames {
@@ -265,6 +267,8 @@ export function useActiveGames(): ActiveGames {
           typeof room.templateTableIndex === "number" && room.templateTableIndex > 0
             ? room.templateTableIndex
             : undefined,
+        roundNo:
+          typeof room.roundNo === "number" && room.roundNo > 0 ? room.roundNo : null,
       };
       const idx = prev.findIndex((r) => r.roomId === nextRoom.roomId);
       let next: ActiveRoom[];
@@ -283,6 +287,7 @@ export function useActiveGames(): ActiveGames {
           templateId: nextRoom.templateId ?? existing.templateId ?? null,
           templateTableIndex:
             nextRoom.templateTableIndex ?? existing.templateTableIndex ?? 1,
+          roundNo: nextRoom.roundNo ?? existing.roundNo ?? null,
         };
       } else {
         const siblingCount = prev.filter(

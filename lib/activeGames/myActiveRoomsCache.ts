@@ -20,6 +20,7 @@ export type CachedActiveRoom = {
   roomType: string;
   templateId: string | null;
   templateTableIndex: number;
+  roundNo: number | null;
 };
 
 type CacheEntry = {

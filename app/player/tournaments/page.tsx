@@ -309,6 +309,14 @@ export default function TournamentsPage() {
                       0,
                       prizePoolGross * (1 - commissionRate)
                     );
+                    const guaranteedPrize = Number(t.guaranteed_prize) || 0;
+                    const hasGuarantee = guaranteedPrize > 0;
+                    const prizeLabel = hasGuarantee
+                      ? "جایزه گارانتی"
+                      : "جایزه جمع شده";
+                    const prizeAmount = hasGuarantee
+                      ? Math.max(guaranteedPrize, collectedAmount)
+                      : collectedAmount;
                     const winnerPercents = prizePercents[t.id] ?? [];
                     return (
                       <div
@@ -328,68 +336,65 @@ export default function TournamentsPage() {
                           <div className={styles.cardTitle}>
                             {t.title || "بدون عنوان"}
                           </div>
-                          <div className={styles.cardBadges}>
-                            <span className={styles.statusBadge}>
-                              {statusLabel(t.status)}
-                            </span>
-                          </div>
                         </div>
 
                         <div className={styles.detailsGrid}>
-                          <div className={styles.field}>
-                            <span className={styles.fieldLabel}>جایزه تضمینی</span>
-                            <span className={styles.fieldValue}>
-                              {t.guaranteed_prize != null
-                                ? t.guaranteed_prize.toLocaleString("en-US")
-                                : "-"}
-                            </span>
+                          <div className={styles.detailsRow}>
+                            <div className={styles.field}>
+                              <span className={styles.fieldLabel}>{prizeLabel}</span>
+                              <span className={styles.fieldValue} dir="ltr">
+                                {prizeAmount.toLocaleString("en-US")}
+                              </span>
+                            </div>
+                            <div className={styles.field}>
+                              <span className={styles.fieldLabel}>زمان شروع</span>
+                              <span className={styles.startTimeValue}>
+                                {t.start_at
+                                  ? `${new Date(t.start_at).toLocaleDateString("fa-IR")}، ${new Date(
+                                      t.start_at
+                                    ).toLocaleTimeString("fa-IR", {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}`
+                                  : "-"}
+                              </span>
+                            </div>
+                            <div className={styles.field}>
+                              <span className={styles.fieldLabel}>وضعیت</span>
+                              <span className={styles.statusBadge}>
+                                {statusLabel(t.status)}
+                              </span>
+                            </div>
                           </div>
-                          <div className={styles.field}>
-                            <span className={styles.fieldLabel}>
-                              {entryCurrency === "DING"
-                                ? "ورودی(دینگ)"
-                                : "قیمت کارت(تومان)"}
-                            </span>
-                            <span className={styles.fieldValue}>
-                              {t.ticket_price != null
-                                ? t.ticket_price <= 0
-                                  ? "رایگان"
-                                  : t.ticket_price.toLocaleString("en-US")
-                                : "-"}
-                            </span>
-                          </div>
-                          <div className={styles.field}>
-                            <span className={styles.fieldLabel}>زمان شروع</span>
-                            <span className={styles.startTimeValue}>
-                              {t.start_at
-                                ? `${new Date(t.start_at).toLocaleDateString("fa-IR")}، ${new Date(
-                                    t.start_at
-                                  ).toLocaleTimeString("fa-IR", {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}`
-                                : "-"}
-                            </span>
-                          </div>
-                          <div className={styles.field}>
-                            <span className={styles.fieldLabel}>مبلغ جمع شده</span>
-                            <span className={styles.fieldValue} dir="ltr">
-                              {collectedAmount.toLocaleString("en-US")}
-                            </span>
-                          </div>
-                          <div className={styles.field}>
-                            <span className={styles.fieldLabel}>تعداد شرکت‌کننده</span>
-                            <span className={styles.fieldValue}>
-                              {entriesCount.toLocaleString("en-US")}
-                            </span>
-                          </div>
-                          <div className={styles.field}>
-                            <span className={styles.fieldLabel}>تعداد برنده نهایی</span>
-                            <span className={styles.fieldValue}>
-                              {finalWinnersCount != null
-                                ? finalWinnersCount.toLocaleString("en-US")
-                                : "-"}
-                            </span>
+                          <div className={styles.detailsRow}>
+                            <div className={styles.field}>
+                              <span className={styles.fieldLabel}>
+                                {entryCurrency === "DING"
+                                  ? "ورودی(دینگ)"
+                                  : "قیمت کارت(تومان)"}
+                              </span>
+                              <span className={styles.fieldValue}>
+                                {t.ticket_price != null
+                                  ? t.ticket_price <= 0
+                                    ? "رایگان"
+                                    : t.ticket_price.toLocaleString("en-US")
+                                  : "-"}
+                              </span>
+                            </div>
+                            <div className={styles.field}>
+                              <span className={styles.fieldLabel}>تعداد شرکت‌کننده</span>
+                              <span className={styles.fieldValue}>
+                                {entriesCount.toLocaleString("en-US")}
+                              </span>
+                            </div>
+                            <div className={styles.field}>
+                              <span className={styles.fieldLabel}>تعداد برنده نهایی</span>
+                              <span className={styles.fieldValue}>
+                                {finalWinnersCount != null
+                                  ? finalWinnersCount.toLocaleString("en-US")
+                                  : "-"}
+                              </span>
+                            </div>
                           </div>
                         </div>
 

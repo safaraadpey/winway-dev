@@ -101,6 +101,10 @@ export default function MyActiveGames() {
   };
 
   const getDisplayText = (room: (typeof rooms)[number]): string => {
+    if (isTournament(room)) {
+      const roundNo = room.roundNo && room.roundNo > 0 ? room.roundNo : 1;
+      return `تور / ${roundNo.toLocaleString("en-US")}`;
+    }
     const priceK = getPriceInThousands(room.cardPrice);
     const tableIndex = getTemplateTableIndex(room, rooms);
     if (priceK > 0) {
@@ -134,6 +138,9 @@ export default function MyActiveGames() {
             const isCurrentRoom = Boolean(
               currentRoomId && room.roomId === currentRoomId
             );
+            const tournament = isTournament(room);
+            const roundNo =
+              tournament && room.roundNo && room.roundNo > 0 ? room.roundNo : 1;
             const priceK = getPriceInThousands(room.cardPrice);
             const tableIndex = getTemplateTableIndex(room, rooms);
 
@@ -145,7 +152,7 @@ export default function MyActiveGames() {
               aria-label={`رفتن به روم ${getDisplayText(room)}`}
               aria-current={isCurrentRoom ? "true" : undefined}
             >
-              {isTournament(room) && (
+              {tournament && (
                 <svg
                   className={styles.trophyIcon}
                   viewBox="0 0 24 24"
@@ -156,18 +163,32 @@ export default function MyActiveGames() {
                 </svg>
               )}
               <span className={styles.chipText}>
-                <span className={styles.chipPriceGroup}>
-                  {priceK > 0 ? <span className={styles.chipUnit}>هزار</span> : null}
-                  <span className={styles.chipNum} dir="ltr">
-                    {priceK > 0 ? priceK.toLocaleString("en-US") : formatPrice(room.cardPrice)}
-                  </span>
-                </span>
-                <span className={styles.chipNum} dir="ltr">
-                  /
-                </span>
-                <span className={styles.chipNum} dir="ltr">
-                  {tableIndex}
-                </span>
+                {tournament ? (
+                  <>
+                    <span className={styles.chipUnit}>تور</span>
+                    <span className={styles.chipNum} dir="ltr">
+                      /
+                    </span>
+                    <span className={styles.chipNum} dir="ltr">
+                      {roundNo.toLocaleString("en-US")}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className={styles.chipPriceGroup}>
+                      {priceK > 0 ? <span className={styles.chipUnit}>هزار</span> : null}
+                      <span className={styles.chipNum} dir="ltr">
+                        {priceK > 0 ? priceK.toLocaleString("en-US") : formatPrice(room.cardPrice)}
+                      </span>
+                    </span>
+                    <span className={styles.chipNum} dir="ltr">
+                      /
+                    </span>
+                    <span className={styles.chipNum} dir="ltr">
+                      {tableIndex}
+                    </span>
+                  </>
+                )}
               </span>
               {getStatusIcon(room.status)}
             </button>

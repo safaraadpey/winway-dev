@@ -12,6 +12,7 @@ export type ActiveRoomRow = {
   room_type: string | null;
   template_id?: string | null;
   template_table_index?: number | string | null;
+  round_no?: number | string | null;
 };
 
 const STATUS_ORDER: Record<CachedActiveRoom["status"], number> = {
@@ -33,6 +34,9 @@ export function mapRpcToActiveRooms(rows: ActiveRoomRow[]): CachedActiveRoom[] {
     roomType: room.room_type || "normal",
     templateId: room.template_id || null,
     templateTableIndex: Math.max(1, Number(room.template_table_index || 1)),
+    roundNo: Number.isFinite(Number(room.round_no))
+      ? Math.max(1, Number(room.round_no))
+      : null,
   }));
 
   activeRooms.sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
