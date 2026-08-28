@@ -489,6 +489,7 @@ export type BackgammonListItem = {
   stateVersion: number;
   createdAt: string;
   mySeat: Seat | null;
+  canJoin: boolean;
 };
 
 export async function listBackgammonGames(userId: string): Promise<BackgammonListItem[]> {
@@ -514,23 +515,26 @@ export async function listBackgammonGames(userId: string): Promise<BackgammonLis
          ON sp_me.session_id = gs.id AND sp_me.user_id = $1::uuid
        WHERE gs.game_id = $2::uuid
          AND gs.status IN ('waiting', 'running')
-         AND (
-           gs.status = 'waiting'
-           OR sp_me.user_id IS NOT NULL
-         )
        ORDER BY gs.created_at DESC
        LIMIT 50`,
       [userId, BACKGAMMON_GAME_ID]
     );
 
-    return res.rows.map((row) => ({
-      sessionId: row.session_id,
-      status: row.status,
-      participantCount: row.participant_count,
-      stateVersion: Number(row.state_version),
-      createdAt: row.created_at,
-      mySeat:
-        row.my_seat === 0 || row.my_seat === 1 ? (row.my_seat as Seat) : null,
-    }));
+    return res.rows.map((row) => {
+      const mySeat =
+        row.my_seat === 0 || row.my_seat === 1 ? (row.my_seat as Seat) : null;
+      return {
+        sessionId: row.session_id,
+        status: row.status,
+        participantCount: row.participant_count,
+        stateVersion: Number(row.state_version),
+        createdAt: row.created_at,
+        mySeat,
+        canJoin:
+          mySeat === null &&
+          row.status === "waiting" &&
+          row.participant_count < BACKGAMMON_CAPACITY,
+      };
+    });
   });
 }

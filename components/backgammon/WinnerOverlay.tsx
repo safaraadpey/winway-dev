@@ -14,7 +14,12 @@ export default function WinnerOverlay({ snapshot, onClose }: Props) {
     return null;
   }
 
-  const winnerLabel = snapshot.winner === snapshot.mySeat ? "You win!" : "Opponent wins";
+  const isSpectator = snapshot.isSpectator || snapshot.mySeat === null;
+  const winnerLabel = isSpectator
+    ? `${snapshot.winner === 0 ? "White" : "Black"} wins`
+    : snapshot.winner === snapshot.mySeat
+      ? "You win!"
+      : "Opponent wins";
   const seatLabel = snapshot.winner === 0 ? "White" : "Black";
 
   return (

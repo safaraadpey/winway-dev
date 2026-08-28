@@ -6,7 +6,7 @@ import {
 } from "@/lib/backgammon/apiResponses";
 import {
   buildPublicSnapshot,
-  loadAuthorizedSnapshot,
+  loadViewableSnapshot,
 } from "@/lib/backgammon/snapshot";
 
 export const runtime = "nodejs";
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
       return backgammonFail("missing_parameters", "sessionId is required.", 400);
     }
 
-    const { userId, snapshot } = await loadAuthorizedSnapshot(request, sessionId);
+    const { userId, snapshot } = await loadViewableSnapshot(request, sessionId);
     return backgammonOk(buildPublicSnapshot(snapshot, userId));
   } catch (err) {
     return handleBackgammonRouteError(err);

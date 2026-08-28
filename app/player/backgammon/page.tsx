@@ -12,6 +12,22 @@ import styles from "./backgammon.module.css";
 
 type GameListItem = Awaited<ReturnType<typeof listBackgammonGames>>[number];
 
+const LOBBY_POLL_MS = 5000;
+
+function gameTitle(game: GameListItem): string {
+  if (game.mySeat !== null) {
+    return game.status === "waiting" ? "بازی شما — در انتظار حریف" : "بازی شما";
+  }
+  if (game.canJoin) return "در انتظار حریف";
+  return "در حال اجرا";
+}
+
+function gameAction(game: GameListItem): string {
+  if (game.mySeat !== null) return "ادامه";
+  if (game.canJoin) return "ورود";
+  return "تماشا";
+}
+
 export default function BackgammonLobbyPage() {
   const router = useRouter();
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
@@ -43,6 +59,12 @@ export default function BackgammonLobbyPage() {
 
   useEffect(() => {
     void refresh();
+    const poll = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void refresh();
+      }
+    }, LOBBY_POLL_MS);
+    return () => clearInterval(poll);
   }, [refresh]);
 
   const handleCreate = async () => {
@@ -58,14 +80,16 @@ export default function BackgammonLobbyPage() {
     }
   };
 
-  const handleJoin = async (sessionId: string) => {
+  const handleOpen = async (game: GameListItem) => {
     try {
       setBusy(true);
       setError(null);
-      await joinBackgammonGame(sessionId);
-      router.push(`/player/backgammon/${sessionId}`);
+      if (game.canJoin) {
+        await joinBackgammonGame(game.sessionId);
+      }
+      router.push(`/player/backgammon/${game.sessionId}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to join game");
+      setError(err instanceof Error ? err.message : "Failed to open game");
     } finally {
       setBusy(false);
     }
@@ -74,8 +98,10 @@ export default function BackgammonLobbyPage() {
   return (
     <div className={styles.page}>
       <div>
-        <h1 className={styles.title}>Backgammon Beta</h1>
-        <p className={styles.subtitle}>Create or join a 2-player match.</p>
+        <h1 className={styles.title}>تخته‌نرد</h1>
+        <p className={styles.subtitle}>
+          بازی بسازید، به میز باز بپیوندید، یا بازی‌های در حال اجرا را تماشا کنید.
+        </p>
       </div>
 
       <button
@@ -84,7 +110,7 @@ export default function BackgammonLobbyPage() {
         disabled={busy}
         onClick={() => void handleCreate()}
       >
-        Create game
+        ساخت بازی
       </button>
 
       <button
@@ -93,7 +119,7 @@ export default function BackgammonLobbyPage() {
         disabled={busy}
         onClick={() => void refresh()}
       >
-        Refresh list
+        به‌روزرسانی لیست
       </button>
 
       {error ? <div className={styles.error}>{error}</div> : null}
@@ -106,11 +132,14 @@ export default function BackgammonLobbyPage() {
             type="button"
             className={styles.listItem}
             disabled={busy}
-            onClick={() => void handleJoin(game.sessionId)}
+            onClick={() => void handleOpen(game)}
           >
-            <div>{game.status === "waiting" ? "Waiting room" : "Active match"}</div>
+            <div className={styles.listItemRow}>
+              <span>{gameTitle(game)}</span>
+              <span className={styles.listAction}>{gameAction(game)}</span>
+            </div>
             <div className={styles.meta} dir="ltr">
-              players {game.participantCount}/2 · v{game.stateVersion}
+              players {game.participantCount}/2
             </div>
           </button>
         ))}

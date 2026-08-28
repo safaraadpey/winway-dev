@@ -34,6 +34,7 @@ export function buildPublicSnapshot(
     winner: snapshot.matchState.winner,
     winKind: snapshot.matchState.winKind,
     mySeat: snapshot.mySeat,
+    isSpectator: snapshot.mySeat === null,
     myUserId: userId,
     players: snapshot.participants.map((p) => ({
       userId: p.user_id,
@@ -60,6 +61,16 @@ export function buildPublicSnapshot(
 export async function getPublicSnapshot(sessionId: string, userId: string) {
   const snapshot = await getBackgammonSnapshot(sessionId, userId);
   return buildPublicSnapshot(snapshot, userId);
+}
+
+/** Feature-gated read. Spectators (non-participants) may view the board. */
+export async function loadViewableSnapshot(
+  request: NextRequest,
+  sessionId: string
+) {
+  const { userId } = await requireBackgammonContext(request);
+  const snapshot = await getBackgammonSnapshot(sessionId, userId);
+  return { userId, snapshot };
 }
 
 export async function loadAuthorizedSnapshot(

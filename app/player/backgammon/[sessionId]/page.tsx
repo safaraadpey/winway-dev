@@ -40,6 +40,8 @@ export default function BackgammonSessionPage({ params }: Props) {
     return <div className={styles.error}>Game not found.</div>;
   }
 
+  const isSpectator = snapshot.isSpectator || snapshot.mySeat === null;
+
   return (
     <div className={styles.page}>
       <div>
@@ -49,19 +51,22 @@ export default function BackgammonSessionPage({ params }: Props) {
             ? "در انتظار حریف…"
             : snapshot.matchStatus === "finished"
               ? "بازی تمام شد"
-              : "مهره‌های خود را بازی کنید"}
+              : isSpectator
+                ? "در حال تماشا"
+                : "مهره‌های خود را بازی کنید"}
         </p>
       </div>
 
       <BackgammonBoard
         snapshot={snapshot}
-        disabled={snapshot.matchStatus !== "running"}
+        disabled={isSpectator || snapshot.matchStatus !== "running"}
         onMove={move}
       />
 
       <DicePanel
         snapshot={snapshot}
         busy={isMutating}
+        spectator={isSpectator}
         onRoll={roll}
         onEndTurn={endTurn}
         onUndo={undo}

@@ -327,6 +327,7 @@ export async function listBackgammonGames(): Promise<
     stateVersion: number;
     createdAt: string;
     mySeat: 0 | 1 | null;
+    canJoin: boolean;
   }>
 > {
   const {

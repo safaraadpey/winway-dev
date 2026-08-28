@@ -20,6 +20,7 @@ export type BackgammonPublicSnapshot = {
   winner: 0 | 1 | null;
   winKind: string | null;
   mySeat: 0 | 1 | null;
+  isSpectator: boolean;
   myUserId: string;
   players: Array<{ userId: string; seat: number; seatLabel: string }>;
   opponentUserId: string | null;

@@ -10,6 +10,7 @@ type Props = {
   onEndTurn: () => Promise<void>;
   onUndo: () => Promise<void>;
   busy?: boolean;
+  spectator?: boolean;
 };
 
 function DieFace({ value }: { value: number | null }) {
@@ -42,6 +43,7 @@ export default function DicePanel({
   onEndTurn,
   onUndo,
   busy,
+  spectator,
 }: Props) {
   const [dieA, dieB] = snapshot.dice.values ?? [null, null];
   const showDice = snapshot.dice.rolled && dieA !== null && dieB !== null;
@@ -58,7 +60,11 @@ export default function DicePanel({
     <div className={styles.dicePanel}>
       <div className={styles.statusBlock}>
         <div className={styles.turnLabel}>
-          {snapshot.isMyTurn ? "نوبت شما" : `نوبت ${turnSeat}`}
+          {spectator
+            ? `نوبت ${turnSeat}`
+            : snapshot.isMyTurn
+              ? "نوبت شما"
+              : `نوبت ${turnSeat}`}
         </div>
         <div className={styles.diceRow}>
           {showDice ? (
@@ -67,37 +73,41 @@ export default function DicePanel({
               <DieFace value={dieB} />
             </>
           ) : (
-            <span className={styles.dicePlaceholder}>تاس بیندازید</span>
+            <span className={styles.dicePlaceholder}>
+              {spectator ? "منتظر تاس…" : "تاس بیندازید"}
+            </span>
           )}
         </div>
       </div>
 
-      <div className={styles.actions}>
-        <button
-          type="button"
-          className={styles.undoButton}
-          disabled={!snapshot.canUndo || busy}
-          onClick={() => void onUndo()}
-        >
-          بازگشت
-        </button>
-        <button
-          type="button"
-          className={styles.rollButton}
-          disabled={!snapshot.canRoll || busy}
-          onClick={() => void onRoll()}
-        >
-          تاس
-        </button>
-        <button
-          type="button"
-          className={styles.endTurnButton}
-          disabled={!canEndTurn || busy}
-          onClick={() => void onEndTurn()}
-        >
-          پایان نوبت
-        </button>
-      </div>
+      {spectator ? null : (
+        <div className={styles.actions}>
+          <button
+            type="button"
+            className={styles.undoButton}
+            disabled={!snapshot.canUndo || busy}
+            onClick={() => void onUndo()}
+          >
+            بازگشت
+          </button>
+          <button
+            type="button"
+            className={styles.rollButton}
+            disabled={!snapshot.canRoll || busy}
+            onClick={() => void onRoll()}
+          >
+            تاس
+          </button>
+          <button
+            type="button"
+            className={styles.endTurnButton}
+            disabled={!canEndTurn || busy}
+            onClick={() => void onEndTurn()}
+          >
+            پایان نوبت
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -49,6 +49,20 @@
   text-align: left;
 }
 
+.listItemRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.listAction {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fcd34d;
+  flex-shrink: 0;
+}
+
 .meta {
   composes: numeric-text numeric-text--12 from global;
   color: rgba(255, 255, 255, 0.65);
