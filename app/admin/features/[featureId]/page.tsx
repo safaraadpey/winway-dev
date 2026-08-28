@@ -436,32 +436,55 @@ export default function AdminFeatureDetailPage({ params }: PageProps) {
             <div className="text-sm text-gray-400">هنوز کاربری اضافه نشده است.</div>
           ) : (
             <div className="space-y-2">
-              {assignedUsers.map((user) => (
-                <div
-                  key={user.userId}
-                  className="flex items-center justify-between rounded-lg bg-[#111827] px-3 py-2 text-sm"
-                >
-                  <div>
-                    <div>{user.displayName}</div>
-                    <div className="text-xs text-gray-400">{user.username}</div>
-                    <div className="text-xs mt-1">
-                      {user.isEnabled ? (
-                        <span className="text-emerald-300">Allow</span>
-                      ) : (
-                        <span className="text-red-300">Deny</span>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void handleRemoveUser(user.userId)}
-                    className="rounded-md bg-red-800 px-2 py-1 text-xs disabled:opacity-50"
+              {assignedUsers.map((user) => {
+                const managed = baseUsers.find((item) => item.id === user.userId);
+                const isMissing =
+                  user.missing || (!managed && !String(user.username || "").trim());
+                const shortId = `${user.userId.slice(0, 8)}…`;
+                const title = managed
+                  ? String(managed.nickname || managed.username || "").trim() || "کاربر"
+                  : isMissing
+                    ? "کاربر حذف‌شده"
+                    : user.displayName;
+                const subtitle = isMissing
+                  ? shortId
+                  : String(managed?.username || user.username || "").trim();
+
+                return (
+                  <div
+                    key={user.userId}
+                    className="flex items-center justify-between rounded-lg bg-[#111827] px-3 py-2 text-sm"
                   >
-                    حذف
-                  </button>
-                </div>
-              ))}
+                    <div>
+                      <div>{title}</div>
+                      {subtitle && subtitle !== title ? (
+                        <div className="text-xs text-gray-400" dir="ltr">
+                          {isMissing ? (
+                            <span className="numeric-text numeric-text--12">{subtitle}</span>
+                          ) : (
+                            subtitle
+                          )}
+                        </div>
+                      ) : null}
+                      <div className="text-xs mt-1">
+                        {user.isEnabled ? (
+                          <span className="text-emerald-300">Allow</span>
+                        ) : (
+                          <span className="text-red-300">Deny</span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => void handleRemoveUser(user.userId)}
+                      className="rounded-md bg-red-800 px-2 py-1 text-xs disabled:opacity-50"
+                    >
+                      حذف
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

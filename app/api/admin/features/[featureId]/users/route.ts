@@ -102,10 +102,28 @@ export async function GET(
 
     if (lookupIds.size > 0) {
       const ids = Array.from(lookupIds);
-      const [{ data: usersData }, { data: profilesData }] = await Promise.all([
+      const [
+        { data: usersData, error: usersLookupError },
+        { data: profilesData, error: profilesLookupError },
+      ] = await Promise.all([
         supabase.from("users").select("id, username, role, status").in("id", ids),
         supabase.from("user_profiles").select("user_id, nickname").in("user_id", ids),
       ]);
+
+      if (usersLookupError) {
+        console.error("[Feature] users lookup failed", {
+          featureId,
+          message: usersLookupError.message,
+        });
+        throw usersLookupError;
+      }
+
+      if (profilesLookupError) {
+        console.warn("[Feature] user_profiles lookup failed", {
+          featureId,
+          message: profilesLookupError.message,
+        });
+      }
 
       for (const profile of profilesData || []) {
         if (profile.nickname) {
@@ -136,11 +154,15 @@ export async function GET(
     const assignedUsers = (overrideRows || []).map((row) => {
       const userId = row.user_id as string;
       const user = usersMap.get(userId);
+      const nickname = profilesMap.get(userId) ?? null;
+      const username = String(user?.username || "").trim();
+      const missing = !user;
       return {
         userId,
-        username: user?.username || "unknown",
-        nickname: profilesMap.get(userId) ?? null,
-        displayName: profilesMap.get(userId) || user?.username || "unknown",
+        username: missing ? "" : username,
+        nickname,
+        displayName: nickname || username || (missing ? "کاربر حذف‌شده" : "کاربر"),
+        missing,
         isEnabled: Boolean(row.is_enabled),
         expiresAt: (row.expires_at as string | null) ?? null,
         note: (row.note as string | null) ?? null,
@@ -148,6 +170,16 @@ export async function GET(
         updatedAt: row.updated_at as string,
       };
     });
+
+    const missingAssignedIds = assignedUsers
+      .filter((user) => user.missing)
+      .map((user) => user.userId);
+    if (missingAssignedIds.length > 0) {
+      console.warn("[Feature] assigned overrides missing from users", {
+        featureId,
+        missingAssignedIds,
+      });
+    }
 
     return NextResponse.json({
       ok: true,
@@ -256,6 +288,7 @@ export async function POST(
           username: targetUser.username,
           nickname: profile?.nickname ?? null,
           displayName: profile?.nickname || targetUser.username,
+          missing: false,
           isEnabled: Boolean(data.is_enabled),
           expiresAt: data.expires_at,
           note: data.note,

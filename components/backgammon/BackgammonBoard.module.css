@@ -1,17 +1,20 @@
 .boardShell {
-  width: 100%;
+  width: calc(100% + 20px);
+  margin-inline: -10px;
   padding: 4px 0 8px;
 }
 
 .boardFrame {
+  position: relative;
   display: flex;
-  gap: 6px;
+  gap: 4px;
   align-items: stretch;
-  justify-content: center;
+  width: 100%;
 }
 
 .bearOffColumn {
   width: 28px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -45,14 +48,20 @@ button.bearOffTray {
 }
 
 .boardSurface {
-  flex: 1;
-  max-width: 340px;
-  border-radius: 10px;
+  width: 100%;
+  border-radius: 0;
   background: linear-gradient(180deg, #b8894a 0%, #9a6b32 100%);
   border: 3px solid #5c3d1e;
+  border-left: none;
+  border-right: none;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
-  padding: 6px;
+  padding: 6px 4px;
   overflow: hidden;
+}
+
+.boardPlayArea {
+  flex: 1;
+  min-width: 0;
 }
 
 .boardInner {
@@ -196,12 +205,47 @@ button.bearOffTray {
   filter: drop-shadow(0 0 4px rgba(252, 211, 77, 0.95));
 }
 
+.checkerAnchor {
+  position: absolute;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  pointer-events: none;
+  z-index: 1;
+  transform: translateX(-50%);
+}
+
+.pointButtonTop .checkerAnchor {
+  top: 1px;
+}
+
+.pointButtonBottom .checkerAnchor {
+  bottom: 1px;
+}
+
+.flyingLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+  overflow: visible;
+}
+
+.flyingChecker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  margin: 0;
+  z-index: 41;
+  will-change: transform;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+}
+
 .triangle {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
   width: calc(100% - 2px);
-  max-width: 26px;
   height: 108px;
   z-index: 0;
 }

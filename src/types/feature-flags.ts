@@ -18,6 +18,7 @@ export type FeatureUserOverrideRow = {
   username: string;
   nickname: string | null;
   displayName: string;
+  missing: boolean;
   isEnabled: boolean;
   expiresAt: string | null;
   note: string | null;

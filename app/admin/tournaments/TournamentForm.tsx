@@ -28,7 +28,7 @@ export type TournamentFormValues = {
   /** Minutes to push start_at when under min_players_to_start (default 60). */
   registration_extend_minutes: number | null;
   final_winners_count: number | null;
-  /** Prize share per rank (1..N); must sum to 100 when N > 1. */
+  /** Prize share per rank (1..N); 2 decimal places, must sum to 100 when N > 1. */
   prize_percentages: number[];
 };
 
@@ -81,6 +81,16 @@ export function buildEqualPrizePercents(count: number): number[] {
   const base = Math.floor(100 / count);
   const remainder = 100 - base * count;
   return Array.from({ length: count }, (_, i) => (i === 0 ? base + remainder : base));
+}
+
+/** Prize percents are stored with 2 decimal places (matches numeric(14,2)). */
+export function roundPrizePercent(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+export function prizePercentsSumEquals100(percents: number[]): boolean {
+  const cents = percents.reduce((sum, p) => sum + Math.round((Number(p) || 0) * 100), 0);
+  return cents === 10000;
 }
 
 function rankLabel(rank: number): string {
@@ -213,7 +223,7 @@ export function TournamentForm({
 
   const handlePrizePercentChange = (index: number, raw: string) => {
     const num = raw === "" ? 0 : Number(raw);
-    if (Number.isNaN(num)) return;
+    if (Number.isNaN(num) || num < 0) return;
     setValues((prev) => {
       const next = [...prev.prize_percentages];
       next[index] = num;
@@ -222,9 +232,10 @@ export function TournamentForm({
   };
 
   const prizePercentSum = useMemo(
-    () => values.prize_percentages.reduce((sum, p) => sum + (Number(p) || 0), 0),
+    () => roundPrizePercent(values.prize_percentages.reduce((sum, p) => sum + (Number(p) || 0), 0)),
     [values.prize_percentages]
   );
+  const prizePercentSumOk = prizePercentsSumEquals100(values.prize_percentages);
 
   const handleNumber = (key: keyof TournamentFormValues, val: string) => {
     const num = val === "" ? null : Number(val);
@@ -297,12 +308,16 @@ export function TournamentForm({
       setError("تعداد درصدهای جایزه با تعداد برندگان هم‌خوان نیست.");
       return;
     }
+    const prizePercentages =
+      winnersCount === 1
+        ? [100]
+        : values.prize_percentages.slice(0, winnersCount).map((p) => roundPrizePercent(Number(p)));
     if (winnersCount > 1) {
-      if (values.prize_percentages.some((p) => p <= 0)) {
-        setError("هر درصد جایزه باید بیشتر از صفر باشد.");
+      if (prizePercentages.some((p) => p <= 0 || p > 100)) {
+        setError("هر درصد جایزه باید بین 0.01 و 100 باشد.");
         return;
       }
-      if (prizePercentSum !== 100) {
+      if (!prizePercentsSumEquals100(prizePercentages)) {
         setError("جمع درصدهای جایزه باید دقیقاً 100 باشد.");
         return;
       }
@@ -336,9 +351,6 @@ export function TournamentForm({
         return;
       }
     }
-    const prizePercentages =
-      winnersCount === 1 ? [100] : values.prize_percentages.slice(0, winnersCount);
-
     await onSubmit({
       ...values,
       final_winners_count: winnersCount,
@@ -777,6 +789,9 @@ export function TournamentForm({
       {(values.final_winners_count ?? 1) > 1 && (
         <div className="rounded-lg border border-gray-700 bg-[#161616] p-4 space-y-3">
           <div className="text-sm font-semibold text-gray-200">تخصیص درصد جایزه</div>
+          <div className="text-xs text-gray-500">
+            درصدها می‌توانند اعشار داشته باشند (مثلاً 33.5) و جمع باید دقیقاً 100 باشد.
+          </div>
           <div className="grid md:grid-cols-2 gap-3">
             {values.prize_percentages.map((pct, index) => (
               <label key={index} className="flex flex-col gap-1 text-sm">
@@ -784,9 +799,10 @@ export function TournamentForm({
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
-                    min="1"
+                    min="0.01"
                     max="100"
-                    step="1"
+                    step="0.01"
+                    inputMode="decimal"
                     value={pct || ""}
                     onChange={(e) => handlePrizePercentChange(index, e.target.value)}
                     className={inputClass}
@@ -801,14 +817,14 @@ export function TournamentForm({
           </div>
           <div
             className={`text-sm ${
-              prizePercentSum === 100 ? "text-teal-400" : "text-amber-400"
+              prizePercentSumOk ? "text-teal-400" : "text-amber-400"
             }`}
           >
             جمع درصدها:{" "}
             <span className="numeric-text numeric-text--14" dir="ltr">
-              {prizePercentSum.toLocaleString("en-US")}%
+              {prizePercentSum.toLocaleString("en-US", { maximumFractionDigits: 2 })}%
             </span>
-            {prizePercentSum !== 100 && " (باید دقیقاً 100 باشد)"}
+            {!prizePercentSumOk && " (باید دقیقاً 100 باشد)"}
           </div>
         </div>
       )}

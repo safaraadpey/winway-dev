@@ -56,7 +56,7 @@ function rankLabel(rank: number): string {
 function formatPercent(value: number): string {
   const n = Number(value);
   if (!Number.isFinite(n)) return "-";
-  return `${n.toLocaleString("en-US")}%`;
+  return `${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}%`;
 }
 
 function formatLongCountdown(seconds: number): string {
