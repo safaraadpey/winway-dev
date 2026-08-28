@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   createGame,
   playFullTurn,
@@ -57,6 +58,20 @@ export default function TicTacToeModal({
   const [claimResult, setClaimResult] = useState<ClaimMatchResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
 
   const resetLocal = useCallback(() => {
     setPhase("setup");
@@ -169,21 +184,22 @@ export default function TicTacToeModal({
     }
   };
 
-  if (!open) return null;
+  if (!open || !mounted || typeof document === "undefined") return null;
 
-  return (
+  return createPortal(
     <div
       className={styles.overlay}
       onClick={handleClose}
       role="presentation"
     >
-      <div
-        className={styles.modal}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="tic-tac-toe-title"
-        onClick={(event) => event.stopPropagation()}
-      >
+      <div className={styles.shellFrame}>
+        <div
+          className={styles.modal}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="tic-tac-toe-title"
+          onClick={(event) => event.stopPropagation()}
+        >
         <div className={styles.header}>
           <h2 id="tic-tac-toe-title" className={styles.title}>
             دوز (Tic-Tac-Toe)
@@ -314,7 +330,9 @@ export default function TicTacToeModal({
             بستن
           </button>
         </div>
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
