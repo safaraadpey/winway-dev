@@ -32,6 +32,13 @@ function mapRpcError(message: string): { status: number; error: string; message:
   if (msg.includes("forbidden")) {
     return { status: 403, error: "forbidden", message: "شما دسترسی لازم برای این عملیات را ندارید" };
   }
+  if (msg.includes("ticket_price") && (msg.includes("null value") || msg.includes("not-null"))) {
+    return {
+      status: 400,
+      error: "validation_error",
+      message: "قیمت بلیت را وارد کنید. برای تورنومنت رایگان عدد ۰ بگذارید.",
+    };
+  }
   if (
     msg.includes("invalid") ||
     msg.includes("must be") ||

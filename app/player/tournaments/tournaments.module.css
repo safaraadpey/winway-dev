@@ -334,6 +334,8 @@
 
 .prizeSplitRow {
   display: flex;
+  flex-direction: row;
+  direction: rtl;
   align-items: center;
   justify-content: space-between;
   gap: 8px;

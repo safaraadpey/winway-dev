@@ -147,7 +147,7 @@ export function TournamentForm({
       start_at: null,
       currency: "IRR",
       entry_currency: "IRR",
-      ticket_price: null,
+      ticket_price: 0,
       min_tickets_per_player: 1,
       max_tickets_per_player: 1,
       table_size_mode: "range",
@@ -384,6 +384,8 @@ export function TournamentForm({
     }
     await onSubmit({
       ...values,
+      ticket_price: values.ticket_price ?? 0,
+      guaranteed_prize: values.guaranteed_prize ?? 0,
       final_winners_count: winnersCount,
       prize_percentages: prizePercentages,
       min_players_to_start: values.min_players_to_start,

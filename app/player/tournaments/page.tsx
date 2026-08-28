@@ -507,6 +507,7 @@ export default function TournamentsPage() {
                                     key={`${t.id}-prize-${index}`}
                                     className={styles.prizeSplitRow}
                                     role="listitem"
+                                    dir="rtl"
                                   >
                                     <span className={styles.prizeSplitRank}>
                                       {rankLabel(index + 1)}
