@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { supabase } from "@/lib/supabaseClient";
 import styles from "./tournaments.module.css";
+import { getShamsiEventDateTimeParts } from "@/lib/format/shamsiDate";
 
 type TournamentRow = {
   id: string;
@@ -275,34 +276,26 @@ export default function TournamentsPage() {
         <div className={styles.headerBlock}>
           <div className={styles.titleRow}>
             <h1 className={styles.title}>تورنومنت‌ها</h1>
-            <button
-              type="button"
-              onClick={() => void fetchTournaments()}
-              className={styles.refreshButton}
-            >
-              بروزرسانی
-            </button>
-          </div>
-
-          <div className={styles.tabs}>
-            <button
-              type="button"
-              onClick={() => setViewMode("active")}
-              className={`${styles.tab} ${
-                viewMode === "active" ? styles.tabActive : styles.tabInactive
-              }`}
-            >
-              در حال اجرا
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("finished")}
-              className={`${styles.tab} ${
-                viewMode === "finished" ? styles.tabActive : styles.tabInactive
-              }`}
-            >
-              پایان یافته
-            </button>
+            <div className={styles.titleActions}>
+              <button
+                type="button"
+                onClick={() =>
+                  setViewMode((mode) => (mode === "active" ? "finished" : "active"))
+                }
+                className={`${styles.refreshButton} ${
+                  viewMode === "finished" ? styles.refreshButtonActive : ""
+                }`}
+              >
+                {viewMode === "finished" ? "در حال اجرا" : "لیست پایان یافته‌ها"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void fetchTournaments()}
+                className={styles.refreshButton}
+              >
+                بروزرسانی
+              </button>
+            </div>
           </div>
         </div>
 
@@ -354,6 +347,9 @@ export default function TournamentsPage() {
                       ? Math.max(guaranteedPrize, collectedAmount)
                       : collectedAmount;
                     const winnerPercents = prizePercents[t.id] ?? [];
+                    const eventAt = t.start_at
+                      ? getShamsiEventDateTimeParts(t.start_at)
+                      : null;
                     return (
                       <div
                         key={t.id}
@@ -383,17 +379,28 @@ export default function TournamentsPage() {
                               </span>
                             </div>
                             <div className={styles.field}>
-                              <span className={styles.fieldLabel}>زمان شروع</span>
-                              <span className={styles.startTimeValue}>
-                                {t.start_at
-                                  ? `${new Date(t.start_at).toLocaleDateString("fa-IR")}، ${new Date(
-                                      t.start_at
-                                    ).toLocaleTimeString("fa-IR", {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })}`
-                                  : "-"}
-                              </span>
+                              <span className={styles.fieldLabel}>تاریخ برگزاری</span>
+                              {!eventAt ? (
+                                <span className={styles.startTimeValue}>-</span>
+                              ) : (
+                                <span className={styles.startTimeValue} dir="rtl">
+                                  <span className={styles.startTimeDate}>
+                                    <span
+                                      className={`${styles.startTimeDay} numeric-text numeric-text--14`}
+                                      dir="ltr"
+                                    >
+                                      {eventAt.day}
+                                    </span>{" "}
+                                    {eventAt.month}
+                                  </span>
+                                  <span
+                                    className={`${styles.startTimeClock} numeric-text numeric-text--14`}
+                                    dir="ltr"
+                                  >
+                                    {eventAt.time}
+                                  </span>
+                                </span>
+                              )}
                             </div>
                             <div className={styles.field}>
                               <span className={styles.fieldLabel}>وضعیت</span>
