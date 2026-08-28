@@ -831,11 +831,23 @@
   cursor: not-allowed;
 }
 
+.autoBuyStatsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
 .autoBuyStatusLine {
   font-size: 12px;
   line-height: 1.4;
   color: rgba(255, 255, 255, 0.78);
   text-align: right;
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .autoBuyStatusValue {
@@ -854,7 +866,8 @@
 
 .autoBuyRoundBadges {
   display: flex;
-  flex-wrap: wrap;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
   gap: 8px;
   justify-content: flex-end;
 }

@@ -533,46 +533,47 @@ export default function BuyCardsPanel({
             </div>
           </div>
 
-          {autoBuyRunning && autoBuyPnlDisplay && (
-            <p className={panelStyles.autoBuyStatusLine}>
-              سود و زیان خالص:{" "}
-              <span
-                className={`${panelStyles.autoBuyStatusValue} ${
-                  autoBuyPnlDisplay.tone === "gain"
-                    ? panelStyles.autoBuyStatusValueGain
-                    : panelStyles.autoBuyStatusValueLoss
-                }`}
-                dir="ltr"
-              >
-                {autoBuyPnlDisplay.value}
-              </span>
-            </p>
-          )}
-
           {autoBuyRunning ? (
-            <div className={panelStyles.autoBuyRoundBadges}>
-              <span
-                className={`${panelStyles.autoBuyRoundBadge} ${panelStyles.autoBuyRoundBadgeWin}`}
-              >
-                <span>برد</span>
+            <div className={panelStyles.autoBuyStatsRow}>
+              {autoBuyPnlDisplay ? (
+                <p className={panelStyles.autoBuyStatusLine}>
+                  سود و زیان خالص:{" "}
+                  <span
+                    className={`${panelStyles.autoBuyStatusValue} ${
+                      autoBuyPnlDisplay.tone === "gain"
+                        ? panelStyles.autoBuyStatusValueGain
+                        : panelStyles.autoBuyStatusValueLoss
+                    }`}
+                    dir="ltr"
+                  >
+                    {autoBuyPnlDisplay.value}
+                  </span>
+                </p>
+              ) : null}
+              <div className={panelStyles.autoBuyRoundBadges}>
                 <span
-                  className={`${panelStyles.autoBuyRoundBadgeValue} ${panelStyles.autoBuyRoundBadgeValueWin}`}
-                  dir="ltr"
+                  className={`${panelStyles.autoBuyRoundBadge} ${panelStyles.autoBuyRoundBadgeWin}`}
                 >
-                  {(autoBuy?.snapshot?.roundsWon ?? 0).toLocaleString("en-US")}
+                  <span>برد</span>
+                  <span
+                    className={`${panelStyles.autoBuyRoundBadgeValue} ${panelStyles.autoBuyRoundBadgeValueWin}`}
+                    dir="ltr"
+                  >
+                    {(autoBuy?.snapshot?.roundsWon ?? 0).toLocaleString("en-US")}
+                  </span>
                 </span>
-              </span>
-              <span
-                className={`${panelStyles.autoBuyRoundBadge} ${panelStyles.autoBuyRoundBadgeLoss}`}
-              >
-                <span>باخت</span>
                 <span
-                  className={`${panelStyles.autoBuyRoundBadgeValue} ${panelStyles.autoBuyRoundBadgeValueLoss}`}
-                  dir="ltr"
+                  className={`${panelStyles.autoBuyRoundBadge} ${panelStyles.autoBuyRoundBadgeLoss}`}
                 >
-                  {(autoBuy?.snapshot?.roundsLost ?? 0).toLocaleString("en-US")}
+                  <span>باخت</span>
+                  <span
+                    className={`${panelStyles.autoBuyRoundBadgeValue} ${panelStyles.autoBuyRoundBadgeValueLoss}`}
+                    dir="ltr"
+                  >
+                    {(autoBuy?.snapshot?.roundsLost ?? 0).toLocaleString("en-US")}
+                  </span>
                 </span>
-              </span>
+              </div>
             </div>
           ) : null}
 

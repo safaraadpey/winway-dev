@@ -58,6 +58,26 @@ function formatPercent(value: number): string {
   return `${n.toLocaleString("en-US")}%`;
 }
 
+function formatLongCountdown(seconds: number): string {
+  const safe = Math.max(0, Math.floor(seconds));
+  const days = Math.floor(safe / 86400);
+  const hours = Math.floor((safe % 86400) / 3600)
+    .toString()
+    .padStart(2, "0");
+  const mins = Math.floor((safe % 3600) / 60)
+    .toString()
+    .padStart(2, "0");
+  const secs = (safe % 60).toString().padStart(2, "0");
+  return `${days}:${hours}:${mins}:${secs}`;
+}
+
+function remainingSecondsUntil(startAt: string | null, nowMs: number): number {
+  if (!startAt) return 0;
+  const startMs = new Date(startAt).getTime();
+  if (!Number.isFinite(startMs)) return 0;
+  return Math.max(0, Math.floor((startMs - nowMs) / 1000));
+}
+
 export default function TournamentsPage() {
   const router = useRouter();
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
@@ -68,7 +88,9 @@ export default function TournamentsPage() {
   const [entryCounts, setEntryCounts] = useState<Record<string, number>>({});
   const [ticketTotals, setTicketTotals] = useState<Record<string, number>>({});
   const [prizePercents, setPrizePercents] = useState<Record<string, number[]>>({});
+  const [openPrizeSplitIds, setOpenPrizeSplitIds] = useState<Record<string, boolean>>({});
   const [viewMode, setViewMode] = useState<"active" | "finished">("active");
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
     setShowBackButton(true);
@@ -78,6 +100,20 @@ export default function TournamentsPage() {
       setOnBackClick(null);
     };
   }, [router, setOnBackClick, setShowBackButton]);
+
+  useEffect(() => {
+    const timerId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+    const onHardExit = () => {
+      window.clearInterval(timerId);
+    };
+    window.addEventListener("app:hard-exit", onHardExit);
+    return () => {
+      window.clearInterval(timerId);
+      window.removeEventListener("app:hard-exit", onHardExit);
+    };
+  }, []);
 
   const statusLabel = (status: string | null) => {
     switch (status) {
@@ -398,18 +434,71 @@ export default function TournamentsPage() {
                           </div>
                         </div>
 
-                        {winnerPercents.length > 0 && (
-                          <div className={styles.prizePercentsGrid}>
-                            {winnerPercents.map((pct, index) => (
-                              <div key={`${t.id}-prize-${index}`} className={styles.field}>
-                                <span className={styles.fieldLabel}>
-                                  {rankLabel(index + 1)}
-                                </span>
-                                <span className={styles.fieldValue} dir="ltr">
-                                  {formatPercent(pct)}
-                                </span>
+                        {(winnerPercents.length > 0 || t.start_at) && (
+                          <div
+                            className={styles.prizeSplit}
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
+                          >
+                            <div className={styles.prizeSplitBar}>
+                              {winnerPercents.length > 0 ? (
+                                <button
+                                  type="button"
+                                  className={styles.prizeSplitTrigger}
+                                  aria-expanded={Boolean(openPrizeSplitIds[t.id])}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenPrizeSplitIds((prev) => ({
+                                      ...prev,
+                                      [t.id]: !prev[t.id],
+                                    }));
+                                  }}
+                                >
+                                  <span>درصد تقسیم جوایز</span>
+                                  <span
+                                    className={
+                                      openPrizeSplitIds[t.id]
+                                        ? styles.prizeSplitChevronOpen
+                                        : styles.prizeSplitChevron
+                                    }
+                                    aria-hidden="true"
+                                  >
+                                    ▼
+                                  </span>
+                                </button>
+                              ) : (
+                                <div className={styles.prizeSplitTriggerSpacer} />
+                              )}
+                              <span
+                                className={styles.prizeSplitTimer}
+                                dir="ltr"
+                              >
+                                {formatLongCountdown(
+                                  remainingSecondsUntil(t.start_at, nowMs)
+                                )}
+                              </span>
+                            </div>
+                            {winnerPercents.length > 0 && openPrizeSplitIds[t.id] ? (
+                              <div className={styles.prizeSplitMenu} role="list">
+                                {winnerPercents.map((pct, index) => (
+                                  <div
+                                    key={`${t.id}-prize-${index}`}
+                                    className={styles.prizeSplitRow}
+                                    role="listitem"
+                                  >
+                                    <span className={styles.prizeSplitRank}>
+                                      {rankLabel(index + 1)}
+                                    </span>
+                                    <span
+                                      className={`${styles.prizeSplitPercent} numeric-text numeric-text--14`}
+                                      dir="ltr"
+                                    >
+                                      {formatPercent(pct)}
+                                    </span>
+                                  </div>
+                                ))}
                               </div>
-                            ))}
+                            ) : null}
                           </div>
                         )}
                       </div>

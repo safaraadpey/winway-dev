@@ -10,6 +10,7 @@ import { hardExitFromCurrentPanel } from "@/lib/auth/hardExit";
 const DEV_MENU_ITEMS = [
   { label: "تنظیمات", path: "/dev-panel/settings" },
   { label: "گزارش مالی", path: "/dev-panel/finance" },
+  { label: "کاربران", path: "/dev-panel/users" },
   { label: "حساب کاربری", path: "/dev-panel/account" },
 ] as const;
 

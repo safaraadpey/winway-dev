@@ -215,11 +215,13 @@
 
 .fieldValue {
   composes: numeric-text numeric-text--14 from global;
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 999px;
+  min-height: 29px;
+  padding: 6px 8px;
+  border-radius: 10px;
   border: 1px solid rgba(107, 114, 128, 0.6);
   background: rgba(0, 0, 0, 0.4);
   color: #f3f4f6;
@@ -244,14 +246,89 @@
   font-weight: 600;
 }
 
-.prizePercentsGrid {
+.prizeSplit {
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid rgba(33, 33, 33, 0.18);
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px 4px;
-  font-size: 0.875rem;
+}
+
+.prizeSplitBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.prizeSplitTrigger {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(107, 114, 128, 0.6);
+  background: rgba(0, 0, 0, 0.4);
+  color: #f3f4f6;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.prizeSplitTriggerSpacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.prizeSplitTimer {
+  composes: numeric-text numeric-text--25 from global;
+  flex-shrink: 0;
+  font-weight: 500;
+  color: #22c55e;
+}
+
+.prizeSplitChevron,
+.prizeSplitChevronOpen {
+  font-size: 10px;
+  line-height: 10px;
+  color: #d1d5db;
+  transition: transform 0.15s ease;
+}
+
+.prizeSplitChevronOpen {
+  transform: rotate(180deg);
+}
+
+.prizeSplitMenu {
+  margin-top: 6px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(107, 114, 128, 0.45);
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.prizeSplitRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+.prizeSplitRank {
+  font-size: 12px;
+  font-weight: 700;
+  color: #212121;
+}
+
+.prizeSplitPercent {
+  color: #f3f4f6;
+  font-weight: 700;
 }
 
 @keyframes tournamentsSpin {
@@ -362,10 +439,38 @@
 :global(html[data-theme="light"]) .fieldValue {
   background: #f3e8ff;
   border: 1px solid #e9d5ff;
-  border-radius: 0.75rem;
+  border-radius: 10px;
   color: #6d28d9;
 }
 
-:global(html[data-theme="light"]) .prizePercentsGrid {
+:global(html[data-theme="light"]) .prizeSplit {
   border-top-color: #ddd6fe;
+}
+
+:global(html[data-theme="light"]) .prizeSplitTrigger {
+  background: #f3e8ff;
+  border-color: #e9d5ff;
+  color: #6d28d9;
+}
+
+:global(html[data-theme="light"]) .prizeSplitTimer {
+  color: #059669;
+}
+
+:global(html[data-theme="light"]) .prizeSplitChevron,
+:global(html[data-theme="light"]) .prizeSplitChevronOpen {
+  color: #7c3aed;
+}
+
+:global(html[data-theme="light"]) .prizeSplitMenu {
+  background: #faf5ff;
+  border-color: #e9d5ff;
+}
+
+:global(html[data-theme="light"]) .prizeSplitRank {
+  color: #5b21b6;
+}
+
+:global(html[data-theme="light"]) .prizeSplitPercent {
+  color: #6d28d9;
 }
