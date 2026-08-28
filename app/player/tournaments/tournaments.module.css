@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "DSEG7 Classic";
+  src: url("/fonts/DSEG7Classic-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 .page {
   height: 100%;
   background-color: #0e0e0f;
@@ -282,10 +290,16 @@
 }
 
 .prizeSplitTimer {
-  composes: numeric-text numeric-text--25 from global;
   flex-shrink: 0;
-  font-weight: 500;
-  color: #22c55e;
+  font-family: "DSEG7 Classic", "Vazirmatn", sans-serif;
+  font-size: 18px;
+  line-height: 25px;
+  font-weight: 700;
+  font-style: normal;
+  color: #b91c1c;
+  letter-spacing: 0.5px;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
 }
 
 .prizeSplitChevron,
@@ -454,7 +468,7 @@
 }
 
 :global(html[data-theme="light"]) .prizeSplitTimer {
-  color: #059669;
+  color: #991b1b;
 }
 
 :global(html[data-theme="light"]) .prizeSplitChevron,
