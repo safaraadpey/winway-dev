@@ -12,6 +12,7 @@ import type { TicTacToeSettings } from "@/lib/tic-tac-toe/types";
 import { supabase } from "@/lib/supabaseClient";
 
 const PLACEMENT_LABELS: Record<TicTacToePlacement, string> = {
+  player_settings: "تنظیمات پلیر",
   player_home: "منوی اصلی پلیر",
   player_lobby: "لابی بازی",
   player_header: "هدر پلیر",

@@ -8,7 +8,6 @@ import { supabase } from "@/lib/supabaseClient";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import { getLogoImagePath } from "@/lib/theme/logoImageFiles";
 import KycVerifiedBadge from "@/components/KycVerifiedBadge";
-import TicTacToeLauncher from "@/components/tic-tac-toe/TicTacToeLauncher";
 import styles from "./MergedPlayerHeader.module.css";
 
 import dingCoinIcon from "@/src/assets/icons/ding-coin.png";
@@ -304,7 +303,6 @@ export default function MergedPlayerHeader({
         </div>
 
         <div className={styles.brandLogoWrap}>
-          <TicTacToeLauncher placement="player_header" compact />
           <Image
             src={getLogoImagePath(themeId, "playerHeaderLogo")}
             alt="Ding Money"

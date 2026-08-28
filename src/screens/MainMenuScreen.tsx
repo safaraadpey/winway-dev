@@ -6,7 +6,6 @@ import { useTheme } from "@/lib/contexts/ThemeContext";
 import { MENU_ENTRIES } from "@/lib/theme/menuEntries";
 import type { MenuEntryDefinition } from "@/lib/theme/types";
 import InstallAppButton from "@/components/InstallAppButton";
-import TicTacToeLauncher from "@/components/tic-tac-toe/TicTacToeLauncher";
 import MenuItem from "@/components/theme/MenuItem";
 import { useMenuLiveCounts } from "@/lib/hooks/useMenuLiveCounts";
 import styles from "./MainMenuScreen.module.css";
@@ -85,9 +84,6 @@ const MainMenuScreen: React.FC = () => {
       <div className={styles.mainMenuInner}>
         <div className={styles.installSection}>
           <InstallAppButton />
-          <div style={{ marginTop: "0.5rem" }}>
-            <TicTacToeLauncher placement="player_home" />
-          </div>
         </div>
         <div className={styles.menuScrollArea}>
           <div className={styles.menuList}>

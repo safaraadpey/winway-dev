@@ -1,6 +1,7 @@
 export const TIC_TAC_TOE_FEATURE_KEY = "tic_tac_toe";
 
 export const TIC_TAC_TOE_PLACEMENTS = [
+  "player_settings",
   "player_home",
   "player_lobby",
   "player_header",
@@ -8,7 +9,9 @@ export const TIC_TAC_TOE_PLACEMENTS = [
 
 export type TicTacToePlacement = (typeof TIC_TAC_TOE_PLACEMENTS)[number];
 
-export const DEFAULT_TIC_TAC_TOE_PLACEMENTS: TicTacToePlacement[] = ["player_home"];
+export const DEFAULT_TIC_TAC_TOE_PLACEMENTS: TicTacToePlacement[] = [
+  "player_settings",
+];
 
 export const TIC_TAC_TOE_OPEN_EVENT = "app:open-tic-tac-toe";
 

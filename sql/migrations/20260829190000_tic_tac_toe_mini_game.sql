@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS tic_tac_toe.settings (
   is_enabled boolean NOT NULL DEFAULT false,
   win_prize_ding bigint NOT NULL DEFAULT 5 CHECK (win_prize_ding >= 0),
   daily_win_cap integer NOT NULL DEFAULT 10 CHECK (daily_win_cap >= 0),
-  placements jsonb NOT NULL DEFAULT '["player_home"]'::jsonb,
+  placements jsonb NOT NULL DEFAULT '["player_settings"]'::jsonb,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 

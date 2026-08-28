@@ -7,7 +7,6 @@ import { useTheme } from "@/lib/contexts/ThemeContext";
 import LobbyRoomCard from '@/components/LobbyRoomCard';
 import MenuItem from "@/components/theme/MenuItem";
 import FeatureGate from "@/components/features/FeatureGate";
-import TicTacToeLauncher from "@/components/tic-tac-toe/TicTacToeLauncher";
 import { BACKGAMMON_FEATURE_KEY } from "@/lib/backgammon/constants";
 import styles from './lobby.module.css';
 import { supabase } from "@/lib/supabaseClient";
@@ -313,10 +312,6 @@ export default function LobbyPage() {
           {errorMessage}
         </div>
       )}
-
-      <div className={styles.ticTacToeLauncherWrap}>
-        <TicTacToeLauncher placement="player_lobby" />
-      </div>
 
       {/* لیست روم‌ها */}
       <div

@@ -5,6 +5,7 @@ import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import { getThemeOptions } from "@/lib/theme/registry";
 import FeatureGate from "@/components/features/FeatureGate";
+import TicTacToeLauncher from "@/components/tic-tac-toe/TicTacToeLauncher";
 import styles from "./SettingsPage.module.css";
 
 export default function SettingsPage() {
@@ -52,6 +53,16 @@ export default function SettingsPage() {
             </div>
           </section>
         </FeatureGate>
+
+        <section className={styles.section} aria-labelledby="mini-game-settings">
+          <h2 id="mini-game-settings" className={styles.sectionLabel}>
+            مینی‌گیم‌ها
+          </h2>
+          <p className={styles.sectionDescription}>
+            بازی‌های کوتاه برای سرگرمی بین دست‌های اصلی.
+          </p>
+          <TicTacToeLauncher placement="player_settings" />
+        </section>
 
         <section className={styles.section} aria-labelledby="theme-settings">
           <h2 id="theme-settings" className={styles.sectionLabel}>

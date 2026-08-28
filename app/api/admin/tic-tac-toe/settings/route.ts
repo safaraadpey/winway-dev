@@ -17,13 +17,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function parsePlacements(raw: unknown): TicTacToePlacement[] {
-  if (!Array.isArray(raw)) return ["player_home"];
+  if (!Array.isArray(raw)) return ["player_settings"];
   const allowed = new Set<string>(TIC_TAC_TOE_PLACEMENTS);
   const parsed = raw.filter(
     (item): item is TicTacToePlacement =>
       typeof item === "string" && allowed.has(item)
   );
-  return parsed.length > 0 ? parsed : ["player_home"];
+  return parsed.length > 0 ? parsed : ["player_settings"];
 }
 
 export async function GET(request: NextRequest) {
