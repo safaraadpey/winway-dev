@@ -9,6 +9,7 @@ import type {
   ReportPeriod,
 } from "@/src/types/financial-reports";
 import toast from "react-hot-toast";
+import { usePaymentMenus } from "@/lib/deposit/usePaymentMenus";
 import styles from "./FinancialReportsPage.module.css";
 
 const PERIOD_LABELS: Record<ReportPeriod, string> = {
@@ -35,6 +36,8 @@ export default function FinancialReportsPage() {
   const [statsExpanded, setStatsExpanded] = useState(true);
   const periodCacheRef = useRef<Partial<Record<ReportPeriod, FinancialReportsData>>>({});
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const { menus: paymentMenus, loading: paymentMenusLoading } =
+    usePaymentMenus();
 
   const updateStatsExpandedFromScroll = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -299,13 +302,15 @@ export default function FinancialReportsPage() {
     <div className={styles.container}>
       <div className={styles.pageHeader}>
         <div className={styles.headerActions} role="group" aria-label="عملیات مالی">
-          <button
-            type="button"
-            className={`${styles.headerActionButton} ${styles.headerActionBuy}`}
-            onClick={() => router.push("/player/wallet?action=buy")}
-          >
-            خرید
-          </button>
+          {!paymentMenusLoading && paymentMenus.walletBuy ? (
+            <button
+              type="button"
+              className={`${styles.headerActionButton} ${styles.headerActionBuy}`}
+              onClick={() => router.push("/player/wallet?action=buy")}
+            >
+              خرید
+            </button>
+          ) : null}
           <button
             type="button"
             className={`${styles.headerActionButton} ${styles.headerActionWithdraw}`}

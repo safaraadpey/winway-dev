@@ -15,6 +15,7 @@ import { generateStableSyntheticCustomerIdentity } from "@/lib/deposit/synthetic
 import { validateDepositAmountToman } from "@/lib/deposit/limits";
 import { takeRateLimitToken } from "@/lib/deposit/rateLimit";
 import { rialsToTomans } from "@/lib/format/persianAmountWords";
+import { assertPlayerPaymentMenu } from "@/lib/deposit/paymentMenuVisibility";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -114,6 +115,21 @@ export async function POST(request: Request) {
         resumed: true,
       });
     }
+  }
+
+  try {
+    await assertPlayerPaymentMenu(pgPool, user.id, "buy_rial");
+  } catch (err: any) {
+    if (err?.message === "payment_menu_forbidden") {
+      return NextResponse.json(
+        {
+          error: "payment_menu_forbidden",
+          message: "خرید ریالی برای حساب شما فعال نیست.",
+        },
+        { status: 403 }
+      );
+    }
+    throw err;
   }
 
   // BuyRial input is Rials; wallet SoR + limits use toman (1 toman = 10 rials).

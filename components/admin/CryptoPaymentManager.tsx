@@ -5,7 +5,9 @@ import toast from "react-hot-toast";
 import { callAdminApi } from "@/lib/adminApiClient";
 
 type Network = "BEP20" | "TRC20" | "TRX";
-type TabId = "rial" | "tiers" | "xpub";
+type TabId = "rial" | "tiers" | "xpub" | "access";
+type MenuMode = "all" | "allowlist";
+type PaymentMenuKey = "wallet_buy" | "buy_rial";
 
 type TierRow = {
   key: string;
@@ -83,6 +85,29 @@ function formatRialPreview(raw: string): string {
   return n.toLocaleString("en-US");
 }
 
+type OperatorRow = {
+  id: string;
+  username: string;
+  nickname: string | null;
+  role: "agent" | "super";
+};
+
+type MenuPolicyState = {
+  mode: MenuMode;
+  operatorIds: string[];
+};
+
+const MENU_LABELS: Record<PaymentMenuKey, string> = {
+  wallet_buy: "منوی کیف پول — بخش خرید",
+  buy_rial: "منوی خرید ریالی",
+};
+
+function operatorLabel(op: OperatorRow): string {
+  const name = op.nickname?.trim() || op.username;
+  const roleFa = op.role === "super" ? "سوپر" : "ایجنت";
+  return `${name} (${roleFa}${op.username && op.nickname ? ` · ${op.username}` : ""})`;
+}
+
 export default function CryptoPaymentManager() {
   const [activeTab, setActiveTab] = useState<TabId>("rial");
   const [rows, setRows] = useState<TierRow[]>([]);
@@ -101,6 +126,17 @@ export default function CryptoPaymentManager() {
   const [bep20Confirmations, setBep20Confirmations] = useState("12");
   const [tronConfirmations, setTronConfirmations] = useState("1");
   const [xpubUpdatedAt, setXpubUpdatedAt] = useState<string | null>(null);
+
+  const [operators, setOperators] = useState<OperatorRow[]>([]);
+  const [menuPolicies, setMenuPolicies] = useState<
+    Record<PaymentMenuKey, MenuPolicyState>
+  >({
+    wallet_buy: { mode: "all", operatorIds: [] },
+    buy_rial: { mode: "all", operatorIds: [] },
+  });
+  const [accessLoading, setAccessLoading] = useState(true);
+  const [accessSaving, setAccessSaving] = useState(false);
+  const [operatorQuery, setOperatorQuery] = useState("");
 
   const loadXpub = useCallback(async () => {
     setXpubLoading(true);
@@ -146,6 +182,32 @@ export default function CryptoPaymentManager() {
     }
   }, []);
 
+  const loadAccess = useCallback(async () => {
+    setAccessLoading(true);
+    try {
+      const data = await callAdminApi<{
+        operators: OperatorRow[];
+        menus: Record<PaymentMenuKey, MenuPolicyState>;
+      }>("/api/admin/crypto-payment/menu-visibility", { method: "GET" });
+      setOperators(data.operators || []);
+      setMenuPolicies({
+        wallet_buy: {
+          mode: data.menus?.wallet_buy?.mode === "allowlist" ? "allowlist" : "all",
+          operatorIds: data.menus?.wallet_buy?.operatorIds || [],
+        },
+        buy_rial: {
+          mode: data.menus?.buy_rial?.mode === "allowlist" ? "allowlist" : "all",
+          operatorIds: data.menus?.buy_rial?.operatorIds || [],
+        },
+      });
+    } catch (e: any) {
+      console.error("[Payment] admin load menu visibility failed", e);
+      toast.error(e?.message || "بارگذاری دسترسی منو ناموفق بود");
+    } finally {
+      setAccessLoading(false);
+    }
+  }, []);
+
   const loadRialPresets = useCallback(async () => {
     setRialLoading(true);
     try {
@@ -166,7 +228,8 @@ export default function CryptoPaymentManager() {
     void load();
     void loadXpub();
     void loadRialPresets();
-  }, [load, loadXpub, loadRialPresets]);
+    void loadAccess();
+  }, [load, loadXpub, loadRialPresets, loadAccess]);
 
   const handleSaveXpub = async () => {
     if (!bep20Xpub.trim() || !trc20Xpub.trim()) {
@@ -275,6 +338,63 @@ export default function CryptoPaymentManager() {
     }
   };
 
+  const toggleOperator = (menuKey: PaymentMenuKey, operatorId: string) => {
+    setMenuPolicies((prev) => {
+      const current = prev[menuKey];
+      const has = current.operatorIds.includes(operatorId);
+      return {
+        ...prev,
+        [menuKey]: {
+          ...current,
+          operatorIds: has
+            ? current.operatorIds.filter((id) => id !== operatorId)
+            : [...current.operatorIds, operatorId],
+        },
+      };
+    });
+  };
+
+  const handleSaveAccess = async () => {
+    for (const key of ["wallet_buy", "buy_rial"] as const) {
+      if (
+        menuPolicies[key].mode === "allowlist" &&
+        menuPolicies[key].operatorIds.length === 0
+      ) {
+        toast.error(
+          `برای «${MENU_LABELS[key]}» حداقل یک ایجنت/سوپر انتخاب کنید یا حالت همه را بگذارید`
+        );
+        return;
+      }
+    }
+    setAccessSaving(true);
+    try {
+      const data = await callAdminApi<{
+        operators: OperatorRow[];
+        menus: Record<PaymentMenuKey, MenuPolicyState>;
+      }>("/api/admin/crypto-payment/menu-visibility", {
+        method: "PUT",
+        body: { menus: menuPolicies },
+      });
+      setOperators(data.operators || operators);
+      setMenuPolicies({
+        wallet_buy: {
+          mode: data.menus?.wallet_buy?.mode === "allowlist" ? "allowlist" : "all",
+          operatorIds: data.menus?.wallet_buy?.operatorIds || [],
+        },
+        buy_rial: {
+          mode: data.menus?.buy_rial?.mode === "allowlist" ? "allowlist" : "all",
+          operatorIds: data.menus?.buy_rial?.operatorIds || [],
+        },
+      });
+      toast.success("دسترسی منوها ذخیره شد");
+    } catch (e: any) {
+      console.error("[Payment] admin save menu visibility failed", e);
+      toast.error(e?.message || "ذخیره دسترسی ناموفق بود");
+    } finally {
+      setAccessSaving(false);
+    }
+  };
+
   const handleSave = async () => {
     if (rows.length === 0) {
       toast.error("حداقل یک ردیف لازم است");
@@ -328,6 +448,13 @@ export default function CryptoPaymentManager() {
     }
   };
 
+  const q = operatorQuery.trim().toLowerCase();
+  const filteredOperators = operators.filter((op) => {
+    if (!q) return true;
+    const hay = `${op.username} ${op.nickname ?? ""} ${op.role}`.toLowerCase();
+    return hay.includes(q);
+  });
+
   return (
     <div className="min-h-screen bg-[#0E0E0F] p-4">
       <div className="mx-auto max-w-4xl">
@@ -335,10 +462,11 @@ export default function CryptoPaymentManager() {
           مدیریت پرداخت
         </h1>
         <p className="mb-5 text-center text-sm leading-6 text-gray-400">
-          مبالغ خرید ریال، ضرایب پلکانی کریپتو و کلیدهای XPUB پایه.
+          مبالغ خرید ریال، ضرایب پلکانی کریپتو، کلیدهای XPUB و نمایش منو برای
+          زیرمجموعه ایجنت/سوپر.
         </p>
 
-        <div className="mb-5 grid grid-cols-3 gap-2 rounded-xl bg-[#151515] p-1">
+        <div className="mb-5 grid grid-cols-2 gap-2 rounded-xl bg-[#151515] p-1 sm:grid-cols-4">
           <button
             type="button"
             onClick={() => setActiveTab("rial")}
@@ -367,6 +495,15 @@ export default function CryptoPaymentManager() {
           >
             XPUB
             {!canManageXpub && !xpubLoading ? " (کل)" : ""}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("access")}
+            className={`rounded-lg py-2.5 text-sm font-semibold ${
+              activeTab === "access" ? "bg-teal-500 text-black" : "text-gray-300"
+            }`}
+          >
+            دسترسی منو
           </button>
         </div>
 
@@ -488,6 +625,132 @@ export default function CryptoPaymentManager() {
                 این مبالغ در لیست «انتخاب مبلغ» صفحه خرید ریال نمایش داده
                 می‌شوند. ردیف‌های غیرفعال برای بازیکن دیده نمی‌شوند.
               </p>
+            </>
+          )
+        ) : null}
+
+        {activeTab === "access" ? (
+          accessLoading ? (
+            <p className="text-center text-gray-400">در حال بارگذاری…</p>
+          ) : (
+            <>
+              <div className="mb-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void loadAccess()}
+                  className="rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-200"
+                >
+                  بارگذاری مجدد
+                </button>
+                <button
+                  type="button"
+                  disabled={accessSaving}
+                  onClick={() => void handleSaveAccess()}
+                  className="mr-auto rounded-lg bg-teal-500 px-4 py-2 text-sm font-bold text-black disabled:opacity-50"
+                >
+                  {accessSaving ? "در حال ذخیره…" : "ذخیره دسترسی"}
+                </button>
+              </div>
+              <p className="mb-4 text-xs leading-5 text-gray-500">
+                اگر «همه بازیکنان» باشد، منو برای همه دیده می‌شود. اگر «فقط
+                زیرمجموعه» باشد، فقط بازیکن‌های همان ایجنت/سوپر انتخاب‌شده منو را
+                می‌بینند.
+              </p>
+              <input
+                value={operatorQuery}
+                onChange={(e) => setOperatorQuery(e.target.value)}
+                placeholder="جستجوی ایجنت / سوپر…"
+                className="mb-4 w-full rounded-lg border border-gray-700 bg-[#1a1a1a] px-3 py-2 text-sm text-gray-100"
+              />
+              <div className="space-y-4">
+                {(["wallet_buy", "buy_rial"] as const).map((key) => {
+                  const policy = menuPolicies[key];
+                  return (
+                    <section
+                      key={key}
+                      className="rounded-xl border border-gray-800 bg-[#151515] p-4"
+                    >
+                      <h2 className="mb-3 text-sm font-bold text-white">
+                        {MENU_LABELS[key]}
+                      </h2>
+                      <div className="mb-3 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setMenuPolicies((prev) => ({
+                              ...prev,
+                              [key]: { ...prev[key], mode: "all" },
+                            }))
+                          }
+                          className={`rounded-lg py-2 text-xs font-semibold ${
+                            policy.mode === "all"
+                              ? "bg-teal-500 text-black"
+                              : "bg-[#1a1a1a] text-gray-300"
+                          }`}
+                        >
+                          همه بازیکنان
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setMenuPolicies((prev) => ({
+                              ...prev,
+                              [key]: { ...prev[key], mode: "allowlist" },
+                            }))
+                          }
+                          className={`rounded-lg py-2 text-xs font-semibold ${
+                            policy.mode === "allowlist"
+                              ? "bg-teal-500 text-black"
+                              : "bg-[#1a1a1a] text-gray-300"
+                          }`}
+                        >
+                          فقط زیرمجموعه
+                        </button>
+                      </div>
+                      {policy.mode === "allowlist" ? (
+                        <ul className="max-h-64 space-y-1 overflow-y-auto">
+                          {filteredOperators.length === 0 ? (
+                            <li className="text-xs text-gray-500">
+                              ایجنت/سوپری پیدا نشد.
+                            </li>
+                          ) : (
+                            filteredOperators.map((op) => {
+                              const checked = policy.operatorIds.includes(op.id);
+                              return (
+                                <li key={`${key}-${op.id}`}>
+                                  <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-gray-200 hover:bg-[#1a1a1a]">
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => toggleOperator(key, op.id)}
+                                    />
+                                    <span>{operatorLabel(op)}</span>
+                                  </label>
+                                </li>
+                              );
+                            })
+                          )}
+                        </ul>
+                      ) : (
+                        <p className="text-xs text-gray-500">
+                          محدودیتی روی ایجنت/سوپر اعمال نمی‌شود.
+                        </p>
+                      )}
+                      {policy.mode === "allowlist" ? (
+                        <p className="mt-2 text-xs text-gray-500">
+                          انتخاب‌شده:{" "}
+                          <span
+                            className="numeric-text numeric-text--12"
+                            dir="ltr"
+                          >
+                            {policy.operatorIds.length}
+                          </span>
+                        </p>
+                      ) : null}
+                    </section>
+                  );
+                })}
+              </div>
             </>
           )
         ) : null}

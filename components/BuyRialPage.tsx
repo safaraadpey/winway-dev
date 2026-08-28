@@ -10,6 +10,7 @@ import {
 import { supabase } from "@/lib/supabaseClient";
 import { isSyntheticCustomerIdentityUiEnabled } from "@/lib/deposit/syntheticCustomerIdentityClient";
 import { DEFAULT_BUY_RIAL_PRESET_AMOUNTS_RIAL } from "@/lib/deposit/buyRialPresetDefaults";
+import { usePaymentMenus } from "@/lib/deposit/usePaymentMenus";
 import buyCardButtonBg from "@/src/assets/logo/BuyCardBotton.png";
 import styles from "./BuyRialPage.module.css";
 
@@ -35,6 +36,8 @@ function isValidFullName(raw: string): boolean {
 
 export default function BuyRialPage() {
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
+  const { menus: paymentMenus, loading: paymentMenusLoading } =
+    usePaymentMenus();
   const [selectedAmountRial, setSelectedAmountRial] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
@@ -274,6 +277,30 @@ export default function BuyRialPage() {
       setConnecting(false);
     }
   };
+
+  if (paymentMenusLoading) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.content}>
+          <h1 className={styles.title}>خرید ریالی</h1>
+          <p className={styles.labelSecondary}>در حال بارگذاری…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!paymentMenus.buyRial) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.content}>
+          <h1 className={styles.title}>خرید ریالی</h1>
+          <p className={styles.labelSecondary}>
+            خرید ریالی برای حساب شما فعال نیست.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.container}>
