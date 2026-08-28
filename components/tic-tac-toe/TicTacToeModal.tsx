@@ -2,11 +2,13 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import Image from "next/image";
 import {
   createGame,
   playFullTurn,
   type MatchState,
 } from "@dingmoney/tic-tac-toe-engine";
+import dingCoinIcon from "@/src/assets/icons/ding-coin.png";
 import { HARD_EXIT_EVENT } from "@/lib/auth/hardExit";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import type { TicTacToeDifficulty } from "@/lib/tic-tac-toe/constants";
@@ -45,13 +47,57 @@ const EMPTY_BOARD: MatchState["board"] = [
 
 function CloseIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
         d="M18 6L6 18M6 6l12 12"
         stroke="currentColor"
         strokeWidth="2.5"
         strokeLinecap="round"
       />
+    </svg>
+  );
+}
+
+function GridIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="6" height="6" rx="1.5" fill="#2f9bff" />
+      <rect x="9" y="3" width="6" height="6" rx="1.5" fill="#ff5f7d" />
+      <rect x="15" y="3" width="6" height="6" rx="1.5" fill="#ffffff" opacity="0.85" />
+      <rect x="3" y="9" width="6" height="6" rx="1.5" fill="#ffffff" opacity="0.85" />
+      <rect x="9" y="9" width="6" height="6" rx="1.5" fill="#2f9bff" />
+      <rect x="15" y="9" width="6" height="6" rx="1.5" fill="#ff5f7d" />
+      <rect x="3" y="15" width="6" height="6" rx="1.5" fill="#ff5f7d" />
+      <rect x="9" y="15" width="6" height="6" rx="1.5" fill="#ffffff" opacity="0.85" />
+      <rect x="15" y="15" width="6" height="6" rx="1.5" fill="#2f9bff" />
+    </svg>
+  );
+}
+
+function TrophyIcon() {
+  return (
+    <svg
+      className={styles.resultIcon}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path d="M8 4h8v2a4 4 0 0 1-8 0V4Z" fill="#fbbf24" />
+      <path
+        d="M6 4H4a2 2 0 0 0 2 3m14-3h2a2 2 0 0 1-2 3M8 20h8M10 16h4v4h-4v-4Z"
+        stroke="#fbbf24"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function PlayIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M9 7.5v9l8-4.5-8-4.5Z" fill="currentColor" />
     </svg>
   );
 }
@@ -179,6 +225,19 @@ export default function TicTacToeModal({
     return styles.resultDraw;
   }, [claimResult]);
 
+  const instructionText = useMemo(() => {
+    if (phase === "loading") return "در حال آماده‌سازی بازی...";
+    if (phase === "claiming") return "در حال ثبت نتیجه...";
+    if (phase === "result" && !claimResult) return "برای شروع دوباره تلاش کنید.";
+    if (phase === "playing") {
+      if (gameState?.currentTurn === "player") {
+        return playerMoves.length === 0 ? "بازی رو شروع کن!" : "نوبت شما";
+      }
+      return "نوبت ماشین...";
+    }
+    return "پایان دست";
+  }, [claimResult, gameState?.currentTurn, phase, playerMoves.length]);
+
   const settleHand = async (moves: number[], currentMatchId: string) => {
     try {
       setPhase("claiming");
@@ -224,16 +283,8 @@ export default function TicTacToeModal({
 
   const boardCells = gameState?.board ?? EMPTY_BOARD;
   const canPickDifficulty = phase === "result" || phase === "loading";
-  const statusText =
-    phase === "loading"
-      ? "در حال آماده‌سازی بازی..."
-      : phase === "claiming"
-        ? "در حال ثبت نتیجه..."
-        : phase === "playing"
-          ? gameState?.currentTurn === "player"
-            ? "نوبت شما"
-            : "نوبت ماشین..."
-          : "پایان دست";
+  const showResultBanner = phase === "result" && claimResult && resultMessage;
+  const showPrimaryAction = phase === "result";
 
   if (!open || !mounted || typeof document === "undefined") return null;
 
@@ -252,9 +303,14 @@ export default function TicTacToeModal({
           onClick={(event) => event.stopPropagation()}
         >
           <div className={styles.header}>
-            <h2 id="tic-tac-toe-title" className={styles.title}>
-              دوز (Tic-Tac-Toe)
-            </h2>
+            <div className={styles.titleGroup}>
+              <span className={styles.titleIcon}>
+                <GridIcon />
+              </span>
+              <h2 id="tic-tac-toe-title" className={styles.title}>
+                دوز (Tic-Tac-Toe)
+              </h2>
+            </div>
             <button
               type="button"
               className={styles.closeButton}
@@ -284,7 +340,15 @@ export default function TicTacToeModal({
           </div>
 
           <div className={styles.prizeRow}>
-            <span>جایزه برد:</span>
+            <span>جایزه برد</span>
+            <Image
+              src={dingCoinIcon}
+              alt=""
+              width={22}
+              height={22}
+              className={styles.prizeCoin}
+              aria-hidden="true"
+            />
             <span
               className={`${styles.prizeAmount} numeric-text numeric-text--16`}
               dir="ltr"
@@ -294,9 +358,15 @@ export default function TicTacToeModal({
             <span>دینگ</span>
           </div>
 
-          <p className={styles.statusText}>{statusText}</p>
+          {!showResultBanner && (
+            <p className={styles.instructionText}>{instructionText}</p>
+          )}
 
-          <div className={styles.board}>
+          <div
+            className={`${styles.board} ${
+              phase === "loading" || phase === "claiming" ? styles.boardLoading : ""
+            }`}
+          >
             {boardCells.map((mark, index) => (
               <button
                 key={index}
@@ -322,23 +392,25 @@ export default function TicTacToeModal({
             ))}
           </div>
 
-          {phase === "result" && claimResult && resultMessage && (
+          {showResultBanner && (
             <div className={`${styles.resultBanner} ${resultClassName}`}>
-              {resultMessage}
+              <TrophyIcon />
+              <span>{resultMessage}</span>
             </div>
           )}
 
           {error && <p className={styles.errorText}>{error}</p>}
 
           <div className={styles.actions}>
-            {phase === "result" && (
+            {showPrimaryAction && (
               <button
                 type="button"
                 className={styles.primaryButton}
                 onClick={() => void beginHand(difficulty)}
                 disabled={busy}
               >
-                {claimResult ? "دست بعدی" : "تلاش دوباره"}
+                <PlayIcon />
+                <span>{claimResult ? "دست بعدی" : "تلاش دوباره"}</span>
               </button>
             )}
 
