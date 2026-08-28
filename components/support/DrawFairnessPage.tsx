@@ -199,6 +199,18 @@ export default function DrawFairnessPage() {
                 </p>
               </div>
             )}
+
+            {outcome.remainingNumbers.length > 0 && (
+              <div className={styles.reproducedBlock}>
+                <p className={styles.reproducedLabel}>
+                  اعداد باقی‌مانده ({outcome.remainingNumbers.length} عدد — ترتیب
+                  قرعه اگر بازی ادامه می‌یافت):
+                </p>
+                <p className={`${styles.reproducedValue} numeric-text numeric-text--16`}>
+                  {outcome.remainingNumbers.join(", ")}
+                </p>
+              </div>
+            )}
           </section>
         )}
 

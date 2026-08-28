@@ -1,0 +1,208 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  padding-top: calc(12px + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  background: var(--player-page-overlay, rgba(14, 14, 15, 0.72));
+}
+
+.modal {
+  width: 100%;
+  max-width: 360px;
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  border-radius: 16px;
+  border: 1px solid var(--player-border, rgba(64, 64, 64, 0.5));
+  background: var(--player-surface-elevated, #2d2d2d);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--player-text-primary, #ffffff);
+}
+
+.closeButton {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--player-border, rgba(64, 64, 64, 0.5));
+  background: var(--player-surface, rgba(26, 26, 26, 0.75));
+  color: var(--player-text-primary, #ffffff);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--player-text-muted, #9ca3af);
+}
+
+.difficultyRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.difficultyButton {
+  border-radius: 12px;
+  border: 1px solid var(--player-border, rgba(64, 64, 64, 0.5));
+  background: var(--player-surface, rgba(26, 26, 26, 0.75));
+  color: var(--player-text-primary, #ffffff);
+  padding: 10px 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.difficultyButtonActive {
+  border-color: var(--player-accent, #00d4aa);
+  background: var(--player-accent-muted, rgba(0, 212, 170, 0.12));
+  color: var(--player-accent, #00d4aa);
+}
+
+.prizeRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--player-accent-muted, rgba(0, 212, 170, 0.12));
+  color: var(--player-text-primary, #ffffff);
+  font-size: 13px;
+}
+
+.prizeAmount {
+  composes: numeric-text numeric-text--16 from global;
+  color: var(--player-ding-balance-amount-color, #fff8e5);
+  font-weight: 800;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.cell {
+  aspect-ratio: 1;
+  border-radius: 12px;
+  border: 1px solid var(--player-border, rgba(64, 64, 64, 0.5));
+  background: var(--player-surface, rgba(26, 26, 26, 0.75));
+  color: var(--player-text-primary, #ffffff);
+  font-size: 32px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cell:disabled {
+  cursor: default;
+  opacity: 0.95;
+}
+
+.cellPlayer {
+  color: #7dd3fc;
+}
+
+.cellMachine {
+  color: #fca5a5;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.primaryButton {
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(180deg, #00d4aa 0%, #0ea5a0 100%);
+  color: #042f2e;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.primaryButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.secondaryButton {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--player-border, rgba(64, 64, 64, 0.5));
+  background: transparent;
+  color: var(--player-text-primary, #ffffff);
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.resultBanner {
+  border-radius: 12px;
+  padding: 12px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.resultWin {
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+}
+
+.resultLose {
+  background: rgba(239, 68, 68, 0.16);
+  color: #fca5a5;
+}
+
+.resultDraw {
+  background: rgba(148, 163, 184, 0.16);
+  color: #cbd5e1;
+}
+
+.errorText {
+  margin: 0;
+  font-size: 13px;
+  color: #fca5a5;
+  text-align: center;
+}
+
+.statusText {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--player-text-muted, #9ca3af);
+}

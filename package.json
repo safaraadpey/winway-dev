@@ -5,7 +5,8 @@
   "workspaces": [
     "packages/*",
     "apps/workers/*",
-    "apps/engines/backgammon"
+    "apps/engines/backgammon",
+    "apps/engines/tic-tac-toe"
   ],
   "scripts": {
     "dev": "next dev",
@@ -19,10 +20,12 @@
     "test:hamipay-deposit": "node tools/hamipay-deposit/run.mjs",
     "test:auth-form-security": "node tools/auth-form-security/run.mjs",
     "test:referral-links": "node tools/referral-links/run.mjs",
-    "test:backgammon-e2e": "node tools/backgammon-e2e/run.mjs"
+    "test:backgammon-e2e": "node tools/backgammon-e2e/run.mjs",
+    "test:tic-tac-toe-engine": "npm run test -w @dingmoney/tic-tac-toe-engine"
   },
   "dependencies": {
     "@dingmoney/backgammon-engine": "*",
+    "@dingmoney/tic-tac-toe-engine": "*",
     "@dingmoney/deposit-core": "*",
     "@noble/curves": "^2.2.0",
     "@noble/hashes": "^2.2.0",

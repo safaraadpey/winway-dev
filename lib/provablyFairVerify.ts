@@ -30,6 +30,7 @@ export type DrawVerificationOutcome = {
   ok: boolean;
   checks: VerificationCheck[];
   reproducedDraws: number[];
+  remainingNumbers: number[];
   computedHash: string | null;
   firstMismatchIndex: number | null;
   parseError: string | null;
@@ -220,13 +221,13 @@ export async function verifyDrawPayload(
   });
 
   let reproducedDraws: number[] = [];
+  let remainingNumbers: number[] = [];
   let firstMismatchIndex: number | null = null;
 
   if (normalizedSeed && /^[0-9a-f]{64}$/.test(normalizedSeed)) {
-    reproducedDraws = await reproduceDrawSequence(
-      normalizedSeed,
-      input.drawnNumbers.length
-    );
+    const fullSequence = await reproduceDrawSequence(normalizedSeed, 90);
+    reproducedDraws = fullSequence.slice(0, input.drawnNumbers.length);
+    remainingNumbers = fullSequence.slice(input.drawnNumbers.length);
 
     for (let i = 0; i < input.drawnNumbers.length; i++) {
       if (reproducedDraws[i] !== input.drawnNumbers[i]) {
@@ -264,6 +265,7 @@ export async function verifyDrawPayload(
     ok,
     checks,
     reproducedDraws,
+    remainingNumbers,
     computedHash,
     firstMismatchIndex,
     parseError: null,

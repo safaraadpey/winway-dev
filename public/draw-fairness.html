@@ -394,9 +394,12 @@
       });
 
       let reproducedDraws = [];
+      let remainingNumbers = [];
       let firstMismatchIndex = null;
       if (normalizedSeed && /^[0-9a-f]{64}$/.test(normalizedSeed)) {
-        reproducedDraws = await reproduceDrawSequence(normalizedSeed, input.drawnNumbers.length);
+        const fullSequence = await reproduceDrawSequence(normalizedSeed, 90);
+        reproducedDraws = fullSequence.slice(0, input.drawnNumbers.length);
+        remainingNumbers = fullSequence.slice(input.drawnNumbers.length);
         for (let i = 0; i < input.drawnNumbers.length; i++) {
           if (reproducedDraws[i] !== input.drawnNumbers[i]) {
             firstMismatchIndex = i;
@@ -425,6 +428,7 @@
         ok: checks.every((c) => c.passed),
         checks,
         reproducedDraws,
+        remainingNumbers,
       };
     }
 
@@ -438,6 +442,9 @@
       }).join("");
       if (outcome.reproducedDraws.length) {
         html += '<div><div style="font-size:12px;font-weight:600;margin-bottom:6px">اعداد بازتولید‌شده:</div><div class="reproduced">' + outcome.reproducedDraws.join(", ") + "</div></div>";
+      }
+      if (outcome.remainingNumbers && outcome.remainingNumbers.length) {
+        html += '<div><div style="font-size:12px;font-weight:600;margin:12px 0 6px">اعداد باقی‌مانده (' + outcome.remainingNumbers.length + ' عدد — ترتیب قرعه اگر بازی ادامه می‌یافت):</div><div class="reproduced">' + outcome.remainingNumbers.join(", ") + "</div></div>";
       }
       el.innerHTML = html;
     }

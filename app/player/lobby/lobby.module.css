@@ -10,6 +10,13 @@
   overflow: hidden;
 }
 
+.ticTacToeLauncherWrap {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto 0.75rem;
+  padding-left: 16px;
+}
+
 .roomsList {
   flex: 1 1 0;
   min-height: 0;
