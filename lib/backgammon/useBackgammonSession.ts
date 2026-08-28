@@ -26,6 +26,21 @@ export function useBackgammonSession(sessionId: string) {
   const tokenRef = useRef<string | null>(null);
   const mutationChainRef = useRef(Promise.resolve());
   const mutatingRef = useRef(false);
+  const pendingMovesRef = useRef(0);
+
+  const applyRemoteSnapshot = useCallback((incoming: BackgammonPublicSnapshot) => {
+    if (pendingMovesRef.current > 0) return;
+    const current = snapshotRef.current;
+    if (
+      current &&
+      typeof incoming.stateVersion === "number" &&
+      incoming.stateVersion <= current.stateVersion
+    ) {
+      return;
+    }
+    snapshotRef.current = incoming;
+    setSnapshot(incoming);
+  }, []);
 
   useEffect(() => {
     snapshotRef.current = snapshot;
@@ -77,7 +92,7 @@ export function useBackgammonSession(sessionId: string) {
         const data = await authFetch(
           `/api/player/backgammon/state?sessionId=${encodeURIComponent(sessionId)}`
         );
-        setSnapshot(data as BackgammonPublicSnapshot);
+        applyRemoteSnapshot(data as BackgammonPublicSnapshot);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load game");
       } finally {
@@ -91,7 +106,7 @@ export function useBackgammonSession(sessionId: string) {
     } finally {
       inflightRef.current = null;
     }
-  }, [authFetch, sessionId]);
+  }, [applyRemoteSnapshot, authFetch, sessionId]);
 
   useEffect(() => {
     void refresh();
@@ -153,6 +168,7 @@ export function useBackgammonSession(sessionId: string) {
         if (optimistic) {
           const preview = optimistic(current);
           if (preview) {
+            snapshotRef.current = preview;
             setSnapshot(preview);
           }
         }
@@ -172,11 +188,25 @@ export function useBackgammonSession(sessionId: string) {
           });
 
           if (data.snapshot) {
-            setSnapshot(data.snapshot);
-          } else {
+            if (pendingMovesRef.current > 1) {
+              const live = snapshotRef.current;
+              if (live) {
+                const merged = {
+                  ...live,
+                  stateVersion: data.stateVersion,
+                };
+                snapshotRef.current = merged;
+                setSnapshot(merged);
+              }
+            } else {
+              snapshotRef.current = data.snapshot;
+              setSnapshot(data.snapshot);
+            }
+          } else if (pendingMovesRef.current <= 1) {
             await refresh();
           }
         } catch (err) {
+          snapshotRef.current = rollback;
           setSnapshot(rollback);
           setError(err instanceof Error ? err.message : "Request failed");
           throw err;
@@ -198,15 +228,31 @@ export function useBackgammonSession(sessionId: string) {
 
   const move = useCallback(
     async (m: Move) => {
-      await runMutation(
-        "/api/player/backgammon/move",
-        {
-          from: m.from,
-          to: m.to,
-          dieUsed: m.dieUsed,
-        },
-        (current) => applyOptimisticMove(current, m)
-      );
+      const current = snapshotRef.current;
+      if (!current) return;
+      const rollback = current;
+      pendingMovesRef.current += 1;
+      const preview = applyOptimisticMove(current, m);
+      if (preview) {
+        snapshotRef.current = preview;
+        setSnapshot(preview);
+      }
+      try {
+        await runMutation(
+          "/api/player/backgammon/move",
+          {
+            from: m.from,
+            to: m.to,
+            dieUsed: m.dieUsed,
+          }
+        );
+      } catch (err) {
+        snapshotRef.current = rollback;
+        setSnapshot(rollback);
+        throw err;
+      } finally {
+        pendingMovesRef.current = Math.max(0, pendingMovesRef.current - 1);
+      }
     },
     [runMutation]
   );

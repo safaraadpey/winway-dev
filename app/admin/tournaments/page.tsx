@@ -62,6 +62,7 @@ function mapToFormValues(row: TournamentRow): TournamentFormValues {
       (row.meta as any)?.min_players_to_start ?? 3,
     final_winners_count: finalWinnersCount,
     prize_percentages: buildEqualPrizePercents(finalWinnersCount),
+    is_test_tournament: (row.meta as any)?.is_test_tournament === true,
     registration_extend_enabled:
       (row.meta as any)?.registration_extend_enabled !== false,
     registration_extend_minutes:
@@ -256,6 +257,12 @@ export default function AdminTournamentsPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="text-lg font-semibold">{t.title || "بدون عنوان"}</div>
+                    {(t.meta as { is_test_tournament?: boolean } | null)?.is_test_tournament ===
+                    true ? (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-amber-500/20 text-amber-200 border-amber-400/50">
+                        تستی
+                      </span>
+                    ) : null}
                     {(() => {
                       const { label, className } = statusDisplay(t.status);
                       return (

@@ -61,6 +61,7 @@ export default function AdminTournamentEditPage() {
           data?.meta?.registration_extend_minutes ?? 60,
         final_winners_count: finalWinnersCount,
         prize_percentages: prizePercentages,
+        is_test_tournament: data?.meta?.is_test_tournament === true,
       };
     },
     []
@@ -143,6 +144,7 @@ export default function AdminTournamentEditPage() {
         registration_extend_enabled: values.registration_extend_enabled,
         registration_extend_minutes: values.registration_extend_minutes ?? 60,
         entry_currency: values.entry_currency,
+        is_test_tournament: values.is_test_tournament === true,
       },
     };
 
@@ -283,6 +285,7 @@ export default function AdminTournamentEditPage() {
         {!loading && !error && initialValues && (
           <TournamentForm
             mode="edit"
+            tournamentId={tournamentId}
             initialValues={initialValues}
             onSubmit={handleSubmit}
             submitting={submitting}

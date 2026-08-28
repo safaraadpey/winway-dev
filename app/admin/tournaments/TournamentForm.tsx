@@ -30,6 +30,8 @@ export type TournamentFormValues = {
   final_winners_count: number | null;
   /** Prize share per rank (1..N); 2 decimal places, must sum to 100 when N > 1. */
   prize_percentages: number[];
+  /** Unlisted: hidden from public list; visible to registrants and anyone with the link. */
+  is_test_tournament: boolean;
 };
 
 export type TournamentFormProps = {
@@ -39,7 +41,13 @@ export type TournamentFormProps = {
   submitting?: boolean;
   readOnly?: boolean;
   lockedMessage?: string;
+  /** Used to show a copyable player link on edit. */
+  tournamentId?: string | null;
 };
+
+export function isTestTournament(meta?: { is_test_tournament?: boolean | null } | null): boolean {
+  return meta?.is_test_tournament === true;
+}
 
 const STATUS_OPTIONS = [
   { value: "draft", label: "پیش‌نویس" },
@@ -130,6 +138,7 @@ export function TournamentForm({
   submitting,
   readOnly = false,
   lockedMessage,
+  tournamentId = null,
 }: TournamentFormProps) {
   const defaults: TournamentFormValues = useMemo(
     () => ({
@@ -157,6 +166,7 @@ export function TournamentForm({
       registration_extend_minutes: 60,
       final_winners_count: 1,
       prize_percentages: [100],
+      is_test_tournament: false,
     }),
     []
   );
@@ -172,6 +182,8 @@ export function TournamentForm({
 
   const [values, setValues] = useState<TournamentFormValues>(mergedInitial);
   const [error, setError] = useState<string | null>(null);
+  const [playerLink, setPlayerLink] = useState("");
+  const [linkCopied, setLinkCopied] = useState(false);
   const startInputRef = useRef<HTMLInputElement | null>(null);
   const minDateLocal = useMemo(() => toDateLocal(new Date()), []);
   const [startDateLocal, setStartDateLocal] = useState("");
@@ -206,6 +218,25 @@ export function TournamentForm({
       setStartMinute("");
     }
   }, [initialValues, mergedInitial]);
+
+  useEffect(() => {
+    if (!tournamentId || typeof window === "undefined") {
+      setPlayerLink("");
+      return;
+    }
+    setPlayerLink(`${window.location.origin}/player/tournaments/${tournamentId}`);
+  }, [tournamentId]);
+
+  const handleCopyLink = async () => {
+    if (!playerLink) return;
+    try {
+      await navigator.clipboard.writeText(playerLink);
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      setError("کپی لینک انجام نشد. لینک را دستی کپی کنید.");
+    }
+  };
 
   const handleChange = (key: keyof TournamentFormValues, val: unknown) => {
     setValues((prev) => ({ ...prev, [key]: val }));
@@ -485,6 +516,51 @@ export function TournamentForm({
               />
             </div>
           </div>
+        </div>
+
+        <div className="md:col-span-2 rounded-lg border border-gray-700 bg-[#161616] p-4 space-y-3">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={values.is_test_tournament}
+                onChange={(e) => handleChange("is_test_tournament", e.target.checked)}
+                className="h-4 w-4 accent-teal-500"
+                disabled={readOnly}
+              />
+              تورنومنت تستی
+            </span>
+            <span className="text-xs text-gray-400">
+              در لیست عمومی دیده نمی‌شود. ثبت‌نام‌شده‌ها و کسانی که لینک دارند می‌توانند ببینند و ثبت‌نام کنند.
+            </span>
+          </label>
+          {values.is_test_tournament && (
+            <label className="flex flex-col gap-1 text-sm">
+              <span>لینک ثبت‌نام</span>
+              <div className="flex items-stretch gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  dir="ltr"
+                  value={playerLink}
+                  placeholder={
+                    tournamentId
+                      ? "در حال ساخت لینک..."
+                      : "پس از ایجاد تورنومنت، لینک اینجا نمایش داده می‌شود"
+                  }
+                  className={`${inputClass} flex-1 text-sm`}
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleCopyLink()}
+                  disabled={!playerLink}
+                  className="px-3 py-2 rounded-lg bg-teal-700 hover:bg-teal-600 text-white text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {linkCopied ? "کپی شد" : "کپی"}
+                </button>
+              </div>
+            </label>
+          )}
         </div>
 
         <label className="flex flex-col gap-1 text-sm">

@@ -40,6 +40,13 @@ export default function AdminTournamentCreatePage() {
       alert(result?.message || "خطا در ایجاد تورنومنت");
       return;
     }
+    const row = result?.data;
+    const createdId =
+      row && typeof row === "object" && "id" in row ? String((row as { id: unknown }).id ?? "") : "";
+    if (values.is_test_tournament && createdId) {
+      router.push(`/admin/tournaments/${createdId}/edit`);
+      return;
+    }
     router.push("/admin/tournaments");
   };
 

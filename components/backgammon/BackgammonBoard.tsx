@@ -36,7 +36,7 @@ function pickMoveTo(moves: Move[], to: Move["to"]): Move | null {
   return matches.reduce((best, m) => (m.dieUsed > best.dieUsed ? m : best));
 }
 
-const JUMP_MS = 320;
+const JUMP_MS = 260;
 
 function prefersReducedMotion(): boolean {
   return (
@@ -49,43 +49,107 @@ function endpointSelector(endpoint: Move["from"] | Move["to"]): string {
   return `[data-bg-endpoint="${String(endpoint)}"]`;
 }
 
-type FlyState = {
-  from: Move["from"];
-  color: "white" | "black";
-  sx: number;
-  sy: number;
-  dx: number;
-  dy: number;
-  fromCount: number;
-};
-
-function countAtFrom(
-  board: BackgammonPublicSnapshot["board"],
-  from: Move["from"],
-  color: "white" | "black"
-): number {
-  if (from === "bar") return board.bar[color];
-  if (from === "off") return board.borneOff[color];
-  if (typeof from === "number") return board.points[from]?.[color] ?? 0;
-  return 0;
-}
-
-function boardWithoutMovingChecker(
-  board: BackgammonPublicSnapshot["board"],
-  from: Move["from"],
-  color: "white" | "black"
-): BackgammonPublicSnapshot["board"] {
-  const next = {
+function cloneBoard(board: BackgammonPublicSnapshot["board"]) {
+  return {
     points: board.points.map((stack) => ({ ...stack })),
     bar: { ...board.bar },
     borneOff: { ...board.borneOff },
   };
-  if (from === "bar") {
-    next.bar[color] = Math.max(0, next.bar[color] - 1);
-  } else if (typeof from === "number" && next.points[from]) {
-    next.points[from][color] = Math.max(0, next.points[from][color] - 1);
+}
+
+/** Hide checkers that are still flying so dest does not pop in early. */
+function boardHidingArrivals(
+  board: BackgammonPublicSnapshot["board"],
+  hidden: Record<string, number>,
+  color: "white" | "black"
+): BackgammonPublicSnapshot["board"] {
+  const keys = Object.keys(hidden);
+  if (keys.length === 0) return board;
+  const next = cloneBoard(board);
+  for (const key of keys) {
+    const n = hidden[key] ?? 0;
+    if (n <= 0) continue;
+    if (key === "bar") {
+      next.bar[color] = Math.max(0, next.bar[color] - n);
+    } else if (key === "off") {
+      next.borneOff[color] = Math.max(0, next.borneOff[color] - n);
+    } else {
+      const point = Number(key);
+      if (next.points[point]) {
+        next.points[point][color] = Math.max(0, next.points[point][color] - n);
+      }
+    }
   }
   return next;
+}
+
+function measureEndpoint(
+  frame: HTMLElement,
+  endpoint: Move["from"] | Move["to"]
+): { x: number; y: number } | null {
+  const el = frame.querySelector(endpointSelector(endpoint));
+  if (!(el instanceof HTMLElement)) return null;
+  const frameRect = frame.getBoundingClientRect();
+  const rect = el.getBoundingClientRect();
+  const size = 20;
+  return {
+    x: rect.left + rect.width / 2 - frameRect.left - size / 2,
+    y: rect.top + rect.height / 2 - frameRect.top - size / 2,
+  };
+}
+
+function animateJumpDom(
+  frame: HTMLElement,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  colorClass: string
+): Promise<void> {
+  if (prefersReducedMotion()) return Promise.resolve();
+
+  const ghost = document.createElement("span");
+  ghost.className = `${colorClass} ${styles.flyingChecker}`;
+  ghost.style.left = `${from.x}px`;
+  ghost.style.top = `${from.y}px`;
+  ghost.setAttribute("aria-hidden", "true");
+  frame.appendChild(ghost);
+
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      ghost.remove();
+      resolve();
+    };
+    const timeoutId = window.setTimeout(finish, JUMP_MS + 80);
+    try {
+      const animation = ghost.animate(
+        [
+          { transform: "translate(0px, 0px) scale(1)", offset: 0 },
+          {
+            transform: `translate(${dx / 2}px, ${dy / 2 - 24}px) scale(1.15)`,
+            offset: 0.45,
+          },
+          { transform: `translate(${dx}px, ${dy}px) scale(1)`, offset: 1 },
+        ],
+        {
+          duration: JUMP_MS,
+          easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+          fill: "forwards",
+        }
+      );
+      animation.finished
+        .then(finish)
+        .catch(finish)
+        .finally(() => window.clearTimeout(timeoutId));
+    } catch {
+      window.clearTimeout(timeoutId);
+      finish();
+    }
+  });
 }
 
 function stackMetrics(count: number) {
@@ -245,30 +309,37 @@ function PointCell({
 
 export default function BackgammonBoard({ snapshot, onMove, disabled }: Props) {
   const [selectedFrom, setSelectedFrom] = useState<string | null>(null);
-  const [fly, setFly] = useState<FlyState | null>(null);
+  const [hiddenArrivals, setHiddenArrivals] = useState<Record<string, number>>(
+    {}
+  );
   const frameRef = useRef<HTMLDivElement | null>(null);
-  const flyRef = useRef<HTMLSpanElement | null>(null);
   const busyRef = useRef(false);
   const flipped = snapshot.mySeat === 1;
   const myColor: "white" | "black" = snapshot.mySeat === 1 ? "black" : "white";
-  const locked = Boolean(disabled || fly);
+  const myCheckerClass =
+    myColor === "white" ? styles.checkerWhite : styles.checkerBlack;
+
   const displaySnapshot = useMemo(() => {
-    if (!fly) return snapshot;
-    const stillAtSource =
-      countAtFrom(snapshot.board, fly.from, fly.color) >= fly.fromCount;
-    if (!stillAtSource) return snapshot;
+    if (Object.keys(hiddenArrivals).length === 0) return snapshot;
     return {
       ...snapshot,
-      board: boardWithoutMovingChecker(snapshot.board, fly.from, fly.color),
+      board: boardHidingArrivals(snapshot.board, hiddenArrivals, myColor),
     };
-  }, [snapshot, fly]);
+  }, [snapshot, hiddenArrivals, myColor]);
 
-  useEffect(() => {
-    if (!fly) return;
-    if (countAtFrom(snapshot.board, fly.from, fly.color) < fly.fromCount) {
-      setFly(null);
-    }
-  }, [snapshot, fly]);
+  const bumpArrival = useCallback((to: Move["to"], delta: number) => {
+    const key = endpointKey(to);
+    setHiddenArrivals((prev) => {
+      const nextCount = Math.max(0, (prev[key] ?? 0) + delta);
+      if (nextCount === 0) {
+        if (!(key in prev)) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return { ...prev, [key]: nextCount };
+    });
+  }, []);
 
   const legalByFrom = useMemo(() => {
     const map = new Map<string, Move[]>();
@@ -303,7 +374,7 @@ export default function BackgammonBoard({ snapshot, onMove, disabled }: Props) {
 
   const barMoves = legalByFrom.get("bar") ?? [];
   const barSelectable =
-    snapshot.isMyTurn && !locked && barMoves.length > 0;
+    snapshot.isMyTurn && !disabled && barMoves.length > 0;
 
   const myBarCount =
     snapshot.mySeat === 0
@@ -320,128 +391,60 @@ export default function BackgammonBoard({ snapshot, onMove, disabled }: Props) {
 
   const myBorneOff =
     snapshot.mySeat === 0
-      ? snapshot.board.borneOff.white
+      ? displaySnapshot.board.borneOff.white
       : snapshot.mySeat === 1
-        ? snapshot.board.borneOff.black
+        ? displaySnapshot.board.borneOff.black
         : 0;
   const oppBorneOff =
     snapshot.mySeat === 0
-      ? snapshot.board.borneOff.black
+      ? displaySnapshot.board.borneOff.black
       : snapshot.mySeat === 1
-        ? snapshot.board.borneOff.white
+        ? displaySnapshot.board.borneOff.white
         : 0;
 
-  const playJump = useCallback(async (move: Move) => {
-    const frame = frameRef.current;
-    if (!frame || prefersReducedMotion()) return;
-
-    const fromEl = frame.querySelector(endpointSelector(move.from));
-    const toEl = frame.querySelector(endpointSelector(move.to));
-    if (!(fromEl instanceof HTMLElement) || !(toEl instanceof HTMLElement)) {
-      return;
-    }
-
-    const frameRect = frame.getBoundingClientRect();
-    const fromRect = fromEl.getBoundingClientRect();
-    const toRect = toEl.getBoundingClientRect();
-    const size = 20;
-    const sx = fromRect.left + fromRect.width / 2 - frameRect.left - size / 2;
-    const sy = fromRect.top + fromRect.height / 2 - frameRect.top - size / 2;
-    const ex = toRect.left + toRect.width / 2 - frameRect.left - size / 2;
-    const ey = toRect.top + toRect.height / 2 - frameRect.top - size / 2;
-    const mx = (sx + ex) / 2;
-    const my = (sy + ey) / 2 - 28;
-
-    const dx = ex - sx;
-    const dy = ey - sy;
-    setFly({
-      color: myColor,
-      from: move.from,
-      sx,
-      sy,
-      dx,
-      dy,
-      fromCount: countAtFrom(snapshot.board, move.from, myColor),
-    });
-
-    await new Promise<void>((resolve) => {
-      let settled = false;
-      let timeoutId = 0;
-      const finish = () => {
-        if (settled) return;
-        settled = true;
-        window.clearTimeout(timeoutId);
-        resolve();
-      };
-      timeoutId = window.setTimeout(finish, JUMP_MS + 80);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const node = flyRef.current;
-          if (!node) {
-            finish();
-            return;
-          }
-          const animation = node.animate(
-            [
-              {
-                transform: "translate(0px, 0px) scale(1)",
-                offset: 0,
-              },
-              {
-                transform: `translate(${dx / 2}px, ${dy / 2 - 28}px) scale(1.18)`,
-                offset: 0.45,
-              },
-              {
-                transform: `translate(${dx}px, ${dy}px) scale(1)`,
-                offset: 1,
-              },
-            ],
-            {
-              duration: JUMP_MS,
-              easing: "cubic-bezier(0.22, 1, 0.36, 1)",
-              fill: "forwards",
-            }
-          );
-          animation.finished.then(finish).catch(finish);
-        });
-      });
-    });
-  }, [myColor, snapshot.board]);
-
   const commitMove = useCallback(
-    async (move: Move) => {
-      if (busyRef.current) return;
+    (move: Move) => {
+      if (busyRef.current || disabled) return;
       busyRef.current = true;
       setSelectedFrom(null);
-      try {
-        await playJump(move);
-        await onMove(move);
-      } finally {
-        busyRef.current = false;
-        setFly(null);
+
+      const frame = frameRef.current;
+      const fromPos = frame ? measureEndpoint(frame, move.from) : null;
+      const toPos = frame ? measureEndpoint(frame, move.to) : null;
+
+      bumpArrival(move.to, 1);
+      void onMove(move);
+      busyRef.current = false;
+
+      if (frame && fromPos && toPos) {
+        void animateJumpDom(frame, fromPos, toPos, myCheckerClass).finally(() => {
+          bumpArrival(move.to, -1);
+        });
+      } else {
+        bumpArrival(move.to, -1);
       }
     },
-    [onMove, playJump]
+    [bumpArrival, disabled, myCheckerClass, onMove]
   );
 
-  const tryMove = async (fromKey: string, to: Move["to"]) => {
+  const tryMove = (fromKey: string, to: Move["to"]) => {
     const match = pickMoveTo(legalByFrom.get(fromKey) ?? [], to);
     if (!match) return false;
-    await commitMove(match);
+    commitMove(match);
     return true;
   };
 
-  const selectOrAutoMove = async (fromKey: string) => {
+  const selectOrAutoMove = (fromKey: string) => {
     const auto = pickAutoMove(legalByFrom.get(fromKey) ?? []);
     if (auto) {
-      await commitMove(auto);
+      commitMove(auto);
       return;
     }
     setSelectedFrom(fromKey);
   };
 
-  const handlePointClick = async (point: number) => {
-    if (locked || !snapshot.isMyTurn || busyRef.current) return;
+  const handlePointClick = (point: number) => {
+    if (disabled || !snapshot.isMyTurn || busyRef.current) return;
 
     const fromKey = String(point);
     const stack = snapshot.board.points[point] ?? { white: 0, black: 0 };
@@ -453,27 +456,27 @@ export default function BackgammonBoard({ snapshot, onMove, disabled }: Props) {
       return;
     }
 
-    if (selectedFrom && (await tryMove(selectedFrom, point))) {
+    if (selectedFrom && tryMove(selectedFrom, point)) {
       return;
     }
 
     if (myCount > 0 && legalByFrom.has(fromKey)) {
-      await selectOrAutoMove(fromKey);
+      selectOrAutoMove(fromKey);
     }
   };
 
-  const handleBarClick = async () => {
+  const handleBarClick = () => {
     if (!barSelectable || busyRef.current) return;
     if (selectedFrom === "bar") {
       setSelectedFrom(null);
       return;
     }
-    await selectOrAutoMove("bar");
+    selectOrAutoMove("bar");
   };
 
-  const handleBearOffClick = async () => {
-    if (!selectedFrom || locked || !snapshot.isMyTurn) return;
-    await tryMove(selectedFrom, "off");
+  const handleBearOffClick = () => {
+    if (!selectedFrom || disabled || !snapshot.isMyTurn) return;
+    tryMove(selectedFrom, "off");
   };
 
   const renderPoint = (point: number, fromTop: boolean) => (
@@ -485,7 +488,7 @@ export default function BackgammonBoard({ snapshot, onMove, disabled }: Props) {
       selectedFrom={selectedFrom}
       legalByFrom={legalByFrom}
       highlightTargets={highlightTargets}
-      disabled={locked}
+      disabled={disabled}
       onPointClick={handlePointClick}
     />
   );
@@ -603,20 +606,6 @@ export default function BackgammonBoard({ snapshot, onMove, disabled }: Props) {
               </div>
             </div>
           </div>
-          {fly ? (
-            <span className={styles.flyingLayer} aria-hidden>
-              <span
-                ref={flyRef}
-                className={[
-                  fly.color === "white"
-                    ? styles.checkerWhite
-                    : styles.checkerBlack,
-                  styles.flyingChecker,
-                ].join(" ")}
-                style={{ left: fly.sx, top: fly.sy }}
-              />
-            </span>
-          ) : null}
         </div>
       </div>
     </div>

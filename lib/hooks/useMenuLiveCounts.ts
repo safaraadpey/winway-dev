@@ -43,14 +43,22 @@ export function useMenuLiveCounts(): MenuLiveCounts {
     async function fetchTournamentRegistrants(): Promise<number> {
       const { data: tournaments, error: tournamentsError } = await supabase
         .from("tournaments")
-        .select("id")
+        .select("id, meta")
         .eq("status", "registration_open");
 
       if (tournamentsError || !tournaments?.length) {
         return 0;
       }
 
-      const tournamentIds = tournaments.map((row) => row.id);
+      const tournamentIds = tournaments
+        .filter((row) => {
+          const meta = row.meta as { is_test_tournament?: boolean } | null;
+          return meta?.is_test_tournament !== true;
+        })
+        .map((row) => row.id);
+      if (tournamentIds.length === 0) {
+        return 0;
+      }
       const { data: entries, error: entriesError } = await supabase
         .from("tournament_entries")
         .select("id")

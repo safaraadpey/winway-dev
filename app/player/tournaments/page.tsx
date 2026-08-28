@@ -20,6 +20,7 @@ type TournamentRow = {
     min_players_to_start?: number | null;
     final_winners_count?: number | null;
     entry_currency?: string | null;
+    is_test_tournament?: boolean | null;
   } | null;
 };
 
@@ -136,14 +137,18 @@ export default function TournamentsPage() {
   const fetchTournaments = async () => {
     setLoading(true);
     setError(null);
-    const { data, error } = await supabase
-      .from("tournaments")
-      .select(
-        "id,title,status,start_at,currency,ticket_price,guaranteed_prize,commission_rate,meta"
-      )
-      .in("status", ["registration_open", "running", "settling", "finished"])
-      .order("start_at", { ascending: false })
-      .order("created_at", { ascending: false });
+    const [{ data, error }, { data: authData }] = await Promise.all([
+      supabase
+        .from("tournaments")
+        .select(
+          "id,title,status,start_at,currency,ticket_price,guaranteed_prize,commission_rate,meta"
+        )
+        .in("status", ["registration_open", "running", "settling", "finished"])
+        .order("start_at", { ascending: false })
+        .order("created_at", { ascending: false }),
+      supabase.auth.getUser(),
+    ]);
+    const myUserId = authData?.user?.id ?? null;
 
     if (error) {
       setError(error.message || "خطا در دریافت لیست تورنومنت‌ها");
@@ -169,10 +174,10 @@ export default function TournamentsPage() {
         if (sa !== sb) return sb - sa;
         return 0;
       });
-      setRows(items);
 
       const tournamentIds = items.map((i) => i.id);
       if (tournamentIds.length === 0) {
+        setRows([]);
         setEntryCounts({});
         setTicketTotals({});
         setPrizePercents({});
@@ -194,6 +199,31 @@ export default function TournamentsPage() {
             .order("rank", { ascending: true }),
         ]);
 
+        const usersByTournament: Record<string, Set<string>> = {};
+        const ticketsByTournament: Record<string, number> = {};
+        if (!entriesError) {
+          for (const row of (entriesData as {
+            tournament_id: string;
+            user_id: string;
+            tickets_count: number | null;
+          }[]) ?? []) {
+            if (!usersByTournament[row.tournament_id]) {
+              usersByTournament[row.tournament_id] = new Set<string>();
+            }
+            usersByTournament[row.tournament_id].add(row.user_id);
+            ticketsByTournament[row.tournament_id] =
+              (ticketsByTournament[row.tournament_id] ?? 0) +
+              (Number(row.tickets_count) || 0);
+          }
+        }
+
+        const visibleItems = items.filter((t) => {
+          if (t.meta?.is_test_tournament !== true) return true;
+          if (!myUserId) return false;
+          return usersByTournament[t.id]?.has(myUserId) === true;
+        });
+        setRows(visibleItems);
+
         const percentsByTournament: Record<string, number[]> = {};
         for (const rule of (prizeRulesData as {
           tournament_id: string;
@@ -209,7 +239,7 @@ export default function TournamentsPage() {
           percentsByTournament[rule.tournament_id].push(value);
         }
         const nextPercents: Record<string, number[]> = {};
-        for (const item of items) {
+        for (const item of visibleItems) {
           const winnersCount = item.meta?.final_winners_count ?? 1;
           const fromRules = percentsByTournament[item.id];
           nextPercents[item.id] =
@@ -223,26 +253,11 @@ export default function TournamentsPage() {
           setEntryCounts({});
           setTicketTotals({});
         } else {
-          const usersByTournament: Record<string, Set<string>> = {};
-          const ticketsByTournament: Record<string, number> = {};
-          for (const row of (entriesData as {
-            tournament_id: string;
-            user_id: string;
-            tickets_count: number | null;
-          }[]) ?? []) {
-            if (!usersByTournament[row.tournament_id]) {
-              usersByTournament[row.tournament_id] = new Set<string>();
-            }
-            usersByTournament[row.tournament_id].add(row.user_id);
-            ticketsByTournament[row.tournament_id] =
-              (ticketsByTournament[row.tournament_id] ?? 0) +
-              (Number(row.tickets_count) || 0);
-          }
           const nextCounts: Record<string, number> = {};
           const nextTickets: Record<string, number> = {};
-          for (const id of tournamentIds) {
-            nextCounts[id] = usersByTournament[id]?.size ?? 0;
-            nextTickets[id] = ticketsByTournament[id] ?? 0;
+          for (const item of visibleItems) {
+            nextCounts[item.id] = usersByTournament[item.id]?.size ?? 0;
+            nextTickets[item.id] = ticketsByTournament[item.id] ?? 0;
           }
           setEntryCounts(nextCounts);
           setTicketTotals(nextTickets);
