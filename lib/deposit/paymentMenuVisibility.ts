@@ -127,7 +127,7 @@ export async function listPaymentMenuAdminSnapshot(
       id: r.id,
       username: r.username ?? "",
       nickname: r.nickname,
-      role: r.role,
+      role: r.role === "super" ? "super" : "agent",
     }));
 
   return { operators, menus };
