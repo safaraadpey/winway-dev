@@ -22,7 +22,7 @@ export default function TicTacToeHost() {
     return () => window.removeEventListener(TIC_TAC_TOE_OPEN_EVENT, handleOpen);
   }, [handleOpen]);
 
-  if (!settings?.featureEnabled || !settings.isEnabled) {
+  if (!settings?.isEnabled) {
     return null;
   }
 

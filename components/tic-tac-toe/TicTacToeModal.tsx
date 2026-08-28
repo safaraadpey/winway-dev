@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   createGame,
@@ -17,7 +17,7 @@ import {
 import type { ClaimMatchResult } from "@/lib/tic-tac-toe/types";
 import styles from "./TicTacToeModal.module.css";
 
-type Phase = "setup" | "playing" | "claiming" | "result";
+type Phase = "loading" | "playing" | "claiming" | "result";
 
 type TicTacToeModalProps = {
   open: boolean;
@@ -30,6 +30,18 @@ const DIFFICULTY_LABELS: Record<TicTacToeDifficulty, string> = {
   medium: "متوسط",
   hard: "سخت",
 };
+
+const EMPTY_BOARD: MatchState["board"] = [
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+];
 
 function CloseIcon() {
   return (
@@ -50,7 +62,7 @@ export default function TicTacToeModal({
   winPrizeDing,
 }: TicTacToeModalProps) {
   const { refreshAllBalances } = useBalancesContext();
-  const [phase, setPhase] = useState<Phase>("setup");
+  const [phase, setPhase] = useState<Phase>("loading");
   const [difficulty, setDifficulty] = useState<TicTacToeDifficulty>("medium");
   const [matchId, setMatchId] = useState<string | null>(null);
   const [gameState, setGameState] = useState<MatchState | null>(null);
@@ -59,6 +71,9 @@ export default function TicTacToeModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const beginHandRef = useRef<(level?: TicTacToeDifficulty) => Promise<void>>(
+    async () => {}
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -74,7 +89,7 @@ export default function TicTacToeModal({
   }, [open]);
 
   const resetLocal = useCallback(() => {
-    setPhase("setup");
+    setPhase("loading");
     setMatchId(null);
     setGameState(null);
     setPlayerMoves([]);
@@ -88,6 +103,39 @@ export default function TicTacToeModal({
     onClose();
   }, [onClose, resetLocal]);
 
+  const beginHand = useCallback(
+    async (level: TicTacToeDifficulty = difficulty) => {
+      try {
+        setBusy(true);
+        setError(null);
+        setPhase("loading");
+        setClaimResult(null);
+        setPlayerMoves([]);
+        setMatchId(null);
+        setGameState(null);
+
+        const started = await startTicTacToeMatch(level);
+        const { state } = createGame({
+          seed: started.seed,
+          difficulty: started.difficulty,
+        });
+
+        setMatchId(started.matchId);
+        setGameState(state);
+        setDifficulty(started.difficulty);
+        setPhase("playing");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "خطا در شروع بازی");
+        setPhase("result");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [difficulty]
+  );
+
+  beginHandRef.current = beginHand;
+
   useEffect(() => {
     if (!open) return;
     const onHardExit = () => handleClose();
@@ -98,7 +146,18 @@ export default function TicTacToeModal({
   useEffect(() => {
     if (!open) {
       resetLocal();
+      return;
     }
+
+    let cancelled = false;
+    void (async () => {
+      await beginHandRef.current(difficulty);
+      if (cancelled) return;
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [open, resetLocal]);
 
   const resultMessage = useMemo(() => {
@@ -119,27 +178,6 @@ export default function TicTacToeModal({
     if (claimResult.outcome === "lose") return styles.resultLose;
     return styles.resultDraw;
   }, [claimResult]);
-
-  const startHand = async () => {
-    try {
-      setBusy(true);
-      setError(null);
-      const started = await startTicTacToeMatch(difficulty);
-      const { state } = createGame({
-        seed: started.seed,
-        difficulty: started.difficulty,
-      });
-      setMatchId(started.matchId);
-      setGameState(state);
-      setPlayerMoves([]);
-      setClaimResult(null);
-      setPhase("playing");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "خطا در شروع بازی");
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const settleHand = async (moves: number[], currentMatchId: string) => {
     try {
@@ -184,6 +222,19 @@ export default function TicTacToeModal({
     }
   };
 
+  const boardCells = gameState?.board ?? EMPTY_BOARD;
+  const canPickDifficulty = phase === "result" || phase === "loading";
+  const statusText =
+    phase === "loading"
+      ? "در حال آماده‌سازی بازی..."
+      : phase === "claiming"
+        ? "در حال ثبت نتیجه..."
+        : phase === "playing"
+          ? gameState?.currentTurn === "player"
+            ? "نوبت شما"
+            : "نوبت ماشین..."
+          : "پایان دست";
+
   if (!open || !mounted || typeof document === "undefined") return null;
 
   return createPortal(
@@ -200,136 +251,106 @@ export default function TicTacToeModal({
           aria-labelledby="tic-tac-toe-title"
           onClick={(event) => event.stopPropagation()}
         >
-        <div className={styles.header}>
-          <h2 id="tic-tac-toe-title" className={styles.title}>
-            دوز (Tic-Tac-Toe)
-          </h2>
-          <button
-            type="button"
-            className={styles.closeButton}
-            onClick={handleClose}
-            aria-label="بستن"
-          >
-            <CloseIcon />
-          </button>
-        </div>
-
-        <p className={styles.subtitle}>
-          Player vs Machine — شما X هستید، ماشین O.
-        </p>
-
-        {(phase === "setup" || phase === "result") && (
-          <>
-            <div className={styles.difficultyRow}>
-              {(Object.keys(DIFFICULTY_LABELS) as TicTacToeDifficulty[]).map(
-                (level) => (
-                  <button
-                    key={level}
-                    type="button"
-                    className={`${styles.difficultyButton} ${
-                      difficulty === level ? styles.difficultyButtonActive : ""
-                    }`}
-                    onClick={() => setDifficulty(level)}
-                    disabled={busy}
-                  >
-                    {DIFFICULTY_LABELS[level]}
-                  </button>
-                )
-              )}
-            </div>
-
-            <div className={styles.prizeRow}>
-              <span>جایزه برد:</span>
-              <span className={`${styles.prizeAmount} numeric-text numeric-text--16`} dir="ltr">
-                {winPrizeDing.toLocaleString("en-US")}
-              </span>
-              <span>دینگ</span>
-            </div>
-          </>
-        )}
-
-        {(phase === "playing" || phase === "claiming" || phase === "result") &&
-          gameState && (
-            <>
-              <p className={styles.statusText}>
-                {phase === "claiming"
-                  ? "در حال ثبت نتیجه..."
-                  : phase === "playing"
-                    ? gameState.currentTurn === "player"
-                      ? "نوبت شما"
-                      : "نوبت ماشین..."
-                    : "پایان دست"}
-              </p>
-              <div className={styles.board}>
-                {gameState.board.map((mark, index) => (
-                  <button
-                    key={index}
-                    type="button"
-                    className={`${styles.cell} ${
-                      mark === "X"
-                        ? styles.cellPlayer
-                        : mark === "O"
-                          ? styles.cellMachine
-                          : ""
-                    }`}
-                    onClick={() => void handleCellClick(index)}
-                    disabled={
-                      busy ||
-                      phase !== "playing" ||
-                      mark !== null ||
-                      gameState.currentTurn !== "player"
-                    }
-                    aria-label={`خانه ${index + 1}`}
-                  >
-                    {mark ?? ""}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-
-        {phase === "result" && claimResult && resultMessage && (
-          <div className={`${styles.resultBanner} ${resultClassName}`}>
-            {resultMessage}
+          <div className={styles.header}>
+            <h2 id="tic-tac-toe-title" className={styles.title}>
+              دوز (Tic-Tac-Toe)
+            </h2>
+            <button
+              type="button"
+              className={styles.closeButton}
+              onClick={handleClose}
+              aria-label="بستن"
+            >
+              <CloseIcon />
+            </button>
           </div>
-        )}
 
-        {error && <p className={styles.errorText}>{error}</p>}
+          <div className={styles.difficultyRow}>
+            {(Object.keys(DIFFICULTY_LABELS) as TicTacToeDifficulty[]).map(
+              (level) => (
+                <button
+                  key={level}
+                  type="button"
+                  className={`${styles.difficultyButton} ${
+                    difficulty === level ? styles.difficultyButtonActive : ""
+                  }`}
+                  onClick={() => setDifficulty(level)}
+                  disabled={busy || !canPickDifficulty}
+                >
+                  {DIFFICULTY_LABELS[level]}
+                </button>
+              )
+            )}
+          </div>
 
-        <div className={styles.actions}>
-          {phase === "setup" && (
-            <button
-              type="button"
-              className={styles.primaryButton}
-              onClick={() => void startHand()}
-              disabled={busy}
+          <div className={styles.prizeRow}>
+            <span>جایزه برد:</span>
+            <span
+              className={`${styles.prizeAmount} numeric-text numeric-text--16`}
+              dir="ltr"
             >
-              شروع بازی
-            </button>
+              {winPrizeDing.toLocaleString("en-US")}
+            </span>
+            <span>دینگ</span>
+          </div>
+
+          <p className={styles.statusText}>{statusText}</p>
+
+          <div className={styles.board}>
+            {boardCells.map((mark, index) => (
+              <button
+                key={index}
+                type="button"
+                className={`${styles.cell} ${
+                  mark === "X"
+                    ? styles.cellPlayer
+                    : mark === "O"
+                      ? styles.cellMachine
+                      : ""
+                }`}
+                onClick={() => void handleCellClick(index)}
+                disabled={
+                  busy ||
+                  phase !== "playing" ||
+                  mark !== null ||
+                  gameState?.currentTurn !== "player"
+                }
+                aria-label={`خانه ${index + 1}`}
+              >
+                {mark ?? ""}
+              </button>
+            ))}
+          </div>
+
+          {phase === "result" && claimResult && resultMessage && (
+            <div className={`${styles.resultBanner} ${resultClassName}`}>
+              {resultMessage}
+            </div>
           )}
 
-          {phase === "result" && (
+          {error && <p className={styles.errorText}>{error}</p>}
+
+          <div className={styles.actions}>
+            {phase === "result" && (
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={() => void beginHand(difficulty)}
+                disabled={busy}
+              >
+                {claimResult ? "دست بعدی" : "تلاش دوباره"}
+              </button>
+            )}
+
             <button
               type="button"
-              className={styles.primaryButton}
-              onClick={() => {
-                resetLocal();
-              }}
-              disabled={busy}
+              className={styles.secondaryButton}
+              onClick={handleClose}
+              disabled={busy && phase === "claiming"}
             >
-              دست بعدی
+              بستن
             </button>
-          )}
-
-          <button
-            type="button"
-            className={styles.secondaryButton}
-            onClick={handleClose}
-            disabled={busy && phase === "claiming"}
-          >
-            بستن
-          </button>
-        </div>
+          </div>
         </div>
       </div>
     </div>,

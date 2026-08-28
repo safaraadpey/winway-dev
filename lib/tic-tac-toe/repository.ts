@@ -8,7 +8,9 @@ import {
   type TicTacToePlacement,
 } from "@/lib/tic-tac-toe/constants";
 import { withTransaction } from "@/lib/db/withTransaction";
+import { connectPgWithRetry } from "@/lib/db/pgConnect";
 import { pgPool } from "@/lib/pg";
+import { supabaseServer } from "@/lib/supabaseServer";
 import type {
   ClaimMatchResult,
   StartMatchResult,
@@ -119,20 +121,40 @@ async function countPaidWinsToday(
   return Number(res.rows[0]?.count ?? 0);
 }
 
-export async function getTicTacToeSettings(): Promise<TicTacToeSettings> {
-  if (!pgPool) {
+async function loadSettingsFromSupabase(): Promise<TicTacToeSettings> {
+  const { data, error } = await supabaseServer
+    .schema("tic_tac_toe")
+    .from("settings")
+    .select("is_enabled, win_prize_ding, daily_win_cap, placements")
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (error || !data) {
     throw new TicTacToeRepositoryError(
-      "DATABASE_URL is not configured.",
-      "db_unavailable",
-      503
+      error?.message || "Tic-Tac-Toe settings missing.",
+      "settings_missing",
+      500
     );
   }
-  const client = await pgPool.connect();
-  try {
-    return await loadSettings(client);
-  } finally {
-    client.release();
+
+  return mapSettings(data as SettingsRow);
+}
+
+export async function getTicTacToeSettings(): Promise<TicTacToeSettings> {
+  if (pgPool) {
+    try {
+      const client = await connectPgWithRetry(pgPool);
+      try {
+        return await loadSettings(client);
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      console.error("[TicTacToe] pg settings load failed, trying supabase fallback:", err);
+    }
   }
+
+  return loadSettingsFromSupabase();
 }
 
 export async function updateTicTacToeSettings(input: {

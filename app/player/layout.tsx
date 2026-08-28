@@ -3,8 +3,6 @@
 import React from 'react';
 import { HeaderVisibilityProvider } from "@/lib/contexts/HeaderVisibilityContext";
 import { ThemeProvider } from "@/lib/contexts/ThemeContext";
-import { ActiveGamesProvider } from "@/lib/contexts/ActiveGamesContext";
-import { ActiveGamesOrchestratorProvider } from "@/lib/activeGames/ActiveGamesOrchestratorProvider";
 import PlayerLayoutClient from "./PlayerLayoutClient";
 import EntryBannerModal from "@/components/EntryBannerModal";
 import KycResultModal from "@/components/KycResultModal";
@@ -32,15 +30,11 @@ export default function PlayerLayout({
     >
       <ThemeProvider>
         <HeaderVisibilityProvider>
-        <ActiveGamesOrchestratorProvider>
-          <ActiveGamesProvider>
-            <PlayerLayoutClient>{children}</PlayerLayoutClient>
-            <EntryBannerModal visibleOnPaths={["/player/home"]} />
-            <KycResultModal visibleOnPaths={["/player/home"]} />
-            <TicTacToeHost />
-          </ActiveGamesProvider>
-        </ActiveGamesOrchestratorProvider>
-      </HeaderVisibilityProvider>
+          <PlayerLayoutClient>{children}</PlayerLayoutClient>
+          <EntryBannerModal visibleOnPaths={["/player/home"]} />
+          <KycResultModal visibleOnPaths={["/player/home"]} />
+          <TicTacToeHost />
+        </HeaderVisibilityProvider>
       </ThemeProvider>
     </div>
   );

@@ -24,10 +24,8 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const [settings, featureEnabled] = await Promise.all([
-      getTicTacToeSettings(),
-      hasFeature(user.id, TIC_TAC_TOE_FEATURE_KEY),
-    ]);
+    const settings = await getTicTacToeSettings();
+    const featureEnabled = await hasFeature(user.id, TIC_TAC_TOE_FEATURE_KEY);
 
     return ticTacToeOk({
       ...settings,

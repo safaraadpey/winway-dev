@@ -151,8 +151,18 @@ export async function hasFeature(userId: string, key: string): Promise<boolean> 
       source = "supabase";
     }
   } catch (err) {
-    console.error("[Feature] hasFeature evaluate failed", { userId, key, err });
-    return false;
+    console.error("[Feature] hasFeature pg evaluate failed, trying supabase fallback", {
+      userId,
+      key,
+      err,
+    });
+    try {
+      enabled = await loadHasFeatureFromSupabase(userId, key);
+      source = "supabase";
+    } catch (fallbackErr) {
+      console.error("[Feature] hasFeature evaluate failed", { userId, key, err: fallbackErr });
+      return false;
+    }
   }
 
   console.log("[Feature] hasFeature evaluate", {

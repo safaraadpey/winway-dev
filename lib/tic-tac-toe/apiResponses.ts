@@ -4,6 +4,7 @@ import {
   ticTacToeErrorResponse,
 } from "@/lib/tic-tac-toe/guards";
 import { TicTacToeRepositoryError } from "@/lib/tic-tac-toe/repository";
+import { isPgPoolExhaustedError, toUserDatabaseBusyMessage } from "@/lib/db/pgErrors";
 
 export function ticTacToeOk<T>(data: T, status = 200): NextResponse {
   return NextResponse.json({ ok: true, data }, { status });
@@ -26,9 +27,16 @@ export function handleTicTacToeRouteError(err: unknown): NextResponse {
   }
 
   console.error("[TicTacToe] unexpected route error:", err);
+  if (isPgPoolExhaustedError(err)) {
+    return ticTacToeFail(
+      "db_busy",
+      toUserDatabaseBusyMessage(err),
+      503
+    );
+  }
   return ticTacToeFail(
     "unexpected_error",
-    err instanceof Error ? err.message : "unexpected error",
+    toUserDatabaseBusyMessage(err),
     500
   );
 }

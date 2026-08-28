@@ -88,6 +88,7 @@ export function useActiveGames(): ActiveGames {
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
   const emptyBackoffStepRef = useRef<number>(0);
   const subscriptionRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const setupGenerationRef = useRef(0);
   const etagRef = useRef<string | null>(null);
   const trackedRoomIdsRef = useRef<Set<string>>(new Set());
   const roomStatusByIdRef = useRef<Map<string, string>>(new Map());
@@ -319,14 +320,17 @@ export function useActiveGames(): ActiveGames {
 
   // Setup subscription
   useEffect(() => {
-    console.log('[useActiveGames] useEffect triggered - setting up...');
+    const setupGeneration = ++setupGenerationRef.current;
+    let cancelled = false;
+
+    console.log("[useActiveGames] useEffect triggered - setting up...");
     installActiveGamesMetricsOnWindow();
     activeGamesMetrics.lifecycle("mount");
     activeGamesMetrics.init();
     isMountedRef.current = true;
 
     const setupSubscription = async () => {
-      console.log('[useActiveGames] setupSubscription started');
+      console.log("[useActiveGames] setupSubscription started");
       if (!session.authReady || !session.userId) {
         console.log("[useActiveGames] No user found (session not ready / missing userId)");
         activeGamesMetrics.lifecycle("auth-missing", {
@@ -339,20 +343,33 @@ export function useActiveGames(): ActiveGames {
         return;
       }
 
-      console.log('[useActiveGames] User found, fetching active rooms...');
-      // Initial fetch
+      console.log("[useActiveGames] User found, fetching active rooms...");
       await fetchActiveRooms(true, "initial");
 
-      // Setup realtime subscription
+      if (
+        cancelled ||
+        setupGeneration !== setupGenerationRef.current ||
+        !isMountedRef.current
+      ) {
+        return;
+      }
+
+      if (subscriptionRef.current) {
+        supabase.removeChannel(subscriptionRef.current);
+        subscriptionRef.current = null;
+        activeGamesMetrics.channelRemoved();
+      }
+
+      const userId = session.userId;
       const channel = supabase
-        .channel(`my_active_rooms_${session.userId}`)
+        .channel(`my_active_rooms_${userId}`)
         .on(
           "postgres_changes",
           {
             event: "*",
             schema: "public",
             table: "tickets",
-            filter: `player_user_id=eq.${session.userId}`,
+            filter: `player_user_id=eq.${userId}`,
           },
           (payload) => {
             console.log("[useActiveGames] Tickets change detected:", payload.eventType);
@@ -407,16 +424,27 @@ export function useActiveGames(): ActiveGames {
           console.log("[useActiveGames] Subscription status:", status);
         });
 
+      if (
+        cancelled ||
+        setupGeneration !== setupGenerationRef.current ||
+        !isMountedRef.current
+      ) {
+        supabase.removeChannel(channel);
+        return;
+      }
+
       subscriptionRef.current = channel;
-      activeGamesMetrics.channelAdded({ name: `my_active_rooms_${session.userId}` });
+      activeGamesMetrics.channelAdded({ name: `my_active_rooms_${userId}` });
     };
 
-    setupSubscription();
+    void setupSubscription();
 
     return () => {
+      cancelled = true;
+      setupGenerationRef.current += 1;
       isMountedRef.current = false;
       activeGamesMetrics.lifecycle("cleanup");
-      
+
       if (subscriptionRef.current) {
         supabase.removeChannel(subscriptionRef.current);
         subscriptionRef.current = null;

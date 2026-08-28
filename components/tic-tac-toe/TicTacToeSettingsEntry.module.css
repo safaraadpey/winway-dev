@@ -1,0 +1,27 @@
+.statusBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.statusText {
+  font-size: 0.8125rem;
+  color: var(--player-text-muted, #9ca3af);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.retryButton {
+  align-self: flex-start;
+  border: 1px solid var(--player-border, #404040);
+  border-radius: 0.625rem;
+  background: var(--player-surface-elevated, #2d2d2d);
+  color: var(--player-text-primary, #ffffff);
+  padding: 0.625rem 0.875rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.retryButton:hover {
+  border-color: var(--player-accent, #00d4aa);
+}
