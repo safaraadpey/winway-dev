@@ -155,7 +155,7 @@ export default function TicTacToeModal({
   const [showLoseFlash, setShowLoseFlash] = useState(false);
   const resultPrizeRowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const coinFlyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const winCelebrationStartedRef = useRef(false);
+  const [flyCoinKey, setFlyCoinKey] = useState(0);
   const prizeCoinRef = useRef<HTMLSpanElement>(null);
   const beginHandRequestIdRef = useRef(0);
   const claimGenerationRef = useRef(0);
@@ -205,7 +205,6 @@ export default function TicTacToeModal({
     setHidePrizeCoin(false);
     setWinHighlightDismissed(false);
     setShowLoseFlash(false);
-    winCelebrationStartedRef.current = false;
     clearResultPrizeRowTimer();
     clearCoinFlyTimer();
   }, [clearCoinFlyTimer, clearResultPrizeRowTimer]);
@@ -215,10 +214,41 @@ export default function TicTacToeModal({
     onClose();
   }, [onClose, resetLocal]);
 
+  const scheduleWinCoinFly = useCallback(() => {
+    clearCoinFlyTimer();
+    coinFlyTimerRef.current = setTimeout(() => {
+      coinFlyTimerRef.current = null;
+      const src = prizeCoinRef.current?.getBoundingClientRect();
+      const tgt = document
+        .querySelector("[data-wallet-ding-target]")
+        ?.getBoundingClientRect();
+
+      if (!src || !tgt) {
+        setWinHighlightDismissed(true);
+        setGameState(null);
+        setPlayerMoves([]);
+        triggerDingCelebrate?.();
+        return;
+      }
+
+      setWinHighlightDismissed(true);
+      setHidePrizeCoin(true);
+      setFlyCoinKey((key) => key + 1);
+      setFlyCoin({
+        startX: src.left + src.width / 2,
+        startY: src.top + src.height / 2,
+        endX: tgt.left + tgt.width / 2 + 14,
+        endY: tgt.top + tgt.height / 2,
+      });
+    }, COIN_FLY_DELAY_MS);
+  }, [clearCoinFlyTimer, triggerDingCelebrate]);
+
   const beginHand = useCallback(
     async (level: TicTacToeDifficulty = difficulty) => {
       const requestId = ++beginHandRequestIdRef.current;
       claimGenerationRef.current += 1;
+      clearResultPrizeRowTimer();
+      clearCoinFlyTimer();
 
       try {
         setError(null);
@@ -227,6 +257,8 @@ export default function TicTacToeModal({
         setMatchId(null);
         setGameState(null);
         setShowLoseFlash(false);
+        setFlyCoin(null);
+        setHidePrizeCoin(false);
         setWinHighlightDismissed(true);
 
         const started = await startTicTacToeMatch(level);
@@ -248,7 +280,7 @@ export default function TicTacToeModal({
         setPhase("result");
       }
     },
-    [difficulty]
+    [difficulty, clearCoinFlyTimer, clearResultPrizeRowTimer]
   );
 
   beginHandRef.current = beginHand;
@@ -296,88 +328,8 @@ export default function TicTacToeModal({
   useEffect(() => {
     if (phase !== "result") {
       setShowResultInPrizeRow(false);
-      clearResultPrizeRowTimer();
-      clearCoinFlyTimer();
-      return;
     }
-
-    if (!claimResult) {
-      clearResultPrizeRowTimer();
-      clearCoinFlyTimer();
-      return;
-    }
-
-    if (claimResult.outcome === "win") {
-      setShowResultInPrizeRow(false);
-
-      if (
-        !winCelebrationStartedRef.current &&
-        !claimResult.alreadyClaimed
-      ) {
-        winCelebrationStartedRef.current = true;
-        clearCoinFlyTimer();
-        coinFlyTimerRef.current = setTimeout(() => {
-          coinFlyTimerRef.current = null;
-          const src = prizeCoinRef.current?.getBoundingClientRect();
-          const tgt = document
-            .querySelector("[data-wallet-ding-target]")
-            ?.getBoundingClientRect();
-
-          if (!src || !tgt) {
-            setWinHighlightDismissed(true);
-            setGameState(null);
-            setPlayerMoves([]);
-            triggerDingCelebrate?.();
-            return;
-          }
-
-          setWinHighlightDismissed(true);
-          setHidePrizeCoin(true);
-          setFlyCoin({
-            startX: src.left + src.width / 2,
-            startY: src.top + src.height / 2,
-            endX: tgt.left + tgt.width / 2 + 14,
-            endY: tgt.top + tgt.height / 2,
-          });
-        }, COIN_FLY_DELAY_MS);
-      }
-
-      scheduleNextHand(WIN_NEXT_HAND_MS);
-      return () => {
-        clearResultPrizeRowTimer();
-        clearCoinFlyTimer();
-      };
-    }
-
-    if (claimResult.outcome === "lose") {
-      setShowResultInPrizeRow(false);
-      scheduleNextHand(LOSE_NEXT_HAND_MS);
-      return () => {
-        clearResultPrizeRowTimer();
-      };
-    }
-
-    if (!resultMessage) {
-      setShowResultInPrizeRow(false);
-      clearResultPrizeRowTimer();
-      return;
-    }
-
-    setShowResultInPrizeRow(true);
-    scheduleNextHand(DRAW_MESSAGE_MS);
-
-    return () => {
-      clearResultPrizeRowTimer();
-    };
-  }, [
-    phase,
-    claimResult,
-    resultMessage,
-    clearCoinFlyTimer,
-    clearResultPrizeRowTimer,
-    scheduleNextHand,
-    triggerDingCelebrate,
-  ]);
+  }, [phase]);
 
   const finishHandLocally = useCallback(
     (
@@ -402,6 +354,15 @@ export default function TicTacToeModal({
         setShowLoseFlash(true);
         setGameState(null);
         setPlayerMoves([]);
+        scheduleNextHand(LOSE_NEXT_HAND_MS);
+      } else if (outcome === "draw") {
+        setShowResultInPrizeRow(true);
+        scheduleNextHand(DRAW_MESSAGE_MS);
+      } else if (outcome === "win") {
+        setShowResultInPrizeRow(false);
+        setWinHighlightDismissed(false);
+        scheduleWinCoinFly();
+        scheduleNextHand(WIN_NEXT_HAND_MS);
       }
 
       void (async () => {
@@ -421,7 +382,7 @@ export default function TicTacToeModal({
         }
       })();
     },
-    [difficulty, refreshAllBalances]
+    [difficulty, refreshAllBalances, scheduleNextHand, scheduleWinCoinFly]
   );
 
   const handleCellClick = async (cell: number) => {
@@ -481,7 +442,6 @@ export default function TicTacToeModal({
       setHidePrizeCoin(false);
       setWinHighlightDismissed(false);
       setShowLoseFlash(false);
-      winCelebrationStartedRef.current = false;
     }
 
     void beginHand(level);
@@ -494,7 +454,7 @@ export default function TicTacToeModal({
     createPortal(
       <AnimatePresence>
         <motion.div
-          key="tic-tac-toe-fly-coin"
+          key={`tic-tac-toe-fly-coin-${flyCoinKey}`}
           className={styles.flyCoin}
           style={{
             left: flyCoin.startX,
