@@ -11,9 +11,12 @@ type WatchInviteShareButtonProps = {
   tournamentTitle?: string | null;
 };
 
-async function loadShareBanner(): Promise<WatchInviteBanner | null> {
+async function loadShareBanner(tournamentId: string): Promise<WatchInviteBanner | null> {
   try {
-    const res = await fetch("/api/watch/banner", { cache: "no-store" });
+    const res = await fetch(
+      `/api/watch/banner?tournamentId=${encodeURIComponent(tournamentId)}`,
+      { cache: "no-store" }
+    );
     if (!res.ok) return null;
     const payload = (await res.json()) as { banner?: WatchInviteBanner | null };
     return payload.banner ?? null;
@@ -137,7 +140,7 @@ export default function WatchInviteShareButton({
         return;
       }
 
-      const banner = await loadShareBanner();
+      const banner = await loadShareBanner(tournamentId);
       const title =
         banner?.isEnabled && banner.title.trim()
           ? banner.title.trim()
@@ -163,7 +166,7 @@ export default function WatchInviteShareButton({
     } finally {
       setSharing(false);
     }
-  }, [handleCopy, linkError, resolveShareUrl, shareUrl, sharing, tournamentTitle]);
+  }, [handleCopy, linkError, resolveShareUrl, shareUrl, sharing, tournamentId, tournamentTitle]);
 
   return (
     <div className={styles.root}>

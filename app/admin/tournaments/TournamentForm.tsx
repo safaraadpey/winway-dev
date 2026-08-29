@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  defaultTournamentWatchInviteBannerForm,
+  type TournamentWatchInviteBannerForm,
+} from "@/lib/watch-invite/bannerOverride";
+import TournamentWatchInviteBannerSection from "@/components/admin/TournamentWatchInviteBannerSection";
 
 export type TournamentFormValues = {
   title: string;
@@ -34,7 +39,7 @@ export type TournamentFormValues = {
   prize_percentages: number[];
   /** Unlisted: hidden from public list; visible to registrants and anyone with the link. */
   is_test_tournament: boolean;
-};
+} & TournamentWatchInviteBannerForm;
 
 export type TournamentFormProps = {
   mode: "create" | "edit";
@@ -178,6 +183,7 @@ export function TournamentForm({
       final_winners_count: 3,
       prize_percentages: [50, 30, 20],
       is_test_tournament: false,
+      ...defaultTournamentWatchInviteBannerForm(),
     }),
     []
   );
@@ -946,6 +952,27 @@ export function TournamentForm({
           </div>
         </div>
       )}
+
+      <TournamentWatchInviteBannerSection
+        value={{
+          watch_invite_use_override: values.watch_invite_use_override,
+          watch_invite_title: values.watch_invite_title,
+          watch_invite_caption: values.watch_invite_caption,
+          watch_invite_is_enabled: values.watch_invite_is_enabled,
+          watch_invite_image_url: values.watch_invite_image_url,
+          watch_invite_image_width: values.watch_invite_image_width,
+          watch_invite_image_height: values.watch_invite_image_height,
+          watch_invite_image_file: values.watch_invite_image_file,
+          watch_invite_clear_image: values.watch_invite_clear_image,
+        }}
+        onChange={(next) =>
+          setValues((prev) => ({
+            ...prev,
+            ...next,
+          }))
+        }
+        readOnly={readOnly}
+      />
 
       <div className="flex gap-3">
         <button

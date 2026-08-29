@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { supabase } from "@/lib/supabaseClient";
 import { TournamentFormValues, buildEqualPrizePercents } from "./TournamentForm";
+import { parseWatchInviteBannerOverrideFromMeta } from "@/lib/watch-invite/bannerOverride";
 
 type TournamentRow = {
   id: string;
@@ -69,6 +70,7 @@ function mapToFormValues(row: TournamentRow): TournamentFormValues {
       (row.meta as any)?.registration_extend_minutes ?? 60,
     break_between_rounds_minutes:
       (row.meta as any)?.break_between_rounds_minutes ?? 0,
+    ...parseWatchInviteBannerOverrideFromMeta(row.meta),
   };
 }
 

@@ -1,6 +1,12 @@
 import { pgPool } from "@/lib/pg";
 import { generateWatchInviteToken } from "@/lib/watch-invite/guestCookie";
-import type { WatchInviteBanner, WatchTournamentSnapshot, WatchTournamentTable } from "@/lib/watch-invite/types";
+import type {
+  WatchInviteBanner,
+  WatchInviteBannerMetaOverride,
+  WatchTournamentSnapshot,
+  WatchTournamentTable,
+} from "@/lib/watch-invite/types";
+import { mergeWatchInviteBanner } from "@/lib/watch-invite/bannerOverride";
 
 function requirePool() {
   if (!pgPool) {
@@ -128,6 +134,36 @@ export async function resolveSignupReferralCodeForUser(userId: string): Promise<
   );
   const code = rows[0]?.referral_code;
   return code ? code.trim().toUpperCase() : null;
+}
+
+export async function getWatchInviteBannerForWatchCode(
+  watchCode: number
+): Promise<WatchInviteBanner> {
+  const globalBanner = await getWatchInviteBanner();
+  const pool = requirePool();
+  const { rows } = await pool.query<{ meta: Record<string, unknown> | null }>(
+    `SELECT meta FROM public.tournaments WHERE watch_code = $1 LIMIT 1`,
+    [watchCode]
+  );
+  const override = rows[0]?.meta?.watch_invite_banner as
+    | WatchInviteBannerMetaOverride
+    | undefined;
+  return mergeWatchInviteBanner(globalBanner, override);
+}
+
+export async function getWatchInviteBannerForTournamentId(
+  tournamentId: string
+): Promise<WatchInviteBanner> {
+  const globalBanner = await getWatchInviteBanner();
+  const pool = requirePool();
+  const { rows } = await pool.query<{ meta: Record<string, unknown> | null }>(
+    `SELECT meta FROM public.tournaments WHERE id = $1 LIMIT 1`,
+    [tournamentId]
+  );
+  const override = rows[0]?.meta?.watch_invite_banner as
+    | WatchInviteBannerMetaOverride
+    | undefined;
+  return mergeWatchInviteBanner(globalBanner, override);
 }
 
 export async function getWatchInviteBanner(): Promise<WatchInviteBanner> {

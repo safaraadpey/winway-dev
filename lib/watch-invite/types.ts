@@ -1,3 +1,13 @@
+export type WatchInviteBannerMetaOverride = {
+  use_override?: boolean;
+  title?: string | null;
+  caption?: string | null;
+  image_url?: string | null;
+  image_width?: number | null;
+  image_height?: number | null;
+  is_enabled?: boolean | null;
+};
+
 export type WatchInviteBanner = {
   title: string;
   caption: string;

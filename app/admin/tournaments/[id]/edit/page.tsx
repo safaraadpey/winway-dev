@@ -4,6 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { supabase } from "@/lib/supabaseClient";
+import { parseWatchInviteBannerOverrideFromMeta } from "@/lib/watch-invite/bannerOverride";
+import {
+  prepareWatchInviteBannerPayload,
+  stripWatchInviteBannerFields,
+} from "@/lib/watch-invite/prepareBannerPayload";
 import { TournamentForm, TournamentFormValues, buildEqualPrizePercents } from "../../TournamentForm";
 
 export default function AdminTournamentEditPage() {
@@ -64,6 +69,7 @@ export default function AdminTournamentEditPage() {
         final_winners_count: finalWinnersCount,
         prize_percentages: prizePercentages,
         is_test_tournament: data?.meta?.is_test_tournament === true,
+        ...parseWatchInviteBannerOverrideFromMeta(data?.meta),
       };
     },
     []
@@ -121,33 +127,44 @@ export default function AdminTournamentEditPage() {
     setSubmitting(true);
     setError(null);
 
+    let watchInviteBanner = null;
+    try {
+      watchInviteBanner = await prepareWatchInviteBannerPayload(values);
+    } catch (err) {
+      setSubmitting(false);
+      setError(err instanceof Error ? err.message : "خطا در آماده‌سازی بنر دعوت");
+      return;
+    }
+
+    const coreValues = stripWatchInviteBannerFields(values);
     const patch = {
-      title: values.title,
-      start_at: values.start_at,
-      currency: values.currency,
-      ticket_price: values.ticket_price,
-      min_tickets_per_player: values.min_tickets_per_player,
-      max_tickets_per_player: values.max_tickets_per_player,
-      table_size_mode: values.table_size_mode,
-      table_size_fixed: values.table_size_fixed,
-      table_size_min: values.table_size_min,
-      table_size_max: values.table_size_max,
-      later_round_table_size_mode: values.later_round_table_size_mode,
-      later_round_table_size_fixed: values.later_round_table_size_fixed,
-      later_round_table_size_min: values.later_round_table_size_min,
-      later_round_table_size_max: values.later_round_table_size_max,
-      remainder_policy: values.remainder_policy,
-      commission_rate: values.commission_rate,
-      guaranteed_prize: values.guaranteed_prize,
-      prize_percentages: values.prize_percentages,
+      title: coreValues.title,
+      start_at: coreValues.start_at,
+      currency: coreValues.currency,
+      ticket_price: coreValues.ticket_price,
+      min_tickets_per_player: coreValues.min_tickets_per_player,
+      max_tickets_per_player: coreValues.max_tickets_per_player,
+      table_size_mode: coreValues.table_size_mode,
+      table_size_fixed: coreValues.table_size_fixed,
+      table_size_min: coreValues.table_size_min,
+      table_size_max: coreValues.table_size_max,
+      later_round_table_size_mode: coreValues.later_round_table_size_mode,
+      later_round_table_size_fixed: coreValues.later_round_table_size_fixed,
+      later_round_table_size_min: coreValues.later_round_table_size_min,
+      later_round_table_size_max: coreValues.later_round_table_size_max,
+      remainder_policy: coreValues.remainder_policy,
+      commission_rate: coreValues.commission_rate,
+      guaranteed_prize: coreValues.guaranteed_prize,
+      prize_percentages: coreValues.prize_percentages,
       meta: {
-        final_winners_count: values.final_winners_count,
-        min_players_to_start: values.min_players_to_start,
-        registration_extend_enabled: values.registration_extend_enabled,
-        registration_extend_minutes: values.registration_extend_minutes ?? 60,
-        break_between_rounds_minutes: values.break_between_rounds_minutes ?? 0,
-        entry_currency: values.entry_currency,
-        is_test_tournament: values.is_test_tournament === true,
+        final_winners_count: coreValues.final_winners_count,
+        min_players_to_start: coreValues.min_players_to_start,
+        registration_extend_enabled: coreValues.registration_extend_enabled,
+        registration_extend_minutes: coreValues.registration_extend_minutes ?? 60,
+        break_between_rounds_minutes: coreValues.break_between_rounds_minutes ?? 0,
+        entry_currency: coreValues.entry_currency,
+        is_test_tournament: coreValues.is_test_tournament === true,
+        watch_invite_banner: watchInviteBanner,
       },
     };
 

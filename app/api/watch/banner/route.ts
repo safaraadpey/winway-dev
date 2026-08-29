@@ -1,12 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getWatchInviteBanner } from "@/lib/watch-invite/repository";
+import {
+  getWatchInviteBanner,
+  getWatchInviteBannerForTournamentId,
+  getWatchInviteBannerForWatchCode,
+} from "@/lib/watch-invite/repository";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const banner = await getWatchInviteBanner();
+    const watchCodeRaw = request.nextUrl.searchParams.get("watchCode");
+    const tournamentId = request.nextUrl.searchParams.get("tournamentId");
+
+    let banner = await getWatchInviteBanner();
+
+    if (watchCodeRaw) {
+      const watchCode = Number(watchCodeRaw);
+      if (Number.isFinite(watchCode) && watchCode > 0) {
+        banner = await getWatchInviteBannerForWatchCode(watchCode);
+      }
+    } else if (tournamentId) {
+      banner = await getWatchInviteBannerForTournamentId(tournamentId);
+    }
+
     if (!banner.isEnabled) {
       return NextResponse.json(
         { banner: null },

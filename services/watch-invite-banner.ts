@@ -19,7 +19,7 @@ async function getAdminAccessToken(): Promise<string | null> {
   return session?.access_token ?? null;
 }
 
-async function uploadWatchInviteBannerImage(
+export async function uploadWatchInviteBannerImage(
   file: File
 ): Promise<
   | { ok: true; url: string; size: number; width: number; height: number }

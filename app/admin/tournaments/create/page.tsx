@@ -4,6 +4,10 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { TournamentForm, TournamentFormValues } from "../TournamentForm";
+import {
+  prepareWatchInviteBannerPayload,
+  stripWatchInviteBannerFields,
+} from "@/lib/watch-invite/prepareBannerPayload";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function AdminTournamentCreatePage() {
@@ -26,13 +30,27 @@ export default function AdminTournamentCreatePage() {
       return;
     }
 
+    let watchInviteBanner = null;
+    try {
+      watchInviteBanner = await prepareWatchInviteBannerPayload(values);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "خطا در آماده‌سازی بنر دعوت");
+      return;
+    }
+
+    const coreValues = stripWatchInviteBannerFields(values);
+    const payload = {
+      ...coreValues,
+      ...(watchInviteBanner ? { watch_invite_banner: watchInviteBanner } : {}),
+    };
+
     const response = await fetch("/api/admin/tournaments", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ payload: values }),
+      body: JSON.stringify({ payload }),
     });
 
     const result = await response.json().catch(() => null);
