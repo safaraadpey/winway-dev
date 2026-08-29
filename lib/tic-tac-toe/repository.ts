@@ -5,6 +5,7 @@ import type { TicTacToeDifficulty } from "@/lib/tic-tac-toe/constants";
 import {
   DEFAULT_TIC_TAC_TOE_PLACEMENTS,
   TIC_TAC_TOE_PLACEMENTS,
+  getTicTacToeWinPrizeDing,
   type TicTacToePlacement,
 } from "@/lib/tic-tac-toe/constants";
 import { withTransaction } from "@/lib/db/withTransaction";
@@ -208,12 +209,13 @@ export async function startTicTacToeMatch(
     }
 
     const seed = createSeed();
+    const winPrizeDing = getTicTacToeWinPrizeDing(difficulty);
     const res = await client.query<{ id: string }>(
       `INSERT INTO tic_tac_toe.matches (
          user_id, seed, difficulty, prize_snapshot, status
        ) VALUES ($1::uuid, $2, $3, $4::bigint, 'pending')
        RETURNING id`,
-      [userId, seed, difficulty, settings.winPrizeDing]
+      [userId, seed, difficulty, winPrizeDing]
     );
 
     const matchId = res.rows[0]?.id;
@@ -229,14 +231,14 @@ export async function startTicTacToeMatch(
       matchId,
       userId,
       difficulty,
-      prize: settings.winPrizeDing,
+      prize: winPrizeDing,
     });
 
     return {
       matchId,
       seed,
       difficulty,
-      winPrizeDing: settings.winPrizeDing,
+      winPrizeDing,
     };
   });
 }

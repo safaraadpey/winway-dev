@@ -30,7 +30,6 @@ export default function TicTacToeHost() {
     <TicTacToeModal
       open={open}
       onClose={handleClose}
-      winPrizeDing={settings.winPrizeDing}
     />
   );
 }

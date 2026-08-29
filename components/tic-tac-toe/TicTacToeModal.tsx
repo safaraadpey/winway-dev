@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   createGame,
   playFullTurn,
@@ -11,7 +12,10 @@ import {
 import dingCoinIcon from "@/src/assets/icons/ding-coin.png";
 import { HARD_EXIT_EVENT } from "@/lib/auth/hardExit";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
-import type { TicTacToeDifficulty } from "@/lib/tic-tac-toe/constants";
+import {
+  getTicTacToeWinPrizeDing,
+  type TicTacToeDifficulty,
+} from "@/lib/tic-tac-toe/constants";
 import {
   claimTicTacToeMatch,
   startTicTacToeMatch,
@@ -19,12 +23,11 @@ import {
 import type { ClaimMatchResult } from "@/lib/tic-tac-toe/types";
 import styles from "./TicTacToeModal.module.css";
 
-type Phase = "loading" | "playing" | "claiming" | "result";
+type Phase = "playing" | "result";
 
 type TicTacToeModalProps = {
   open: boolean;
   onClose: () => void;
-  winPrizeDing: number;
 };
 
 const DIFFICULTY_LABELS: Record<TicTacToeDifficulty, string> = {
@@ -32,6 +35,8 @@ const DIFFICULTY_LABELS: Record<TicTacToeDifficulty, string> = {
   medium: "متوسط",
   hard: "سخت",
 };
+
+const DIFFICULTY_ORDER: TicTacToeDifficulty[] = ["hard", "medium", "easy"];
 
 const EMPTY_BOARD: MatchState["board"] = [
   null,
@@ -44,6 +49,19 @@ const EMPTY_BOARD: MatchState["board"] = [
   null,
   null,
 ];
+
+const WIN_NEXT_HAND_MS = 1500;
+const LOSE_NEXT_HAND_MS = 900;
+const DRAW_MESSAGE_MS = 1800;
+const COIN_FLY_DELAY_MS = 120;
+const COIN_FLY_DURATION_MS = 720;
+
+type FlyCoinState = {
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+};
 
 function CloseIcon() {
   return (
@@ -74,41 +92,54 @@ function GridIcon() {
   );
 }
 
-function TrophyIcon() {
+function CellCrossIcon() {
   return (
     <svg
-      className={styles.resultIcon}
+      className={styles.cellIcon}
       viewBox="0 0 24 24"
       fill="none"
       aria-hidden="true"
     >
-      <path d="M8 4h8v2a4 4 0 0 1-8 0V4Z" fill="#fbbf24" />
       <path
-        d="M6 4H4a2 2 0 0 0 2 3m14-3h2a2 2 0 0 1-2 3M8 20h8M10 16h4v4h-4v-4Z"
-        stroke="#fbbf24"
-        strokeWidth="1.8"
+        d="M7 7l10 10M17 7L7 17"
+        stroke="currentColor"
+        strokeWidth="3.5"
         strokeLinecap="round"
-        strokeLinejoin="round"
       />
     </svg>
   );
 }
 
-function PlayIcon() {
+function CellCircleIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M9 7.5v9l8-4.5-8-4.5Z" fill="currentColor" />
+    <svg
+      className={styles.cellIcon}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="8"
+        stroke="currentColor"
+        strokeWidth="3.5"
+        fill="none"
+      />
     </svg>
   );
+}
+
+function CellMarkIcon({ mark }: { mark: "X" | "O" }) {
+  return mark === "X" ? <CellCrossIcon /> : <CellCircleIcon />;
 }
 
 export default function TicTacToeModal({
   open,
   onClose,
-  winPrizeDing,
 }: TicTacToeModalProps) {
-  const { refreshAllBalances } = useBalancesContext();
-  const [phase, setPhase] = useState<Phase>("loading");
+  const { refreshAllBalances, triggerDingCelebrate } = useBalancesContext();
+  const [phase, setPhase] = useState<Phase>("playing");
   const [difficulty, setDifficulty] = useState<TicTacToeDifficulty>("medium");
   const [matchId, setMatchId] = useState<string | null>(null);
   const [gameState, setGameState] = useState<MatchState | null>(null);
@@ -117,9 +148,34 @@ export default function TicTacToeModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [showResultInPrizeRow, setShowResultInPrizeRow] = useState(false);
+  const [flyCoin, setFlyCoin] = useState<FlyCoinState | null>(null);
+  const [hidePrizeCoin, setHidePrizeCoin] = useState(false);
+  const [winHighlightDismissed, setWinHighlightDismissed] = useState(false);
+  const [showLoseFlash, setShowLoseFlash] = useState(false);
+  const resultPrizeRowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const coinFlyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const winCelebrationStartedRef = useRef(false);
+  const prizeCoinRef = useRef<HTMLSpanElement>(null);
+  const beginHandRequestIdRef = useRef(0);
+  const claimGenerationRef = useRef(0);
   const beginHandRef = useRef<(level?: TicTacToeDifficulty) => Promise<void>>(
     async () => {}
   );
+
+  const clearResultPrizeRowTimer = useCallback(() => {
+    if (resultPrizeRowTimerRef.current) {
+      clearTimeout(resultPrizeRowTimerRef.current);
+      resultPrizeRowTimerRef.current = null;
+    }
+  }, []);
+
+  const clearCoinFlyTimer = useCallback(() => {
+    if (coinFlyTimerRef.current) {
+      clearTimeout(coinFlyTimerRef.current);
+      coinFlyTimerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -135,14 +191,24 @@ export default function TicTacToeModal({
   }, [open]);
 
   const resetLocal = useCallback(() => {
-    setPhase("loading");
+    beginHandRequestIdRef.current += 1;
+    claimGenerationRef.current += 1;
+    setPhase("playing");
     setMatchId(null);
     setGameState(null);
     setPlayerMoves([]);
     setClaimResult(null);
     setBusy(false);
     setError(null);
-  }, []);
+    setShowResultInPrizeRow(false);
+    setFlyCoin(null);
+    setHidePrizeCoin(false);
+    setWinHighlightDismissed(false);
+    setShowLoseFlash(false);
+    winCelebrationStartedRef.current = false;
+    clearResultPrizeRowTimer();
+    clearCoinFlyTimer();
+  }, [clearCoinFlyTimer, clearResultPrizeRowTimer]);
 
   const handleClose = useCallback(() => {
     resetLocal();
@@ -151,16 +217,21 @@ export default function TicTacToeModal({
 
   const beginHand = useCallback(
     async (level: TicTacToeDifficulty = difficulty) => {
+      const requestId = ++beginHandRequestIdRef.current;
+      claimGenerationRef.current += 1;
+
       try {
-        setBusy(true);
         setError(null);
-        setPhase("loading");
         setClaimResult(null);
         setPlayerMoves([]);
         setMatchId(null);
         setGameState(null);
+        setShowLoseFlash(false);
+        setWinHighlightDismissed(true);
 
         const started = await startTicTacToeMatch(level);
+        if (requestId !== beginHandRequestIdRef.current) return;
+
         const { state } = createGame({
           seed: started.seed,
           difficulty: started.difficulty,
@@ -170,11 +241,11 @@ export default function TicTacToeModal({
         setGameState(state);
         setDifficulty(started.difficulty);
         setPhase("playing");
+        setWinHighlightDismissed(false);
       } catch (err) {
+        if (requestId !== beginHandRequestIdRef.current) return;
         setError(err instanceof Error ? err.message : "خطا در شروع بازی");
         setPhase("result");
-      } finally {
-        setBusy(false);
       }
     },
     [difficulty]
@@ -207,57 +278,151 @@ export default function TicTacToeModal({
   }, [open, resetLocal]);
 
   const resultMessage = useMemo(() => {
-    if (!claimResult) return null;
+    if (!claimResult || claimResult.outcome !== "draw") return null;
+    return "مساوی! جایزه‌ای پرداخت نشد.";
+  }, [claimResult]);
+
+  const scheduleNextHand = useCallback(
+    (delayMs: number) => {
+      clearResultPrizeRowTimer();
+      resultPrizeRowTimerRef.current = setTimeout(() => {
+        resultPrizeRowTimerRef.current = null;
+        void beginHandRef.current();
+      }, delayMs);
+    },
+    [clearResultPrizeRowTimer]
+  );
+
+  useEffect(() => {
+    if (phase !== "result") {
+      setShowResultInPrizeRow(false);
+      clearResultPrizeRowTimer();
+      clearCoinFlyTimer();
+      return;
+    }
+
+    if (!claimResult) {
+      clearResultPrizeRowTimer();
+      clearCoinFlyTimer();
+      return;
+    }
+
     if (claimResult.outcome === "win") {
-      if (claimResult.paidDing > 0) {
-        return `بردید! ${claimResult.paidDing.toLocaleString("en-US")} دینگ به حساب شما اضافه شد.`;
+      setShowResultInPrizeRow(false);
+
+      if (
+        !winCelebrationStartedRef.current &&
+        !claimResult.alreadyClaimed
+      ) {
+        winCelebrationStartedRef.current = true;
+        clearCoinFlyTimer();
+        coinFlyTimerRef.current = setTimeout(() => {
+          coinFlyTimerRef.current = null;
+          const src = prizeCoinRef.current?.getBoundingClientRect();
+          const tgt = document
+            .querySelector("[data-wallet-ding-target]")
+            ?.getBoundingClientRect();
+
+          if (!src || !tgt) {
+            setWinHighlightDismissed(true);
+            setGameState(null);
+            setPlayerMoves([]);
+            triggerDingCelebrate?.();
+            return;
+          }
+
+          setWinHighlightDismissed(true);
+          setHidePrizeCoin(true);
+          setFlyCoin({
+            startX: src.left + src.width / 2,
+            startY: src.top + src.height / 2,
+            endX: tgt.left + tgt.width / 2 + 14,
+            endY: tgt.top + tgt.height / 2,
+          });
+        }, COIN_FLY_DELAY_MS);
       }
-      return "بردید! امروز سقف جایزه پر شده — دینگی اضافه نشد.";
+
+      scheduleNextHand(WIN_NEXT_HAND_MS);
+      return () => {
+        clearResultPrizeRowTimer();
+        clearCoinFlyTimer();
+      };
     }
-    if (claimResult.outcome === "draw") return "مساوی! جایزه‌ای پرداخت نشد.";
-    return "باختید. جایزه‌ای پرداخت نشد.";
-  }, [claimResult]);
 
-  const resultClassName = useMemo(() => {
-    if (!claimResult) return styles.resultDraw;
-    if (claimResult.outcome === "win") return styles.resultWin;
-    if (claimResult.outcome === "lose") return styles.resultLose;
-    return styles.resultDraw;
-  }, [claimResult]);
-
-  const instructionText = useMemo(() => {
-    if (phase === "loading") return "در حال آماده‌سازی بازی...";
-    if (phase === "claiming") return "در حال ثبت نتیجه...";
-    if (phase === "result" && !claimResult) return "برای شروع دوباره تلاش کنید.";
-    if (phase === "playing") {
-      if (gameState?.currentTurn === "player") {
-        return playerMoves.length === 0 ? "بازی رو شروع کن!" : "نوبت شما";
-      }
-      return "نوبت ماشین...";
+    if (claimResult.outcome === "lose") {
+      setShowResultInPrizeRow(false);
+      scheduleNextHand(LOSE_NEXT_HAND_MS);
+      return () => {
+        clearResultPrizeRowTimer();
+      };
     }
-    return "پایان دست";
-  }, [claimResult, gameState?.currentTurn, phase, playerMoves.length]);
 
-  const settleHand = async (moves: number[], currentMatchId: string) => {
-    try {
-      setPhase("claiming");
-      setBusy(true);
-      const result = await claimTicTacToeMatch({
+    if (!resultMessage) {
+      setShowResultInPrizeRow(false);
+      clearResultPrizeRowTimer();
+      return;
+    }
+
+    setShowResultInPrizeRow(true);
+    scheduleNextHand(DRAW_MESSAGE_MS);
+
+    return () => {
+      clearResultPrizeRowTimer();
+    };
+  }, [
+    phase,
+    claimResult,
+    resultMessage,
+    clearCoinFlyTimer,
+    clearResultPrizeRowTimer,
+    scheduleNextHand,
+    triggerDingCelebrate,
+  ]);
+
+  const finishHandLocally = useCallback(
+    (
+      moves: number[],
+      currentMatchId: string,
+      outcome: Exclude<MatchState["outcome"], null>
+    ) => {
+      const claimGeneration = ++claimGenerationRef.current;
+      const optimisticPaidDing =
+        outcome === "win" ? getTicTacToeWinPrizeDing(difficulty) : 0;
+
+      setError(null);
+      setPhase("result");
+      setClaimResult({
         matchId: currentMatchId,
-        playerMoves: moves,
+        outcome,
+        paidDing: optimisticPaidDing,
+        alreadyClaimed: false,
       });
-      setClaimResult(result);
-      if (result.paidDing > 0) {
-        await refreshAllBalances?.();
+
+      if (outcome === "lose") {
+        setShowLoseFlash(true);
+        setGameState(null);
+        setPlayerMoves([]);
       }
-      setPhase("result");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "خطا در ثبت نتیجه");
-      setPhase("result");
-    } finally {
-      setBusy(false);
-    }
-  };
+
+      void (async () => {
+        try {
+          const result = await claimTicTacToeMatch({
+            matchId: currentMatchId,
+            playerMoves: moves,
+          });
+          if (claimGeneration !== claimGenerationRef.current) return;
+          setClaimResult(result);
+          if (result.paidDing > 0) {
+            void refreshAllBalances?.();
+          }
+        } catch (err) {
+          if (claimGeneration !== claimGenerationRef.current) return;
+          console.error("[TicTacToe] background claim failed:", err);
+        }
+      })();
+    },
+    [difficulty, refreshAllBalances]
+  );
 
   const handleCellClick = async (cell: number) => {
     if (phase !== "playing" || !gameState || !matchId || busy) return;
@@ -271,8 +436,8 @@ export default function TicTacToeModal({
       setGameState(state);
       setPlayerMoves(nextMoves);
 
-      if (state.status === "finished") {
-        await settleHand(nextMoves, matchId);
+      if (state.status === "finished" && state.outcome) {
+        finishHandLocally(nextMoves, matchId, state.outcome);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "حرکت نامعتبر");
@@ -282,13 +447,97 @@ export default function TicTacToeModal({
   };
 
   const boardCells = gameState?.board ?? EMPTY_BOARD;
-  const canPickDifficulty = phase === "result" || phase === "loading";
-  const showResultBanner = phase === "result" && claimResult && resultMessage;
-  const showPrimaryAction = phase === "result";
+  const canPickDifficulty =
+    phase === "result" ||
+    (phase === "playing" && playerMoves.length === 0);
+  const showResultBanner =
+    phase === "result" &&
+    claimResult?.outcome === "draw" &&
+    resultMessage &&
+    showResultInPrizeRow;
+  const winPrizeDing = getTicTacToeWinPrizeDing(difficulty);
+  const showBoardWinHighlight =
+    gameState?.status === "finished" &&
+    gameState.outcome === "win" &&
+    !winHighlightDismissed;
+  const showBoardLoseHighlight = showLoseFlash;
+
+  const handleDifficultyPick = (level: TicTacToeDifficulty) => {
+    if (busy) return;
+
+    const canRestartHand =
+      phase === "result" ||
+      (phase === "playing" && playerMoves.length === 0);
+    if (!canRestartHand) return;
+    if (phase === "playing" && level === difficulty) return;
+
+    setDifficulty(level);
+
+    if (phase === "result") {
+      clearResultPrizeRowTimer();
+      clearCoinFlyTimer();
+      setShowResultInPrizeRow(false);
+      setFlyCoin(null);
+      setHidePrizeCoin(false);
+      setWinHighlightDismissed(false);
+      setShowLoseFlash(false);
+      winCelebrationStartedRef.current = false;
+    }
+
+    void beginHand(level);
+  };
 
   if (!open || !mounted || typeof document === "undefined") return null;
 
-  return createPortal(
+  const flyCoinPortal =
+    flyCoin &&
+    createPortal(
+      <AnimatePresence>
+        <motion.div
+          key="tic-tac-toe-fly-coin"
+          className={styles.flyCoin}
+          style={{
+            left: flyCoin.startX,
+            top: flyCoin.startY,
+            x: "-50%",
+            y: "-50%",
+          }}
+          initial={{ scale: 1, opacity: 1 }}
+          animate={{
+            left: flyCoin.endX,
+            top: flyCoin.endY,
+            scale: [1, 0.82, 0.32],
+            opacity: [1, 0.92, 0],
+          }}
+          transition={{
+            duration: COIN_FLY_DURATION_MS / 1000,
+            ease: [0.22, 0.61, 0.36, 1],
+          }}
+          onAnimationComplete={() => {
+            setFlyCoin(null);
+            setHidePrizeCoin(false);
+            setGameState(null);
+            setPlayerMoves([]);
+            triggerDingCelebrate?.();
+          }}
+        >
+          <Image
+            src={dingCoinIcon}
+            alt=""
+            width={22}
+            height={22}
+            className={styles.flyCoinImage}
+            aria-hidden="true"
+          />
+        </motion.div>
+      </AnimatePresence>,
+      document.body
+    );
+
+  return (
+    <>
+      {flyCoinPortal}
+      {createPortal(
     <div
       className={styles.overlay}
       onClick={handleClose}
@@ -322,7 +571,7 @@ export default function TicTacToeModal({
           </div>
 
           <div className={styles.difficultyRow}>
-            {(Object.keys(DIFFICULTY_LABELS) as TicTacToeDifficulty[]).map(
+            {DIFFICULTY_ORDER.map(
               (level) => (
                 <button
                   key={level}
@@ -330,7 +579,7 @@ export default function TicTacToeModal({
                   className={`${styles.difficultyButton} ${
                     difficulty === level ? styles.difficultyButtonActive : ""
                   }`}
-                  onClick={() => setDifficulty(level)}
+                  onClick={() => handleDifficultyPick(level)}
                   disabled={busy || !canPickDifficulty}
                 >
                   {DIFFICULTY_LABELS[level]}
@@ -339,93 +588,93 @@ export default function TicTacToeModal({
             )}
           </div>
 
-          <div className={styles.prizeRow}>
-            <span>جایزه برد</span>
-            <Image
-              src={dingCoinIcon}
-              alt=""
-              width={22}
-              height={22}
-              className={styles.prizeCoin}
-              aria-hidden="true"
-            />
-            <span
-              className={`${styles.prizeAmount} numeric-text numeric-text--16`}
-              dir="ltr"
-            >
-              {winPrizeDing.toLocaleString("en-US")}
-            </span>
-            <span>دینگ</span>
+          <div
+            className={styles.prizeRow}
+            role={showResultBanner ? "status" : undefined}
+            aria-live={showResultBanner ? "polite" : undefined}
+          >
+            {showResultBanner ? (
+              <span>{resultMessage}</span>
+            ) : (
+              <>
+                <span>جایزه برد</span>
+                <span
+                  ref={prizeCoinRef}
+                  className={`${styles.prizeCoinWrap} ${
+                    hidePrizeCoin ? styles.prizeCoinHidden : ""
+                  }`}
+                >
+                  <Image
+                    src={dingCoinIcon}
+                    alt=""
+                    width={22}
+                    height={22}
+                    className={styles.prizeCoin}
+                    aria-hidden="true"
+                  />
+                </span>
+                <span
+                  className={`${styles.prizeAmount} numeric-text numeric-text--16`}
+                  dir="ltr"
+                >
+                  {winPrizeDing.toLocaleString("en-US")}
+                </span>
+                <span>دینگ</span>
+              </>
+            )}
           </div>
-
-          {!showResultBanner && (
-            <p className={styles.instructionText}>{instructionText}</p>
-          )}
 
           <div
-            className={`${styles.board} ${
-              phase === "loading" || phase === "claiming" ? styles.boardLoading : ""
+            className={`${styles.boardFrame} ${
+              showBoardWinHighlight
+                ? styles.boardFrameWinner
+                : showBoardLoseHighlight
+                  ? styles.boardFrameLoser
+                  : ""
             }`}
           >
-            {boardCells.map((mark, index) => (
-              <button
-                key={index}
-                type="button"
-                className={`${styles.cell} ${
-                  mark === "X"
-                    ? styles.cellPlayer
-                    : mark === "O"
-                      ? styles.cellMachine
-                      : ""
-                }`}
-                onClick={() => void handleCellClick(index)}
-                disabled={
-                  busy ||
-                  phase !== "playing" ||
-                  mark !== null ||
-                  gameState?.currentTurn !== "player"
-                }
-                aria-label={`خانه ${index + 1}`}
-              >
-                {mark ?? ""}
-              </button>
-            ))}
-          </div>
-
-          {showResultBanner && (
-            <div className={`${styles.resultBanner} ${resultClassName}`}>
-              <TrophyIcon />
-              <span>{resultMessage}</span>
+            <div className={styles.board}>
+              {boardCells.map((mark, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  className={styles.cell}
+                  onClick={() => void handleCellClick(index)}
+                  disabled={
+                    busy ||
+                    phase !== "playing" ||
+                    mark !== null ||
+                    gameState?.currentTurn !== "player"
+                  }
+                  aria-label={
+                    mark
+                      ? `خانه ${index + 1} — ${mark === "X" ? "ضربدر" : "دایره"}`
+                      : `خانه ${index + 1}`
+                  }
+                >
+                  {mark ? (
+                    <span
+                      className={`${styles.cellMark} ${
+                        mark === "X"
+                          ? styles.cellPlayer
+                          : styles.cellMachine
+                      }`}
+                      aria-hidden="true"
+                    >
+                      <CellMarkIcon mark={mark} />
+                    </span>
+                  ) : null}
+                </button>
+              ))}
             </div>
-          )}
+          </div>
 
           {error && <p className={styles.errorText}>{error}</p>}
-
-          <div className={styles.actions}>
-            {showPrimaryAction && (
-              <button
-                type="button"
-                className={styles.primaryButton}
-                onClick={() => void beginHand(difficulty)}
-                disabled={busy}
-              >
-                <PlayIcon />
-                <span>{claimResult ? "دست بعدی" : "تلاش دوباره"}</span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={handleClose}
-              disabled={busy && phase === "claiming"}
-            >
-              بستن
-            </button>
-          </div>
         </div>
       </div>
     </div>,
     document.body
+      )}
+    </>
   );
 }

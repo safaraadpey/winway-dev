@@ -49,7 +49,8 @@
   padding: 18px 16px 16px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 20px;
+  --tic-board-width: 50%;
 }
 
 .header {
@@ -107,15 +108,29 @@
 }
 
 .difficultyButton {
+  composes: prizeChipFull from "../room/RoomHeader.module.css";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  padding: 6px 8px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.82);
-  padding: 9px 8px;
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: 100% 100%;
+  background-color: #111c2f;
+  border: 1px solid transparent;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  color: #e5e7eb;
   font-size: 13px;
-  font-weight: 700;
+  line-height: 13px;
+  font-weight: 600;
+  font-family: "Vazirmatn", sans-serif;
+  text-align: center;
   cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
 }
 
 .difficultyButton:disabled {
@@ -124,12 +139,19 @@
 }
 
 .difficultyButtonActive {
-  border-color: rgba(0, 255, 255, 0.85);
-  color: #8ff7ff;
+  composes: prizeChipLineWinner from "../room/RoomHeader.module.css";
+}
+
+.difficultyButton.difficultyButtonActive {
+  border: 2px solid #fbbf24;
   box-shadow:
-    0 0 0 1px rgba(0, 255, 255, 0.25),
-    0 0 16px rgba(0, 255, 255, 0.22);
-  background: rgba(0, 255, 255, 0.08);
+    0 0 12px rgba(251, 191, 36, 0.5),
+    0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+:global(html[data-theme="light"]) .difficultyButton.difficultyButtonActive {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18);
 }
 
 .prizeRow {
@@ -137,13 +159,15 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 14px;
+  padding: 8px 14px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(0, 0, 0, 0.28);
   color: #ffffff;
   font-size: 14px;
   font-weight: 700;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .prizeCoin {
@@ -153,27 +177,83 @@
   flex-shrink: 0;
 }
 
+.prizeCoinWrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.prizeCoinHidden {
+  opacity: 0;
+}
+
+.flyCoin {
+  position: fixed;
+  z-index: 10050;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.65));
+}
+
+.flyCoinImage {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  display: block;
+}
+
 .prizeAmount {
   composes: numeric-text numeric-text--16 from global;
   color: #fff8e5;
   font-weight: 800;
 }
 
-.instructionText {
-  margin: 0;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.88);
+.boardFrame {
+  width: var(--tic-board-width);
+  margin: 0 auto;
+  padding: 4px;
+  border-radius: 16px;
+  border: 2px solid transparent;
+  box-sizing: border-box;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.boardFrameWinner {
+  border-color: #fbbf24;
+  box-shadow: 0 0 16px rgba(251, 191, 36, 0.5);
+}
+
+.boardFrameLoser {
+  transition: none;
+  border-color: #ef4444;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.55);
+  animation: boardLoseFlash 0.45s ease-in-out infinite alternate;
+}
+
+@keyframes boardLoseFlash {
+  0% {
+    border-color: #ef4444;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.35);
+  }
+
+  100% {
+    border-color: #fca5a5;
+    box-shadow: 0 0 24px rgba(248, 113, 113, 0.8);
+  }
 }
 
 .board {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
-  width: 50%;
-  margin: 0 auto;
-  padding: 2px 0;
+  width: 100%;
 }
 
 .cell {
@@ -185,14 +265,24 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.95),
     0 3px 6px rgba(0, 0, 0, 0.28);
   color: #0f172a;
-  font-size: 21px;
-  font-weight: 900;
-  line-height: 1;
+  padding: 0;
   cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.cellMark {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: "Vazirmatn", sans-serif;
+  width: 100%;
+  height: 100%;
+}
+
+.cellIcon {
+  width: 42px;
+  height: 42px;
+  display: block;
 }
 
 .cell:disabled {
@@ -201,49 +291,12 @@
 
 .cellPlayer {
   color: #2f9bff;
-  text-shadow: 0 2px 8px rgba(47, 155, 255, 0.35);
+  filter: drop-shadow(0 2px 6px rgba(47, 155, 255, 0.4));
 }
 
 .cellMachine {
   color: #ff5f7d;
-  text-shadow: 0 2px 8px rgba(255, 95, 125, 0.35);
-}
-
-.resultBanner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: 14px;
-  padding: 12px 14px;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 800;
-  line-height: 1.5;
-}
-
-.resultIcon {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-}
-
-.resultWin {
-  background: rgba(34, 197, 94, 0.2);
-  border: 1px solid rgba(74, 222, 128, 0.35);
-  color: #bbf7d0;
-}
-
-.resultLose {
-  background: rgba(127, 29, 29, 0.42);
-  border: 1px solid rgba(248, 113, 113, 0.28);
-  color: #fecaca;
-}
-
-.resultDraw {
-  background: rgba(71, 85, 105, 0.35);
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  color: #e2e8f0;
+  filter: drop-shadow(0 2px 6px rgba(255, 95, 125, 0.4));
 }
 
 .errorText {
@@ -252,54 +305,6 @@
   color: #fca5a5;
   text-align: center;
   line-height: 1.5;
-}
-
-.actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 2px;
-}
-
-.primaryButton {
-  width: 100%;
-  border: none;
-  border-radius: 16px;
-  padding: 14px 16px;
-  background: linear-gradient(180deg, #00ffff 0%, #00c8d4 52%, #00a8b8 100%);
-  color: #042f2e;
-  font-size: 16px;
-  font-weight: 800;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  box-shadow:
-    0 0 18px rgba(0, 255, 255, 0.35),
-    0 8px 20px rgba(0, 0, 0, 0.25);
-}
-
-.primaryButton:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.secondaryButton {
-  width: 100%;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.04);
-  color: #ffffff;
-  padding: 12px 16px;
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.secondaryButton:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
 }
 
 .boardLoading {

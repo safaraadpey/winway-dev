@@ -361,6 +361,7 @@ export default function MergedPlayerHeader({
         {/* Ding Capsule */}
         <motion.div
           data-tour-id="ding-balance"
+          data-wallet-ding-target
           className={capsuleClass(styles.dingBg)}
           animate={dingCapsuleAnimate}
           transition={{ duration: 0.8, ease: "easeInOut" }}

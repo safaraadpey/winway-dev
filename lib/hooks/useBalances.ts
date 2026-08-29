@@ -18,6 +18,7 @@ export interface Balances {
   isAnimating: boolean;
   isTomanAnimating: boolean;
   triggerTomanCelebrate: () => void;
+  triggerDingCelebrate: () => void;
   /**
    * Refresh wallet balances (toman + locked) immediately from DB.
    * Useful right after purchase/cancel actions to avoid waiting for realtime delay.
@@ -422,6 +423,22 @@ export function useBalances(): Balances {
     }, 900);
   };
 
+  const triggerDingCelebrate = () => {
+    if (!isMountedRef.current) return;
+    if (isDingEnabled()) {
+      void playDingTone();
+    }
+    if (animationTimeoutRef.current) {
+      clearTimeout(animationTimeoutRef.current);
+    }
+    setIsAnimating(true);
+    animationTimeoutRef.current = setTimeout(() => {
+      if (!isMountedRef.current) return;
+      setIsAnimating(false);
+      animationTimeoutRef.current = null;
+    }, 800);
+  };
+
   const creditDingOnReveal = (revealKey: string, delta: number) => {
     if (!revealKey || delta <= 0) return;
     if (creditedRevealKeysRef.current.has(revealKey)) return;
@@ -506,6 +523,7 @@ export function useBalances(): Balances {
     isAnimating,
     isTomanAnimating,
     triggerTomanCelebrate,
+    triggerDingCelebrate,
     refreshWalletBalances,
     refreshAllBalances,
     creditDingOnReveal,

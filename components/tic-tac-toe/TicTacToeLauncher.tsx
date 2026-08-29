@@ -2,6 +2,7 @@
 
 import React from "react";
 import type { TicTacToePlacement } from "@/lib/tic-tac-toe/constants";
+import { TIC_TAC_TOE_MAX_WIN_PRIZE_DING } from "@/lib/tic-tac-toe/constants";
 import { openTicTacToeModal } from "@/lib/tic-tac-toe/openTicTacToe";
 import { useTicTacToeSettings } from "@/lib/tic-tac-toe/client";
 import type { TicTacToePublicSettings } from "@/lib/tic-tac-toe/types";
@@ -51,7 +52,7 @@ export default function TicTacToeLauncher({
             <span className={styles.launcherSubtitle}>Player vs Machine</span>
           </span>
           <span className={`${styles.launcherPrize} numeric-text numeric-text--14`} dir="ltr">
-            +{settings.winPrizeDing.toLocaleString("en-US")} Ding
+            +{TIC_TAC_TOE_MAX_WIN_PRIZE_DING.toLocaleString("en-US")} Ding
           </span>
         </>
       )}
