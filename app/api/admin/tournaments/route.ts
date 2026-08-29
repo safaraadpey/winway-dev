@@ -39,6 +39,13 @@ function mapRpcError(message: string): { status: number; error: string; message:
       message: "قیمت بلیت را وارد کنید. برای تورنومنت رایگان عدد ۰ بگذارید.",
     };
   }
+  if (msg.includes("prize percentages must sum") || msg.includes("prize percentage")) {
+    return {
+      status: 400,
+      error: "validation_error",
+      message: "جمع درصدهای جایزه باید دقیقاً 100 باشد.",
+    };
+  }
   if (
     msg.includes("invalid") ||
     msg.includes("must be") ||
@@ -46,6 +53,13 @@ function mapRpcError(message: string): { status: number; error: string; message:
     msg.includes("not allowed")
   ) {
     return { status: 400, error: "validation_error", message: message || "ورودی نامعتبر است" };
+  }
+  if (msg.includes("does not exist")) {
+    return {
+      status: 500,
+      error: "database_error",
+      message: "خطای دیتابیس: migration یا تابع ناقص است.",
+    };
   }
   return {
     status: 500,

@@ -78,8 +78,6 @@ interface MergedPlayerHeaderProps {
   refreshDisabled?: boolean;
   guestPresentation?: {
     playerName: string;
-    dingCapsuleLabel: string;
-    tomanCapsuleLabel: string;
   };
 }
 
@@ -356,9 +354,7 @@ export default function MergedPlayerHeader({
           tabIndex={refreshLocked ? undefined : 0}
           onKeyDown={refreshLocked ? undefined : handleRefreshKeyDown}
         >
-          {isGuestPresentation ? (
-            <span className={styles.capsuleLabel}>{guestPresentation!.tomanCapsuleLabel}</span>
-          ) : loading ? (
+          {isGuestPresentation ? null : loading ? (
             <span className={styles.loadingText}>...</span>
           ) : (
             <>
@@ -395,16 +391,13 @@ export default function MergedPlayerHeader({
           onKeyDown={refreshLocked ? undefined : handleRefreshKeyDown}
         >
           {isGuestPresentation ? (
-            <>
-              <span className={styles.capsuleLabel}>{guestPresentation!.dingCapsuleLabel}</span>
-              <Image
-                src={dingCoinIcon}
-                alt="Ding Coin"
-                className={styles.coinIcon}
-                width={30}
-                height={30}
-              />
-            </>
+            <Image
+              src={dingCoinIcon}
+              alt="Ding Coin"
+              className={styles.coinIcon}
+              width={30}
+              height={30}
+            />
           ) : loading ? (
             <span className={styles.loadingText}>...</span>
           ) : (

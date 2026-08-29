@@ -3,8 +3,9 @@ import { cookies } from "next/headers";
 import { buildRegistrationLinkPath } from "@/lib/referral/buildRegistrationLink";
 import {
   buildGuestCookiePayload,
+  buildWatchGuestCookieWriteOptions,
   getWatchGuestCookieName,
-  getWatchGuestCookieOptions,
+  getWatchGuestCookieSetPaths,
   serializeWatchGuestCookie,
 } from "@/lib/watch-invite/guestCookie";
 import {
@@ -57,11 +58,11 @@ export async function GET(request: NextRequest) {
 
     if (setGuest) {
       const payload = buildGuestCookiePayload(watchCode, inviteToken);
-      cookies().set(
-        getWatchGuestCookieName(),
-        serializeWatchGuestCookie(payload),
-        getWatchGuestCookieOptions()
-      );
+      const value = serializeWatchGuestCookie(payload);
+      const cookieName = getWatchGuestCookieName();
+      for (const path of getWatchGuestCookieSetPaths()) {
+        cookies().set(cookieName, value, buildWatchGuestCookieWriteOptions(path));
+      }
     }
 
     return NextResponse.json(

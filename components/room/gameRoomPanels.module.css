@@ -499,32 +499,32 @@
   background-color: #fde68a;
 }
 
-/* راند ۱ — بنفش */
+/* راند ۱ — سبز */
 .tableRowTone1 {
-  background-color: #ddd6fe;
-  box-shadow: inset 4px 0 0 #7c3aed;
+  background-color: #dcfce7;
+  box-shadow: inset 4px 0 0 #16a34a;
 }
 
 .tableRowClickable.tableRowTone1:hover {
-  background-color: #c4b5fd;
+  background-color: #bbf7d0;
 }
 
 .tableRowClickable.tableRowTone1:active {
-  background-color: #a78bfa;
+  background-color: #86efac;
 }
 
-/* راند ۲ — یشمی */
+/* راند ۲ — طلایی کمرنگ */
 .tableRowTone2 {
-  background-color: #99f6e4;
-  box-shadow: inset 4px 0 0 #0f766e;
+  background-color: #fefce8;
+  box-shadow: inset 4px 0 0 #facc15;
 }
 
 .tableRowClickable.tableRowTone2:hover {
-  background-color: #5eead4;
+  background-color: #fef9c3;
 }
 
 .tableRowClickable.tableRowTone2:active {
-  background-color: #2dd4bf;
+  background-color: #fef08a;
 }
 
 /* راند ۳ — طلایی */

@@ -48,6 +48,8 @@ export type TournamentFormProps = {
   submitting?: boolean;
   readOnly?: boolean;
   lockedMessage?: string;
+  /** خطای برگشتی از submit سرور (مثلاً API) */
+  externalError?: string | null;
   /** Used to show a copyable player link on edit. */
   tournamentId?: string | null;
 };
@@ -153,6 +155,7 @@ export function TournamentForm({
   submitting,
   readOnly = false,
   lockedMessage,
+  externalError = null,
   tournamentId = null,
 }: TournamentFormProps) {
   const defaults: TournamentFormValues = useMemo(
@@ -435,6 +438,7 @@ export function TournamentForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && <div className="text-sm text-red-400">{error}</div>}
+      {externalError && <div className="text-sm text-red-400">{externalError}</div>}
       {lockedMessage && (
         <div className="text-sm text-amber-400 bg-[#241a0a] border border-amber-700 rounded-lg px-3 py-2">
           {lockedMessage}

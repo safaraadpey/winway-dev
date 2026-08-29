@@ -1,7 +1,9 @@
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import {
+  WATCH_GUEST_COOKIE_LOCK_PATH,
   WATCH_GUEST_COOKIE_MAX_AGE_SEC,
   WATCH_GUEST_COOKIE_NAME,
+  WATCH_GUEST_COOKIE_PATH,
   WATCH_INVITE_TOKEN_ALPHABET,
   WATCH_INVITE_TOKEN_LENGTH,
 } from "@/lib/watch-invite/constants";
@@ -95,24 +97,51 @@ export function getWatchGuestCookieOptions() {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax" as const,
-    path: "/",
+    path: WATCH_GUEST_COOKIE_PATH,
     maxAge: WATCH_GUEST_COOKIE_MAX_AGE_SEC,
   };
 }
 
-export function isGuestPathAllowed(pathname: string): boolean {
-  if (
-    pathname.startsWith("/watch/t/") ||
-    pathname.startsWith("/api/watch/") ||
-    pathname.startsWith("/register") ||
-    pathname === "/signup" ||
-    pathname === "/login" ||
-    pathname.startsWith("/_next/") ||
-    pathname === "/favicon.ico" ||
-    pathname.startsWith("/themes/") ||
-    pathname.startsWith("/api/auth")
-  ) {
-    return true;
-  }
+export function getWatchGuestCookieSetPaths(): string[] {
+  return [WATCH_GUEST_COOKIE_PATH, WATCH_GUEST_COOKIE_LOCK_PATH];
+}
+
+type WatchGuestCookieWriteOptions = ReturnType<typeof getWatchGuestCookieOptions>;
+
+export function buildWatchGuestCookieWriteOptions(
+  path: string
+): WatchGuestCookieWriteOptions {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path,
+    maxAge: WATCH_GUEST_COOKIE_MAX_AGE_SEC,
+  };
+}
+
+export function getWatchGuestCookieClearOptions() {
+  const { secure, sameSite } = getWatchGuestCookieOptions();
+  return {
+    httpOnly: true as const,
+    secure,
+    sameSite,
+    maxAge: 0,
+  };
+}
+
+/** Player-app routes guests must not browse; everything else (/, auth, watch) stays open. */
+export function isGuestBlockedPlayerPath(pathname: string): boolean {
+  if (pathname.startsWith("/api/")) return false;
+
+  if (pathname === "/player" || pathname.startsWith("/player/")) return true;
+  if (pathname === "/post-login") return true;
+  if (pathname.startsWith("/room/")) return true;
+  if (pathname === "/lobby" || pathname.startsWith("/lobby/")) return true;
+  if (pathname === "/wallet" || pathname.startsWith("/wallet/")) return true;
+  if (pathname === "/messages" || pathname.startsWith("/messages/")) return true;
+  if (pathname === "/ding" || pathname.startsWith("/ding/")) return true;
+  if (pathname === "/settings" || pathname.startsWith("/settings/")) return true;
+
   return false;
 }
