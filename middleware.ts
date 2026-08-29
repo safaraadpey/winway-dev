@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { updateSupabaseSession } from "@/lib/supabase/middleware";
+import { getWatchGuestCookieName, isGuestPathAllowed } from "@/lib/watch-invite/guestCookie";
+import { parseWatchGuestCookieEdge } from "@/lib/watch-invite/guestCookieEdge";
 
 const DEFAULT_MAIN_HOST = "dingmoney.org";
 const DEFAULT_ADMIN_HOST = "admin.dingmoney.org";
@@ -30,7 +32,23 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(buildRedirectUrl(req, adminHost));
   }
 
-  return updateSupabaseSession(req, { pathname });
+  const { response, user } = await updateSupabaseSession(req, { pathname });
+
+  const guestRaw = req.cookies.get(getWatchGuestCookieName())?.value;
+  const guest = await parseWatchGuestCookieEdge(guestRaw);
+
+  if (guest && !user && !isGuestPathAllowed(pathname)) {
+    const redirectUrl = req.nextUrl.clone();
+    redirectUrl.pathname = guest.p;
+    redirectUrl.search = "";
+    console.log("[WatchInvite] Guest redirect blocked path", {
+      pathname,
+      watchPath: guest.p,
+    });
+    return NextResponse.redirect(redirectUrl);
+  }
+
+  return response;
 }
 
 export const config = {

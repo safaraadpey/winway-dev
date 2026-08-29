@@ -67,6 +67,8 @@ function mapToFormValues(row: TournamentRow): TournamentFormValues {
       (row.meta as any)?.registration_extend_enabled !== false,
     registration_extend_minutes:
       (row.meta as any)?.registration_extend_minutes ?? 60,
+    break_between_rounds_minutes:
+      (row.meta as any)?.break_between_rounds_minutes ?? 0,
   };
 }
 

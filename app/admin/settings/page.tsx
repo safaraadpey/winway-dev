@@ -15,6 +15,7 @@ import { clearDashboardCache } from "@/services/dashboard";
 import { publishReferralCodeUpdated } from "@/lib/referral/referralCodeEvents";
 import toast from "react-hot-toast";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
+import WatchInviteBannerSettingsSection from "@/components/admin/WatchInviteBannerSettingsSection";
 
 export default function AdminSettingsPage() {
   const router = useRouter();
@@ -240,6 +241,8 @@ export default function AdminSettingsPage() {
             </div>
           </div>
         )}
+
+        <WatchInviteBannerSettingsSection />
       </div>
     </div>
   );

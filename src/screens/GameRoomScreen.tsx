@@ -52,6 +52,8 @@ const LIVE_ENTER_STATUSES = new Set([
   "running",
   "live",
   "settling",
+  "settled",
+  "finished",
 ]);
 
 function shouldEnterLiveRoom(

@@ -13,7 +13,7 @@ type UpdateSupabaseSessionOptions = {
 export async function updateSupabaseSession(
   request: NextRequest,
   options?: UpdateSupabaseSessionOptions
-): Promise<NextResponse> {
+): Promise<{ response: NextResponse; user: { id: string } | null }> {
   const requestHeaders = new Headers(request.headers);
   if (options?.pathname) {
     requestHeaders.set("x-pathname", options.pathname);
@@ -46,7 +46,9 @@ export async function updateSupabaseSession(
   });
 
   // Triggers token refresh when needed and writes updated cookies to the response.
-  await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  return response;
+  return { response, user };
 }

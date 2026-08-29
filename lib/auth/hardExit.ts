@@ -203,5 +203,11 @@ export function hardExit(role: HardExitRole = "player"): void {
     // best-effort only
   });
 
+  void fetch("/api/watch/clear-guest", { method: "POST", cache: "no-store" }).catch(
+    () => {
+      // best-effort only — HttpOnly guest cookie cannot be cleared from document.cookie
+    }
+  );
+
   window.setTimeout(() => redirectToLogin(role), HARD_EXIT_REDIRECT_MS);
 }

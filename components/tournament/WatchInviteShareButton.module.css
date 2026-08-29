@@ -1,0 +1,18 @@
+.shareButton {
+  width: 100%;
+  border: none;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(180deg, #0d9488 0%, #0f766e 100%);
+  color: #ffffff;
+  font-family: Vazirmatn, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+}
+
+.shareButton:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}

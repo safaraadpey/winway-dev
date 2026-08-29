@@ -15,6 +15,7 @@ export interface TournamentActiveCardStatus {
 interface TournamentActiveCardsStatusProps {
   cards: TournamentActiveCardStatus[];
   secondsRemaining?: number;
+  countdownKind?: "tournament_start" | "round_break" | null;
   tournamentStatus?: string | null;
   currentRoundNo?: number | null;
   waitingListMessage?: string;
@@ -24,12 +25,12 @@ interface TournamentActiveCardsStatusProps {
 export default function TournamentActiveCardsStatus({
   cards,
   secondsRemaining,
+  countdownKind = null,
   tournamentStatus,
   currentRoundNo,
   waitingListMessage = "اولین نفر باشید که در تورنومنت ثبت نام میکنید",
   useLongCountdown = false,
 }: TournamentActiveCardsStatusProps) {
-  const totalCount = cards.reduce((sum, card) => sum + card.count, 0);
   const formatTime = (seconds: number): string => {
     const safeSeconds = Math.max(0, Math.floor(seconds));
     if (useLongCountdown) {
@@ -62,6 +63,12 @@ export default function TournamentActiveCardsStatus({
     : showRoundStatus
       ? `${roundLabel} درحال اجرا`
       : timerLabel;
+  const countdownAnnouncement =
+    countdownKind === "round_break"
+      ? "زمان استراحت بین راندها"
+      : countdownKind === "tournament_start"
+        ? "زمان شروع تورنومنت"
+        : null;
 
   return (
     <div
@@ -69,7 +76,12 @@ export default function TournamentActiveCardsStatus({
     >
       <div className={panelStyles.activeCardsHeader}>
         <div className={panelStyles.activeCardsTimerWrap}>
-          <span className={panelStyles.activeCardsTimer}>{statusLabel}</span>
+          <span
+            className={panelStyles.activeCardsTimer}
+            dir={!showRoundStatus ? "ltr" : undefined}
+          >
+            {statusLabel}
+          </span>
           {!showRoundStatus && (
             <Image
               src={hourglassPng}
@@ -82,9 +94,11 @@ export default function TournamentActiveCardsStatus({
           )}
         </div>
 
-        <span className={panelStyles.activeCardsMeta}>
-          مجموع کارتها {totalCount}
-        </span>
+        {countdownAnnouncement ? (
+          <span className={panelStyles.activeCardsAnnouncement}>
+            {countdownAnnouncement}
+          </span>
+        ) : null}
       </div>
 
       <div className="flex-1 space-y-2 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">

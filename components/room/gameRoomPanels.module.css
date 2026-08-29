@@ -398,6 +398,15 @@
   color: #ffffff;
 }
 
+.activeCardsAnnouncement {
+  font-size: 14px;
+  font-weight: 600;
+  color: #22c55e;
+  text-align: right;
+  line-height: 1.25;
+  max-width: 52%;
+}
+
 .activeCardsEmpty {
   border-radius: 0.5rem;
   background: #ffffff;
@@ -461,6 +470,117 @@
   text-align: center;
   color: #6b7280;
   font-size: 0.875rem;
+}
+
+.tableRow {
+  border-radius: 0.5rem;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  cursor: default;
+}
+
+.tableRowClickable {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.tableRowToneDefault {
+  background-color: #fffbeb;
+}
+
+.tableRowClickable.tableRowToneDefault:hover {
+  background-color: #fef3c7;
+}
+
+.tableRowClickable.tableRowToneDefault:active {
+  background-color: #fde68a;
+}
+
+/* راند ۱ — بنفش */
+.tableRowTone1 {
+  background-color: #ddd6fe;
+  box-shadow: inset 4px 0 0 #7c3aed;
+}
+
+.tableRowClickable.tableRowTone1:hover {
+  background-color: #c4b5fd;
+}
+
+.tableRowClickable.tableRowTone1:active {
+  background-color: #a78bfa;
+}
+
+/* راند ۲ — یشمی */
+.tableRowTone2 {
+  background-color: #99f6e4;
+  box-shadow: inset 4px 0 0 #0f766e;
+}
+
+.tableRowClickable.tableRowTone2:hover {
+  background-color: #5eead4;
+}
+
+.tableRowClickable.tableRowTone2:active {
+  background-color: #2dd4bf;
+}
+
+/* راند ۳ — طلایی */
+.tableRowTone3 {
+  background-color: #fde68a;
+  box-shadow: inset 4px 0 0 #d97706;
+}
+
+.tableRowClickable.tableRowTone3:hover {
+  background-color: #fcd34d;
+}
+
+.tableRowClickable.tableRowTone3:active {
+  background-color: #fbbf24;
+}
+
+/* راند ۴ — نیلی */
+.tableRowTone4 {
+  background-color: #c7d2fe;
+  box-shadow: inset 4px 0 0 #4f46e5;
+}
+
+.tableRowClickable.tableRowTone4:hover {
+  background-color: #a5b4fc;
+}
+
+.tableRowClickable.tableRowTone4:active {
+  background-color: #818cf8;
+}
+
+/* راند ۵ — ارغوانی */
+.tableRowTone5 {
+  background-color: #f5d0fe;
+  box-shadow: inset 4px 0 0 #a21caf;
+}
+
+.tableRowClickable.tableRowTone5:hover {
+  background-color: #f0abfc;
+}
+
+.tableRowClickable.tableRowTone5:active {
+  background-color: #e879f9;
+}
+
+/* راند ۶ — زمردی */
+.tableRowTone6 {
+  background-color: #a7f3d0;
+  box-shadow: inset 4px 0 0 #059669;
+}
+
+.tableRowClickable.tableRowTone6:hover {
+  background-color: #6ee7b7;
+}
+
+.tableRowClickable.tableRowTone6:active {
+  background-color: #34d399;
 }
 
 .activeCardRow {
@@ -590,6 +710,10 @@
 
 :global(html[data-theme="light"]) .activeCardsMeta {
   color: #6d28d9;
+}
+
+:global(html[data-theme="light"]) .activeCardsAnnouncement {
+  color: #059669;
 }
 
 :global(html[data-theme="light"]) .activeCardsEmpty {

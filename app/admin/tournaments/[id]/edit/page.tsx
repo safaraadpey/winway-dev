@@ -59,6 +59,8 @@ export default function AdminTournamentEditPage() {
           data?.meta?.registration_extend_enabled !== false,
         registration_extend_minutes:
           data?.meta?.registration_extend_minutes ?? 60,
+        break_between_rounds_minutes:
+          data?.meta?.break_between_rounds_minutes ?? 0,
         final_winners_count: finalWinnersCount,
         prize_percentages: prizePercentages,
         is_test_tournament: data?.meta?.is_test_tournament === true,
@@ -143,6 +145,7 @@ export default function AdminTournamentEditPage() {
         min_players_to_start: values.min_players_to_start,
         registration_extend_enabled: values.registration_extend_enabled,
         registration_extend_minutes: values.registration_extend_minutes ?? 60,
+        break_between_rounds_minutes: values.break_between_rounds_minutes ?? 0,
         entry_currency: values.entry_currency,
         is_test_tournament: values.is_test_tournament === true,
       },

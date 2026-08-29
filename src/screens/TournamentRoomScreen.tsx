@@ -6,9 +6,12 @@ import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import { supabase } from "@/lib/supabaseClient";
 import TournamentBuyPanel from "@/components/tournament/TournamentBuyPanel";
+import WatchInviteShareButton from "@/components/tournament/WatchInviteShareButton";
+import WatchInviteGuestPanel from "@/components/tournament/WatchInviteGuestPanel";
 import TournamentActiveCardsStatus, { TournamentActiveCardStatus } from "@/components/tournament/TournamentActiveCardsStatus";
 import ActiveTablesSection from "@/components/room/ActiveTablesSection";
 import { ActiveTable } from "@/components/ActiveTablesPanel";
+import type { WatchInviteBanner, WatchTournamentSnapshot } from "@/lib/watch-invite/types";
 import toast from "react-hot-toast";
 import TournamentRoomLoadingFallback from "@/components/TournamentRoomLoadingFallback";
 import panelStyles from "@/components/room/gameRoomPanels.module.css";
@@ -19,6 +22,10 @@ interface TournamentRoomScreenProps {
   tournamentId?: string;
   roomId?: string; // reserved for future use
   templateId?: string; // reserved for future use
+  mode?: "player" | "guest";
+  watchCode?: number;
+  guestSignupPath?: string;
+  watchBanner?: WatchInviteBanner | null;
 }
 
 type TournamentRow = {
@@ -44,6 +51,8 @@ type TournamentRow = {
     final_winners_count?: number | null;
     min_players_to_start?: number | null;
     entry_currency?: string | null;
+    break_between_rounds_minutes?: number | null;
+    round_break_ends_at?: string | null;
   } | null;
 };
 
@@ -64,7 +73,14 @@ const statusLabel = (status: string | null) => {
   }
 };
 
-export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScreenProps) {
+export default function TournamentRoomScreen({
+  tournamentId,
+  mode = "player",
+  watchCode,
+  guestSignupPath,
+  watchBanner = null,
+}: TournamentRoomScreenProps) {
+  const isGuestMode = mode === "guest";
   const router = useRouter();
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
   const { refreshWalletBalances } = useBalancesContext();
@@ -77,6 +93,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   const [tournamentTables, setTournamentTables] = useState<ActiveTable[]>([]);
   const [tablesLoading, setTablesLoading] = useState(false);
   const [currentRoundNo, setCurrentRoundNo] = useState<number | null>(null);
+  const [roundBreakEndsAt, setRoundBreakEndsAt] = useState<string | null>(null);
   const [winnersLoading, setWinnersLoading] = useState(false);
   const [winners, setWinners] = useState<
     {
@@ -108,6 +125,8 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   const [globalRegistrationLocked, setGlobalRegistrationLocked] = useState(false);
   const [globalRegistrationLockReason, setGlobalRegistrationLockReason] = useState<string | null>(null);
   const [profileNamesByUserId, setProfileNamesByUserId] = useState<Record<string, string>>({});
+  const [guestPlayerCount, setGuestPlayerCount] = useState(0);
+  const [guestTotalTickets, setGuestTotalTickets] = useState(0);
 
   const isUuidLike = useCallback((value: string | null | undefined) => {
     if (!value) return false;
@@ -156,13 +175,107 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   }, [tournamentId]);
 
   useEffect(() => {
+    if (isGuestMode) {
+      setShowBackButton(false);
+      setOnBackClick(null);
+      return () => {
+        setShowBackButton(false);
+        setOnBackClick(null);
+      };
+    }
+
     setShowBackButton(true);
     setOnBackClick(() => () => router.push("/player/tournaments"));
     return () => {
       setShowBackButton(false);
       setOnBackClick(null);
     };
-  }, [router, setOnBackClick, setShowBackButton]);
+  }, [isGuestMode, router, setOnBackClick, setShowBackButton]);
+
+  const mapSnapshotToTournament = useCallback((snapshot: WatchTournamentSnapshot): TournamentRow => {
+    return {
+      id: tournamentId || String(snapshot.watchCode),
+      title: snapshot.title,
+      status: snapshot.status,
+      start_at: snapshot.startAt,
+      currency: snapshot.entryCurrency,
+      ticket_price: snapshot.ticketPrice,
+      guaranteed_prize: snapshot.guaranteedPrize,
+      commission_rate: snapshot.commissionRate,
+      min_tickets_per_player: snapshot.minTicketsPerPlayer,
+      max_tickets_per_player: snapshot.maxTicketsPerPlayer,
+      table_size_mode: snapshot.tableSizeMode,
+      table_size_fixed: snapshot.tableSizeFixed,
+      table_size_min: snapshot.tableSizeMin,
+      table_size_max: snapshot.tableSizeMax,
+      later_round_table_size_mode: snapshot.laterRoundTableSizeMode,
+      later_round_table_size_fixed: snapshot.laterRoundTableSizeFixed,
+      later_round_table_size_min: snapshot.laterRoundTableSizeMin,
+      later_round_table_size_max: snapshot.laterRoundTableSizeMax,
+      meta: {
+        final_winners_count: snapshot.finalWinnersCount,
+        min_players_to_start: snapshot.minPlayersToStart,
+        entry_currency: snapshot.entryCurrency,
+        round_break_ends_at: snapshot.roundBreakEndsAt,
+      },
+    };
+  }, [tournamentId]);
+
+  const loadGuestSnapshot = useCallback(
+    async (showLoader: boolean) => {
+      if (!watchCode) {
+        setError("لینک تماشا نامعتبر است");
+        setLoading(false);
+        return;
+      }
+
+      if (showLoader) {
+        setLoading(true);
+      }
+      setError(null);
+
+      try {
+        const res = await fetch(`/api/watch/tournament/${watchCode}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          setError("تورنومنت یافت نشد");
+          setTournament(null);
+          setTournamentTables([]);
+          return;
+        }
+
+        const snapshot = (await res.json()) as WatchTournamentSnapshot;
+        setTournament(mapSnapshotToTournament(snapshot));
+        setGuestPlayerCount(snapshot.playerCount);
+        setGuestTotalTickets(snapshot.totalTickets);
+        setRoundBreakEndsAt(snapshot.roundBreakEndsAt);
+        setCurrentRoundNo(snapshot.currentRoundNo);
+        setTournamentTables(
+          (snapshot.tables || []).map((table) => ({
+            id: table.id,
+            prize: table.prize,
+            players: table.players,
+            cardCount: table.cardCount,
+            roundNo: table.roundNo,
+            tableNo: table.tableNo,
+            isFinished: table.isFinished,
+            winnerNames: table.winnerNames,
+          }))
+        );
+        setEntries([]);
+        setProfileNamesByUserId({});
+      } catch (err) {
+        console.error("[WatchInvite] guest snapshot error:", err);
+        setError("خطا در دریافت اطلاعات تورنومنت");
+      } finally {
+        if (showLoader) {
+          setLoading(false);
+        }
+      }
+    },
+    [mapSnapshotToTournament, watchCode]
+  );
 
   const loadTournamentAndEntries = useCallback(
     async (showLoader: boolean) => {
@@ -198,7 +311,13 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
         setEntries([]);
         setProfileNamesByUserId({});
       } else {
-        setTournament((data as TournamentRow) ?? null);
+        const row = (data as TournamentRow) ?? null;
+        setTournament(row);
+        const breakEnds =
+          typeof row?.meta?.round_break_ends_at === "string"
+            ? row.meta.round_break_ends_at
+            : null;
+        setRoundBreakEndsAt(breakEnds);
         const nextEntries = (((entriesData as any) ?? []) as typeof entries);
         setEntries(nextEntries);
         void loadProfileNames();
@@ -214,6 +333,10 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   useEffect(() => {
     let active = true;
     const fetchUser = async () => {
+      if (isGuestMode) {
+        setCurrentUserId(null);
+        return;
+      }
       const { data, error } = await supabase.auth.getUser();
       if (!active) return;
       if (!error && data?.user) {
@@ -223,6 +346,11 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     void fetchUser();
 
     const loadGlobalLockState = async () => {
+      if (isGuestMode) {
+        setGlobalRegistrationLocked(false);
+        setGlobalRegistrationLockReason(null);
+        return;
+      }
       try {
         const {
           data: { session },
@@ -250,9 +378,19 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
       }
     };
 
+    if (isGuestMode) {
+      void Promise.all([loadGuestSnapshot(true), loadGlobalLockState()]);
+      const refreshInterval = setInterval(() => {
+        void Promise.all([loadGuestSnapshot(false), loadGlobalLockState()]);
+      }, 10000);
+      return () => {
+        active = false;
+        clearInterval(refreshInterval);
+      };
+    }
+
     void Promise.all([loadTournamentAndEntries(true), loadGlobalLockState()]);
 
-    // Keep tournament status fresh so UI sections react immediately after state changes.
     const refreshInterval = setInterval(() => {
       void Promise.all([loadTournamentAndEntries(false), loadGlobalLockState()]);
     }, 10000);
@@ -261,9 +399,11 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
       active = false;
       clearInterval(refreshInterval);
     };
-  }, [loadTournamentAndEntries]);
+  }, [isGuestMode, loadGuestSnapshot, loadTournamentAndEntries]);
 
   useEffect(() => {
+    if (isGuestMode) return;
+
     const shouldShowWinner =
       tournament?.status === "finished" || tournament?.status === "settling";
 
@@ -325,9 +465,11 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     return () => {
       active = false;
     };
-  }, [pickHumanName, tournament?.id, tournament?.status]);
+  }, [isGuestMode, pickHumanName, tournament?.id, tournament?.status]);
 
   useEffect(() => {
+    if (isGuestMode) return;
+
     const shouldShowLeaderboard =
       tournament?.status === "finished" || tournament?.status === "settling";
 
@@ -389,10 +531,10 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     return () => {
       active = false;
     };
-  }, [pickHumanName, tournament?.id, tournament?.status]);
+  }, [isGuestMode, pickHumanName, tournament?.id, tournament?.status]);
 
   useEffect(() => {
-    if (!tournamentId) return;
+    if (isGuestMode || !tournamentId) return;
 
     const isFinished =
       tournament?.status === "finished" || tournament?.status === "settling";
@@ -427,10 +569,14 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
         const payload = (await res.json()) as {
           tables?: ActiveTable[];
           currentRoundNo?: number | null;
+          roundBreakEndsAt?: string | null;
         };
 
         if (active) {
           setTournamentTables(Array.isArray(payload.tables) ? payload.tables : []);
+          if (typeof payload.roundBreakEndsAt !== "undefined") {
+            setRoundBreakEndsAt(payload.roundBreakEndsAt ?? null);
+          }
           if (isFinished) {
             const roundNumbers = (payload.tables || [])
               .map((t) => t.roundNo)
@@ -467,7 +613,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
       active = false;
       clearInterval(interval);
     };
-  }, [tournamentId, tournament?.status]);
+  }, [isGuestMode, tournamentId, tournament?.status]);
 
   const minQty = useMemo(
     () => tournament?.min_tickets_per_player ?? 1,
@@ -484,7 +630,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   const entryCurrency =
     (tournament?.meta?.entry_currency || tournament?.currency || "IRR").toString();
   const guaranteedPrize = tournament?.guaranteed_prize ?? 0;
-  const playersCount = entries?.length ?? 0;
+  const playersCount = isGuestMode ? guestPlayerCount : (entries?.length ?? 0);
   const normalizeCommissionRate = (value: number | null | undefined) => {
     if (value == null || Number.isNaN(value)) return 0;
     if (value < 0) return 0;
@@ -493,10 +639,10 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   };
   const commissionRate = normalizeCommissionRate(tournament?.commission_rate ?? 0);
   const hasGuarantee = guaranteedPrize > 0;
-  const totalTickets = useMemo(
-    () => entries.reduce((sum, entry) => sum + (entry.tickets_count ?? 0), 0),
-    [entries]
-  );
+  const totalTickets = useMemo(() => {
+    if (isGuestMode) return guestTotalTickets;
+    return entries.reduce((sum, entry) => sum + (entry.tickets_count ?? 0), 0);
+  }, [entries, guestTotalTickets, isGuestMode]);
   const prizePoolGross = entryCurrency === "DING" ? 0 : price * totalTickets;
   const prizePoolNet = Math.max(0, prizePoolGross * (1 - commissionRate));
   // Display: guaranteed tournaments show guarantee while pool is below it.
@@ -518,18 +664,31 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
       ? Number(tournament.meta.final_winners_count)
       : 1;
 
-  // شمارش معکوس تا زمان شروع تورنومنت
+  // Countdown: registration start_at, or inter-round break end (same timer slot).
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
     const compute = () => {
-      if (!tournament?.start_at) {
+      const now = Date.now();
+      const status = tournament?.status ?? null;
+      if (status === "finished" || status === "settling") {
         setStartCountdown(0);
         return;
       }
-      const target = new Date(tournament.start_at).getTime();
-      const now = Date.now();
-      const diff = Math.max(0, Math.floor((target - now) / 1000));
-      setStartCountdown(diff);
+      const startMs = tournament?.start_at
+        ? new Date(tournament.start_at).getTime()
+        : NaN;
+      if (Number.isFinite(startMs) && startMs > now) {
+        setStartCountdown(Math.max(0, Math.floor((startMs - now) / 1000)));
+        return;
+      }
+      const breakMs = roundBreakEndsAt
+        ? new Date(roundBreakEndsAt).getTime()
+        : NaN;
+      if (Number.isFinite(breakMs) && breakMs > now) {
+        setStartCountdown(Math.max(0, Math.floor((breakMs - now) / 1000)));
+        return;
+      }
+      setStartCountdown(0);
     };
     compute();
     timer = setInterval(() => {
@@ -538,7 +697,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [tournament?.start_at]);
+  }, [tournament?.start_at, tournament?.status, roundBreakEndsAt]);
 
   const formatTableSizePhase = (
     mode: string | null | undefined,
@@ -778,14 +937,39 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
   }, [remainingQty, minQty]);
 
   const handleTableClick = (roomId: string) => {
-    router.push(
-      `/player/gameroom?roomId=${encodeURIComponent(roomId)}&spectate=1`
-    );
+    if (isGuestMode) return;
+    if (!tournamentId) return;
+    console.info("[Tournament] Open table room", {
+      roomId,
+      tournamentId,
+      spectate: true,
+    });
+    const params = new URLSearchParams({
+      roomId,
+      spectate: "1",
+      tournamentId,
+    });
+    router.push(`/player/gameroom?${params.toString()}`);
   };
 
   const isRegistrationOpen = tournament?.status === "registration_open";
   const isTournamentEnded =
     tournament?.status === "finished" || tournament?.status === "settling";
+  const nowMs = Date.now();
+  const startMs = tournament?.start_at
+    ? new Date(tournament.start_at).getTime()
+    : NaN;
+  const breakMs = roundBreakEndsAt
+    ? new Date(roundBreakEndsAt).getTime()
+    : NaN;
+  const countdownKind: "tournament_start" | "round_break" | null =
+    isTournamentEnded
+      ? null
+      : Number.isFinite(startMs) && startMs > nowMs
+        ? "tournament_start"
+        : Number.isFinite(breakMs) && breakMs > nowMs
+          ? "round_break"
+          : null;
   const tablesEmptyMessage = tablesLoading
     ? "در حال بارگذاری..."
     : isTournamentEnded
@@ -804,10 +988,10 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
             {error || "تورنومنت یافت نشد"}
           </div>
           <button
-            onClick={() => router.push("/player/tournaments")}
+            onClick={() => router.push(isGuestMode ? guestSignupPath || "/signup" : "/player/tournaments")}
             className={screenStyles.errorBackButton}
           >
-            بازگشت به لیست تورنومنت‌ها
+            {isGuestMode ? "ثبت‌نام" : "بازگشت به لیست تورنومنت‌ها"}
           </button>
         </div>
       </div>
@@ -864,7 +1048,18 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
           </div>
         </div>
 
-        {(tournament?.status === "finished" || tournament?.status === "settling") && (
+        {isGuestMode && guestSignupPath ? (
+          <WatchInviteGuestPanel banner={watchBanner} signupPath={guestSignupPath} />
+        ) : null}
+
+        {!isGuestMode && tournamentId ? (
+          <WatchInviteShareButton
+            tournamentId={tournamentId}
+            tournamentTitle={tournament?.title}
+          />
+        ) : null}
+
+        {(tournament?.status === "finished" || tournament?.status === "settling") && !isGuestMode && (
           <div className={`${panelStyles.panelSurface} ${screenStyles.winnersPanel}`}>
             <div className={screenStyles.winnersTitle}>برنده‌ها</div>
             {winnersLoading ? (
@@ -891,7 +1086,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
           </div>
         )}
 
-        {(tournament?.status === "finished" || tournament?.status === "settling") && (
+        {(tournament?.status === "finished" || tournament?.status === "settling") && !isGuestMode && (
           <div className={`${panelStyles.panelSurface} ${screenStyles.dingRankPanel}`}>
             <div className={screenStyles.dingRankTitle}>رتبه‌بندی DING</div>
             {dingLeaderboardLoading ? (
@@ -924,7 +1119,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
           </div>
         )}
 
-        {isRegistrationOpen && (
+        {isRegistrationOpen && !isGuestMode && (
           <TournamentBuyPanel
             price={price}
             minQuantity={panelMinQty}
@@ -952,6 +1147,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
         <TournamentActiveCardsStatus
           cards={previewCards}
           secondsRemaining={startCountdown}
+          countdownKind={countdownKind}
           useLongCountdown
           tournamentStatus={tournament?.status ?? null}
           currentRoundNo={currentRoundNo}
@@ -967,7 +1163,7 @@ export default function TournamentRoomScreen({ tournamentId }: TournamentRoomScr
           titleClassName={panelStyles.activeTablesTitleGreen}
           tables={tournamentTables}
           emptyMessage={tablesEmptyMessage}
-          onTableClick={handleTableClick}
+          onTableClick={isGuestMode ? undefined : handleTableClick}
         />
 
       </div>

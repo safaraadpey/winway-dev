@@ -27,6 +27,8 @@ export type TournamentFormValues = {
   registration_extend_enabled: boolean;
   /** Minutes to push start_at when under min_players_to_start (default 60). */
   registration_extend_minutes: number | null;
+  /** Minutes to wait after a round finishes before starting the next (0 = none). */
+  break_between_rounds_minutes: number | null;
   final_winners_count: number | null;
   /** Prize share per rank (1..N); 2 decimal places, must sum to 100 when N > 1. */
   prize_percentages: number[];
@@ -82,13 +84,21 @@ const RANK_LABELS = [
   "نفر هشتم",
 ];
 
-/** Equal split with remainder assigned to rank 1 (e.g. 3 → 34/33/33). */
+/** Equal split with remainder assigned to rank 1 (e.g. 4 → 25/25/25/25). */
 export function buildEqualPrizePercents(count: number): number[] {
   if (count <= 0) return [];
   if (count === 1) return [100];
   const base = Math.floor(100 / count);
   const remainder = 100 - base * count;
   return Array.from({ length: count }, (_, i) => (i === 0 ? base + remainder : base));
+}
+
+/** Default prize split when changing winner count (or creating a new tournament). */
+export function buildDefaultPrizePercents(count: number): number[] {
+  if (count === 3) return [50, 30, 20];
+  if (count === 4) return [40, 30, 20, 10];
+  if (count === 5) return [45, 25, 15, 10, 5];
+  return buildEqualPrizePercents(count);
 }
 
 /** Prize percents are stored with 2 decimal places (matches numeric(14,2)). */
@@ -164,19 +174,20 @@ export function TournamentForm({
       min_players_to_start: 3,
       registration_extend_enabled: true,
       registration_extend_minutes: 60,
-      final_winners_count: 1,
-      prize_percentages: [100],
+      break_between_rounds_minutes: 0,
+      final_winners_count: 3,
+      prize_percentages: [50, 30, 20],
       is_test_tournament: false,
     }),
     []
   );
 
   const mergedInitial = useMemo(() => {
-    const count = initialValues?.final_winners_count ?? 1;
+    const count = initialValues?.final_winners_count ?? defaults.final_winners_count ?? 3;
     const percents =
       initialValues?.prize_percentages && initialValues.prize_percentages.length === count
         ? initialValues.prize_percentages
-        : buildEqualPrizePercents(count);
+        : buildDefaultPrizePercents(count);
     return { ...defaults, ...initialValues, prize_percentages: percents };
   }, [defaults, initialValues]);
 
@@ -248,7 +259,7 @@ export function TournamentForm({
     setValues((prev) => ({
       ...prev,
       final_winners_count: count,
-      prize_percentages: buildEqualPrizePercents(count),
+      prize_percentages: buildDefaultPrizePercents(count),
     }));
   };
 
@@ -330,7 +341,7 @@ export function TournamentForm({
       setError("حداقل سایز میز (راند دوم به بعد) نمی‌تواند بیشتر از حداکثر باشد.");
       return;
     }
-    const winnersCount = values.final_winners_count ?? 1;
+    const winnersCount = values.final_winners_count ?? 3;
     if (winnersCount < 1 || winnersCount > 8) {
       setError("تعداد برنده‌های نهایی باید بین 1 تا 8 باشد.");
       return;
@@ -374,6 +385,14 @@ export function TournamentForm({
         return;
       }
     }
+    if (
+      values.break_between_rounds_minutes == null ||
+      values.break_between_rounds_minutes < 0 ||
+      values.break_between_rounds_minutes > 1440
+    ) {
+      setError("وقفه بین راندها باید بین ۰ تا ۱۴۴۰ دقیقه باشد.");
+      return;
+    }
     if (startAtValue) {
       const now = new Date();
       const start = new Date(startAtValue);
@@ -391,6 +410,7 @@ export function TournamentForm({
       min_players_to_start: values.min_players_to_start,
       registration_extend_enabled: values.registration_extend_enabled,
       registration_extend_minutes: values.registration_extend_minutes ?? 60,
+      break_between_rounds_minutes: values.break_between_rounds_minutes ?? 0,
       start_at: startAtValue,
     });
   };
@@ -670,6 +690,26 @@ export function TournamentForm({
         </label>
 
         <label className="flex flex-col gap-1 text-sm">
+          <span>وقفه بین راندها (دقیقه)</span>
+          <input
+            type="number"
+            min="0"
+            max="1440"
+            value={values.break_between_rounds_minutes ?? ""}
+            onChange={(e) =>
+              handleNumber("break_between_rounds_minutes", e.target.value)
+            }
+            className={inputClass}
+            disabled={readOnly}
+          />
+          <span className="text-xs text-gray-400">
+            بعد از پایان هر راند این مدت صبر می‌شود، سپس راند بعد شروع می‌شود.
+            صفر یعنی بدون وقفه. روی فینال (وقتی برنده‌ای برای راند بعد نماند) اعمال
+            نمی‌شود.
+          </span>
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm">
           <span>درصد کمیسیون (0 تا 100)</span>
           <input
             type="number"
@@ -850,7 +890,7 @@ export function TournamentForm({
         <label className="flex flex-col gap-1 text-sm">
           <span>تعداد برنده‌های نهایی</span>
           <select
-            value={values.final_winners_count ?? 1}
+            value={values.final_winners_count ?? 3}
             onChange={(e) => handleFinalWinnersCountChange(e.target.value)}
             className={inputClass}
             disabled={readOnly}
@@ -864,7 +904,7 @@ export function TournamentForm({
         </label>
       </div>
 
-      {(values.final_winners_count ?? 1) > 1 && (
+      {(values.final_winners_count ?? 3) > 1 && (
         <div className="rounded-lg border border-gray-700 bg-[#161616] p-4 space-y-3">
           <div className="text-sm font-semibold text-gray-200">تخصیص درصد جایزه</div>
           <div className="text-xs text-gray-500">

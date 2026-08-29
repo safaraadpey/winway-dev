@@ -20,6 +20,11 @@ import {
 } from "@/lib/activeGames/myActiveGameNavigation";
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 
+function playerTournamentHref(tournamentId: string): string {
+  const id = encodeURIComponent(tournamentId);
+  return `/player/tournaments/${id}?tournamentId=${id}&templateId=${id}`;
+}
+
 export default function GameRoomClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -27,10 +32,14 @@ export default function GameRoomClient() {
   const roomId = searchParams.get("roomId") ?? undefined;
   const templateId = searchParams.get("templateId") ?? undefined;
   const spectate = searchParams.get("spectate") === "1";
+  const queryTournamentId = searchParams.get("tournamentId");
   const enterLiveFromChip =
     searchParams.get(ACTIVE_GAME_ENTER_LIVE_PARAM) === "1";
   const { rooms: activeRooms } = useActiveGamesContext();
   const [liveRoomId, setLiveRoomId] = useState<string | null>(null);
+  const [resolvedTournamentId, setResolvedTournamentId] = useState<string | null>(
+    null
+  );
   const liveRoomIdRef = useRef<string | null>(null);
   const { activeTourId } = useTour();
   const pendingLiveRoomIdRef = useRef<string | null>(null);
@@ -38,6 +47,14 @@ export default function GameRoomClient() {
   useEffect(() => {
     liveRoomIdRef.current = liveRoomId;
   }, [liveRoomId]);
+
+  useEffect(() => {
+    setResolvedTournamentId(queryTournamentId);
+  }, [queryTournamentId, roomId]);
+
+  const handleResolvedTournamentId = useCallback((tournamentId: string | null) => {
+    setResolvedTournamentId((prev) => tournamentId ?? prev ?? queryTournamentId);
+  }, [queryTournamentId]);
 
   const handleEnterLive = useCallback(
     (nextRoomId: string) => {
@@ -84,19 +101,39 @@ export default function GameRoomClient() {
     );
   }, [roomId, templateId]);
 
-  // Back always returns to lobby (lobby or live phase, any entry path).
+  // Spectator of a tournament table (live or replay) returns to that tournament.
+  // Other game-room entry paths still return to the lobby.
   useEffect(() => {
     setShowBackButton(true);
     setOnBackClick(() => () => {
       setLiveRoomId(null);
       pendingLiveRoomIdRef.current = null;
+      const tournamentId = (resolvedTournamentId || queryTournamentId)?.trim();
+      if (spectate && tournamentId) {
+        console.info("[Room] Back to tournament", {
+          tournamentId,
+          roomId,
+          spectate: true,
+        });
+        router.push(playerTournamentHref(tournamentId));
+        return;
+      }
+      console.info("[Room] Back to lobby", { roomId, spectate });
       router.push("/player/lobby");
     });
     return () => {
       setShowBackButton(false);
       setOnBackClick(null);
     };
-  }, [router, setShowBackButton, setOnBackClick]);
+  }, [
+    router,
+    setShowBackButton,
+    setOnBackClick,
+    spectate,
+    resolvedTournamentId,
+    queryTournamentId,
+    roomId,
+  ]);
 
   // غیرفعال کردن اسکرول عمودی برای این صفحه
   useEffect(() => {
@@ -213,7 +250,12 @@ export default function GameRoomClient() {
   }
 
   if (roomId && liveRoomId === roomId) {
-    return <LiveRoomScreen roomId={roomId} />;
+    return (
+      <LiveRoomScreen
+        roomId={roomId}
+        onResolvedTournamentId={handleResolvedTournamentId}
+      />
+    );
   }
 
   return (

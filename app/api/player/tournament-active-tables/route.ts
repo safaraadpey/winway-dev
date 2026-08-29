@@ -50,7 +50,7 @@ export async function GET(request: Request) {
 
     const { data: tournament, error: tournamentErr } = await supabase
       .from("tournaments")
-      .select("id, ticket_price")
+      .select("id, ticket_price, meta")
       .eq("id", tournamentId)
       .single();
 
@@ -79,10 +79,17 @@ export async function GET(request: Request) {
       );
     }
 
+    const roundBreakEndsAt =
+      typeof (tournament as { meta?: { round_break_ends_at?: string | null } | null }).meta
+        ?.round_break_ends_at === "string"
+        ? (tournament as { meta: { round_break_ends_at: string } }).meta.round_break_ends_at
+        : null;
+
     if (!roundRooms || roundRooms.length === 0) {
       return NextResponse.json({
         tables: [] as TournamentActiveTable[],
         currentRoundNo: null,
+        roundBreakEndsAt,
       });
     }
 
@@ -94,6 +101,7 @@ export async function GET(request: Request) {
       return NextResponse.json({
         tables: [] as TournamentActiveTable[],
         currentRoundNo: null,
+        roundBreakEndsAt,
       });
     }
 
@@ -224,7 +232,7 @@ export async function GET(request: Request) {
         .sort((a, b) => b - a)[0] ?? null;
 
     return NextResponse.json(
-      { tables, currentRoundNo },
+      { tables, currentRoundNo, roundBreakEndsAt },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (err: unknown) {

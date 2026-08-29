@@ -15,12 +15,17 @@ export interface ActiveTable {
   status?: string | null;
 }
 
-const CLICKABLE_TABLE_STATUSES = new Set(["waiting", "playing", "live"]);
+const CLICKABLE_TABLE_STATUSES = new Set([
+  "waiting",
+  "playing",
+  "live",
+  "running",
+  "settling",
+  "settled",
+  "finished",
+]);
 
 export function isActiveTableClickable(table: ActiveTable): boolean {
-  if (table.isFinished) return false;
-  if (table.winnerNames && table.winnerNames.length > 0) return false;
-
   const status = (table.status || "").trim().toLowerCase();
   if (!status) return true;
 

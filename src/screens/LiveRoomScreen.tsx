@@ -48,6 +48,7 @@ type FullWinner = CardWinner;
 
 interface LiveRoomScreenProps {
   roomId: string;
+  onResolvedTournamentId?: (tournamentId: string | null) => void;
 }
 
 /** اگر این مدت هیچ draw sync نشد (ریل‌تایم + poll)، یک بار draw poll می‌زنیم. */
@@ -135,7 +136,10 @@ function canOpenResultsDialog(
   return terminal || fullWinners.length > 0;
 }
 
-export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
+export default function LiveRoomScreen({
+  roomId,
+  onResolvedTournamentId,
+}: LiveRoomScreenProps) {
   const router = useRouter();
   const session = useSession();
   const { setShowStatusBar, setBalanceRefreshDisabled } = useHeaderVisibility();
@@ -178,6 +182,8 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   const resultsDelayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resultsDelayResolveRef = useRef<(() => void) | null>(null);
   const resultsOpenGenerationRef = useRef(0);
+  /** First snapshot was already finished — watching a replay, not a live ending. */
+  const replayModeRef = useRef(false);
   /** RT draws received while a draw poll is in-flight (merged when poll completes). */
   const pendingRtDrawsRef = useRef<ProcessedDraw[]>([]);
   const winnersSyncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -185,6 +191,10 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   );
 
   const tryOpenResultsDialog = useCallback(async () => {
+    if (replayModeRef.current) {
+      console.log("[LiveRoom] Skip results dialog (replay)", { roomId });
+      return;
+    }
     if (resultsRequestedRef.current || openingResultsRef.current) return;
 
     const status = (
@@ -425,6 +435,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
   }, [data?.draws, loading]);
 
   useEffect(() => {
+    if (replayModeRef.current) return;
     if (resultsRequestedRef.current) return;
     const status = (data?.room?.status || "").trim().toLowerCase();
     if (!canOpenResultsDialog(fullWinners, displayedCalledNumbers, status)) {
@@ -612,6 +623,7 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     setResults(null);
     resultsRequestedRef.current = false;
     openingResultsRef.current = false;
+    replayModeRef.current = false;
     lastRealtimeActivityRef.current = Date.now();
     lastDrawSyncAtRef.current = Date.now();
     roomStatusRef.current = "";
@@ -667,6 +679,10 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
     return () => setShowStatusBar(true);
   }, [setShowStatusBar]);
 
+  useEffect(() => {
+    onResolvedTournamentId?.(data?.tournament?.id ?? null);
+  }, [data?.tournament?.id, onResolvedTournamentId]);
+
   // غیرفعال کردن refresh دستی ding/toman در هدر حین بازی فعال
   useEffect(() => {
     const status = (data?.room?.status || "").trim().toLowerCase();
@@ -705,6 +721,13 @@ export default function LiveRoomScreen({ roomId }: LiveRoomScreenProps) {
         roomStatusRef.current = (snapshot.room.status || "")
           .trim()
           .toLowerCase();
+        replayModeRef.current = isRoomTerminalStatus(roomStatusRef.current);
+        if (replayModeRef.current) {
+          console.log("[LiveRoom] Replay mode; results dialog suppressed", {
+            roomId,
+            status: roomStatusRef.current,
+          });
+        }
         setData(snapshot);
         markDrawSynced();
         setError(null);

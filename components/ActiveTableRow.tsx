@@ -1,6 +1,7 @@
 "use client";
 
-import React from 'react';
+import React from "react";
+import panelStyles from "@/components/room/gameRoomPanels.module.css";
 
 interface ActiveTableRowProps {
   prize: number;
@@ -11,6 +12,29 @@ interface ActiveTableRowProps {
   winnerNames?: string[];
   isFinished?: boolean;
   onClick?: () => void;
+}
+
+const ROUND_TONE_COUNT = 6;
+
+function tableRowToneClass(roundNo?: number | null): string {
+  if (roundNo == null || !Number.isFinite(roundNo) || roundNo < 1) {
+    return panelStyles.tableRowToneDefault;
+  }
+  const tone = ((Math.trunc(roundNo) - 1) % ROUND_TONE_COUNT) + 1;
+  switch (tone) {
+    case 1:
+      return panelStyles.tableRowTone1;
+    case 2:
+      return panelStyles.tableRowTone2;
+    case 3:
+      return panelStyles.tableRowTone3;
+    case 4:
+      return panelStyles.tableRowTone4;
+    case 5:
+      return panelStyles.tableRowTone5;
+    default:
+      return panelStyles.tableRowTone6;
+  }
 }
 
 /**
@@ -32,7 +56,7 @@ export default function ActiveTableRow({
 
   const hasWinners = Boolean(winnerNames && winnerNames.length > 0);
   const showResult = isFinished || hasWinners;
-  const isClickable = Boolean(onClick) && !showResult;
+  const isClickable = Boolean(onClick);
 
   const leftLabel = (() => {
     if (roundNo != null) {
@@ -47,11 +71,9 @@ export default function ActiveTableRow({
 
   return (
     <div
-      className={`
-        bg-amber-50 rounded-lg px-3 py-1.5
-        flex items-center justify-between gap-2
-        ${isClickable ? "cursor-pointer hover:bg-amber-100 active:bg-amber-200 transition-colors" : "cursor-default"}
-      `}
+      className={`${panelStyles.tableRow} ${tableRowToneClass(roundNo)} ${
+        isClickable ? panelStyles.tableRowClickable : ""
+      }`}
       onClick={isClickable ? onClick : undefined}
       role={isClickable ? "button" : undefined}
       tabIndex={isClickable ? 0 : undefined}
@@ -80,4 +102,3 @@ export default function ActiveTableRow({
     </div>
   );
 }
-

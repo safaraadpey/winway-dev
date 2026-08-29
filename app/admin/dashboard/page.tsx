@@ -566,6 +566,15 @@ export default function AdminDashboardPage() {
           )}
           {isAdminZero && (
             <button
+              onClick={() => router.push("/admin/settings#watch-invite-banner")}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
+            >
+              <span>بنر دعوت به تماشا</span>
+              <span className="text-xl">›</span>
+            </button>
+          )}
+          {isAdminZero && (
+            <button
               onClick={() => router.push("/admin/player-popup-content")}
               className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
             >
