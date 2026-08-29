@@ -498,6 +498,7 @@ export default function GameEndResultsListener() {
           drawVerification: null,
           isTournament: false,
           tournamentId: null,
+          cardPrice: Number(activeRoomsRef.current.get(next.roomId)?.cardPrice ?? 0),
         });
         setDialogOpen(true);
       })
@@ -542,6 +543,7 @@ export default function GameEndResultsListener() {
         lineWinners={results?.lineWinners ?? []}
         fullWinners={results?.fullWinners ?? []}
         isTournament={results?.isTournament ?? false}
+        cardPrice={results?.cardPrice ?? 0}
         title={
           dialogRoomName ? (
             <span dir="rtl">

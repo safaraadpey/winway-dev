@@ -26,6 +26,7 @@ type RoomResultsResponse = {
   drawVerification: DrawVerificationSpec | null;
   isTournament: boolean;
   tournamentId: string | null;
+  cardPrice: number;
 };
 
 type ResultRow = {
@@ -142,6 +143,7 @@ export async function GET(request: NextRequest) {
       room_seed_hash: string | null;
       room_template_id: string | null;
       room_type: string | null;
+      card_price: string | number | null;
     }>(
       `
       SELECT
@@ -151,7 +153,8 @@ export async function GET(request: NextRequest) {
         END AS room_seed_hex,
         r.room_seed_hash,
         r.room_template_id,
-        rt.room_type::text AS room_type
+        rt.room_type::text AS room_type,
+        r.card_price
       FROM public.rooms r
       LEFT JOIN public.room_templates rt ON rt.id = r.room_template_id
       WHERE r.id = $1::uuid
@@ -164,6 +167,7 @@ export async function GET(request: NextRequest) {
     const seed = roomRow?.room_seed_hex ?? null;
     const commitHash = roomRow?.room_seed_hash ?? null;
     const isTournament = roomRow?.room_type === "tournament";
+    const cardPrice = Number(roomRow?.card_price || 0);
 
     const { rows: drawRows } = await pgPool.query<{ number: number }>(
       `
@@ -207,6 +211,7 @@ export async function GET(request: NextRequest) {
       fullWinners: fullWinners.length,
       draws: drawnNumbers.length,
       isTournament,
+      cardPrice,
     });
 
     const payload: RoomResultsResponse = {
@@ -217,6 +222,7 @@ export async function GET(request: NextRequest) {
       drawVerification,
       isTournament,
       tournamentId,
+      cardPrice,
     };
 
     return NextResponse.json(payload);

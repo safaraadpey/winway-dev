@@ -808,6 +808,7 @@ export type RoomResultsResponse = {
   drawVerification: DrawVerificationSpec | null;
   isTournament: boolean;
   tournamentId: string | null;
+  cardPrice: number;
 };
 
 export type FetchRoomResultsOptions = {

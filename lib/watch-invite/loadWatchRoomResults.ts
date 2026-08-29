@@ -22,6 +22,7 @@ export type WatchRoomResultsPayload = {
   drawVerification: DrawVerificationSpec | null;
   isTournament: boolean;
   tournamentId: string | null;
+  cardPrice: number;
 };
 
 type ResultRow = {
@@ -69,11 +70,13 @@ export async function loadWatchRoomResults(
     room_seed_hex: string | null;
     room_seed_hash: string | null;
     room_type: string | null;
+    card_price: string | number | null;
   }>(
     `SELECT
        CASE WHEN r.room_seed IS NULL THEN NULL ELSE encode(r.room_seed, 'hex') END AS room_seed_hex,
        r.room_seed_hash,
-       rt.room_type::text AS room_type
+       rt.room_type::text AS room_type,
+       r.card_price
      FROM public.rooms r
      LEFT JOIN public.room_templates rt ON rt.id = r.room_template_id
     WHERE r.id = $1::uuid
@@ -85,6 +88,7 @@ export async function loadWatchRoomResults(
   const seed = roomRow?.room_seed_hex ?? null;
   const commitHash = roomRow?.room_seed_hash ?? null;
   const isTournament = roomRow?.room_type === "tournament";
+  const cardPrice = Number(roomRow?.card_price || 0);
 
   const { rows: drawRows } = await pgPool.query<{ number: number }>(
     `SELECT number
@@ -114,5 +118,6 @@ export async function loadWatchRoomResults(
     drawVerification,
     isTournament,
     tournamentId: access.tournamentId,
+    cardPrice,
   };
 }

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   decideTournamentTick,
+  mustRecountBeforeUnderMinAction,
   resolveMinPlayersToStart,
   resolveRegistrationExtendEnabled,
   resolveRegistrationExtendSeconds,
@@ -50,6 +51,14 @@ describe("tournamentEligibility", () => {
   it("defers when under quorum and auto-extend is on", () => {
     const action = decideTournamentTick(dueOpen, Date.parse(dueOpen.startAt), 19);
     assert.deepEqual(action, { kind: "defer", deferSeconds: 3600 });
+  });
+
+  it("requires recount when the first quorum read is 0 or invalid", () => {
+    assert.equal(mustRecountBeforeUnderMinAction(0), true);
+    assert.equal(mustRecountBeforeUnderMinAction(Number.NaN), true);
+    assert.equal(mustRecountBeforeUnderMinAction(-1), true);
+    assert.equal(mustRecountBeforeUnderMinAction(1), false);
+    assert.equal(mustRecountBeforeUnderMinAction(44), false);
   });
 
   it("cancels when under quorum and auto-extend is off", () => {

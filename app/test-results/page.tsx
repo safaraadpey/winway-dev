@@ -45,6 +45,7 @@ export default function GameResultsPreview() {
         currentUserId={"u1"}
         lineWinners={mockLine}
         fullWinners={mockFull}
+        cardPrice={100000}
       />
     </div>
   );

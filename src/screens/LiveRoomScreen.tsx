@@ -1354,6 +1354,7 @@ export default function LiveRoomScreen({
         lineWinners={results?.lineWinners ?? []}
         fullWinners={results?.fullWinners ?? []}
         isTournament={results?.isTournament ?? false}
+        cardPrice={results?.cardPrice ?? cardPrice}
       />
     </div>
   );

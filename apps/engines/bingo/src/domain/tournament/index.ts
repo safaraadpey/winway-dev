@@ -13,7 +13,11 @@
  * (fallback), so this is safe during migration.
  */
 
-import { decideTournamentTick } from "../../core/index.js";
+import {
+  decideTournamentTick,
+  mustRecountBeforeUnderMinAction,
+  resolveMinPlayersToStart,
+} from "../../core/index.js";
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import type { Logger } from "../../metrics/logger.js";
 import { TournamentRepo } from "../../repositories/tournamentRepo.js";
@@ -78,14 +82,42 @@ export async function tickDueTournamentsEngine(
   let ticked = 0;
 
   for (const candidate of candidates) {
-    const players =
+    let players =
       candidate.status === "registration_open"
         ? await repo.countDistinctCreatedPlayers(candidate.id)
         : 0;
 
-    const action = decideTournamentTick(candidate, nowMs, players);
+    let action = decideTournamentTick(candidate, nowMs, players);
+
+    if (action.kind === "defer" || action.kind === "cancel") {
+      const recounted = await repo.countDistinctCreatedPlayers(candidate.id);
+      if (recounted !== players) {
+        log.warn("[Tournament] quorum recount mismatch", {
+          tournamentId: candidate.id,
+          first: players,
+          recounted,
+        });
+        players = recounted;
+        action = decideTournamentTick(candidate, nowMs, players);
+      } else if (mustRecountBeforeUnderMinAction(players)) {
+        log.warn("[Tournament] quorum confirmed empty before defer/cancel", {
+          tournamentId: candidate.id,
+          players,
+        });
+      }
+    }
 
     if (action.kind === "skip") continue;
+
+    if (candidate.status === "registration_open") {
+      log.info("[Tournament] tick decision", {
+        tournamentId: candidate.id,
+        action: action.kind,
+        players,
+        minPlayers: resolveMinPlayersToStart(candidate.meta),
+        startAt: candidate.startAt,
+      });
+    }
 
     if (action.kind === "defer") {
       const newStart = new Date(nowMs + action.deferSeconds * 1000).toISOString();

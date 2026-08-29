@@ -51,6 +51,22 @@
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
 }
 
+.tablePrice {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.35rem;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(254, 238, 180, 0.92);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+.tablePriceValue {
+  composes: numeric-text numeric-text--16 from global;
+  font-weight: 800;
+}
+
 .proofRow {
   position: relative;
   width: 100%;
@@ -194,6 +210,11 @@
   color: #6d28d9;
   text-shadow: none;
   font-size: 15px;
+}
+
+:global(html[data-theme="light"]) .tablePrice {
+  color: #6d28d9;
+  text-shadow: none;
 }
 
 :global(html[data-theme="light"]) .proofLabel {

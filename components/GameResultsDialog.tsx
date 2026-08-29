@@ -257,6 +257,7 @@ interface GameResultsDialogProps {
   lineWinners: Winner[];
   fullWinners: Winner[];
   isTournament?: boolean;
+  cardPrice?: number | null;
   title?: React.ReactNode;
   proofSeed?: string | null;
   proofCommitHash?: string | null;
@@ -272,6 +273,7 @@ export default function GameResultsDialog({
   lineWinners,
   fullWinners,
   isTournament = false,
+  cardPrice = null,
   title,
   proofSeed,
   proofCommitHash,
@@ -534,6 +536,17 @@ export default function GameResultsDialog({
             <div className={styles.title}>
               {celebrate ? "🎉 تبریک! شما برنده شدید" : (title ?? "بازی تمام شد!")}
             </div>
+            {typeof cardPrice === "number" && cardPrice > 0 && (
+              <div className={styles.tablePrice} dir="rtl">
+                <span>میز</span>
+                <span
+                  dir="ltr"
+                  className={`numeric-text numeric-text--16 ${styles.tablePriceValue}`}
+                >
+                  {cardPrice.toLocaleString("en-US")}
+                </span>
+              </div>
+            )}
 
             {(proofDisplay || verificationJson) && (
               <div className={styles.proofRow}>

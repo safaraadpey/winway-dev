@@ -2,7 +2,9 @@
  * Tournament data access for the engine-driven tick.
  *
  * Reads the due-tournament set and player counts (the inputs to the eligibility
- * decision), and performs the two non-advance writes the SQL outer loop owns:
+ * decision). Quorum is COUNT(DISTINCT) from PostgreSQL, not a PostgREST row
+ * select — an empty payload used to look like 0 players and defer +60 minutes.
+ * Also performs the two non-advance writes the SQL outer loop owns:
  *   - defer start_at when under min players and auto-extend is on,
  *   - cancel + refund via RPC when under min and auto-extend is off,
  *   - append a tournament_tick_log row on per-tournament failure.
@@ -12,15 +14,28 @@
  * model and the fallback path.
  */
 
-import type { SupabaseAdmin } from "../db/supabase-admin.js";
+import type { Pool } from "pg";
 import type { TournamentTickCandidate } from "../core/index.js";
+import { getPgPool } from "../db/pg.js";
+import type { SupabaseAdmin } from "../db/supabase-admin.js";
 
 function fail(op: string, message: string): never {
   throw new Error(`tournamentRepo ${op}: ${message}`);
 }
 
+function parseExactCount(raw: unknown, source: string): number {
+  const n = typeof raw === "string" ? Number.parseInt(raw, 10) : Number(raw);
+  if (!Number.isFinite(n) || n < 0) {
+    fail("countDistinctCreatedPlayers", `invalid count from ${source}`);
+  }
+  return Math.floor(n);
+}
+
 export class TournamentRepo {
-  constructor(private readonly db: SupabaseAdmin) {}
+  constructor(
+    private readonly db: SupabaseAdmin,
+    private readonly pg: Pool | null = getPgPool()
+  ) {}
 
   /**
    * Due candidates: registration_open with start_at <= now, plus all running.
@@ -75,15 +90,32 @@ export class TournamentRepo {
     }));
   }
 
-  /** Distinct user_id with entry status 'created' for a tournament. */
+  /**
+   * Distinct user_id with entry status 'created'.
+   * Source of truth is PostgreSQL COUNT(DISTINCT). PostgREST row-select is not
+   * used — an empty payload used to look like 0 players and defer +60 minutes.
+   */
   async countDistinctCreatedPlayers(tournamentId: string): Promise<number> {
-    const { data, error } = await this.db
+    if (this.pg) {
+      const result = await this.pg.query<{ n: string | number }>(
+        `
+        SELECT COUNT(DISTINCT te.user_id)::int AS n
+          FROM public.tournament_entries te
+         WHERE te.tournament_id = $1::uuid
+           AND te.status = 'created'
+        `,
+        [tournamentId]
+      );
+      return parseExactCount(result.rows[0]?.n, "postgres");
+    }
+
+    const { count, error } = await this.db
       .from("tournament_entries")
-      .select("user_id")
+      .select("user_id", { count: "exact", head: true })
       .eq("tournament_id", tournamentId)
       .eq("status", "created");
     if (error) fail("countDistinctCreatedPlayers", error.message);
-    return new Set((data ?? []).map((r: { user_id: string }) => r.user_id)).size;
+    return parseExactCount(count, "supabase_count");
   }
 
   /** Push start_at (the "not enough players + auto-extend" branch). */

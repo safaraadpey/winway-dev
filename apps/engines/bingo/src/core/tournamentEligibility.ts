@@ -112,6 +112,19 @@ export function resolveRegistrationExtendSeconds(
 }
 
 /**
+ * A single empty/zero read must not drive defer or cancel. PostgREST row
+ * selects can return [] without error; treat 0 as untrusted until recounted
+ * from PostgreSQL COUNT(DISTINCT).
+ */
+export function mustRecountBeforeUnderMinAction(
+  distinctCreatedPlayers: number
+): boolean {
+  return (
+    !Number.isFinite(distinctCreatedPlayers) || distinctCreatedPlayers <= 0
+  );
+}
+
+/**
  * Decide the action for one candidate. `distinctCreatedPlayers` is the count of
  * distinct user_id with entry status 'created' (only needed/queried for
  * registration_open candidates).
