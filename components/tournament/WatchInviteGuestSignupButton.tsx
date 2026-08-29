@@ -10,7 +10,7 @@ type WatchInviteGuestSignupButtonProps = {
   label?: string;
 };
 
-const DEFAULT_SIGNUP_LABEL = "ثبت‌نام کن، شاید برنده بعدی تو باشی";
+const DEFAULT_SIGNUP_LABEL = "همین الان ثبت‌نام کن و از دبرنا لذت ببر";
 
 export default function WatchInviteGuestSignupButton({
   signupPath,
