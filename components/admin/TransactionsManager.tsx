@@ -1011,7 +1011,7 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                           onClick={() => void handleWithdrawalReview(req.id, "approve", kind)}
                           className="flex-1 py-2.5 rounded-xl bg-teal-500 text-black font-semibold text-sm disabled:opacity-60"
                         >
-                          {isReviewing ? "..." : "تایید برداشت"}
+                          {isReviewing ? "..." : "تایید درخواست"}
                         </button>
                         <button
                           type="button"
@@ -1019,7 +1019,7 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                           onClick={() => void handleWithdrawalReview(req.id, "reject", kind)}
                           className="flex-1 py-2.5 rounded-xl bg-red-700 text-white font-semibold text-sm disabled:opacity-60"
                         >
-                          {isReviewing ? "..." : "رد"}
+                          {isReviewing ? "..." : "رد درخواست"}
                         </button>
                       </div>
                     </div>
