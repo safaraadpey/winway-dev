@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
 import TournamentBuyPanel from "@/components/tournament/TournamentBuyPanel";
 import WatchInviteShareButton from "@/components/tournament/WatchInviteShareButton";
 import WatchInviteGuestPanel from "@/components/tournament/WatchInviteGuestPanel";
+import WatchInviteGuestSignupButton from "@/components/tournament/WatchInviteGuestSignupButton";
 import WatchInviteGuestLiveBlockModal from "@/components/tournament/WatchInviteGuestLiveBlockModal";
 import { buildWatchInvitePath } from "@/lib/watch-invite/buildWatchLink";
 import TournamentActiveCardsStatus, { TournamentActiveCardStatus } from "@/components/tournament/TournamentActiveCardsStatus";
@@ -1077,7 +1078,7 @@ export default function TournamentRoomScreen({
           </div>
         </div>
 
-        {isGuestMode && guestSignupPath ? (
+        {isGuestMode && guestSignupPath && !isRegistrationOpen ? (
           <WatchInviteGuestPanel signupPath={guestSignupPath} />
         ) : null}
 
@@ -1148,7 +1149,7 @@ export default function TournamentRoomScreen({
           </div>
         )}
 
-        {isRegistrationOpen && !isGuestMode && (
+        {isRegistrationOpen && (
           <TournamentBuyPanel
             price={price}
             minQuantity={panelMinQty}
@@ -1157,8 +1158,19 @@ export default function TournamentRoomScreen({
             displayMin={minQty}
             displayMax={maxQty}
             initialQuantity={panelMinQty}
-            disabled={submitting || !tournament || remainingQty <= 0 || globalRegistrationLocked}
-            onConfirm={handleRegister}
+            disabled={
+              !isGuestMode &&
+              (submitting || !tournament || remainingQty <= 0 || globalRegistrationLocked)
+            }
+            confirmSlot={
+              isGuestMode && guestSignupPath ? (
+                <WatchInviteGuestSignupButton
+                  signupPath={guestSignupPath}
+                  label="همین الان ثبت‌نام کن و 50 دینگ جایزه بگیر"
+                />
+              ) : undefined
+            }
+            onConfirm={isGuestMode ? async () => {} : handleRegister}
             actionLabel={
               submitting
                 ? "در حال ثبت..."
@@ -1167,9 +1179,17 @@ export default function TournamentRoomScreen({
                   : undefined
             }
             currencyLabel={entryCurrencyLabel}
-            secondaryActionLabel={currentEntry ? (submitting ? "در حال لغو..." : "لغو خرید") : undefined}
+            secondaryActionLabel={
+              !isGuestMode && currentEntry
+                ? submitting
+                  ? "در حال لغو..."
+                  : "لغو خرید"
+                : undefined
+            }
             secondaryDisabled={submitting}
-            onSecondaryAction={currentEntry ? handleCancelRegister : undefined}
+            onSecondaryAction={
+              !isGuestMode && currentEntry ? handleCancelRegister : undefined
+            }
           />
         )}
 

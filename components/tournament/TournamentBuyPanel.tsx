@@ -16,6 +16,8 @@ interface TournamentBuyPanelProps {
   displayMin?: number;
   displayMax?: number;
   disabled?: boolean;
+  /** فقط دکمه تأیید/خرید را غیرفعال می‌کند؛ stepper همچنان فعال می‌ماند */
+  confirmDisabled?: boolean;
   mode?: PanelMode;
   actionLabel?: string;
   initialQuantity?: number;
@@ -24,6 +26,8 @@ interface TournamentBuyPanelProps {
   onToggleMusic?: () => void;
   showMusicToggle?: boolean;
   onConfirm: (quantity: number) => Promise<void> | void;
+  /** جایگزین دکمه تأیید/خرید — مثلاً CTA ثبت‌نام مهمان */
+  confirmSlot?: React.ReactNode;
   secondaryActionLabel?: string;
   secondaryDisabled?: boolean;
   onSecondaryAction?: () => Promise<void> | void;
@@ -37,6 +41,7 @@ export default function TournamentBuyPanel({
   displayMin,
   displayMax,
   disabled = false,
+  confirmDisabled = false,
   mode = "purchase",
   actionLabel,
   initialQuantity,
@@ -45,6 +50,7 @@ export default function TournamentBuyPanel({
   onToggleMusic,
   showMusicToggle,
   onConfirm,
+  confirmSlot,
   secondaryActionLabel,
   secondaryDisabled,
   onSecondaryAction,
@@ -85,7 +91,7 @@ export default function TournamentBuyPanel({
 
   const totalPrice = quantity * price;
   const controlsDisabled = disabled || isCancelMode;
-  const buttonDisabled = disabled || isSubmitting;
+  const buttonDisabled = disabled || confirmDisabled || isSubmitting;
   const ctaLabel = isCancelMode
     ? actionLabel || "لغو رزرو"
     : `تایید ${totalPrice.toLocaleString("en-US")} ${currencyLabel}`;
@@ -142,44 +148,46 @@ export default function TournamentBuyPanel({
       </div>
 
       <div className={hasSecondary ? panelStyles.tournamentActionsRow : undefined}>
-        <button
-          type="button"
-          onClick={handleConfirm}
-          disabled={buttonDisabled}
-          className={
-            isCancelMode
-              ? panelStyles.tournamentCancelButton
-              : panelStyles.tournamentConfirmButton
-          }
-        >
-          {isSubmitting ? (
-            <span className="flex items-center justify-center gap-2">
-              <svg
-                className="animate-spin h-5 w-5"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                ></circle>
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
-              در حال پردازش...
-            </span>
-          ) : (
-            ctaLabel
-          )}
-        </button>
+        {confirmSlot ?? (
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={buttonDisabled}
+            className={
+              isCancelMode
+                ? panelStyles.tournamentCancelButton
+                : panelStyles.tournamentConfirmButton
+            }
+          >
+            {isSubmitting ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg
+                  className="animate-spin h-5 w-5"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                در حال پردازش...
+              </span>
+            ) : (
+              ctaLabel
+            )}
+          </button>
+        )}
 
         {hasSecondary && (
           <button
