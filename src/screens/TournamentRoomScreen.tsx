@@ -181,8 +181,8 @@ export default function TournamentRoomScreen({
 
   useEffect(() => {
     if (isGuestMode) {
-      setShowBackButton(true);
-      setOnBackClick(() => () => router.back());
+      setShowBackButton(false);
+      setOnBackClick(null);
       return () => {
         setShowBackButton(false);
         setOnBackClick(null);
@@ -195,7 +195,7 @@ export default function TournamentRoomScreen({
       setShowBackButton(false);
       setOnBackClick(null);
     };
-  }, [guestSignupPath, isGuestMode, router, setOnBackClick, setShowBackButton]);
+  }, [isGuestMode, router, setOnBackClick, setShowBackButton]);
 
   const mapSnapshotToTournament = useCallback((snapshot: WatchTournamentSnapshot): TournamentRow => {
     return {
