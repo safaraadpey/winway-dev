@@ -3,7 +3,6 @@ import { buildRegistrationLinkPath } from "@/lib/referral/buildRegistrationLink"
 import {
   getInviteTokenRow,
   getTournamentByWatchCode,
-  getWatchInviteBannerForWatchCode,
   resolveSignupReferralCodeForUser,
 } from "@/lib/watch-invite/repository";
 import WatchTournamentClient from "./WatchTournamentClient";
@@ -41,7 +40,6 @@ export default async function WatchTournamentPage({ params }: WatchPageProps) {
     notFound();
   }
 
-  const banner = await getWatchInviteBannerForWatchCode(watchCode);
   const signupPath = buildRegistrationLinkPath(referralCode);
 
   return (
@@ -49,7 +47,6 @@ export default async function WatchTournamentPage({ params }: WatchPageProps) {
       watchCode={watchCode}
       inviteToken={inviteToken}
       signupPath={signupPath}
-      banner={banner.isEnabled ? banner : null}
     />
   );
 }

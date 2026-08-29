@@ -11,6 +11,7 @@ interface ActiveTableRowProps {
   tableNo?: number | null;
   winnerNames?: string[];
   isFinished?: boolean;
+  hideWinnerNames?: boolean;
   onClick?: () => void;
 }
 
@@ -48,6 +49,7 @@ export default function ActiveTableRow({
   tableNo,
   winnerNames,
   isFinished = false,
+  hideWinnerNames = false,
   onClick,
 }: ActiveTableRowProps) {
   const formatNumber = (num: number): string => {
@@ -56,6 +58,11 @@ export default function ActiveTableRow({
 
   const hasWinners = Boolean(winnerNames && winnerNames.length > 0);
   const showResult = isFinished || hasWinners;
+  const resultLabel = hideWinnerNames
+    ? "پایان یافته"
+    : hasWinners
+      ? winnerNames!.join("، ")
+      : "در حال تسویه...";
   const isClickable = Boolean(onClick);
 
   const leftLabel = (() => {
@@ -91,7 +98,7 @@ export default function ActiveTableRow({
       <span className="text-gray-800 font-semibold text-sm shrink-0">{leftLabel}</span>
       {showResult ? (
         <span className="text-emerald-700 font-semibold text-sm text-left truncate">
-          {hasWinners ? winnerNames!.join("، ") : "در حال تسویه..."}
+          {resultLabel}
         </span>
       ) : (
         <div className="flex items-center gap-4 shrink-0">

@@ -11,6 +11,7 @@ interface ActiveTablesSectionProps {
   emptyMessage?: string;
   tables?: ActiveTable[];
   onTableClick?: (tableId: string) => void;
+  hideWinnerNames?: boolean;
 }
 
 export default function ActiveTablesSection({
@@ -19,6 +20,7 @@ export default function ActiveTablesSection({
   emptyMessage = "هیچ میز فعالی وجود ندارد",
   tables = [],
   onTableClick,
+  hideWinnerNames = false,
 }: ActiveTablesSectionProps) {
   const hasTables = tables.length > 0;
   const maxHeight = "146px";
@@ -49,6 +51,7 @@ export default function ActiveTablesSection({
               tableNo={table.tableNo}
               winnerNames={table.winnerNames}
               isFinished={table.isFinished}
+              hideWinnerNames={hideWinnerNames}
               onClick={
                 onTableClick && isActiveTableClickable(table)
                   ? () => onTableClick(table.id)

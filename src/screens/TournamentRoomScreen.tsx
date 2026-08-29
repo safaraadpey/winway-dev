@@ -8,10 +8,12 @@ import { supabase } from "@/lib/supabaseClient";
 import TournamentBuyPanel from "@/components/tournament/TournamentBuyPanel";
 import WatchInviteShareButton from "@/components/tournament/WatchInviteShareButton";
 import WatchInviteGuestPanel from "@/components/tournament/WatchInviteGuestPanel";
+import WatchInviteGuestLiveBlockModal from "@/components/tournament/WatchInviteGuestLiveBlockModal";
+import { buildWatchInvitePath } from "@/lib/watch-invite/buildWatchLink";
 import TournamentActiveCardsStatus, { TournamentActiveCardStatus } from "@/components/tournament/TournamentActiveCardsStatus";
 import ActiveTablesSection from "@/components/room/ActiveTablesSection";
 import { ActiveTable } from "@/components/ActiveTablesPanel";
-import type { WatchInviteBanner, WatchTournamentSnapshot } from "@/lib/watch-invite/types";
+import type { WatchTournamentSnapshot } from "@/lib/watch-invite/types";
 import toast from "react-hot-toast";
 import TournamentRoomLoadingFallback from "@/components/TournamentRoomLoadingFallback";
 import panelStyles from "@/components/room/gameRoomPanels.module.css";
@@ -24,8 +26,8 @@ interface TournamentRoomScreenProps {
   templateId?: string; // reserved for future use
   mode?: "player" | "guest";
   watchCode?: number;
+  inviteToken?: string;
   guestSignupPath?: string;
-  watchBanner?: WatchInviteBanner | null;
 }
 
 type TournamentRow = {
@@ -77,8 +79,8 @@ export default function TournamentRoomScreen({
   tournamentId,
   mode = "player",
   watchCode,
+  inviteToken,
   guestSignupPath,
-  watchBanner = null,
 }: TournamentRoomScreenProps) {
   const isGuestMode = mode === "guest";
   const router = useRouter();
@@ -127,6 +129,8 @@ export default function TournamentRoomScreen({
   const [profileNamesByUserId, setProfileNamesByUserId] = useState<Record<string, string>>({});
   const [guestPlayerCount, setGuestPlayerCount] = useState(0);
   const [guestTotalTickets, setGuestTotalTickets] = useState(0);
+  const [guestActiveCards, setGuestActiveCards] = useState<TournamentActiveCardStatus[]>([]);
+  const [guestLiveModalOpen, setGuestLiveModalOpen] = useState(false);
 
   const isUuidLike = useCallback((value: string | null | undefined) => {
     if (!value) return false;
@@ -249,6 +253,13 @@ export default function TournamentRoomScreen({
         setTournament(mapSnapshotToTournament(snapshot));
         setGuestPlayerCount(snapshot.playerCount);
         setGuestTotalTickets(snapshot.totalTickets);
+        setGuestActiveCards(
+          (snapshot.activeCards || []).map((card) => ({
+            id: card.id,
+            title: card.label,
+            count: card.count,
+          }))
+        );
         setRoundBreakEndsAt(snapshot.roundBreakEndsAt);
         setCurrentRoundNo(snapshot.currentRoundNo);
         setTournamentTables(
@@ -260,7 +271,7 @@ export default function TournamentRoomScreen({
             roundNo: table.roundNo,
             tableNo: table.tableNo,
             isFinished: table.isFinished,
-            winnerNames: table.winnerNames,
+            status: table.status ?? null,
           }))
         );
         setEntries([]);
@@ -892,6 +903,7 @@ export default function TournamentRoomScreen({
 
   const previewCards: TournamentActiveCardStatus[] = useMemo(() => {
     if (!tournament) return [];
+    if (isGuestMode) return guestActiveCards;
     if (entries.length > 0) {
       return entries.map((e) => ({
         id: e.user_id,
@@ -906,7 +918,7 @@ export default function TournamentRoomScreen({
     }
     // بدون ثبت‌نام، لیست را خالی نگه دار تا حالت خالی نمایش داده شود
     return [];
-  }, [entries, pickHumanName, profileNamesByUserId, tournament]);
+  }, [entries, guestActiveCards, isGuestMode, pickHumanName, profileNamesByUserId, tournament]);
 
   const currentEntry = useMemo(
     () =>
@@ -951,6 +963,20 @@ export default function TournamentRoomScreen({
     });
     router.push(`/player/gameroom?${params.toString()}`);
   };
+
+  const handleGuestTableClick = useCallback(
+    (roomId: string) => {
+      const table = tournamentTables.find((row) => row.id === roomId);
+      if (!table) return;
+      if (table.isFinished) {
+        if (!watchCode || !inviteToken) return;
+        router.push(buildWatchInvitePath(watchCode, inviteToken, roomId));
+        return;
+      }
+      setGuestLiveModalOpen(true);
+    },
+    [inviteToken, router, tournamentTables, watchCode]
+  );
 
   const isRegistrationOpen = tournament?.status === "registration_open";
   const isTournamentEnded =
@@ -1051,7 +1077,7 @@ export default function TournamentRoomScreen({
         </div>
 
         {isGuestMode && guestSignupPath ? (
-          <WatchInviteGuestPanel banner={watchBanner} signupPath={guestSignupPath} />
+          <WatchInviteGuestPanel signupPath={guestSignupPath} />
         ) : null}
 
         {!isGuestMode && shareTournamentId ? (
@@ -1165,8 +1191,17 @@ export default function TournamentRoomScreen({
           titleClassName={panelStyles.activeTablesTitleGreen}
           tables={tournamentTables}
           emptyMessage={tablesEmptyMessage}
-          onTableClick={isGuestMode ? undefined : handleTableClick}
+          onTableClick={isGuestMode ? handleGuestTableClick : handleTableClick}
+          hideWinnerNames={isGuestMode}
         />
+
+        {isGuestMode && guestSignupPath ? (
+          <WatchInviteGuestLiveBlockModal
+            open={guestLiveModalOpen}
+            signupPath={guestSignupPath}
+            onClose={() => setGuestLiveModalOpen(false)}
+          />
+        ) : null}
 
       </div>
     </div>

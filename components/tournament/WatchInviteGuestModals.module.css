@@ -1,0 +1,125 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.modal {
+  width: 100%;
+  max-width: 22rem;
+  border-radius: 1rem;
+  border: 1px solid #374151;
+  background: #161616;
+  padding: 1rem;
+  color: #f9fafb;
+}
+
+.modalWide {
+  max-width: 24rem;
+}
+
+.message {
+  margin: 0 0 1rem;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #e5e7eb;
+}
+
+.signupButton {
+  width: 100%;
+  border: none;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+  color: #111827;
+  font-family: Vazirmatn, sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+  cursor: pointer;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.modalTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.closeButton {
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.loadingText,
+.errorText,
+.emptyDraws {
+  text-align: center;
+  font-size: 13px;
+  color: #9ca3af;
+}
+
+.errorText {
+  color: #fca5a5;
+}
+
+.finishedBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.statsRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 13px;
+  color: #d1d5db;
+}
+
+.drawsLabel {
+  font-size: 13px;
+  font-weight: 700;
+  color: #e5e7eb;
+  text-align: right;
+}
+
+.drawsGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.drawChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.5rem;
+  background: #1f2937;
+  color: #fcd34d;
+  font-weight: 700;
+}

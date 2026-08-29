@@ -2,20 +2,17 @@
 
 import React, { useEffect } from "react";
 import TournamentRoomScreen from "@/src/screens/TournamentRoomScreen";
-import type { WatchInviteBanner } from "@/lib/watch-invite/types";
 
 type WatchTournamentClientProps = {
   watchCode: number;
   inviteToken: string;
   signupPath: string;
-  banner: WatchInviteBanner | null;
 };
 
 export default function WatchTournamentClient({
   watchCode,
   inviteToken,
   signupPath,
-  banner,
 }: WatchTournamentClientProps) {
   useEffect(() => {
     const search = new URLSearchParams({
@@ -36,8 +33,8 @@ export default function WatchTournamentClient({
     <TournamentRoomScreen
       mode="guest"
       watchCode={watchCode}
+      inviteToken={inviteToken}
       guestSignupPath={signupPath}
-      watchBanner={banner}
     />
   );
 }

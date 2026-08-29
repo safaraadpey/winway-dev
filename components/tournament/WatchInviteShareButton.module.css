@@ -1,7 +1,6 @@
 .root {
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
 
 .shareButton {
@@ -21,56 +20,4 @@
 .shareButton:disabled {
   opacity: 0.65;
   cursor: not-allowed;
-}
-
-.linkCard {
-  border-radius: 0.75rem;
-  padding: 0.75rem;
-  background: rgba(31, 41, 51, 0.92);
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.linkLabel {
-  color: #d1d5db;
-  font-size: 12px;
-  font-weight: 600;
-  text-align: right;
-}
-
-.linkValue {
-  composes: numeric-text numeric-text--12 from global;
-  color: #93c5fd;
-  font-weight: 600;
-  word-break: break-all;
-  line-height: 1.5;
-  text-align: left;
-}
-
-.linkLoading,
-.linkError {
-  font-size: 12px;
-  text-align: right;
-}
-
-.linkLoading {
-  color: #9ca3af;
-}
-
-.linkError {
-  color: #fca5a5;
-}
-
-.copyButton {
-  align-self: flex-start;
-  border: none;
-  border-radius: 0.5rem;
-  padding: 0.45rem 0.75rem;
-  background: #1f2937;
-  color: #e5e7eb;
-  font-family: Vazirmatn, sans-serif;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
 }

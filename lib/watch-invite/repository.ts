@@ -5,6 +5,7 @@ import type {
   WatchInviteBannerMetaOverride,
   WatchTournamentSnapshot,
   WatchTournamentTable,
+  WatchTournamentActiveCard,
 } from "@/lib/watch-invite/types";
 import { mergeWatchInviteBanner } from "@/lib/watch-invite/bannerOverride";
 
@@ -242,7 +243,12 @@ export async function loadWatchTournamentSnapshot(
   const roundBreakEndsAt =
     typeof meta.round_break_ends_at === "string" ? meta.round_break_ends_at : null;
 
-  const [{ rows: entryRows }, { rows: ticketRows }, { rows: roundRows }] = await Promise.all([
+  const [
+    { rows: entryRows },
+    { rows: ticketRows },
+    { rows: roundRows },
+    { rows: cardEntryRows },
+  ] = await Promise.all([
     pool.query<{ count: string }>(
       `SELECT COUNT(DISTINCT user_id)::text AS count
          FROM public.tournament_entries
@@ -271,33 +277,31 @@ export async function loadWatchTournamentSnapshot(
         ORDER BY trr.round_no DESC, trr.table_no ASC`,
       [tournament.id]
     ),
+    pool.query<{ user_id: string; tickets_count: number }>(
+      `SELECT user_id, tickets_count
+         FROM public.tournament_entries
+        WHERE tournament_id = $1
+          AND status IN ('created', 'settled')
+        ORDER BY created_at ASC, user_id ASC`,
+      [tournament.id]
+    ),
   ]);
 
   const roomIds = roundRows.map((r) => r.room_id).filter(Boolean);
   let tables: WatchTournamentTable[] = [];
 
   if (roomIds.length > 0) {
-    const [{ rows: assignmentRows }, { rows: winnerRows }] = await Promise.all([
-      pool.query<{
-        room_id: string | null;
-        game_room_id: string | null;
-        user_id: string | null;
-        cards_count: number | null;
-      }>(
-        `SELECT room_id, game_room_id, user_id, cards_count
-           FROM public.tournament_round_assignments
-          WHERE tournament_id = $1`,
-        [tournament.id]
-      ),
-      pool.query<{ room_id: string; user_id: string; nickname: string | null; username: string | null }>(
-        `SELECT rw.room_id, rw.user_id, up.nickname, u.username
-           FROM public.room_winners rw
-           JOIN public.users u ON u.id = rw.user_id
-           LEFT JOIN public.user_profiles up ON up.user_id = u.id
-          WHERE rw.room_id = ANY($1::uuid[])`,
-        [roomIds]
-      ),
-    ]);
+    const { rows: assignmentRows } = await pool.query<{
+      room_id: string | null;
+      game_room_id: string | null;
+      user_id: string | null;
+      cards_count: number | null;
+    }>(
+      `SELECT room_id, game_room_id, user_id, cards_count
+         FROM public.tournament_round_assignments
+        WHERE tournament_id = $1`,
+      [tournament.id]
+    );
 
     const stats = new Map<string, { players: Set<string>; cards: number }>();
     for (const row of assignmentRows) {
@@ -309,20 +313,13 @@ export async function loadWatchTournamentSnapshot(
       s.cards += Number(row.cards_count || 0);
     }
 
-    const winnersByRoom = new Map<string, string[]>();
-    for (const w of winnerRows) {
-      const name = w.nickname?.trim() || w.username?.trim() || "بازیکن";
-      if (!winnersByRoom.has(w.room_id)) winnersByRoom.set(w.room_id, []);
-      winnersByRoom.get(w.room_id)!.push(name);
-    }
-
     const ticketPrice = Number(tournament.ticket_price || 0);
+    const finishedStatuses = new Set(["finished", "settling", "settled"]);
     tables = roundRows.map((row) => {
       const roomId = row.room_id;
       const stat = stats.get(roomId) || { players: new Set<string>(), cards: 0 };
-      const finished = ["finished", "settling", "settled"].includes(
-        (row.room_status || "").toLowerCase()
-      );
+      const roomStatus = (row.room_status || "").toLowerCase();
+      const finished = finishedStatuses.has(roomStatus);
       return {
         id: roomId,
         prize: ticketPrice * stat.cards,
@@ -330,12 +327,17 @@ export async function loadWatchTournamentSnapshot(
         cardCount: stat.cards,
         roundNo: row.round_no,
         tableNo: row.table_no,
-        ...(finished
-          ? { isFinished: true, winnerNames: winnersByRoom.get(roomId) || [] }
-          : {}),
+        status: row.room_status,
+        ...(finished ? { isFinished: true } : {}),
       };
     });
   }
+
+  const activeCards: WatchTournamentActiveCard[] = cardEntryRows.map((row, index) => ({
+    id: row.user_id,
+    label: `بازیکن ${(index + 1).toLocaleString("fa-IR")}`,
+    count: Math.max(1, Number(row.tickets_count || 1)),
+  }));
 
   const currentRoundNo =
     roundRows.length > 0
@@ -367,6 +369,7 @@ export async function loadWatchTournamentSnapshot(
     playerCount: Number(entryRows[0]?.count || 0),
     totalTickets: Number(ticketRows[0]?.total || 0),
     currentRoundNo,
+    activeCards,
     tables,
   };
 }

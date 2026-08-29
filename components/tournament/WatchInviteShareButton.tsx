@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
 import type { WatchInviteBanner } from "@/lib/watch-invite/types";
@@ -27,7 +27,6 @@ async function loadShareBanner(tournamentId: string): Promise<WatchInviteBanner 
 
 async function fetchShareUrl(tournamentId: string): Promise<{
   shareUrl?: string;
-  tournamentTitle?: string;
   message?: string;
 }> {
   const {
@@ -50,7 +49,6 @@ async function fetchShareUrl(tournamentId: string): Promise<{
 
   const payload = (await res.json()) as {
     shareUrl?: string;
-    tournamentTitle?: string;
     message?: string;
   };
 
@@ -66,77 +64,15 @@ export default function WatchInviteShareButton({
   tournamentTitle,
 }: WatchInviteShareButtonProps) {
   const [sharing, setSharing] = useState(false);
-  const [loadingLink, setLoadingLink] = useState(true);
-  const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [linkError, setLinkError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadShareLink = async () => {
-      setLoadingLink(true);
-      setLinkError(null);
-      try {
-        const payload = await fetchShareUrl(tournamentId);
-        if (!active) return;
-        if (payload.shareUrl) {
-          setShareUrl(payload.shareUrl);
-          setLinkError(null);
-        } else {
-          setShareUrl(null);
-          setLinkError(payload.message || "لینک اشتراک‌گذاری در دسترس نیست");
-        }
-      } catch (err) {
-        console.error("[WatchInvite] preload share link error:", err);
-        if (!active) return;
-        setShareUrl(null);
-        setLinkError("خطا در دریافت لینک اشتراک‌گذاری");
-      } finally {
-        if (active) setLoadingLink(false);
-      }
-    };
-
-    void loadShareLink();
-    return () => {
-      active = false;
-    };
-  }, [tournamentId]);
-
-  const resolveShareUrl = useCallback(async () => {
-    const payload = await fetchShareUrl(tournamentId);
-    if (payload.shareUrl) {
-      setShareUrl(payload.shareUrl);
-      setLinkError(null);
-      return payload.shareUrl;
-    }
-    setShareUrl(null);
-    setLinkError(payload.message || "لینک اشتراک‌گذاری در دسترس نیست");
-    return null;
-  }, [tournamentId]);
-
-  const handleCopy = useCallback(async () => {
-    const url = shareUrl || (await resolveShareUrl());
-    if (!url) {
-      toast.error(linkError || "لینک اشتراک‌گذاری در دسترس نیست");
-      return;
-    }
-
-    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(url);
-      toast.success("لینک کپی شد");
-      return;
-    }
-
-    toast.error("مرورگر از کپی کردن پشتیبانی نمی‌کند");
-  }, [linkError, resolveShareUrl, shareUrl]);
 
   const handleShare = useCallback(async () => {
     if (sharing) return;
     setSharing(true);
     try {
-      const url = shareUrl || (await resolveShareUrl());
+      const payload = await fetchShareUrl(tournamentId);
+      const url = payload.shareUrl;
       if (!url) {
-        toast.error(linkError || "لینک اشتراک‌گذاری در دسترس نیست");
+        toast.error(payload.message || "لینک اشتراک‌گذاری در دسترس نیست");
         return;
       }
 
@@ -159,14 +95,20 @@ export default function WatchInviteShareButton({
         }
       }
 
-      await handleCopy();
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        toast.success("لینک کپی شد");
+        return;
+      }
+
+      toast.error("مرورگر از اشتراک‌گذاری پشتیبانی نمی‌کند");
     } catch (err) {
       console.error("[WatchInvite] share button error:", err);
       toast.error("خطا در اشتراک‌گذاری");
     } finally {
       setSharing(false);
     }
-  }, [handleCopy, linkError, resolveShareUrl, shareUrl, sharing, tournamentId, tournamentTitle]);
+  }, [sharing, tournamentId, tournamentTitle]);
 
   return (
     <div className={styles.root}>
@@ -174,32 +116,10 @@ export default function WatchInviteShareButton({
         type="button"
         className={styles.shareButton}
         onClick={() => void handleShare()}
-        disabled={sharing || loadingLink}
+        disabled={sharing}
       >
         {sharing ? "در حال آماده‌سازی..." : "به اشتراک گذاری تورنومنت"}
       </button>
-
-      <div className={styles.linkCard}>
-        <div className={styles.linkLabel}>لینک اشتراک‌گذاری</div>
-        {loadingLink ? (
-          <div className={styles.linkLoading}>در حال دریافت لینک...</div>
-        ) : shareUrl ? (
-          <>
-            <div className={styles.linkValue} dir="ltr">
-              {shareUrl}
-            </div>
-            <button
-              type="button"
-              className={styles.copyButton}
-              onClick={() => void handleCopy()}
-            >
-              کپی لینک
-            </button>
-          </>
-        ) : (
-          <div className={styles.linkError}>{linkError || "لینک در دسترس نیست"}</div>
-        )}
-      </div>
     </div>
   );
 }

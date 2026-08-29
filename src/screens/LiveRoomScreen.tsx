@@ -8,6 +8,11 @@ import {
   fetchRoomResultsWhenPrizesReady,
   type RoomResultsResponse,
 } from "@/services/rooms";
+import {
+  fetchWatchLiveRoomSnapshot,
+  fetchWatchRoomResults,
+  fetchWatchRoomResultsWhenPrizesReady,
+} from "@/services/watchRooms";
 import BingoCardDemo from "@/components/BingoCardDemo";
 import RoomHeader from "@/components/room/RoomHeader";
 import DrawStrip from "@/components/room/DrawStrip";
@@ -49,6 +54,10 @@ type FullWinner = CardWinner;
 interface LiveRoomScreenProps {
   roomId: string;
   onResolvedTournamentId?: (tournamentId: string | null) => void;
+  guestSpectate?: {
+    watchCode: number;
+    backPath: string;
+  };
 }
 
 /** اگر این مدت هیچ draw sync نشد (ریل‌تایم + poll)، یک بار draw poll می‌زنیم. */
@@ -139,13 +148,48 @@ function canOpenResultsDialog(
 export default function LiveRoomScreen({
   roomId,
   onResolvedTournamentId,
+  guestSpectate,
 }: LiveRoomScreenProps) {
+  const isGuestSpectate = Boolean(guestSpectate);
   const router = useRouter();
   const session = useSession();
   const { setShowStatusBar, setBalanceRefreshDisabled } = useHeaderVisibility();
   const { creditDingOnReveal, scheduleWalletBalanceSync, refreshAllBalances } =
     useBalancesContext();
   const { invalidate: invalidateActiveGames } = useActiveGamesContext();
+
+  const fetchSnapshot = useCallback(
+    (targetRoomId: string, options?: { scope?: "full" | "draws" }) => {
+      if (guestSpectate) {
+        return fetchWatchLiveRoomSnapshot(guestSpectate.watchCode, targetRoomId, options);
+      }
+      return fetchLiveRoomSnapshot(targetRoomId, options);
+    },
+    [guestSpectate]
+  );
+
+  const fetchResultsSnapshot = useCallback(
+    (targetRoomId: string) => {
+      if (guestSpectate) {
+        return fetchWatchRoomResults(guestSpectate.watchCode, targetRoomId);
+      }
+      return fetchRoomResults(targetRoomId);
+    },
+    [guestSpectate]
+  );
+
+  const fetchResultsWhenReady = useCallback(
+    (
+      targetRoomId: string,
+      options?: { maxAttempts?: number; delayMs?: number }
+    ) => {
+      if (guestSpectate) {
+        return fetchWatchRoomResultsWhenPrizesReady(guestSpectate.watchCode, targetRoomId);
+      }
+      return fetchRoomResultsWhenPrizesReady(targetRoomId, options);
+    },
+    [guestSpectate]
+  );
 
   const [data, setData] = useState<LiveRoomSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -246,7 +290,7 @@ export default function LiveRoomScreen({
       }, RESULTS_BANNER_DELAY_MS);
     });
 
-    const fetchPromise = fetchRoomResultsWhenPrizesReady(roomId, {
+    const fetchPromise = fetchResultsWhenReady(roomId, {
       maxAttempts: isTournamentRoom ? 10 : 30,
       delayMs: isTournamentRoom ? 200 : 500,
     }).then(
@@ -273,13 +317,13 @@ export default function LiveRoomScreen({
     } finally {
       openingResultsRef.current = false;
     }
-  }, [roomId, scheduleWalletBalanceSync]);
+  }, [roomId, scheduleWalletBalanceSync, fetchResultsWhenReady]);
 
   const syncWinnersFromApi = useCallback(
     async (snapshot: LiveRoomSnapshot | null | undefined) => {
       if (!snapshot) return;
       try {
-        const roomResults = await fetchRoomResults(roomId);
+        const roomResults = await fetchResultsSnapshot(roomId);
         if (!snapshot.tournament?.id) {
           const nextLine = mapWinnersFromApi(
             roomResults.lineWinners,
@@ -300,7 +344,7 @@ export default function LiveRoomScreen({
         console.warn("[LiveRoom] winners sync failed:", err);
       }
     },
-    [roomId]
+    [roomId, fetchResultsSnapshot]
   );
 
   const syncWinnersFromApiRef = useRef(syncWinnersFromApi);
@@ -477,7 +521,7 @@ export default function LiveRoomScreen({
 
     pollInFlightRef.current = true;
     try {
-      const snapshot = await fetchLiveRoomSnapshot(roomId, { scope: "draws" });
+      const snapshot = await fetchSnapshot(roomId, { scope: "draws" });
       roomStatusRef.current = (snapshot.room.status || "").trim().toLowerCase();
       const pending = pendingRtDrawsRef.current;
       pendingRtDrawsRef.current = [];
@@ -510,7 +554,7 @@ export default function LiveRoomScreen({
     } finally {
       pollInFlightRef.current = false;
     }
-  }, [roomId, markDrawSynced]);
+  }, [roomId, markDrawSynced, fetchSnapshot]);
 
   const runDrawSyncPollRef = useRef(runDrawSyncPoll);
   useEffect(() => {
@@ -528,7 +572,7 @@ export default function LiveRoomScreen({
     try {
       const cardPoolMeta = cardPoolMetaRef.current;
       if (shouldUseDrawsOnlyLiveRoomFallback(cardPoolMeta)) {
-        const snapshot = await fetchLiveRoomSnapshot(roomId, { scope: "draws" });
+        const snapshot = await fetchSnapshot(roomId, { scope: "draws" });
         const nextStatus = (snapshot.room.status || "").trim().toLowerCase();
         roomStatusRef.current = nextStatus;
         const pending = pendingRtDrawsRef.current;
@@ -560,7 +604,7 @@ export default function LiveRoomScreen({
         return;
       }
 
-      const snapshot = await fetchLiveRoomSnapshot(roomId);
+      const snapshot = await fetchSnapshot(roomId);
       const nextStatus = (snapshot.room.status || "").trim().toLowerCase();
       roomStatusRef.current = nextStatus;
       const pending = pendingRtDrawsRef.current;
@@ -588,6 +632,7 @@ export default function LiveRoomScreen({
     syncWinnersFromApi,
     tryOpenResultsDialog,
     markRealtimeActivity,
+    fetchSnapshot,
   ]);
 
   const runFallbackPollRef = useRef(runFallbackPoll);
@@ -685,6 +730,7 @@ export default function LiveRoomScreen({
 
   // غیرفعال کردن refresh دستی ding/toman در هدر حین بازی فعال
   useEffect(() => {
+    if (isGuestSpectate) return;
     const status = (data?.room?.status || "").trim().toLowerCase();
     const isActivePlay = PLAYING_ROOM_STATUSES.has(status);
     setBalanceRefreshDisabled(isActivePlay);
@@ -710,12 +756,12 @@ export default function LiveRoomScreen({
   useEffect(() => {
     let isMounted = true;
 
-    async function loadSnapshot() {
+    async function loadInitialSnapshot() {
       if (!roomId || isHardExiting()) return;
       setLoading(true);
       try {
         console.log("[LiveRoom] loading snapshot for room", roomId);
-        const snapshot = await fetchLiveRoomSnapshot(roomId);
+        const snapshot = await fetchSnapshot(roomId);
         if (!isMounted) return;
 
         roomStatusRef.current = (snapshot.room.status || "")
@@ -761,12 +807,12 @@ export default function LiveRoomScreen({
       }
     }
 
-    loadSnapshot();
+    loadInitialSnapshot();
 
     return () => {
       isMounted = false;
     };
-  }, [roomId]);
+  }, [roomId, fetchSnapshot]);
 
   useEffect(() => {
     roomStatusRef.current = (data?.room?.status || "").trim().toLowerCase();
@@ -818,6 +864,7 @@ export default function LiveRoomScreen({
 
   // ریل‌تایم: draws + rooms + results (بعد از setAuth)
   useEffect(() => {
+    if (isGuestSpectate) return;
     if (!roomId || !session.authReady) return;
 
     console.log("[LiveRoom] realtime useEffect mount for room", roomId);
@@ -1281,6 +1328,10 @@ export default function LiveRoomScreen({
         isOpen={showResultsDialog}
         onClose={() => {
           setShowResultsDialog(false);
+          if (guestSpectate?.backPath) {
+            router.push(guestSpectate.backPath);
+            return;
+          }
           const tournamentId = results?.tournamentId ?? null;
           const destination =
             results?.isTournament && tournamentId

@@ -26,6 +26,12 @@ export type WatchInviteSession = {
   watchPath: string;
 };
 
+export type WatchTournamentActiveCard = {
+  id: string;
+  label: string;
+  count: number;
+};
+
 export type WatchTournamentSnapshot = {
   watchCode: number;
   title: string;
@@ -51,6 +57,7 @@ export type WatchTournamentSnapshot = {
   playerCount: number;
   totalTickets: number;
   currentRoundNo: number | null;
+  activeCards: WatchTournamentActiveCard[];
   tables: WatchTournamentTable[];
 };
 
@@ -61,6 +68,6 @@ export type WatchTournamentTable = {
   cardCount: number;
   roundNo: number | null;
   tableNo: number | null;
+  status?: string | null;
   isFinished?: boolean;
-  winnerNames?: string[];
 };
