@@ -216,7 +216,7 @@ export async function markWithdrawalProcessing(
 export async function loadPendingWithdrawalAlertSummary(
   userRole: "admin" | "agent" | string
 ): Promise<{ total: number; rial: number; crypto: number }> {
-  if (userRole === "agent") {
+  if (userRole === "agent" || userRole === "super") {
     const rial = await loadPendingWithdrawals("rial");
     return { total: rial.length, rial: rial.length, crypto: 0 };
   }

@@ -9,6 +9,7 @@ import {
   getWithdrawalRequestKind,
   markWithdrawalProcessing,
 } from "@/lib/withdrawal/service";
+import { canReviewRialWithdrawals } from "@/lib/withdrawal/constants";
 import type {
   AdminWithdrawalMarkProcessingBody,
   WithdrawalKind,
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
     const ctx = await getAdminJwtContextOrThrow(request);
     const role = ctx.role;
 
-    if (!["admin", "agent"].includes(role)) {
+    if (!canReviewRialWithdrawals(role)) {
       return NextResponse.json(
         { error: "forbidden", message: "دسترسی مجاز نیست." },
         { status: 403 }
@@ -70,11 +71,11 @@ export async function POST(request: Request) {
       );
     }
 
-    if (kind === "rial" && role !== "agent" && role !== "admin") {
+    if (kind === "rial" && !canReviewRialWithdrawals(role)) {
       return NextResponse.json(
         {
           error: "forbidden",
-          message: "فقط ایجنت بالادستی یا ادمین assign‌شده می‌تواند برداشت ریالی را مدیریت کند.",
+          message: "فقط ایجنت/سوپر بالادستی یا ادمین assign‌شده می‌تواند برداشت ریالی را مدیریت کند.",
         },
         { status: 403 }
       );

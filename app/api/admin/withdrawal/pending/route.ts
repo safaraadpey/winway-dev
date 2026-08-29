@@ -3,6 +3,7 @@ import { getAdminJwtContextOrThrow } from "@/lib/supabaseServer";
 import { pgPool } from "@/lib/pg";
 import { getPlayersWeeklyPerformance } from "@/lib/player/weeklyPerformance";
 import { listPendingWithdrawalsForActor } from "@/lib/withdrawal/service";
+import { canReviewRialWithdrawals } from "@/lib/withdrawal/constants";
 import type { WithdrawalKind } from "@/src/types/withdrawal";
 
 export const runtime = "nodejs";
@@ -26,11 +27,11 @@ export async function GET(request: Request) {
           { status: 403 }
         );
       }
-    } else if (role !== "agent" && role !== "admin") {
+    } else if (!canReviewRialWithdrawals(role)) {
       return NextResponse.json(
         {
           error: "forbidden",
-          message: "فقط ایجنت بالادستی یا ادمین assign‌شده می‌تواند برداشت ریالی را ببیند.",
+          message: "فقط ایجنت/سوپر بالادستی یا ادمین assign‌شده می‌تواند برداشت ریالی را ببیند.",
         },
         { status: 403 }
       );

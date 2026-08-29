@@ -29,6 +29,7 @@ import type {
 } from "@/src/types/transactions";
 import type { WithdrawalRequestItem, WithdrawalKind } from "@/src/types/withdrawal";
 import { getNetworkLabel, getWithdrawalStatusLabel } from "@/src/types/withdrawal";
+import { canReviewRialWithdrawals } from "@/lib/withdrawal/constants";
 import toast from "react-hot-toast";
 import {
   getTransactionHistoryIndicator,
@@ -111,8 +112,7 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
     return kindParam === "crypto" ? "crypto" : "rial";
   });
 
-  const canAccessRialWithdrawals =
-    currentUserRole === "agent" || currentUserRole === "admin";
+  const canAccessRialWithdrawals = canReviewRialWithdrawals(currentUserRole);
   const canAccessCryptoWithdrawals = currentUserRole === "admin";
   const canAccessWithdrawalsTab =
     canAccessRialWithdrawals || canAccessCryptoWithdrawals;
@@ -282,7 +282,7 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
     }
     if (currentUserRole === "admin") {
       setWithdrawalKindFilter("crypto");
-    } else if (currentUserRole === "agent") {
+    } else if (currentUserRole === "agent" || currentUserRole === "super") {
       setWithdrawalKindFilter("rial");
     }
   }, [currentUserRole, searchParams]);

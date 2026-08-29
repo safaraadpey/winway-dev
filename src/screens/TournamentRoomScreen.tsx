@@ -1175,28 +1175,33 @@ export default function TournamentRoomScreen({
           />
         )}
 
-        <TournamentActiveCardsStatus
-          cards={previewCards}
-          secondsRemaining={startCountdown}
-          countdownKind={countdownKind}
-          useLongCountdown
-          tournamentStatus={tournament?.status ?? null}
-          currentRoundNo={currentRoundNo}
-          waitingListMessage={
-            isTournamentEnded
-              ? "ثبت‌نام این تورنومنت به پایان رسیده است"
-              : undefined
-          }
-        />
+        <div className={screenStyles.cardsSlot}>
+          <TournamentActiveCardsStatus
+            cards={previewCards}
+            secondsRemaining={startCountdown}
+            countdownKind={countdownKind}
+            useLongCountdown
+            tournamentStatus={tournament?.status ?? null}
+            currentRoundNo={currentRoundNo}
+            waitingListMessage={
+              isTournamentEnded
+                ? "ثبت‌نام این تورنومنت به پایان رسیده است"
+                : undefined
+            }
+          />
+        </div>
 
-        <ActiveTablesSection
-          title="میزهای تورنومنت"
-          titleClassName={panelStyles.activeTablesTitleGreen}
-          tables={tournamentTables}
-          emptyMessage={tablesEmptyMessage}
-          onTableClick={isGuestMode ? handleGuestTableClick : handleTableClick}
-          hideWinnerNames={isGuestMode}
-        />
+        <div className={screenStyles.tablesSlot}>
+          <ActiveTablesSection
+            title="میزهای تورنومنت"
+            titleClassName={panelStyles.activeTablesTitleGreen}
+            tables={tournamentTables}
+            emptyMessage={tablesEmptyMessage}
+            onTableClick={isGuestMode ? handleGuestTableClick : handleTableClick}
+            hideWinnerNames={isGuestMode}
+            className={screenStyles.tablesPanel}
+          />
+        </div>
 
         {isGuestMode && guestSignupPath ? (
           <WatchInviteGuestLiveBlockModal

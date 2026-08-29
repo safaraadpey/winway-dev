@@ -143,7 +143,7 @@ export default function AgentDashboardPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {userRole === "agent" && (
+              {(userRole === "agent" || userRole === "super") && (
                 <PendingWithdrawalAlertBadge
                   userRole={userRole}
                   transactionsPath="/agent/transactions?tab=withdrawals"

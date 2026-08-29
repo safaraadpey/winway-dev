@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadPendingWithdrawalAlertSummary } from "@/services/withdrawals";
+import { canReviewRialWithdrawals } from "@/lib/withdrawal/constants";
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -20,7 +21,7 @@ export default function PendingWithdrawalAlertBadge({
     null
   );
 
-  const canShowBadge = userRole === "admin" || userRole === "agent";
+  const canShowBadge = canReviewRialWithdrawals(userRole);
 
   const refresh = useCallback(async () => {
     if (!canShowBadge) {
