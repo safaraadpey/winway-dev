@@ -23,4 +23,8 @@ export function useBalancesContext(): Balances {
   return ctx;
 }
 
+export function useBalancesContextOptional(): Balances | null {
+  return useContext(BalancesContext);
+}
+
 

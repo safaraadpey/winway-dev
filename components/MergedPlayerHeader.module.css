@@ -291,6 +291,23 @@
   font-family: "Vazirmatn", sans-serif;
 }
 
+.capsuleLabel {
+  font-family: Vazirmatn, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--player-balance-amount-color, #fff8e5);
+  white-space: nowrap;
+}
+
+.tomanBg .capsuleLabel {
+  color: var(--player-toman-balance-amount-color, var(--player-balance-amount-color, #fff8e5));
+}
+
+.dingBg .capsuleLabel {
+  color: var(--player-ding-balance-amount-color, var(--player-balance-amount-color, #fff8e5));
+}
+
 .brandLogoWrap {
   flex-shrink: 0;
   display: none;

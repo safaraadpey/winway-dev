@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
-import { useBalancesContext } from "@/lib/contexts/BalancesContext";
+import { useBalancesContextOptional } from "@/lib/contexts/BalancesContext";
 import { supabase } from "@/lib/supabaseClient";
 import TournamentBuyPanel from "@/components/tournament/TournamentBuyPanel";
 import WatchInviteShareButton from "@/components/tournament/WatchInviteShareButton";
@@ -85,7 +85,8 @@ export default function TournamentRoomScreen({
   const isGuestMode = mode === "guest";
   const router = useRouter();
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
-  const { refreshWalletBalances } = useBalancesContext();
+  const balancesContext = useBalancesContextOptional();
+  const refreshWalletBalances = balancesContext?.refreshWalletBalances;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -180,8 +181,8 @@ export default function TournamentRoomScreen({
 
   useEffect(() => {
     if (isGuestMode) {
-      setShowBackButton(false);
-      setOnBackClick(null);
+      setShowBackButton(true);
+      setOnBackClick(() => () => router.back());
       return () => {
         setShowBackButton(false);
         setOnBackClick(null);
@@ -194,7 +195,7 @@ export default function TournamentRoomScreen({
       setShowBackButton(false);
       setOnBackClick(null);
     };
-  }, [isGuestMode, router, setOnBackClick, setShowBackButton]);
+  }, [guestSignupPath, isGuestMode, router, setOnBackClick, setShowBackButton]);
 
   const mapSnapshotToTournament = useCallback((snapshot: WatchTournamentSnapshot): TournamentRow => {
     return {

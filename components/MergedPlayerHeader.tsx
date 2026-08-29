@@ -76,6 +76,11 @@ interface MergedPlayerHeaderProps {
   onBackClick?: () => void;
   onRefreshBalances?: () => Promise<void> | void;
   refreshDisabled?: boolean;
+  guestPresentation?: {
+    playerName: string;
+    dingCapsuleLabel: string;
+    tomanCapsuleLabel: string;
+  };
 }
 
 export default function MergedPlayerHeader({
@@ -88,7 +93,9 @@ export default function MergedPlayerHeader({
   onBackClick,
   onRefreshBalances,
   refreshDisabled = false,
+  guestPresentation,
 }: MergedPlayerHeaderProps) {
+  const isGuestPresentation = Boolean(guestPresentation);
   const router = useRouter();
   const { themeId } = useTheme();
 
@@ -110,6 +117,11 @@ export default function MergedPlayerHeader({
   };
 
   useEffect(() => {
+    if (isGuestPresentation) {
+      setPlayerLoading(false);
+      return;
+    }
+
     async function fetchPlayerInfo() {
       try {
         setPlayerLoading(true);
@@ -177,7 +189,7 @@ export default function MergedPlayerHeader({
     }
 
     fetchPlayerInfo();
-  }, [refreshKey]);
+  }, [refreshKey, isGuestPresentation]);
 
   useEffect(() => {
     const handleProfileUpdate = () => setRefreshKey((prev) => prev + 1);
@@ -191,6 +203,14 @@ export default function MergedPlayerHeader({
     };
   }, []);
 
+  const displayPlayerName = guestPresentation
+    ? guestPresentation.playerName
+    : playerLoading
+      ? "..."
+      : playerName;
+
+  const refreshLocked = refreshDisabled || isGuestPresentation;
+
   const formatBalance = (amount: number) => amount.toLocaleString("en-US");
 
   const getAvatarImage = () => avatarMap[avatarId] || avatar001;
@@ -201,7 +221,7 @@ export default function MergedPlayerHeader({
   };
 
   const handleRefreshBalances = async () => {
-    if (!onRefreshBalances || refreshDisabled || isRefreshingBalances) return;
+    if (!onRefreshBalances || refreshLocked || isRefreshingBalances) return;
     try {
       setIsRefreshingBalances(true);
       await onRefreshBalances();
@@ -211,7 +231,7 @@ export default function MergedPlayerHeader({
   };
 
   const handleRefreshKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (refreshDisabled) return;
+    if (refreshLocked) return;
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       void handleRefreshBalances();
@@ -220,7 +240,7 @@ export default function MergedPlayerHeader({
 
   const capsuleClass = (bgClass: string) =>
     `${styles.balanceCapsule} ${bgClass}${
-      refreshDisabled ? "" : ` ${styles.refreshableCapsule}`
+      refreshLocked ? "" : ` ${styles.refreshableCapsule}`
     }`;
 
   const capsuleAnimate = isAnimating
@@ -295,8 +315,8 @@ export default function MergedPlayerHeader({
             <Image src={getAvatarImage()} alt="Player Avatar" className={styles.avatar} width={32} height={32} />
           </div>
           <div className={styles.playerName}>
-            {playerLoading ? "..." : playerName}
-            {!playerLoading && kycVerified ? (
+            {displayPlayerName}
+            {!isGuestPresentation && !playerLoading && kycVerified ? (
               <KycVerifiedBadge className={styles.kycBadge} size={14} />
             ) : null}
           </div>
@@ -330,13 +350,15 @@ export default function MergedPlayerHeader({
           animate={tomanCapsuleAnimate}
           transition={{ duration: 0.85, ease: "easeInOut" }}
           onClick={
-            refreshDisabled ? undefined : () => void handleRefreshBalances()
+            refreshLocked ? undefined : () => void handleRefreshBalances()
           }
-          role={refreshDisabled ? undefined : "button"}
-          tabIndex={refreshDisabled ? undefined : 0}
-          onKeyDown={refreshDisabled ? undefined : handleRefreshKeyDown}
+          role={refreshLocked ? undefined : "button"}
+          tabIndex={refreshLocked ? undefined : 0}
+          onKeyDown={refreshLocked ? undefined : handleRefreshKeyDown}
         >
-          {loading ? (
+          {isGuestPresentation ? (
+            <span className={styles.capsuleLabel}>{guestPresentation!.tomanCapsuleLabel}</span>
+          ) : loading ? (
             <span className={styles.loadingText}>...</span>
           ) : (
             <>
@@ -366,13 +388,24 @@ export default function MergedPlayerHeader({
           animate={dingCapsuleAnimate}
           transition={{ duration: 0.8, ease: "easeInOut" }}
           onClick={
-            refreshDisabled ? undefined : () => void handleRefreshBalances()
+            refreshLocked ? undefined : () => void handleRefreshBalances()
           }
-          role={refreshDisabled ? undefined : "button"}
-          tabIndex={refreshDisabled ? undefined : 0}
-          onKeyDown={refreshDisabled ? undefined : handleRefreshKeyDown}
+          role={refreshLocked ? undefined : "button"}
+          tabIndex={refreshLocked ? undefined : 0}
+          onKeyDown={refreshLocked ? undefined : handleRefreshKeyDown}
         >
-          {loading ? (
+          {isGuestPresentation ? (
+            <>
+              <span className={styles.capsuleLabel}>{guestPresentation!.dingCapsuleLabel}</span>
+              <Image
+                src={dingCoinIcon}
+                alt="Ding Coin"
+                className={styles.coinIcon}
+                width={30}
+                height={30}
+              />
+            </>
+          ) : loading ? (
             <span className={styles.loadingText}>...</span>
           ) : (
             <>
