@@ -1,13 +1,5 @@
-import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { buildRegistrationLinkPath } from "@/lib/referral/buildRegistrationLink";
-import {
-  buildGuestCookiePayload,
-  getWatchGuestCookieName,
-  getWatchGuestCookieOptions,
-  serializeWatchGuestCookie,
-} from "@/lib/watch-invite/guestCookie";
 import {
   getInviteTokenRow,
   getTournamentByWatchCode,
@@ -49,32 +41,13 @@ export default async function WatchTournamentPage({ params }: WatchPageProps) {
     notFound();
   }
 
-  const supabase = createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    const payload = buildGuestCookiePayload(watchCode, inviteToken);
-    cookies().set(
-      getWatchGuestCookieName(),
-      serializeWatchGuestCookie(payload),
-      getWatchGuestCookieOptions()
-    );
-    console.log("[WatchInvite] Guest session cookie set", {
-      watchCode,
-      source: "postgresql",
-    });
-  }
-
   const banner = await getWatchInviteBanner();
   const signupPath = buildRegistrationLinkPath(referralCode);
 
   return (
     <WatchTournamentClient
-      tournamentId={tournament.id}
       watchCode={watchCode}
-      isGuest={!user}
+      inviteToken={inviteToken}
       signupPath={signupPath}
       banner={banner.isEnabled ? banner : null}
     />

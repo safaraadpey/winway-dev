@@ -976,6 +976,8 @@ export default function TournamentRoomScreen({
       ? "میزی برای نمایش وجود ندارد"
       : "هیچ بازی فعالی وجود ندارد";
 
+  const shareTournamentId = tournamentId ?? tournament?.id ?? null;
+
   if (loading) {
     return <TournamentRoomLoadingFallback />;
   }
@@ -1052,9 +1054,9 @@ export default function TournamentRoomScreen({
           <WatchInviteGuestPanel banner={watchBanner} signupPath={guestSignupPath} />
         ) : null}
 
-        {!isGuestMode && tournamentId ? (
+        {!isGuestMode && shareTournamentId ? (
           <WatchInviteShareButton
-            tournamentId={tournamentId}
+            tournamentId={shareTournamentId}
             tournamentTitle={tournament?.title}
           />
         ) : null}

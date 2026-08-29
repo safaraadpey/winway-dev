@@ -1,40 +1,43 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import TournamentRoomScreen from "@/src/screens/TournamentRoomScreen";
 import type { WatchInviteBanner } from "@/lib/watch-invite/types";
 
 type WatchTournamentClientProps = {
-  tournamentId: string;
   watchCode: number;
-  isGuest: boolean;
+  inviteToken: string;
   signupPath: string;
   banner: WatchInviteBanner | null;
 };
 
 export default function WatchTournamentClient({
-  tournamentId,
   watchCode,
-  isGuest,
+  inviteToken,
   signupPath,
   banner,
 }: WatchTournamentClientProps) {
-  if (isGuest) {
-    return (
-      <TournamentRoomScreen
-        mode="guest"
-        watchCode={watchCode}
-        guestSignupPath={signupPath}
-        watchBanner={banner}
-      />
-    );
-  }
+  useEffect(() => {
+    const search = new URLSearchParams({
+      watchCode: String(watchCode),
+      inviteToken,
+      setGuest: "1",
+    });
+    void fetch(`/api/watch/resolve?${search.toString()}`, {
+      method: "GET",
+      cache: "no-store",
+    }).catch(() => {
+      // best-effort — page still renders if cookie set fails
+    });
+  }, [inviteToken, watchCode]);
 
+  // Watch links are always spectator context: signup CTA from inviter's agent code.
   return (
     <TournamentRoomScreen
-      tournamentId={tournamentId}
-      mode="player"
+      mode="guest"
       watchCode={watchCode}
+      guestSignupPath={signupPath}
+      watchBanner={banner}
     />
   );
 }

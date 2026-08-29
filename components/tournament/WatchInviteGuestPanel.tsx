@@ -38,7 +38,7 @@ export default function WatchInviteGuestPanel({
         className={styles.signupButton}
         onClick={() => router.push(signupPath)}
       >
-        ثبت‌نام
+        دعوت به ثبت‌نام
       </button>
     </div>
   );
