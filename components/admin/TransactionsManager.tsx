@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { filterManagedUsers, getCachedManagedUsersBase, loadManagedUsers } from "@/services/users";
 import {
@@ -44,6 +44,62 @@ const ALL_ROLE_TABS: { key: ManagedUserRoleFilter; label: string }[] = [
 ];
 
 type TabMode = "cashdesk" | "history" | "withdrawals";
+
+const WITHDRAWAL_REVIEW_NOTE_PLACEHOLDER =
+  "متنی که شما ایجنت محترم یادداشت میکنید در پنل کاربر قابل مشاهده است و رسید پرداخت یا دلیل رد خواهد بود ، لطفا در نوشتار دقت کنید";
+
+function WithdrawalReviewNoteTextarea({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mirrorRef = useRef<HTMLDivElement>(null);
+
+  const syncHeight = useCallback(() => {
+    const textarea = textareaRef.current;
+    const mirror = mirrorRef.current;
+    if (!textarea || !mirror) return;
+
+    mirror.textContent = value.trim() ? value : WITHDRAWAL_REVIEW_NOTE_PLACEHOLDER;
+    textarea.style.height = `${mirror.scrollHeight + 4}px`;
+  }, [value]);
+
+  useLayoutEffect(() => {
+    syncHeight();
+  }, [syncHeight]);
+
+  useEffect(() => {
+    window.addEventListener("resize", syncHeight);
+    return () => window.removeEventListener("resize", syncHeight);
+  }, [syncHeight]);
+
+  return (
+    <div className="relative w-full">
+      <div
+        ref={mirrorRef}
+        aria-hidden
+        dir="rtl"
+        className="pointer-events-none invisible absolute inset-x-0 top-0 w-full whitespace-pre-wrap break-words px-3 py-2 text-sm text-right"
+      />
+      <textarea
+        ref={textareaRef}
+        dir="rtl"
+        rows={1}
+        className="w-full rounded-xl border border-gray-600 bg-[#111827] px-3 py-2 text-sm text-white text-right placeholder:text-right placeholder:text-gray-500 outline-none focus:border-teal-500 resize-none overflow-hidden"
+        placeholder={WITHDRAWAL_REVIEW_NOTE_PLACEHOLDER}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onInput={syncHeight}
+        disabled={disabled}
+      />
+    </div>
+  );
+}
 
 interface TransactionsManagerProps {
   pageTitle?: string;
@@ -791,9 +847,12 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                   const isProcessing = processingRequestId === req.id;
                   const kind = req.kind ?? withdrawalKindFilter;
                   const reviewNote = reviewNotes[req.id] || "";
-                  const canReview = reviewNote.trim().length > 0 && !isReviewing && !isProcessing;
+                  const canApprove =
+                    reviewNote.trim().length > 0 && !isReviewing && !isProcessing;
+                  const canReject = !isReviewing;
                   const canMarkProcessing =
                     req.status === "pending" && !isReviewing && !isProcessing;
+                  const showPayoutDetails = req.status !== "pending";
                   return (
                     <div
                       key={req.id}
@@ -811,16 +870,27 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                             {getWithdrawalStatusLabel(req.status)}
                           </p>
                         </div>
-                        {kind === "crypto" ? (
-                          <span className="numeric-text numeric-text--16 text-yellow-300" dir="ltr">
-                            {(req.cryptoAmount ?? 0).toLocaleString("en-US")}{" "}
-                            {req.cryptoSymbol}
-                          </span>
-                        ) : (
-                          <span className="numeric-text numeric-text--16 text-yellow-300" dir="ltr">
-                            {req.amount.toLocaleString("en-US")} T
-                          </span>
-                        )}
+                        <div className="text-xs text-gray-300 space-y-1 shrink-0">
+                          <p className="flex w-full items-center justify-between gap-2" dir="ltr">
+                            <span className="numeric-text numeric-text--12 text-white" dir="ltr">
+                              {(req.playerWeekGamesPlayed ?? 0).toLocaleString("en-US")}
+                            </span>
+                            <span className="text-gray-400">
+                              تعداد بازی (۷ روز گذشته):
+                            </span>
+                          </p>
+                          <p className="flex w-full items-center justify-between gap-2" dir="ltr">
+                            <span>
+                              <span className="numeric-text numeric-text--12 text-white" dir="ltr">
+                                {(req.playerWeekTotalWinnings ?? 0).toLocaleString("en-US")}
+                              </span>
+                              <span> تومان</span>
+                            </span>
+                            <span className="text-gray-400">
+                              جمع برد (۷ روز گذشته):
+                            </span>
+                          </p>
+                        </div>
                       </div>
 
                       {kind === "crypto" ? (
@@ -835,32 +905,31 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                               {req.amount.toLocaleString("en-US")}
                             </span>
                           </p>
-                          <p className="flex items-center justify-between gap-2">
-                            <span className="break-all text-left" dir="ltr">
-                              <span className="text-gray-400">آدرس: </span>
-                              {req.walletAddress}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => void copyWalletAddress(req.walletAddress || "")}
-                              className="flex-shrink-0 rounded-lg border border-gray-600 px-2 py-1 text-[11px] font-semibold text-gray-200 hover:bg-[#374151]"
-                            >
-                              کپی
-                            </button>
-                          </p>
+                          {showPayoutDetails ? (
+                            <p className="flex items-center justify-between gap-2">
+                              <span className="break-all text-left" dir="ltr">
+                                <span className="text-gray-400">آدرس: </span>
+                                {req.walletAddress}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => void copyWalletAddress(req.walletAddress || "")}
+                                className="flex-shrink-0 rounded-lg border border-gray-600 px-2 py-1 text-[11px] font-semibold text-gray-200 hover:bg-[#374151]"
+                              >
+                                کپی
+                              </button>
+                            </p>
+                          ) : null}
                         </div>
-                      ) : (
+                      ) : showPayoutDetails ? (
                         <div className="text-xs text-gray-300 space-y-1">
                           <p>
                             <span className="text-gray-400">نام: </span>
                             {req.fullName}
                           </p>
                           <p className="flex items-center justify-between gap-2">
-                            <span>
-                              <span className="text-gray-400">کارت: </span>
-                              <span className="numeric-text numeric-text--12" dir="ltr">
-                                {formatCardDisplay(req.cardNumber || "")}
-                              </span>
+                            <span className="numeric-text numeric-text--16 text-white" dir="ltr">
+                              {formatCardDisplay(req.cardNumber || "")}
                             </span>
                             <button
                               type="button"
@@ -872,11 +941,8 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                           </p>
                           {req.shebaNumber ? (
                             <p className="flex items-center justify-between gap-2">
-                              <span className="break-all text-left" dir="ltr">
-                                <span className="text-gray-400">شبا: </span>
-                                <span className="numeric-text numeric-text--12">
-                                  {formatShebaDisplay(req.shebaNumber)}
-                                </span>
+                              <span className="numeric-text numeric-text--16 text-white break-all text-left" dir="ltr">
+                                {formatShebaDisplay(req.shebaNumber)}
                               </span>
                               <button
                                 type="button"
@@ -888,45 +954,26 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                             </p>
                           ) : null}
                         </div>
-                      )}
+                      ) : null}
 
-                      <div className="text-xs text-gray-300 space-y-1 border-t border-gray-700/60 pt-2">
-                        <p>
-                          <span className="text-gray-400">
-                            تعداد بازی (۷ روز گذشته):{" "}
-                          </span>
-                          <span className="numeric-text numeric-text--12 text-white" dir="ltr">
-                            {(req.playerWeekGamesPlayed ?? 0).toLocaleString("en-US")}
-                          </span>
+                      {showPayoutDetails ? (
+                        <p className="text-xs text-gray-300">
+                          <span className="text-gray-400">مبلغ درخواستی: </span>
+                          {kind === "crypto" ? (
+                            <span className="numeric-text numeric-text--16 text-yellow-300" dir="ltr">
+                              {(req.cryptoAmount ?? 0).toLocaleString("en-US")}{" "}
+                              {req.cryptoSymbol}
+                            </span>
+                          ) : (
+                            <>
+                              <span className="numeric-text numeric-text--16 text-yellow-300" dir="ltr">
+                                {req.amount.toLocaleString("en-US")}
+                              </span>
+                              <span className="text-yellow-300"> تومان</span>
+                            </>
+                          )}
                         </p>
-                        <p>
-                          <span className="text-gray-400">
-                            جمع برد (۷ روز گذشته):{" "}
-                          </span>
-                          <span className="numeric-text numeric-text--12 text-white" dir="ltr">
-                            {(req.playerWeekTotalWinnings ?? 0).toLocaleString("en-US")}{" "}
-                            تومان
-                          </span>
-                        </p>
-                      </div>
-
-                      <label className="block pt-1">
-                        <span className="text-xs text-gray-400 mb-1.5 block">
-                          توضیحات بررسی (الزامی)
-                        </span>
-                        <textarea
-                          className="w-full min-h-[72px] rounded-xl border border-gray-600 bg-[#111827] px-3 py-2 text-sm text-white placeholder:text-gray-500 outline-none focus:border-teal-500 resize-y"
-                          placeholder="دلیل تأیید یا رد را بنویسید…"
-                          value={reviewNote}
-                          onChange={(e) =>
-                            setReviewNotes((prev) => ({
-                              ...prev,
-                              [req.id]: e.target.value,
-                            }))
-                          }
-                          disabled={isReviewing}
-                        />
-                      </label>
+                      ) : null}
 
                       <button
                         type="button"
@@ -934,13 +981,33 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                         onClick={() => void handleMarkProcessing(req.id, kind)}
                         className="w-full py-2.5 rounded-xl bg-blue-600 text-white font-semibold text-sm disabled:opacity-60"
                       >
-                        {isProcessing ? "..." : "در حال انجام"}
+                        {isProcessing
+                          ? "..."
+                          : kind === "crypto"
+                            ? "در حال انجام"
+                            : "مشاهده مشخصات کارت"}
                       </button>
+
+                      <label className="block pt-1">
+                        <span className="text-xs text-gray-400 mb-1.5 block">
+                          توضیحات(الزامی)
+                        </span>
+                        <WithdrawalReviewNoteTextarea
+                          value={reviewNote}
+                          onChange={(nextValue) =>
+                            setReviewNotes((prev) => ({
+                              ...prev,
+                              [req.id]: nextValue,
+                            }))
+                          }
+                          disabled={isReviewing}
+                        />
+                      </label>
 
                       <div className="flex gap-2 pt-1">
                         <button
                           type="button"
-                          disabled={!canReview}
+                          disabled={!canApprove}
                           onClick={() => void handleWithdrawalReview(req.id, "approve", kind)}
                           className="flex-1 py-2.5 rounded-xl bg-teal-500 text-black font-semibold text-sm disabled:opacity-60"
                         >
@@ -948,7 +1015,7 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
                         </button>
                         <button
                           type="button"
-                          disabled={!canReview}
+                          disabled={!canReject}
                           onClick={() => void handleWithdrawalReview(req.id, "reject", kind)}
                           className="flex-1 py-2.5 rounded-xl bg-red-700 text-white font-semibold text-sm disabled:opacity-60"
                         >
