@@ -1,10 +1,12 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { buildRegistrationLinkPath } from "@/lib/referral/buildRegistrationLink";
 import {
   getInviteTokenRow,
   getTournamentByWatchCode,
   resolveSignupReferralCodeForUser,
 } from "@/lib/watch-invite/repository";
+import { buildWatchPageMetadata } from "@/lib/watch-invite/watchPageMetadata";
 import WatchTournamentClient from "./WatchTournamentClient";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +17,12 @@ type WatchPageProps = {
     inviteToken: string;
   };
 };
+
+export async function generateMetadata({
+  params,
+}: WatchPageProps): Promise<Metadata> {
+  return buildWatchPageMetadata(params);
+}
 
 export default async function WatchTournamentPage({ params }: WatchPageProps) {
   const watchCode = Number(params.watchCode);
