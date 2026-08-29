@@ -41,6 +41,16 @@ function getSettingsSnapshot(): SettingsStore {
   return settingsStore;
 }
 
+export class TicTacToeRequestError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string
+  ) {
+    super(message);
+    this.name = "TicTacToeRequestError";
+  }
+}
+
 async function authFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const {
     data: { session },
@@ -63,7 +73,10 @@ async function authFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
   const payload = await response.json();
   if (!response.ok || payload.ok === false) {
-    throw new Error(payload.message || "Request failed.");
+    throw new TicTacToeRequestError(
+      payload.message || "Request failed.",
+      typeof payload.error === "string" ? payload.error : "request_failed"
+    );
   }
 
   return payload.data as T;

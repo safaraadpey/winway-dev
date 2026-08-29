@@ -37,3 +37,7 @@ export function getTicTacToeWinPrizeDing(
 export const TIC_TAC_TOE_MAX_WIN_PRIZE_DING = Math.max(
   ...Object.values(TIC_TAC_TOE_DIFFICULTY_WIN_PRIZE_DING)
 );
+
+export const TIC_TAC_TOE_MILESTONE_WINS = 7;
+
+export const TIC_TAC_TOE_HARD_MILESTONE_BONUS_DING = 20;

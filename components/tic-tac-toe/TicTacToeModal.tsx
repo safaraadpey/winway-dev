@@ -14,12 +14,22 @@ import { HARD_EXIT_EVENT } from "@/lib/auth/hardExit";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import {
   getTicTacToeWinPrizeDing,
+  TIC_TAC_TOE_HARD_MILESTONE_BONUS_DING,
   type TicTacToeDifficulty,
 } from "@/lib/tic-tac-toe/constants";
 import {
   claimTicTacToeMatch,
   startTicTacToeMatch,
+  TicTacToeRequestError,
+  useTicTacToeSettings,
 } from "@/lib/tic-tac-toe/client";
+import {
+  applyOutcomeToProgress,
+  difficultyAfterProgressionEvent,
+  mapProgressStats,
+  type TicTacToeProgressStats,
+  type TicTacToeProgressionEvent,
+} from "@/lib/tic-tac-toe/progress";
 import type { ClaimMatchResult } from "@/lib/tic-tac-toe/types";
 import styles from "./TicTacToeModal.module.css";
 
@@ -53,8 +63,12 @@ const EMPTY_BOARD: MatchState["board"] = [
 const WIN_NEXT_HAND_MS = 1500;
 const LOSE_NEXT_HAND_MS = 900;
 const DRAW_MESSAGE_MS = 1800;
+const MILESTONE_NEXT_HAND_MS = 3200;
+const PENALTY_MESSAGE_MS = 1400;
 const COIN_FLY_DELAY_MS = 120;
 const COIN_FLY_DURATION_MS = 720;
+
+type TierCelebrationKind = "easy_completed" | "hard_milestone";
 
 type FlyCoinState = {
   startX: number;
@@ -139,8 +153,13 @@ export default function TicTacToeModal({
   onClose,
 }: TicTacToeModalProps) {
   const { refreshAllBalances, triggerDingCelebrate } = useBalancesContext();
+  const { settings, refresh: refreshTicTacToeSettings } = useTicTacToeSettings();
   const [phase, setPhase] = useState<Phase>("playing");
-  const [difficulty, setDifficulty] = useState<TicTacToeDifficulty>("medium");
+  const [difficulty, setDifficulty] = useState<TicTacToeDifficulty>("easy");
+  const [progressStats, setProgressStats] = useState<TicTacToeProgressStats | null>(
+    null
+  );
+  const [handBootstrapped, setHandBootstrapped] = useState(false);
   const [matchId, setMatchId] = useState<string | null>(null);
   const [gameState, setGameState] = useState<MatchState | null>(null);
   const [playerMoves, setPlayerMoves] = useState<number[]>([]);
@@ -153,12 +172,17 @@ export default function TicTacToeModal({
   const [hidePrizeCoin, setHidePrizeCoin] = useState(false);
   const [winHighlightDismissed, setWinHighlightDismissed] = useState(false);
   const [showLoseFlash, setShowLoseFlash] = useState(false);
+  const [tierCelebration, setTierCelebration] = useState<TierCelebrationKind | null>(
+    null
+  );
+  const [prizeRowMessage, setPrizeRowMessage] = useState<string | null>(null);
   const resultPrizeRowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const coinFlyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [flyCoinKey, setFlyCoinKey] = useState(0);
   const prizeCoinRef = useRef<HTMLSpanElement>(null);
   const beginHandRequestIdRef = useRef(0);
   const claimGenerationRef = useRef(0);
+  const progressStatsRef = useRef<TicTacToeProgressStats | null>(null);
   const beginHandRef = useRef<(level?: TicTacToeDifficulty) => Promise<void>>(
     async () => {}
   );
@@ -181,12 +205,76 @@ export default function TicTacToeModal({
     setMounted(true);
   }, []);
 
+  const modalRootRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!open) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+
+    const html = document.documentElement;
+    const body = document.body;
+
+    const savedHtmlOverflow = html.style.overflow;
+    const savedBodyOverflow = body.style.overflow;
+    const savedBodyOverflowY = body.style.overflowY;
+
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    body.style.overflowY = "hidden";
+
+    const lockedElements: Array<{
+      el: HTMLElement;
+      overflow: string;
+      overflowY: string;
+    }> = [];
+
+    const lockScrollableElement = (el: HTMLElement) => {
+      lockedElements.push({
+        el,
+        overflow: el.style.overflow,
+        overflowY: el.style.overflowY,
+      });
+      el.style.overflow = "hidden";
+      el.style.overflowY = "hidden";
+    };
+
+    const layoutRoot = document.querySelector(".player-layout-root");
+    if (layoutRoot instanceof HTMLElement) {
+      lockScrollableElement(layoutRoot);
+      layoutRoot.querySelectorAll("*").forEach((node) => {
+        if (!(node instanceof HTMLElement)) return;
+        const { overflowY } = window.getComputedStyle(node);
+        if (overflowY === "auto" || overflowY === "scroll") {
+          lockScrollableElement(node);
+        }
+      });
+    }
+
+    const preventBackgroundScroll = (event: Event) => {
+      const modalRoot = modalRootRef.current;
+      const target = event.target;
+      if (modalRoot && target instanceof Node && modalRoot.contains(target)) {
+        return;
+      }
+      event.preventDefault();
+    };
+
+    document.addEventListener("touchmove", preventBackgroundScroll, {
+      passive: false,
+    });
+    document.addEventListener("wheel", preventBackgroundScroll, { passive: false });
+
     return () => {
-      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("touchmove", preventBackgroundScroll);
+      document.removeEventListener("wheel", preventBackgroundScroll);
+
+      html.style.overflow = savedHtmlOverflow;
+      body.style.overflow = savedBodyOverflow;
+      body.style.overflowY = savedBodyOverflowY;
+
+      for (const { el, overflow, overflowY } of lockedElements) {
+        el.style.overflow = overflow;
+        el.style.overflowY = overflowY;
+      }
     };
   }, [open]);
 
@@ -205,6 +293,10 @@ export default function TicTacToeModal({
     setHidePrizeCoin(false);
     setWinHighlightDismissed(false);
     setShowLoseFlash(false);
+    setTierCelebration(null);
+    setPrizeRowMessage(null);
+    setProgressStats(null);
+    setHandBootstrapped(false);
     clearResultPrizeRowTimer();
     clearCoinFlyTimer();
   }, [clearCoinFlyTimer, clearResultPrizeRowTimer]);
@@ -257,6 +349,8 @@ export default function TicTacToeModal({
         setMatchId(null);
         setGameState(null);
         setShowLoseFlash(false);
+        setTierCelebration(null);
+        setPrizeRowMessage(null);
         setFlyCoin(null);
         setHidePrizeCoin(false);
         setWinHighlightDismissed(true);
@@ -272,10 +366,33 @@ export default function TicTacToeModal({
         setMatchId(started.matchId);
         setGameState(state);
         setDifficulty(started.difficulty);
+        if (started.progress) {
+          setProgressStats(started.progress);
+        }
         setPhase("playing");
         setWinHighlightDismissed(false);
       } catch (err) {
         if (requestId !== beginHandRequestIdRef.current) return;
+
+        if (
+          err instanceof TicTacToeRequestError &&
+          err.code === "difficulty_locked"
+        ) {
+          const stats = progressStatsRef.current;
+          const fallback = stats
+            ? mapProgressStats(stats).suggestedDifficulty
+            : "easy";
+          if (fallback !== level) {
+            void beginHandRef.current(fallback);
+            return;
+          }
+          console.warn("[TicTacToe] Start blocked for locked difficulty", {
+            level,
+            fallback,
+          });
+          return;
+        }
+
         setError(err instanceof Error ? err.message : "خطا در شروع بازی");
         setPhase("result");
       }
@@ -298,16 +415,29 @@ export default function TicTacToeModal({
       return;
     }
 
+    void refreshTicTacToeSettings();
+  }, [open, resetLocal, refreshTicTacToeSettings]);
+
+  useEffect(() => {
+    if (!open || handBootstrapped) return;
+    const stats = settings?.progress;
+    if (!stats) return;
+
+    const suggested = mapProgressStats(stats).suggestedDifficulty;
+    setProgressStats(stats);
+    setDifficulty(suggested);
+    setHandBootstrapped(true);
+
     let cancelled = false;
     void (async () => {
-      await beginHandRef.current(difficulty);
+      await beginHandRef.current(suggested);
       if (cancelled) return;
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [open, resetLocal]);
+  }, [open, handBootstrapped, settings?.progress]);
 
   const resultMessage = useMemo(() => {
     if (!claimResult || claimResult.outcome !== "draw") return null;
@@ -315,14 +445,49 @@ export default function TicTacToeModal({
   }, [claimResult]);
 
   const scheduleNextHand = useCallback(
-    (delayMs: number) => {
+    (delayMs: number, level?: TicTacToeDifficulty) => {
       clearResultPrizeRowTimer();
       resultPrizeRowTimerRef.current = setTimeout(() => {
         resultPrizeRowTimerRef.current = null;
-        void beginHandRef.current();
+        if (level) {
+          setDifficulty(level);
+        }
+        void beginHandRef.current(level ?? difficulty);
       }, delayMs);
     },
-    [clearResultPrizeRowTimer]
+    [clearResultPrizeRowTimer, difficulty]
+  );
+
+  const progressView = useMemo(
+    () => (progressStats ? mapProgressStats(progressStats) : null),
+    [progressStats]
+  );
+
+  progressStatsRef.current = progressStats;
+
+  const scheduleProgressionHand = useCallback(
+    (event: TicTacToeProgressionEvent) => {
+      const next = difficultyAfterProgressionEvent(event);
+      if (!next) return;
+
+      clearResultPrizeRowTimer();
+      let delay = WIN_NEXT_HAND_MS;
+      if (
+        event === "easy_completed" ||
+        event === "medium_completed" ||
+        event === "hard_milestone"
+      ) {
+        delay = MILESTONE_NEXT_HAND_MS;
+      } else if (
+        event === "hard_penalty_reset" ||
+        event === "medium_penalty_reopen_easy"
+      ) {
+        delay = PENALTY_MESSAGE_MS;
+      }
+
+      scheduleNextHand(delay, next);
+    },
+    [clearResultPrizeRowTimer, scheduleNextHand]
   );
 
   useEffect(() => {
@@ -338,8 +503,31 @@ export default function TicTacToeModal({
       outcome: Exclude<MatchState["outcome"], null>
     ) => {
       const claimGeneration = ++claimGenerationRef.current;
+
+      let progressionEvent: TicTacToeProgressionEvent | null = null;
+      let milestoneBonusDing = 0;
+      let nextDifficulty: TicTacToeDifficulty | undefined;
+      let nextProgressStats = progressStats;
+
+      if (progressStats) {
+        const applied = applyOutcomeToProgress(progressStats, difficulty, outcome);
+        nextProgressStats = applied.stats;
+        progressionEvent = applied.event;
+        milestoneBonusDing = applied.milestoneBonusDing;
+        setProgressStats(applied.stats);
+        const autoLevel = difficultyAfterProgressionEvent(progressionEvent);
+        if (autoLevel) {
+          nextDifficulty = autoLevel;
+        }
+      }
+
       const optimisticPaidDing =
-        outcome === "win" ? getTicTacToeWinPrizeDing(difficulty) : 0;
+        outcome === "win"
+          ? getTicTacToeWinPrizeDing(difficulty) + milestoneBonusDing
+          : 0;
+      const isTierCelebration =
+        progressionEvent === "easy_completed" ||
+        progressionEvent === "hard_milestone";
 
       setError(null);
       setPhase("result");
@@ -347,22 +535,47 @@ export default function TicTacToeModal({
         matchId: currentMatchId,
         outcome,
         paidDing: optimisticPaidDing,
+        milestoneBonusDing,
         alreadyClaimed: false,
+        progressionEvent,
+        progress: nextProgressStats ?? {
+          easyWins: 0,
+          easyLosses: 0,
+          easyCleared: false,
+          mediumWins: 0,
+          mediumLosses: 0,
+          hardWins: 0,
+          hardLosses: 0,
+        },
       });
 
       if (outcome === "lose") {
         setShowLoseFlash(true);
         setGameState(null);
         setPlayerMoves([]);
-        scheduleNextHand(LOSE_NEXT_HAND_MS);
+        if (progressionEvent === "hard_penalty_reset") {
+          setPrizeRowMessage("۷ باخت سخت — پیشرفت آسان و متوسط پاک شد");
+          setShowResultInPrizeRow(true);
+        } else if (progressionEvent === "medium_penalty_reopen_easy") {
+          setPrizeRowMessage("۷ باخت متوسط — سطح آسان دوباره باز شد");
+          setShowResultInPrizeRow(true);
+        } else if (!progressionEvent) {
+          scheduleNextHand(LOSE_NEXT_HAND_MS, nextDifficulty);
+        }
       } else if (outcome === "draw") {
         setShowResultInPrizeRow(true);
-        scheduleNextHand(DRAW_MESSAGE_MS);
+        scheduleNextHand(DRAW_MESSAGE_MS, nextDifficulty);
       } else if (outcome === "win") {
         setShowResultInPrizeRow(false);
+        setPrizeRowMessage(null);
         setWinHighlightDismissed(false);
+        if (isTierCelebration && progressionEvent) {
+          setTierCelebration(progressionEvent);
+        }
         scheduleWinCoinFly();
-        scheduleNextHand(WIN_NEXT_HAND_MS);
+        if (!progressionEvent) {
+          scheduleNextHand(WIN_NEXT_HAND_MS, nextDifficulty);
+        }
       }
 
       void (async () => {
@@ -373,16 +586,36 @@ export default function TicTacToeModal({
           });
           if (claimGeneration !== claimGenerationRef.current) return;
           setClaimResult(result);
+          setProgressStats(result.progress);
+          if (result.progressionEvent) {
+            scheduleProgressionHand(result.progressionEvent);
+          }
           if (result.paidDing > 0) {
             void refreshAllBalances?.();
           }
         } catch (err) {
           if (claimGeneration !== claimGenerationRef.current) return;
           console.error("[TicTacToe] background claim failed:", err);
+          if (progressionEvent) {
+            scheduleProgressionHand(progressionEvent);
+          } else if (outcome === "win") {
+            scheduleNextHand(WIN_NEXT_HAND_MS, nextDifficulty);
+          } else if (outcome === "lose") {
+            scheduleNextHand(LOSE_NEXT_HAND_MS, nextDifficulty);
+          } else if (outcome === "draw") {
+            scheduleNextHand(DRAW_MESSAGE_MS, nextDifficulty);
+          }
         }
       })();
     },
-    [difficulty, refreshAllBalances, scheduleNextHand, scheduleWinCoinFly]
+    [
+      difficulty,
+      progressStats,
+      refreshAllBalances,
+      scheduleNextHand,
+      scheduleProgressionHand,
+      scheduleWinCoinFly,
+    ]
   );
 
   const handleCellClick = async (cell: number) => {
@@ -413,10 +646,26 @@ export default function TicTacToeModal({
     (phase === "playing" && playerMoves.length === 0);
   const showResultBanner =
     phase === "result" &&
-    claimResult?.outcome === "draw" &&
-    resultMessage &&
-    showResultInPrizeRow;
+    showResultInPrizeRow &&
+    ((claimResult?.outcome === "draw" && resultMessage) || prizeRowMessage);
   const winPrizeDing = getTicTacToeWinPrizeDing(difficulty);
+  const displayPrizeDing =
+    claimResult?.outcome === "win"
+      ? winPrizeDing + (claimResult.milestoneBonusDing ?? 0)
+      : winPrizeDing;
+  const showModalMilestoneHighlight =
+    tierCelebration !== null ||
+    (phase === "result" &&
+      (claimResult?.progressionEvent === "hard_milestone" ||
+        claimResult?.progressionEvent === "easy_completed") &&
+      !winHighlightDismissed);
+  const activeTierCelebration =
+    tierCelebration ??
+    (phase === "result" &&
+    (claimResult?.progressionEvent === "easy_completed" ||
+      claimResult?.progressionEvent === "hard_milestone")
+      ? claimResult.progressionEvent
+      : null);
   const showBoardWinHighlight =
     gameState?.status === "finished" &&
     gameState.outcome === "win" &&
@@ -425,6 +674,7 @@ export default function TicTacToeModal({
 
   const handleDifficultyPick = (level: TicTacToeDifficulty) => {
     if (busy) return;
+    if (progressView && !progressView[level].selectable) return;
 
     const canRestartHand =
       phase === "result" ||
@@ -438,10 +688,12 @@ export default function TicTacToeModal({
       clearResultPrizeRowTimer();
       clearCoinFlyTimer();
       setShowResultInPrizeRow(false);
+      setPrizeRowMessage(null);
       setFlyCoin(null);
       setHidePrizeCoin(false);
       setWinHighlightDismissed(false);
       setShowLoseFlash(false);
+      setTierCelebration(null);
     }
 
     void beginHand(level);
@@ -499,13 +751,19 @@ export default function TicTacToeModal({
       {flyCoinPortal}
       {createPortal(
     <div
-      className={styles.overlay}
+      ref={modalRootRef}
+      className={`${styles.overlay} ${
+        showModalMilestoneHighlight ? styles.overlayTierCelebration : ""
+      }`}
+      data-tic-tac-toe-modal
       onClick={handleClose}
       role="presentation"
     >
       <div className={styles.shellFrame}>
         <div
-          className={styles.modal}
+          className={`${styles.modal} ${
+            showModalMilestoneHighlight ? styles.modalMilestoneWinner : ""
+          }`}
           role="dialog"
           aria-modal="true"
           aria-labelledby="tic-tac-toe-title"
@@ -531,30 +789,91 @@ export default function TicTacToeModal({
           </div>
 
           <div className={styles.difficultyRow}>
-            {DIFFICULTY_ORDER.map(
-              (level) => (
+            {DIFFICULTY_ORDER.map((level) => {
+              const levelStats = progressView?.[level];
+              const isLocked = levelStats ? !levelStats.selectable : level !== "easy";
+
+              return (
                 <button
                   key={level}
                   type="button"
                   className={`${styles.difficultyButton} ${
                     difficulty === level ? styles.difficultyButtonActive : ""
+                  } ${isLocked ? styles.difficultyButtonLocked : ""} ${
+                    activeTierCelebration === "easy_completed" && level === "medium"
+                      ? styles.difficultyButtonUnlockTarget
+                      : ""
                   }`}
                   onClick={() => handleDifficultyPick(level)}
-                  disabled={busy || !canPickDifficulty}
+                  disabled={busy || !canPickDifficulty || isLocked}
+                  aria-disabled={isLocked || busy || !canPickDifficulty}
                 >
-                  {DIFFICULTY_LABELS[level]}
+                  <span className={styles.difficultyLossStat}>
+                    <span
+                      className={`${styles.difficultyStatValue} numeric-text numeric-text--11`}
+                      dir="ltr"
+                    >
+                      {(levelStats?.losses ?? 0).toLocaleString("en-US")}
+                    </span>
+                  </span>
+                  <span className={styles.difficultyLabel}>
+                    {DIFFICULTY_LABELS[level]}
+                  </span>
+                  <span className={styles.difficultyWinStat}>
+                    <span
+                      className={`${styles.difficultyStatValue} numeric-text numeric-text--11`}
+                      dir="ltr"
+                    >
+                      {(levelStats?.wins ?? 0).toLocaleString("en-US")}
+                    </span>
+                  </span>
                 </button>
-              )
-            )}
+              );
+            })}
           </div>
 
           <div
-            className={styles.prizeRow}
-            role={showResultBanner ? "status" : undefined}
-            aria-live={showResultBanner ? "polite" : undefined}
+            className={`${styles.prizeRow} ${
+              showModalMilestoneHighlight ? styles.prizeRowTierCelebration : ""
+            }`}
+            role={showResultBanner || activeTierCelebration ? "status" : undefined}
+            aria-live={showResultBanner || activeTierCelebration ? "polite" : undefined}
           >
             {showResultBanner ? (
-              <span>{resultMessage}</span>
+              <span>{prizeRowMessage ?? resultMessage}</span>
+            ) : activeTierCelebration === "easy_completed" && phase === "result" ? (
+              <span className={styles.tierCelebrationMessage}>
+                ۷ برد آسان — سطح متوسط باز شد!
+              </span>
+            ) : activeTierCelebration === "hard_milestone" && phase === "result" ? (
+              <>
+                <span>جایزه ویژه ۷ برد سخت</span>
+                <span
+                  ref={prizeCoinRef}
+                  className={`${styles.prizeCoinWrap} ${
+                    hidePrizeCoin ? styles.prizeCoinHidden : ""
+                  }`}
+                >
+                  <Image
+                    src={dingCoinIcon}
+                    alt=""
+                    width={22}
+                    height={22}
+                    className={styles.prizeCoin}
+                    aria-hidden="true"
+                  />
+                </span>
+                <span
+                  className={`${styles.prizeAmount} numeric-text numeric-text--16`}
+                  dir="ltr"
+                >
+                  {(
+                    TIC_TAC_TOE_HARD_MILESTONE_BONUS_DING +
+                    getTicTacToeWinPrizeDing("hard")
+                  ).toLocaleString("en-US")}
+                </span>
+                <span>دینگ</span>
+              </>
             ) : (
               <>
                 <span>جایزه برد</span>
@@ -577,7 +896,7 @@ export default function TicTacToeModal({
                   className={`${styles.prizeAmount} numeric-text numeric-text--16`}
                   dir="ltr"
                 >
-                  {winPrizeDing.toLocaleString("en-US")}
+                  {displayPrizeDing.toLocaleString("en-US")}
                 </span>
                 <span>دینگ</span>
               </>

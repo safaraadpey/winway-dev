@@ -17,6 +17,13 @@ import type {
   StartMatchResult,
   TicTacToeSettings,
 } from "@/lib/tic-tac-toe/types";
+import {
+  applyOutcomeToProgress,
+  EMPTY_TIC_TAC_TOE_PROGRESS_STATS,
+  isDifficultySelectable,
+  mapProgressStats,
+  type TicTacToeProgressStats,
+} from "@/lib/tic-tac-toe/progress";
 
 export class TicTacToeRepositoryError extends Error {
   constructor(
@@ -105,6 +112,137 @@ function assertPlayerMoves(value: unknown): number[] {
 
 function createSeed(): string {
   return randomBytes(16).toString("hex");
+}
+
+type ProgressRowDb = {
+  easy_wins: number;
+  easy_losses: number;
+  easy_cleared: boolean;
+  medium_wins: number;
+  medium_losses: number;
+  hard_wins: number;
+  hard_losses: number;
+};
+
+function mapProgressRow(row: ProgressRowDb): TicTacToeProgressStats {
+  return {
+    easyWins: row.easy_wins,
+    easyLosses: row.easy_losses,
+    easyCleared: row.easy_cleared,
+    mediumWins: row.medium_wins,
+    mediumLosses: row.medium_losses,
+    hardWins: row.hard_wins,
+    hardLosses: row.hard_losses,
+  };
+}
+
+const PROGRESS_SELECT =
+  "easy_wins, easy_losses, easy_cleared, medium_wins, medium_losses, hard_wins, hard_losses";
+
+async function ensureUserProgress(
+  client: PoolClient,
+  userId: string
+): Promise<TicTacToeProgressStats> {
+  const res = await client.query<ProgressRowDb>(
+    `INSERT INTO tic_tac_toe.user_progress (user_id)
+     VALUES ($1::uuid)
+     ON CONFLICT (user_id) DO NOTHING
+     RETURNING ${PROGRESS_SELECT}`,
+    [userId]
+  );
+
+  if (res.rows[0]) {
+    return mapProgressRow(res.rows[0]);
+  }
+
+  const existing = await client.query<ProgressRowDb>(
+    `SELECT ${PROGRESS_SELECT}
+     FROM tic_tac_toe.user_progress
+     WHERE user_id = $1::uuid`,
+    [userId]
+  );
+
+  const row = existing.rows[0];
+  if (!row) {
+    return { ...EMPTY_TIC_TAC_TOE_PROGRESS_STATS };
+  }
+
+  return mapProgressRow(row);
+}
+
+async function loadUserProgressForUpdate(
+  client: PoolClient,
+  userId: string
+): Promise<TicTacToeProgressStats> {
+  await client.query(
+    `INSERT INTO tic_tac_toe.user_progress (user_id)
+     VALUES ($1::uuid)
+     ON CONFLICT (user_id) DO NOTHING`,
+    [userId]
+  );
+
+  const res = await client.query<ProgressRowDb>(
+    `SELECT ${PROGRESS_SELECT}
+     FROM tic_tac_toe.user_progress
+     WHERE user_id = $1::uuid
+     FOR UPDATE`,
+    [userId]
+  );
+
+  const row = res.rows[0];
+  if (!row) {
+    return { ...EMPTY_TIC_TAC_TOE_PROGRESS_STATS };
+  }
+
+  return mapProgressRow(row);
+}
+
+async function saveUserProgress(
+  client: PoolClient,
+  userId: string,
+  stats: TicTacToeProgressStats
+): Promise<void> {
+  await client.query(
+    `UPDATE tic_tac_toe.user_progress
+     SET easy_wins = $2,
+         easy_losses = $3,
+         easy_cleared = $4,
+         medium_wins = $5,
+         medium_losses = $6,
+         hard_wins = $7,
+         hard_losses = $8,
+         updated_at = now()
+     WHERE user_id = $1::uuid`,
+    [
+      userId,
+      stats.easyWins,
+      stats.easyLosses,
+      stats.easyCleared,
+      stats.mediumWins,
+      stats.mediumLosses,
+      stats.hardWins,
+      stats.hardLosses,
+    ]
+  );
+}
+
+export async function getTicTacToeUserProgress(
+  userId: string
+): Promise<TicTacToeProgressStats> {
+  if (pgPool) {
+    try {
+      const client = await connectPgWithRetry(pgPool);
+      try {
+        return await ensureUserProgress(client, userId);
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      console.error("[TicTacToe] pg progress load failed:", err);
+    }
+  }
+
+  return { ...EMPTY_TIC_TAC_TOE_PROGRESS_STATS };
 }
 
 async function countPaidWinsToday(
@@ -208,6 +346,16 @@ export async function startTicTacToeMatch(
       );
     }
 
+    const progressStats = await ensureUserProgress(client, userId);
+    const progress = mapProgressStats(progressStats);
+    if (!isDifficultySelectable(progress, difficulty)) {
+      throw new TicTacToeRepositoryError(
+        "Difficulty is locked.",
+        "difficulty_locked",
+        403
+      );
+    }
+
     const seed = createSeed();
     const winPrizeDing = getTicTacToeWinPrizeDing(difficulty);
     const res = await client.query<{ id: string }>(
@@ -239,6 +387,7 @@ export async function startTicTacToeMatch(
       seed,
       difficulty,
       winPrizeDing,
+      progress: progressStats,
     };
   });
 }
@@ -280,6 +429,7 @@ export async function claimTicTacToeMatch(
     }
 
     if (match.status !== "pending") {
+      const progressStats = await ensureUserProgress(client, userId);
       console.log("[TicTacToe] Claim idempotent replay", {
         matchId,
         userId,
@@ -291,7 +441,10 @@ export async function claimTicTacToeMatch(
         matchId,
         outcome: match.outcome ?? "lose",
         paidDing: Number(match.paid_ding),
+        milestoneBonusDing: 0,
         alreadyClaimed: true,
+        progressionEvent: null,
+        progress: progressStats,
       };
     }
 
@@ -328,21 +481,21 @@ export async function claimTicTacToeMatch(
 
     const outcome = replay.outcome;
     let paidDing = 0;
+    let milestoneBonusDing = 0;
+
+    const currentProgress = await loadUserProgressForUpdate(client, userId);
+    const progressUpdate = applyOutcomeToProgress(
+      currentProgress,
+      match.difficulty,
+      outcome
+    );
+    milestoneBonusDing = progressUpdate.milestoneBonusDing;
 
     if (outcome === "win") {
       const settings = await loadSettings(client);
       const winsToday = await countPaidWinsToday(client, userId);
       if (winsToday < settings.dailyWinCap) {
         paidDing = Number(match.prize_snapshot);
-        await client.query(
-          `INSERT INTO public.ding_balances (user_id, balance, updated_at, created_at)
-           VALUES ($1::uuid, $2::bigint, now(), now())
-           ON CONFLICT (user_id)
-           DO UPDATE SET
-             balance = public.ding_balances.balance + EXCLUDED.balance,
-             updated_at = now()`,
-          [userId, paidDing]
-        );
         console.log("[TicTacToe] Ding credited", {
           matchId,
           userId,
@@ -351,12 +504,44 @@ export async function claimTicTacToeMatch(
           cap: settings.dailyWinCap,
         });
       } else {
-        console.log("[TicTacToe] Daily win cap reached — no ding paid", {
+        console.log("[TicTacToe] Daily win cap reached — no hand prize paid", {
           matchId,
           userId,
           cap: settings.dailyWinCap,
         });
       }
+    }
+
+    if (milestoneBonusDing > 0) {
+      paidDing += milestoneBonusDing;
+      console.log("[TicTacToe] Hard milestone bonus credited", {
+        matchId,
+        userId,
+        milestoneBonusDing,
+      });
+    }
+
+    if (paidDing > 0) {
+      await client.query(
+        `INSERT INTO public.ding_balances (user_id, balance, updated_at, created_at)
+         VALUES ($1::uuid, $2::bigint, now(), now())
+         ON CONFLICT (user_id)
+         DO UPDATE SET
+           balance = public.ding_balances.balance + EXCLUDED.balance,
+           updated_at = now()`,
+        [userId, paidDing]
+      );
+    }
+
+    await saveUserProgress(client, userId, progressUpdate.stats);
+
+    if (progressUpdate.event) {
+      console.log("[TicTacToe] Progression event", {
+        matchId,
+        userId,
+        event: progressUpdate.event,
+        progress: progressUpdate.stats,
+      });
     }
 
     await client.query(
@@ -377,13 +562,18 @@ export async function claimTicTacToeMatch(
       userId,
       outcome,
       paidDing,
+      milestoneBonusDing,
+      progressionEvent: progressUpdate.event,
     });
 
     return {
       matchId,
       outcome,
       paidDing,
+      milestoneBonusDing,
       alreadyClaimed: false,
+      progressionEvent: progressUpdate.event,
+      progress: progressUpdate.stats,
     };
   });
 }

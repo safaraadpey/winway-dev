@@ -1,4 +1,11 @@
 import type { TicTacToeDifficulty, TicTacToePlacement } from "./constants";
+import type {
+  TicTacToeProgressStats,
+  TicTacToeProgressionEvent,
+  TicTacToeUserProgress,
+} from "./progress";
+
+export type { TicTacToeProgressStats, TicTacToeProgressionEvent, TicTacToeUserProgress };
 
 export type TicTacToeSettings = {
   isEnabled: boolean;
@@ -9,6 +16,7 @@ export type TicTacToeSettings = {
 
 export type TicTacToePublicSettings = TicTacToeSettings & {
   featureEnabled: boolean;
+  progress: TicTacToeProgressStats | null;
 };
 
 export type StartMatchResult = {
@@ -16,13 +24,17 @@ export type StartMatchResult = {
   seed: string;
   difficulty: TicTacToeDifficulty;
   winPrizeDing: number;
+  progress: TicTacToeProgressStats;
 };
 
 export type ClaimMatchResult = {
   matchId: string;
   outcome: "win" | "lose" | "draw";
   paidDing: number;
+  milestoneBonusDing: number;
   alreadyClaimed: boolean;
+  progressionEvent: TicTacToeProgressionEvent | null;
+  progress: TicTacToeProgressStats;
 };
 
 export type MatchRow = {
