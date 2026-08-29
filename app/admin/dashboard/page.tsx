@@ -65,58 +65,114 @@ const PANEL_OPERATOR_ROW_PX = 20;
 /** py-2 container padding (~16px) */
 const PANEL_OPERATOR_PADDING_PX = 16;
 
+function sortBreakdownRows(
+  list: DashboardPanelOperator[],
+  amountOf: (op: DashboardPanelOperator) => number
+): DashboardPanelOperator[] {
+  return [...list].sort(
+    (a, b) =>
+      amountOf(b) - amountOf(a) ||
+      (b.playedPlayersCount ?? 0) - (a.playedPlayersCount ?? 0) ||
+      a.displayName.localeCompare(b.displayName, "fa")
+  );
+}
+
 function PanelOperatorsBreakdown({ operators }: { operators: DashboardPanelOperator[] }) {
-  if (operators.length === 0) {
+  const [tab, setTab] = useState<"panels" | "admin">("panels");
+
+  const panelRows = sortBreakdownRows(
+    operators.filter(
+      (op) =>
+        op.amount > 0 || (op.playedPlayersCount ?? 0) > 0 || (op.playingPlayersCount ?? 0) > 0
+    ),
+    (op) => op.amount
+  );
+  const adminRows = sortBreakdownRows(
+    operators.filter((op) => (op.adminAmount ?? 0) > 0),
+    (op) => op.adminAmount ?? 0
+  );
+
+  if (panelRows.length === 0 && adminRows.length === 0) {
     return null;
   }
 
-  const scrolls = operators.length > PANEL_OPERATOR_VISIBLE_ROWS;
+  const rows = tab === "panels" ? panelRows : adminRows;
+  const scrolls = rows.length > PANEL_OPERATOR_VISIBLE_ROWS;
   const maxHeightPx = scrolls
     ? PANEL_OPERATOR_PADDING_PX + PANEL_OPERATOR_ROW_PX * PANEL_OPERATOR_VISIBLE_ROWS
     : undefined;
 
   return (
-    <div
-      className={`col-span-2 mb-1 rounded-lg border border-gray-800 bg-black/30 px-2 py-2${
-        scrolls ? " overflow-y-auto" : ""
-      }`}
-      style={maxHeightPx ? { maxHeight: `${maxHeightPx}px` } : undefined}
-    >
-      {operators.map((op) => (
-        <div key={op.userId} className="grid grid-cols-2 py-0.5 text-xs text-gray-300">
-          <span className="flex min-w-0 items-center gap-1">
-            {op.role === "agent" && op.takesFullSuperCommission ? (
-              <span
-                className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-red-500"
-                title="کمیسیون این ایجنت برابر کمیسیون کل سوپر است"
-                aria-label="کمیسیون این ایجنت برابر کمیسیون کل سوپر است"
-              />
-            ) : null}
-            <span className="min-w-0 truncate">
-              {op.displayName}
-              <span className="text-gray-500"> ({op.role === "super" ? "سوپر" : "ایجنت"})</span>
-            </span>
-            <span className="shrink-0" title="یکتا در بازه - در بازی همین حالا">
-              <span className="numeric-text numeric-text--13" dir="ltr">
-                <span
-                  className={(op.playedPlayersCount ?? 0) > 0 ? "text-[#fcd34d]" : "text-gray-600"}
-                >
-                  {(op.playedPlayersCount ?? 0).toLocaleString("en-US")}
+    <div className="col-span-2 mb-1 rounded-lg border border-gray-800 bg-black/30 px-2 py-2">
+      <div className="mb-2 grid grid-cols-2 overflow-hidden rounded-md text-xs font-semibold">
+        <button
+          type="button"
+          onClick={() => setTab("panels")}
+          className={`py-1.5 ${
+            tab === "panels" ? "bg-teal-500 text-black" : "bg-black/40 text-gray-400"
+          }`}
+        >
+          کانیات پنل‌ها
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("admin")}
+          className={`py-1.5 ${
+            tab === "admin" ? "bg-teal-500 text-black" : "bg-black/40 text-gray-400"
+          }`}
+        >
+          کانیات ادمین
+        </button>
+      </div>
+      <div
+        className={scrolls ? "overflow-y-auto" : undefined}
+        style={maxHeightPx ? { maxHeight: `${maxHeightPx}px` } : undefined}
+      >
+        {rows.length === 0 ? (
+          <div className="py-2 text-center text-xs text-gray-500">در این بازه موردی نیست</div>
+        ) : (
+          rows.map((op) => (
+            <div key={op.userId} className="grid grid-cols-2 py-0.5 text-xs text-gray-300">
+              <span className="flex min-w-0 items-center gap-1">
+                {op.role === "agent" && op.takesFullSuperCommission ? (
+                  <span
+                    className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-red-500"
+                    title="کمیسیون این ایجنت برابر کمیسیون کل سوپر است"
+                    aria-label="کمیسیون این ایجنت برابر کمیسیون کل سوپر است"
+                  />
+                ) : null}
+                <span className="min-w-0 truncate">
+                  {op.displayName}
+                  <span className="text-gray-500"> ({op.role === "super" ? "سوپر" : "ایجنت"})</span>
                 </span>
-                <span className="text-gray-500">-</span>
-                <span
-                  className={(op.playingPlayersCount ?? 0) > 0 ? "text-emerald-400" : "text-gray-600"}
-                >
-                  {(op.playingPlayersCount ?? 0).toLocaleString("en-US")}
+                <span className="shrink-0" title="یکتا در بازه - در بازی همین حالا">
+                  <span className="numeric-text numeric-text--13" dir="ltr">
+                    <span
+                      className={(op.playedPlayersCount ?? 0) > 0 ? "text-[#fcd34d]" : "text-gray-600"}
+                    >
+                      {(op.playedPlayersCount ?? 0).toLocaleString("en-US")}
+                    </span>
+                    <span className="text-gray-500">-</span>
+                    <span
+                      className={
+                        (op.playingPlayersCount ?? 0) > 0 ? "text-emerald-400" : "text-gray-600"
+                      }
+                    >
+                      {(op.playingPlayersCount ?? 0).toLocaleString("en-US")}
+                    </span>
+                  </span>
                 </span>
               </span>
-            </span>
-          </span>
-          <span className="text-right">
-            <DashboardAmount value={op.amount} size="12" />
-          </span>
-        </div>
-      ))}
+              <span className="text-right">
+                <DashboardAmount
+                  value={tab === "panels" ? op.amount : op.adminAmount ?? 0}
+                  size="12"
+                />
+              </span>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }
@@ -505,6 +561,15 @@ export default function AdminDashboardPage() {
               className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
             >
               <span>بنر ورودی</span>
+              <span className="text-xl">›</span>
+            </button>
+          )}
+          {isAdminZero && (
+            <button
+              onClick={() => router.push("/admin/player-popup-content")}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#1f2933] text-white text-base"
+            >
+              <span>Player Popup Content</span>
               <span className="text-xl">›</span>
             </button>
           )}

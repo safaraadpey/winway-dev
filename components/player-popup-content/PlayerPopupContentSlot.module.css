@@ -1,0 +1,259 @@
+.slot {
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.blockShell {
+  border-radius: 14px;
+  border: 1px solid var(--player-border, rgba(64, 64, 64, 0.5));
+  background: var(--player-surface, rgba(26, 26, 26, 0.75));
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  padding: 10px 12px;
+}
+
+.blockShellWinnersFiller {
+  border-color: transparent;
+  background-color: #1f2735;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+  box-shadow: none;
+}
+
+:global(html[data-theme="light"]) .blockShellWinnersFiller {
+  background-image: none !important;
+  background-color: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.06);
+}
+
+.blockTitle {
+  margin: 0 0 6px;
+  color: var(--player-text-primary, #ffffff);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.textBlock {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 600;
+  text-align: center;
+}
+
+.textDefault {
+  color: var(--player-text-primary, #ffffff);
+}
+
+.textAccent {
+  color: var(--player-accent, #00d4aa);
+}
+
+.textWarning {
+  color: #fbbf24;
+}
+
+.winnersBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.winnersHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  direction: rtl;
+}
+
+.winnersTitle {
+  margin: 0;
+  color: var(--player-text-primary, #ffffff);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: right;
+  flex: 1;
+  min-width: 0;
+}
+
+.winnersPrizeLabel {
+  margin: 0;
+  color: #fcd34d;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+  flex-shrink: 0;
+}
+
+.winnersList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 56px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.winnersList::-webkit-scrollbar {
+  display: none;
+}
+
+.winnerItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  direction: rtl;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.winnerIdentity {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+  direction: rtl;
+}
+
+.winnerRank {
+  composes: numeric-text numeric-text--12 from global;
+  color: #6ee7b7;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.winnerName {
+  color: var(--player-text-primary, #ffffff);
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.winnerPrize {
+  color: #fcd34d;
+  font-weight: 700;
+  flex-shrink: 0;
+  direction: ltr;
+  text-align: left;
+}
+
+.countdownShell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.countdownBlock {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  direction: rtl;
+}
+
+.countdownTitle {
+  margin: 0;
+  color: var(--player-text-primary, #ffffff);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: right;
+  flex: 1;
+  min-width: 0;
+}
+
+.countdownTimerSlot {
+  flex-shrink: 0;
+}
+
+.countdownExpired {
+  margin: 0;
+  color: var(--player-text-muted, #9ca3af);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  flex-shrink: 0;
+}
+
+.countdownBody {
+  margin: 0;
+  color: var(--player-text-primary, #ffffff);
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 600;
+  text-align: center;
+}
+
+.bannerBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bannerImageWrap {
+  width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.bannerImage {
+  width: 100%;
+  height: auto;
+  max-height: 72px;
+  object-fit: cover;
+  display: block;
+}
+
+.bannerBody {
+  margin: 0;
+  color: var(--player-text-muted, #9ca3af);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.ctaButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 34px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 212, 170, 0.45);
+  background: var(--player-accent-muted, rgba(0, 212, 170, 0.12));
+  color: var(--player-accent, #00d4aa);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.ctaButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

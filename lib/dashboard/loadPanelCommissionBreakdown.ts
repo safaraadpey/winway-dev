@@ -16,6 +16,9 @@ type PeriodAmountRow = {
   day_amount: string | number;
   week_amount: string | number;
   month_amount: string | number;
+  admin_day_amount?: string | number;
+  admin_week_amount?: string | number;
+  admin_month_amount?: string | number;
 };
 
 type RangeAmountRow = {
@@ -23,6 +26,7 @@ type RangeAmountRow = {
   role: string;
   display_name: string;
   amount: string | number;
+  admin_amount?: string | number;
 };
 
 function emptyPeriods(): Record<Exclude<DashboardPeriod, "overall">, DashboardPanelOperator[]> {
@@ -37,11 +41,15 @@ function sortOperators(list: DashboardPanelOperator[]): DashboardPanelOperator[]
   return [...list]
     .filter(
       (op) =>
-        op.amount > 0 || (op.playedPlayersCount ?? 0) > 0 || (op.playingPlayersCount ?? 0) > 0
+        op.amount > 0 ||
+        (op.adminAmount ?? 0) > 0 ||
+        (op.playedPlayersCount ?? 0) > 0 ||
+        (op.playingPlayersCount ?? 0) > 0
     )
     .sort(
       (a, b) =>
         b.amount - a.amount ||
+        (b.adminAmount ?? 0) - (a.adminAmount ?? 0) ||
         (b.playedPlayersCount ?? 0) - (a.playedPlayersCount ?? 0) ||
         a.displayName.localeCompare(b.displayName, "fa")
     );
@@ -52,13 +60,15 @@ function toOperator(
   role: string,
   displayName: string,
   amount: string | number,
-  playedPlayersCount = 0
+  playedPlayersCount = 0,
+  adminAmount: string | number = 0
 ): DashboardPanelOperator {
   return {
     userId,
     displayName: displayName?.trim() || "پنل",
     role: normalizeRole(role),
     amount: Number(amount || 0),
+    adminAmount: Number(adminAmount || 0),
     playedPlayersCount,
     playingPlayersCount: 0,
   };
@@ -84,6 +94,7 @@ function mergePlayedCounts(
       displayName: row.displayName,
       role: row.role,
       amount: 0,
+      adminAmount: 0,
       playedPlayersCount: row.count,
       playingPlayersCount: 0,
     });
@@ -410,31 +421,81 @@ function addEvent(
   events.push({ userId, role, created_at: createdAt, amount });
 }
 
+/** سهم ادمین به سوپر می‌رسد؛ اگر سوپر نباشد به ایجنت مستقیم. */
+function addAdminAttributedEvent(
+  events: OperatorEarnedEvent[],
+  agentId: string,
+  superId: string,
+  adminAmount: number,
+  createdAt: string
+) {
+  if (superId) {
+    addEvent(events, superId, "super", adminAmount, createdAt);
+    return;
+  }
+  addEvent(events, agentId, "agent", adminAmount, createdAt);
+}
+
+function mergePanelAndAdminAmounts(
+  panelAmounts: Map<string, { role: "agent" | "super"; amount: number }>,
+  adminAmounts: Map<string, { role: "agent" | "super"; amount: number }>,
+  names: Map<string, { displayName: string; role: "agent" | "super" }>
+): DashboardPanelOperator[] {
+  const userIds = new Set([...panelAmounts.keys(), ...adminAmounts.keys()]);
+  const list: DashboardPanelOperator[] = [];
+  for (const userId of userIds) {
+    const meta = names.get(userId);
+    const panel = panelAmounts.get(userId);
+    const admin = adminAmounts.get(userId);
+    const role = meta?.role ?? panel?.role ?? admin?.role;
+    if (!meta || !role) continue;
+    list.push({
+      userId,
+      displayName: meta.displayName,
+      role,
+      amount: panel?.amount ?? 0,
+      adminAmount: admin?.amount ?? 0,
+      playedPlayersCount: 0,
+      playingPlayersCount: 0,
+    });
+  }
+  return sortOperators(list);
+}
+
 async function loadOperatorEarnedEventsFromSupabase(
   supabase: SupabaseClient,
   fromIso: string,
   toIso?: string | null
-): Promise<OperatorEarnedEvent[]> {
+): Promise<{ panel: OperatorEarnedEvent[]; admin: OperatorEarnedEvent[] }> {
   const pageSize = 1000;
   const events: OperatorEarnedEvent[] = [];
+  const adminEvents: OperatorEarnedEvent[] = [];
 
   const pushRow = (row: {
     agent_id?: string | null;
     super_id?: string | null;
     agent_amount?: number | null;
     super_amount?: number | null;
+    admin_amount?: number | null;
     created_at?: string | null;
   }) => {
     const createdAt = String(row.created_at || "");
     if (!createdAt) return;
     addEvent(events, String(row.agent_id || ""), "agent", Number(row.agent_amount || 0), createdAt);
     addEvent(events, String(row.super_id || ""), "super", Number(row.super_amount || 0), createdAt);
+    addAdminAttributedEvent(
+      adminEvents,
+      String(row.agent_id || ""),
+      String(row.super_id || ""),
+      Number(row.admin_amount || 0),
+      createdAt
+    );
   };
 
   for (let from = 0; ; from += pageSize) {
     let query = supabase
       .from("commissions_log")
-      .select("agent_id, super_id, agent_amount, super_amount, created_at")
+      .select("agent_id, super_id, agent_amount, super_amount, admin_amount, created_at")
       .eq("status", "settled")
       .gte("created_at", fromIso)
       .order("created_at", { ascending: true })
@@ -453,7 +514,7 @@ async function loadOperatorEarnedEventsFromSupabase(
   for (let from = 0; ; from += pageSize) {
     let query = supabase
       .from("tournament_commission_snapshots")
-      .select("agent_id, super_id, agent_amount, super_amount, created_at")
+      .select("agent_id, super_id, agent_amount, super_amount, admin_amount, created_at")
       .gte("created_at", fromIso)
       .order("created_at", { ascending: true })
       .range(from, from + pageSize - 1);
@@ -468,7 +529,7 @@ async function loadOperatorEarnedEventsFromSupabase(
     if (rows.length < pageSize) break;
   }
 
-  return events;
+  return { panel: events, admin: adminEvents };
 }
 
 async function loadPeriodFromPostgres(): Promise<Record<
@@ -482,7 +543,7 @@ async function loadPeriodFromPostgres(): Promise<Record<
     with b as (
       select now() as n
     ),
-    events as (
+    panel_events as (
       select c.agent_id as user_id, 'agent'::text as role, c.created_at, c.agent_amount as earned
       from public.commissions_log c
       cross join b
@@ -512,31 +573,100 @@ async function loadPeriodFromPostgres(): Promise<Record<
       where s.super_id is not null
         and s.super_amount > 0
         and s.created_at >= b.n - interval '30 days'
+    ),
+    admin_events as (
+      select
+        coalesce(c.super_id, c.agent_id) as user_id,
+        case when c.super_id is not null then 'super'::text else 'agent'::text end as role,
+        c.created_at,
+        c.admin_amount as earned
+      from public.commissions_log c
+      cross join b
+      where c.status = 'settled'
+        and c.admin_amount > 0
+        and coalesce(c.super_id, c.agent_id) is not null
+        and c.created_at >= b.n - interval '30 days'
+      union all
+      select
+        coalesce(s.super_id, s.agent_id),
+        case when s.super_id is not null then 'super'::text else 'agent'::text end,
+        s.created_at,
+        s.admin_amount
+      from public.tournament_commission_snapshots s
+      cross join b
+      where s.admin_amount > 0
+        and coalesce(s.super_id, s.agent_id) is not null
+        and s.created_at >= b.n - interval '30 days'
+    ),
+    panel_agg as (
+      select
+        e.user_id,
+        e.role,
+        coalesce(sum(e.earned) filter (where e.created_at >= date_trunc('day', b.n)), 0) as day_amount,
+        coalesce(sum(e.earned) filter (where e.created_at >= b.n - interval '7 days'), 0) as week_amount,
+        coalesce(sum(e.earned) filter (where e.created_at >= b.n - interval '30 days'), 0) as month_amount
+      from panel_events e
+      cross join b
+      group by e.user_id, e.role
+    ),
+    admin_agg as (
+      select
+        e.user_id,
+        e.role,
+        coalesce(sum(e.earned) filter (where e.created_at >= date_trunc('day', b.n)), 0) as day_amount,
+        coalesce(sum(e.earned) filter (where e.created_at >= b.n - interval '7 days'), 0) as week_amount,
+        coalesce(sum(e.earned) filter (where e.created_at >= b.n - interval '30 days'), 0) as month_amount
+      from admin_events e
+      cross join b
+      group by e.user_id, e.role
     )
     select
-      e.user_id::text as user_id,
-      e.role::text as role,
-      coalesce(nullif(btrim(p.nickname), ''), nullif(btrim(u.username), ''), 'پنل') as display_name,
-      coalesce(sum(e.earned) filter (where e.created_at >= date_trunc('day', b.n)), 0) as day_amount,
-      coalesce(sum(e.earned) filter (where e.created_at >= b.n - interval '7 days'), 0) as week_amount,
-      coalesce(sum(e.earned) filter (where e.created_at >= b.n - interval '30 days'), 0) as month_amount
-    from events e
-    cross join b
-    join public.users u on u.id = e.user_id
-    left join public.user_profiles p on p.user_id = e.user_id
+      coalesce(pa.user_id, aa.user_id)::text as user_id,
+      coalesce(pa.role, aa.role)::text as role,
+      coalesce(nullif(btrim(pr.nickname), ''), nullif(btrim(u.username), ''), 'پنل') as display_name,
+      coalesce(pa.day_amount, 0) as day_amount,
+      coalesce(pa.week_amount, 0) as week_amount,
+      coalesce(pa.month_amount, 0) as month_amount,
+      coalesce(aa.day_amount, 0) as admin_day_amount,
+      coalesce(aa.week_amount, 0) as admin_week_amount,
+      coalesce(aa.month_amount, 0) as admin_month_amount
+    from panel_agg pa
+    full outer join admin_agg aa on aa.user_id = pa.user_id
+    join public.users u on u.id = coalesce(pa.user_id, aa.user_id)
+    left join public.user_profiles pr on pr.user_id = u.id
     where u.role in ('agent', 'super')
-    group by e.user_id, e.role, u.role, p.nickname, u.username
     `
   );
 
   const byPeriod = emptyPeriods();
   for (const row of result.rows) {
-    const day = toOperator(row.user_id, row.role, row.display_name, row.day_amount);
-    const week = toOperator(row.user_id, row.role, row.display_name, row.week_amount);
-    const month = toOperator(row.user_id, row.role, row.display_name, row.month_amount);
-    if (day.amount > 0) byPeriod.day.push(day);
-    if (week.amount > 0) byPeriod.week.push(week);
-    if (month.amount > 0) byPeriod.month.push(month);
+    const day = toOperator(
+      row.user_id,
+      row.role,
+      row.display_name,
+      row.day_amount,
+      0,
+      row.admin_day_amount
+    );
+    const week = toOperator(
+      row.user_id,
+      row.role,
+      row.display_name,
+      row.week_amount,
+      0,
+      row.admin_week_amount
+    );
+    const month = toOperator(
+      row.user_id,
+      row.role,
+      row.display_name,
+      row.month_amount,
+      0,
+      row.admin_month_amount
+    );
+    if (day.amount > 0 || (day.adminAmount ?? 0) > 0) byPeriod.day.push(day);
+    if (week.amount > 0 || (week.adminAmount ?? 0) > 0) byPeriod.week.push(week);
+    if (month.amount > 0 || (month.adminAmount ?? 0) > 0) byPeriod.month.push(month);
   }
 
   byPeriod.day = sortOperators(byPeriod.day);
@@ -553,7 +683,7 @@ async function loadRangeFromPostgres(
 
   const result = await pgPool.query<RangeAmountRow>(
     `
-    with events as (
+    with panel_events as (
       select c.agent_id as user_id, 'agent'::text as role, c.agent_amount as earned
       from public.commissions_log c
       where c.status = 'settled'
@@ -583,24 +713,59 @@ async function loadRangeFromPostgres(
         and s.super_amount > 0
         and s.created_at >= $1::timestamptz
         and s.created_at <= $2::timestamptz
+    ),
+    admin_events as (
+      select
+        coalesce(c.super_id, c.agent_id) as user_id,
+        case when c.super_id is not null then 'super'::text else 'agent'::text end as role,
+        c.admin_amount as earned
+      from public.commissions_log c
+      where c.status = 'settled'
+        and c.admin_amount > 0
+        and coalesce(c.super_id, c.agent_id) is not null
+        and c.created_at >= $1::timestamptz
+        and c.created_at <= $2::timestamptz
+      union all
+      select
+        coalesce(s.super_id, s.agent_id),
+        case when s.super_id is not null then 'super'::text else 'agent'::text end,
+        s.admin_amount
+      from public.tournament_commission_snapshots s
+      where s.admin_amount > 0
+        and coalesce(s.super_id, s.agent_id) is not null
+        and s.created_at >= $1::timestamptz
+        and s.created_at <= $2::timestamptz
+    ),
+    panel_agg as (
+      select e.user_id, e.role, coalesce(sum(e.earned), 0) as amount
+      from panel_events e
+      group by e.user_id, e.role
+    ),
+    admin_agg as (
+      select e.user_id, e.role, coalesce(sum(e.earned), 0) as amount
+      from admin_events e
+      group by e.user_id, e.role
     )
     select
-      e.user_id::text as user_id,
-      e.role::text as role,
-      coalesce(nullif(btrim(p.nickname), ''), nullif(btrim(u.username), ''), 'پنل') as display_name,
-      coalesce(sum(e.earned), 0) as amount
-    from events e
-    join public.users u on u.id = e.user_id
-    left join public.user_profiles p on p.user_id = e.user_id
+      coalesce(pa.user_id, aa.user_id)::text as user_id,
+      coalesce(pa.role, aa.role)::text as role,
+      coalesce(nullif(btrim(pr.nickname), ''), nullif(btrim(u.username), ''), 'پنل') as display_name,
+      coalesce(pa.amount, 0) as amount,
+      coalesce(aa.amount, 0) as admin_amount
+    from panel_agg pa
+    full outer join admin_agg aa on aa.user_id = pa.user_id
+    join public.users u on u.id = coalesce(pa.user_id, aa.user_id)
+    left join public.user_profiles pr on pr.user_id = u.id
     where u.role in ('agent', 'super')
-    group by e.user_id, e.role, u.role, p.nickname, u.username
-    having coalesce(sum(e.earned), 0) > 0
+      and (coalesce(pa.amount, 0) > 0 or coalesce(aa.amount, 0) > 0)
     `,
     [fromIso, toIso]
   );
 
   return sortOperators(
-    result.rows.map((row) => toOperator(row.user_id, row.role, row.display_name, row.amount))
+    result.rows.map((row) =>
+      toOperator(row.user_id, row.role, row.display_name, row.amount, 0, row.admin_amount)
+    )
   );
 }
 
@@ -643,8 +808,12 @@ async function resolveOperatorNames(
 
 function operatorsFromAmountMap(
   amounts: Map<string, { role: "agent" | "super"; amount: number }>,
-  names: Map<string, { displayName: string; role: "agent" | "super" }>
+  names: Map<string, { displayName: string; role: "agent" | "super" }>,
+  adminAmounts?: Map<string, { role: "agent" | "super"; amount: number }>
 ): DashboardPanelOperator[] {
+  if (adminAmounts) {
+    return mergePanelAndAdminAmounts(amounts, adminAmounts, names);
+  }
   const list: DashboardPanelOperator[] = [];
   for (const [userId, entry] of amounts) {
     const meta = names.get(userId);
@@ -654,6 +823,7 @@ function operatorsFromAmountMap(
       displayName: meta.displayName,
       role: meta.role,
       amount: entry.amount,
+      adminAmount: 0,
       playedPlayersCount: 0,
       playingPlayersCount: 0,
     });
@@ -671,13 +841,25 @@ async function loadPeriodFromSupabase(
   const weekIso = getRollingWeekStart(now).toISOString();
   const monthIso = getRollingMonthStart(now).toISOString();
   const events = await loadOperatorEarnedEventsFromSupabase(supabase, monthIso);
-  const monthAmounts = collectAmountsSince(events, monthIso);
-  const names = await resolveOperatorNames(supabase, [...monthAmounts.keys()]);
+  const monthAmounts = collectAmountsSince(events.panel, monthIso);
+  const monthAdminAmounts = collectAmountsSince(events.admin, monthIso);
+  const names = await resolveOperatorNames(supabase, [
+    ...monthAmounts.keys(),
+    ...monthAdminAmounts.keys(),
+  ]);
 
   return {
-    day: operatorsFromAmountMap(collectAmountsSince(events, dayIso), names),
-    week: operatorsFromAmountMap(collectAmountsSince(events, weekIso), names),
-    month: operatorsFromAmountMap(monthAmounts, names),
+    day: operatorsFromAmountMap(
+      collectAmountsSince(events.panel, dayIso),
+      names,
+      collectAmountsSince(events.admin, dayIso)
+    ),
+    week: operatorsFromAmountMap(
+      collectAmountsSince(events.panel, weekIso),
+      names,
+      collectAmountsSince(events.admin, weekIso)
+    ),
+    month: operatorsFromAmountMap(monthAmounts, names, monthAdminAmounts),
   };
 }
 
@@ -687,13 +869,15 @@ async function loadRangeFromSupabase(
   toIso: string
 ): Promise<DashboardPanelOperator[]> {
   const events = await loadOperatorEarnedEventsFromSupabase(supabase, fromIso, toIso);
-  const amounts = collectAmountsSince(events, fromIso, toIso);
-  const names = await resolveOperatorNames(supabase, [...amounts.keys()]);
-  return operatorsFromAmountMap(amounts, names);
+  const amounts = collectAmountsSince(events.panel, fromIso, toIso);
+  const adminAmounts = collectAmountsSince(events.admin, fromIso, toIso);
+  const names = await resolveOperatorNames(supabase, [...amounts.keys(), ...adminAmounts.keys()]);
+  return operatorsFromAmountMap(amounts, names, adminAmounts);
 }
 
 /**
- * Per-agent / per-super commission that makes up admin "کانیات پنل‌ها".
+ * Per-agent / per-super commission that makes up admin "کانیات پنل‌ها",
+ * plus adminAmount (کانیات ادمین) attributed to that super or direct agent.
  *
  * Week/month use the same timestamp windows as the admin dashboard
  * (now()-7d / now()-30d on created_at). Overall still lives in daily rollup.

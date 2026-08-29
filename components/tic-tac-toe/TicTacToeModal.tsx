@@ -31,6 +31,10 @@ import {
   type TicTacToeProgressionEvent,
 } from "@/lib/tic-tac-toe/progress";
 import type { ClaimMatchResult } from "@/lib/tic-tac-toe/types";
+import type {
+  PlayerPopupContentFeed,
+} from "@/lib/player-popup-content/types";
+import PlayerPopupContentSlot from "@/components/player-popup-content/PlayerPopupContentSlot";
 import styles from "./TicTacToeModal.module.css";
 
 type Phase = "playing" | "result";
@@ -38,6 +42,8 @@ type Phase = "playing" | "result";
 type TicTacToeModalProps = {
   open: boolean;
   onClose: () => void;
+  /** Optional dynamic popup slot feed; independent from game logic. */
+  popupContent?: PlayerPopupContentFeed;
 };
 
 const DIFFICULTY_LABELS: Record<TicTacToeDifficulty, string> = {
@@ -151,6 +157,7 @@ function CellMarkIcon({ mark }: { mark: "X" | "O" }) {
 export default function TicTacToeModal({
   open,
   onClose,
+  popupContent,
 }: TicTacToeModalProps) {
   const { refreshAllBalances, triggerDingCelebrate } = useBalancesContext();
   const { settings, refresh: refreshTicTacToeSettings } = useTicTacToeSettings();
@@ -305,6 +312,8 @@ export default function TicTacToeModal({
     resetLocal();
     onClose();
   }, [onClose, resetLocal]);
+
+  const popupDismissible = popupContent?.dismissible !== false;
 
   const scheduleWinCoinFly = useCallback(() => {
     clearCoinFlyTimer();
@@ -525,9 +534,6 @@ export default function TicTacToeModal({
         outcome === "win"
           ? getTicTacToeWinPrizeDing(difficulty) + milestoneBonusDing
           : 0;
-      const isTierCelebration =
-        progressionEvent === "easy_completed" ||
-        progressionEvent === "hard_milestone";
 
       setError(null);
       setPhase("result");
@@ -569,7 +575,10 @@ export default function TicTacToeModal({
         setShowResultInPrizeRow(false);
         setPrizeRowMessage(null);
         setWinHighlightDismissed(false);
-        if (isTierCelebration && progressionEvent) {
+        if (
+          progressionEvent === "easy_completed" ||
+          progressionEvent === "hard_milestone"
+        ) {
           setTierCelebration(progressionEvent);
         }
         scheduleWinCoinFly();
@@ -756,7 +765,7 @@ export default function TicTacToeModal({
         showModalMilestoneHighlight ? styles.overlayTierCelebration : ""
       }`}
       data-tic-tac-toe-modal
-      onClick={handleClose}
+      onClick={popupDismissible ? handleClose : undefined}
       role="presentation"
     >
       <div className={styles.shellFrame}>
@@ -769,6 +778,11 @@ export default function TicTacToeModal({
           aria-labelledby="tic-tac-toe-title"
           onClick={(event) => event.stopPropagation()}
         >
+          <PlayerPopupContentSlot
+            {...popupContent}
+            className={styles.popupContentSlot}
+          />
+
           <div className={styles.header}>
             <div className={styles.titleGroup}>
               <span className={styles.titleIcon}>
@@ -778,14 +792,16 @@ export default function TicTacToeModal({
                 دوز (Tic-Tac-Toe)
               </h2>
             </div>
-            <button
-              type="button"
-              className={styles.closeButton}
-              onClick={handleClose}
-              aria-label="بستن"
-            >
-              <CloseIcon />
-            </button>
+            {popupDismissible ? (
+              <button
+                type="button"
+                className={styles.closeButton}
+                onClick={handleClose}
+                aria-label="بستن"
+              >
+                <CloseIcon />
+              </button>
+            ) : null}
           </div>
 
           <div className={styles.difficultyRow}>

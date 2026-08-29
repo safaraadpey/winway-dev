@@ -1,0 +1,36 @@
+.previewModal {
+  max-height: calc(100dvh - 24px);
+  max-height: calc(100svh - 24px);
+}
+
+.previewTopBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.previewCloseButton {
+  margin-inline-start: auto;
+}
+
+.previewBadge {
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  background: rgba(251, 191, 36, 0.12);
+  color: #fcd34d;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.previewFootnote {
+  margin: 0;
+  color: var(--player-text-muted, #9ca3af);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-align: center;
+}
