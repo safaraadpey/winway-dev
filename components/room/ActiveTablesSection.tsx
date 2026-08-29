@@ -12,6 +12,7 @@ interface ActiveTablesSectionProps {
   tables?: ActiveTable[];
   onTableClick?: (tableId: string) => void;
   hideWinnerNames?: boolean;
+  className?: string;
 }
 
 export default function ActiveTablesSection({
@@ -21,13 +22,16 @@ export default function ActiveTablesSection({
   tables = [],
   onTableClick,
   hideWinnerNames = false,
+  className,
 }: ActiveTablesSectionProps) {
   const hasTables = tables.length > 0;
   const maxHeight = "146px";
 
   return (
     <div
-      className={`${panelStyles.activeCardsPanelSurface} space-y-3 rounded-2xl px-3 pt-[4px] pb-[6px] min-h-[200px]`}
+      className={`${panelStyles.activeCardsPanelSurface} space-y-3 rounded-2xl px-3 pt-[4px] pb-[6px] min-h-[200px]${
+        className ? ` ${className}` : ""
+      }`}
       data-tour-id="game-room-active-tables"
     >
       <div className={panelStyles.activeTablesTitleWrap}>
