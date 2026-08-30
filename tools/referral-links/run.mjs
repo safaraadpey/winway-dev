@@ -158,15 +158,15 @@ assert(
   "SignupForm prop takes priority over query ref"
 );
 assert(
-  referralUiSrc.includes("/register/"),
-  "ReferralRegistrationLink UI shows path-based URL"
+  !referralUiSrc.includes('"/register/"'),
+  "ReferralRegistrationLink shows referral code only in the box"
 );
 assert(
   referralUiSrc.includes("navigator.share"),
   "ReferralRegistrationLink supports native share"
 );
 assert(
-  referralUiSrc.includes("ارسال"),
+  referralUiSrc.includes("ارسال لینک"),
   "ReferralRegistrationLink shows send button"
 );
 assert(

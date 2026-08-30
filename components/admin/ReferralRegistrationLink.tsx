@@ -71,19 +71,22 @@ export default function ReferralRegistrationLink({
 
   return (
     <div className="rounded-xl border border-gray-700 bg-[#151515] p-3 mb-3">
-      <div className="text-gray-400 text-xs mb-2">لینک ثبت نام و تنظیم کد معرف</div>
+      <div className="text-white text-xs mb-2 text-right">
+        از اینجا میتوانید{" "}
+        <span className="text-green-400 font-semibold">لینک ثبت نام</span>{" "}
+        را برای زیر مجموعه خود ارسال کنید
+      </div>
       <div className="flex items-center gap-2">
         <div
-          className="flex-1 min-w-0 h-10 rounded-lg bg-[#1f1f1f] border border-gray-700 flex items-center px-3 font-mono truncate dir-ltr text-left"
+          className="flex-1 min-w-0 h-11 rounded-lg bg-[#1f1f1f] border border-gray-700 flex items-center justify-end px-3 font-mono overflow-hidden"
           title={fullLink || undefined}
         >
           {normalizedCode ? (
-            <>
-              <span className="text-[10px] text-gray-500 leading-none">/register/</span>
-              <span className="text-sm text-green-400 font-semibold">{normalizedCode}</span>
-            </>
+            <div className="min-w-0 max-w-full truncate text-[17px] text-green-400 font-semibold font-mono" dir="ltr">
+              {normalizedCode}
+            </div>
           ) : (
-            <span className="text-sm text-gray-500">کد معرف ثبت نشده</span>
+            <span className="text-[17px] text-gray-500 w-full text-right">کد معرف ثبت نشده</span>
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -95,7 +98,7 @@ export default function ReferralRegistrationLink({
                 disabled={sharing}
                 className="px-3 h-10 rounded-lg bg-blue-700 text-white text-xs font-semibold hover:bg-blue-600 active:bg-blue-800 whitespace-nowrap disabled:opacity-60"
               >
-                {sharing ? "..." : "ارسال"}
+                {sharing ? "..." : "ارسال لینک"}
               </button>
               <button
                 type="button"
