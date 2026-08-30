@@ -20,6 +20,7 @@ export default function ReferralRegistrationLink({
 }: ReferralRegistrationLinkProps) {
   const router = useRouter();
   const [copying, setCopying] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const normalizedCode = referralCode?.trim().toUpperCase() ?? "";
   const fullLink = normalizedCode ? buildRegistrationLink(normalizedCode) : "";
 
@@ -34,6 +35,37 @@ export default function ReferralRegistrationLink({
       toast.error("خطا در کپی لینک");
     } finally {
       setCopying(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (sharing || !fullLink) return;
+
+    setSharing(true);
+    try {
+      const title = "لینک ثبت‌نام";
+      const text = "برای ثبت‌نام با کد معرف من از این لینک استفاده کنید";
+
+      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+        try {
+          await navigator.share({ title, text, url: fullLink });
+          return;
+        } catch (err) {
+          if (err instanceof Error && err.name === "AbortError") return;
+        }
+      }
+
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(fullLink);
+        toast.success("لینک ثبت‌نام کپی شد");
+        return;
+      }
+
+      toast.error("مرورگر از اشتراک‌گذاری پشتیبانی نمی‌کند");
+    } catch {
+      toast.error("خطا در اشتراک‌گذاری لینک");
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -56,14 +88,24 @@ export default function ReferralRegistrationLink({
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {normalizedCode ? (
-            <button
-              type="button"
-              onClick={() => void handleCopy()}
-              disabled={copying}
-              className="px-3 h-10 rounded-lg bg-teal-700 text-white text-xs font-semibold hover:bg-teal-600 active:bg-teal-800 whitespace-nowrap disabled:opacity-60"
-            >
-              {copying ? "..." : "کپی لینک"}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => void handleShare()}
+                disabled={sharing}
+                className="px-3 h-10 rounded-lg bg-blue-700 text-white text-xs font-semibold hover:bg-blue-600 active:bg-blue-800 whitespace-nowrap disabled:opacity-60"
+              >
+                {sharing ? "..." : "ارسال"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleCopy()}
+                disabled={copying}
+                className="px-3 h-10 rounded-lg bg-teal-700 text-white text-xs font-semibold hover:bg-teal-600 active:bg-teal-800 whitespace-nowrap disabled:opacity-60"
+              >
+                {copying ? "..." : "کپی لینک"}
+              </button>
+            </>
           ) : null}
           <button
             type="button"

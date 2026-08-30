@@ -162,8 +162,12 @@ assert(
   "ReferralRegistrationLink UI shows path-based URL"
 );
 assert(
-  !referralUiSrc.includes("navigator.share"),
-  "ReferralRegistrationLink does not use navigator.share"
+  referralUiSrc.includes("navigator.share"),
+  "ReferralRegistrationLink supports native share"
+);
+assert(
+  referralUiSrc.includes("ارسال"),
+  "ReferralRegistrationLink shows send button"
 );
 assert(
   !metaSrc.includes("ADMIN26"),
