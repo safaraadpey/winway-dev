@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { isTestTournamentMeta } from "@/lib/admin/testTournamentAccess";
+import { useIsAdminZero } from "@/lib/admin/useIsAdminZero";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { supabase } from "@/lib/supabaseClient";
 import { TournamentFormValues, buildEqualPrizePercents } from "./TournamentForm";
@@ -100,6 +102,7 @@ export default function AdminTournamentsPage() {
   const [rows, setRows] = useState<TournamentRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const { isAdminZero } = useIsAdminZero();
 
   useEffect(() => {
     setShowHeader(true);
@@ -130,7 +133,11 @@ export default function AdminTournamentsPage() {
     };
   }, []);
 
-  const hasData = rows.length > 0;
+  const visibleRows = useMemo(() => {
+    if (isAdminZero) return rows;
+    return rows.filter((t) => !isTestTournamentMeta(t.meta));
+  }, [isAdminZero, rows]);
+  const hasData = visibleRows.length > 0;
 
   const renderSettings = (t: TournamentRow) => {
     const statusLabel = statusDisplay(t.status).label;
@@ -253,7 +260,7 @@ export default function AdminTournamentsPage() {
 
         {!loading && hasData && (
           <div className="space-y-3">
-            {rows.map((t) => (
+            {visibleRows.map((t) => (
               <div
                 key={t.id}
                 className="rounded-2xl border border-gray-800 bg-[#151515] px-4 py-2 space-y-3"
@@ -261,8 +268,7 @@ export default function AdminTournamentsPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="text-lg font-semibold">{t.title || "بدون عنوان"}</div>
-                    {(t.meta as { is_test_tournament?: boolean } | null)?.is_test_tournament ===
-                    true ? (
+                    {isTestTournamentMeta(t.meta) ? (
                       <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-amber-500/20 text-amber-200 border-amber-400/50">
                         تستی
                       </span>

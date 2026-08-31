@@ -187,3 +187,23 @@ export async function tickDueTournamentsEngine(
   if (ticked > 0) log.info("tournament tick (engine)", { ticked });
   return ticked;
 }
+
+/** Process due Dev Panel scheduled tournament registrations. */
+export async function tickDevRegistrationSchedule(
+  supabase: SupabaseAdmin,
+  log: Logger,
+  limit = 50
+): Promise<number> {
+  const { data, error } = await supabase.rpc("fn_tick_dev_registration_schedule", {
+    p_limit: limit,
+  });
+  if (error) {
+    throw new Error(`fn_tick_dev_registration_schedule failed: ${error.message}`);
+  }
+
+  const processed = Number(data ?? 0);
+  if (processed > 0) {
+    log.info("[DevRegister] schedule tick", { processed });
+  }
+  return processed;
+}

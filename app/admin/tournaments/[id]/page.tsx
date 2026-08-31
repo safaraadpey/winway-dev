@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { isTestTournamentMeta } from "@/lib/admin/testTournamentAccess";
+import { useIsAdminZero } from "@/lib/admin/useIsAdminZero";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -13,6 +15,7 @@ type TournamentRow = {
   currency: string | null;
   ticket_price: number | null;
   guaranteed_prize: number | null;
+  meta?: Record<string, unknown> | null;
 };
 
 type EntryRow = {
@@ -57,6 +60,7 @@ export default function AdminTournamentDetailPage() {
   const [rooms, setRooms] = useState<RoundRoomRow[]>([]);
   const [winnerNames, setWinnerNames] = useState<string[]>([]);
   const [nicknameByUserId, setNicknameByUserId] = useState<Record<string, string>>({});
+  const { ready: adminZeroReady, isAdminZero } = useIsAdminZero();
 
   const tournamentId =
     typeof params?.id === "string"
@@ -70,6 +74,13 @@ export default function AdminTournamentDetailPage() {
     setShowBackButton(true);
     setOnBackClick(() => () => router.push("/admin/tournaments"));
   }, [router, setOnBackClick, setShowBackButton, setShowHeader]);
+
+  useEffect(() => {
+    if (!adminZeroReady || loading || !tournament) return;
+    if (!isAdminZero && isTestTournamentMeta(tournament.meta)) {
+      router.replace("/admin/tournaments");
+    }
+  }, [adminZeroReady, isAdminZero, loading, router, tournament]);
 
   useEffect(() => {
     let active = true;
@@ -91,7 +102,7 @@ export default function AdminTournamentDetailPage() {
         await Promise.all([
           supabase
             .from("tournaments")
-            .select("id,title,status,start_at,currency,ticket_price,guaranteed_prize")
+            .select("id,title,status,start_at,currency,ticket_price,guaranteed_prize,meta")
             .eq("id", tournamentId)
             .maybeSingle(),
           supabase

@@ -52,6 +52,8 @@ export type TournamentFormProps = {
   externalError?: string | null;
   /** Used to show a copyable player link on edit. */
   tournamentId?: string | null;
+  /** Test-tournament flag is adminzero-only. */
+  showTestTournamentOption?: boolean;
 };
 
 export function isTestTournament(meta?: { is_test_tournament?: boolean | null } | null): boolean {
@@ -157,6 +159,7 @@ export function TournamentForm({
   lockedMessage,
   externalError = null,
   tournamentId = null,
+  showTestTournamentOption = false,
 }: TournamentFormProps) {
   const defaults: TournamentFormValues = useMemo(
     () => ({
@@ -550,6 +553,7 @@ export function TournamentForm({
           </div>
         </div>
 
+        {showTestTournamentOption ? (
         <div className="md:col-span-2 rounded-lg border border-gray-700 bg-[#161616] p-4 space-y-3">
           <label className="flex flex-col gap-1 text-sm">
             <span className="flex items-center gap-2">
@@ -594,6 +598,7 @@ export function TournamentForm({
             </label>
           )}
         </div>
+        ) : null}
 
         <label className="flex flex-col gap-1 text-sm">
           <span>ارز</span>

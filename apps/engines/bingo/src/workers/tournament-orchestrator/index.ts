@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   tickDueTournaments,
   tickDueTournamentsEngine,
+  tickDevRegistrationSchedule,
 } from "../../domain/tournament/index.js";
 import { redisKeysV2 } from "../../redis/keysV2.js";
 import { acquireLeaderLock, releaseLeaderLock } from "../../redis/leaderLock.js";
@@ -54,6 +55,7 @@ export function startTournamentOrchestrator(ctx: WorkerContext): () => void {
       } else {
         await tickDueTournaments(supabase, log, opts);
       }
+      await tickDevRegistrationSchedule(supabase, log, config.tournamentTickBatchLimit);
     } catch (err) {
       log.error("tournament-orchestrator tick error", {
         error: err instanceof Error ? err.message : String(err),

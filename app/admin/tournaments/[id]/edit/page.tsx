@@ -9,6 +9,7 @@ import {
   prepareWatchInviteBannerPayload,
   stripWatchInviteBannerFields,
 } from "@/lib/watch-invite/prepareBannerPayload";
+import { useIsAdminZero } from "@/lib/admin/useIsAdminZero";
 import { TournamentForm, TournamentFormValues, buildEqualPrizePercents } from "../../TournamentForm";
 
 export default function AdminTournamentEditPage() {
@@ -21,6 +22,7 @@ export default function AdminTournamentEditPage() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialValues, setInitialValues] = useState<TournamentFormValues | null>(null);
+  const { ready: adminZeroReady, isAdminZero } = useIsAdminZero();
 
   const tournamentId = typeof params?.id === "string" ? params.id : Array.isArray(params?.id) ? params?.id[0] : null;
 
@@ -80,6 +82,13 @@ export default function AdminTournamentEditPage() {
     setShowBackButton(true);
     setOnBackClick(() => () => router.push("/admin/tournaments"));
   }, [router, setOnBackClick, setShowBackButton, setShowHeader]);
+
+  useEffect(() => {
+    if (!adminZeroReady || loading || !initialValues) return;
+    if (!isAdminZero && initialValues.is_test_tournament) {
+      router.replace("/admin/tournaments");
+    }
+  }, [adminZeroReady, initialValues, isAdminZero, loading, router]);
 
   useEffect(() => {
     let active = true;
@@ -311,6 +320,7 @@ export default function AdminTournamentEditPage() {
             submitting={submitting}
             readOnly={isLocked}
             lockedMessage={lockedMessage}
+            showTestTournamentOption={isAdminZero}
           />
         )}
       </div>

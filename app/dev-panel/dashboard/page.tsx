@@ -11,6 +11,8 @@ const DEV_MENU_ITEMS = [
   { label: "تنظیمات", path: "/dev-panel/settings" },
   { label: "گزارش مالی", path: "/dev-panel/finance" },
   { label: "کاربران", path: "/dev-panel/users" },
+  { label: "ثبت نام تورنومنت", path: "/dev-panel/tournament-register" },
+  { label: "مدیریت لئو", path: "/dev-panel/leo" },
   { label: "حساب کاربری", path: "/dev-panel/account" },
 ] as const;
 

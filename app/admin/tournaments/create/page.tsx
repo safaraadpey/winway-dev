@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
+import { useIsAdminZero } from "@/lib/admin/useIsAdminZero";
 import { TournamentForm, TournamentFormValues } from "../TournamentForm";
 import {
   prepareWatchInviteBannerPayload,
@@ -15,6 +16,7 @@ export default function AdminTournamentCreatePage() {
   const { setShowHeader, setShowBackButton, setOnBackClick } = useHeaderVisibility();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { isAdminZero } = useIsAdminZero();
 
   useEffect(() => {
     setShowHeader(true);
@@ -91,6 +93,7 @@ export default function AdminTournamentCreatePage() {
           onSubmit={handleSubmit}
           submitting={submitting}
           externalError={error}
+          showTestTournamentOption={isAdminZero}
         />
       </div>
     </div>

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { connectPgWithRetry } from "@/lib/db/pgConnect";
+import { pgPool } from "@/lib/pg";
 import { getDevPanelContextOrThrow, logAdminAction } from "@/lib/supabaseServer";
 
 export const runtime = "nodejs";
@@ -51,6 +53,34 @@ export async function PATCH(
         ok: true,
         data: { id: profileId, engineEnabled },
       });
+    }
+
+    if (engineEnabled) {
+      const client = await connectPgWithRetry(pgPool!);
+      try {
+        const conflictResult = await client.query<{ count: string }>(
+          `SELECT COUNT(*)::text AS count
+             FROM public.dev_player_profile_members m
+             JOIN public.leo_user_configs l ON l.user_id = m.user_id
+            WHERE m.profile_id = $1
+              AND l.is_enabled = true`,
+          [profileId]
+        );
+        const conflictCount = Number(conflictResult.rows[0]?.count ?? 0);
+        if (conflictCount > 0) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: "conflict_leo_active",
+              message:
+                "برخی اعضای این پروفایل لئو فعال دارند. برای روشن کردن Dev Player ابتدا لئو را غیرفعال کنید.",
+            },
+            { status: 409 }
+          );
+        }
+      } finally {
+        client.release();
+      }
     }
 
     const { error: updateError } = await supabase

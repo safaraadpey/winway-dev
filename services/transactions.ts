@@ -217,6 +217,45 @@ function makeHistoryCacheKey(params: { dateFilter: DateFilter; search: string; u
   return `${params.userId}|${params.dateFilter}|${q}`;
 }
 
+/** PostgREST page size (project max-rows is typically 1000). */
+const HISTORY_PAGE_SIZE = 1000;
+/** Safety cap so a busy month cannot unbounded-load the browser. */
+const HISTORY_MAX_ROWS = 10_000;
+const IN_FILTER_CHUNK = 200;
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  if (size <= 0) return [items];
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
+type HistoryPageQueryResult<T> = {
+  data: T[] | null;
+  error: { message: string } | null;
+};
+
+async function fetchAllHistoryPages<T>(
+  runPage: (from: number, to: number) => PromiseLike<HistoryPageQueryResult<T>>,
+  logLabel: string
+): Promise<{ rows: T[]; error: HistoryPageQueryResult<T>["error"]; truncated: boolean }> {
+  const rows: T[] = [];
+  for (let from = 0; from < HISTORY_MAX_ROWS; from += HISTORY_PAGE_SIZE) {
+    const to = from + HISTORY_PAGE_SIZE - 1;
+    const { data, error } = await runPage(from, to);
+    if (error) return { rows, error, truncated: false };
+    const page = data || [];
+    rows.push(...page);
+    if (page.length < HISTORY_PAGE_SIZE) {
+      return { rows, error: null, truncated: false };
+    }
+  }
+  console.warn(`[Wallet] ${logLabel} truncated at ${HISTORY_MAX_ROWS} rows`);
+  return { rows, error: null, truncated: true };
+}
+
 /** Panel cashdesk + approved withdrawal credits — excludes room join, settlement, commission, etc. */
 const PANEL_HISTORY_SOURCE_KINDS = [
   "manual_panel",
@@ -296,23 +335,25 @@ async function fetchUsernameMap(
   const uniqueIds = Array.from(new Set(userIds.filter((id) => /^[0-9a-fA-F-]{36}$/.test(id))));
   if (uniqueIds.length === 0) return map;
 
-  const { data, error } = await supabase
-    .from("users")
-    .select("id, username, role, admin_sub_role")
-    .in("id", uniqueIds);
+  for (const batch of chunkArray(uniqueIds, IN_FILTER_CHUNK)) {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id, username, role, admin_sub_role")
+      .in("id", batch);
 
-  if (error) {
-    console.error("[Wallet] fetchUsernameMap error:", error);
-    return map;
-  }
+    if (error) {
+      console.error("[Wallet] fetchUsernameMap error:", error);
+      return map;
+    }
 
-  for (const row of data || []) {
-    map.set(String(row.id), {
-      username: row.username || "نامشخص",
-      shortId: makeShortIdFromUuid(String(row.id)),
-      role: row.role,
-      adminSubRole: row.admin_sub_role ?? null,
-    });
+    for (const row of data || []) {
+      map.set(String(row.id), {
+        username: row.username || "نامشخص",
+        shortId: makeShortIdFromUuid(String(row.id)),
+        role: row.role,
+        adminSubRole: row.admin_sub_role ?? null,
+      });
+    }
   }
 
   return map;
@@ -345,20 +386,23 @@ async function loadOnlineDepositHistoryItems(params: {
     return [];
   }
 
-  let query = supabase
-    .from("transactions")
-    .select("id, user_id, amount, created_at, idempotency_key")
-    .eq("source_kind", "deposit_domain")
-    .eq("type", "deposit")
-    .gte("created_at", dateFromIso)
-    .order("created_at", { ascending: false })
-    .limit(100);
-
-  if (!scopeAll) {
-    query = query.in("user_id", targetUserIds);
-  }
-
-  const { data, error } = await query;
+  const { rows: data, error } = await fetchAllHistoryPages(
+    (from, to) => {
+      let query = supabase
+        .from("transactions")
+        .select("id, user_id, amount, created_at, idempotency_key")
+        .eq("source_kind", "deposit_domain")
+        .eq("type", "deposit")
+        .gte("created_at", dateFromIso)
+        .order("created_at", { ascending: false })
+        .range(from, to);
+      if (!scopeAll) {
+        query = query.in("user_id", targetUserIds);
+      }
+      return query;
+    },
+    "deposit_domain history"
+  );
   if (error) {
     console.warn("[Wallet] deposit_domain history error:", error.message);
     return [];
@@ -413,19 +457,22 @@ async function loadCryptoWithdrawalHistoryItems(params: {
     return [];
   }
 
-  let query = supabase
-    .from("withdrawal_requests")
-    .select("id, player_id, amount, created_at")
-    .eq("kind", "crypto")
-    .gte("created_at", dateFromIso)
-    .order("created_at", { ascending: false })
-    .limit(100);
-
-  if (!scopeAll) {
-    query = query.in("player_id", targetUserIds);
-  }
-
-  const { data, error } = await query;
+  const { rows: data, error } = await fetchAllHistoryPages(
+    (from, to) => {
+      let query = supabase
+        .from("withdrawal_requests")
+        .select("id, player_id, amount, created_at")
+        .eq("kind", "crypto")
+        .gte("created_at", dateFromIso)
+        .order("created_at", { ascending: false })
+        .range(from, to);
+      if (!scopeAll) {
+        query = query.in("player_id", targetUserIds);
+      }
+      return query;
+    },
+    "crypto withdrawal history"
+  );
   if (error) {
     console.warn("[Wallet] crypto withdrawal history error:", error.message);
     return [];
@@ -637,56 +684,65 @@ export async function loadTransactionHistory(
 
     let uniqueTransactions: any[];
 
+    let historyTruncated = false;
+
     if (scopeAll) {
-      const { data, error } = await supabase
-        .from("transactions")
-        .select(panelSelect)
-        .in("source_kind", [...PANEL_HISTORY_SOURCE_KINDS])
-        .gte("created_at", dateFromIso)
-        .order("created_at", { ascending: false })
-        .limit(100);
+      const { rows, error, truncated } = await fetchAllHistoryPages(
+        (from, to) =>
+          supabase
+            .from("transactions")
+            .select(panelSelect)
+            .in("source_kind", [...PANEL_HISTORY_SOURCE_KINDS])
+            .gte("created_at", dateFromIso)
+            .order("created_at", { ascending: false })
+            .range(from, to),
+        "loadTransactionHistory panel"
+      );
 
       if (error) {
         console.error("[Wallet] loadTransactionHistory query error:", error);
         throw new Error("خطا در بارگذاری تاریخچه تراکنش‌ها");
       }
-      uniqueTransactions = data || [];
+      uniqueTransactions = rows;
+      historyTruncated = truncated;
     } else {
-      // روش 1: تراکنش‌هایی که user_id (طرف کیف پول) در scope است
-      let receiverQuery = supabase
-        .from("transactions")
-        .select(panelSelect)
-        .in("source_kind", [...PANEL_HISTORY_SOURCE_KINDS])
-        .gte("created_at", dateFromIso)
-        .order("created_at", { ascending: false })
-        .limit(100)
-        .in("user_id", targetUserIds);
+      const [receiverRes, senderRes] = await Promise.all([
+        fetchAllHistoryPages(
+          (from, to) =>
+            supabase
+              .from("transactions")
+              .select(panelSelect)
+              .in("source_kind", [...PANEL_HISTORY_SOURCE_KINDS])
+              .gte("created_at", dateFromIso)
+              .order("created_at", { ascending: false })
+              .in("user_id", targetUserIds)
+              .range(from, to),
+          "loadTransactionHistory panel receiver"
+        ),
+        fetchAllHistoryPages(
+          (from, to) =>
+            supabase
+              .from("transactions")
+              .select(panelSelect)
+              .in("source_kind", [...PANEL_HISTORY_SOURCE_KINDS])
+              .gte("created_at", dateFromIso)
+              .order("created_at", { ascending: false })
+              .in("source_ref", targetUserIds)
+              .range(from, to),
+          "loadTransactionHistory panel sender"
+        ),
+      ]);
 
-      const { data: transactionsAsReceiver, error: error1 } = await receiverQuery;
-
-      // روش 2: تراکنش‌هایی که source_ref (عامل پنل / طرف مقابل) در scope است
-      let senderQuery = supabase
-        .from("transactions")
-        .select(panelSelect)
-        .in("source_kind", [...PANEL_HISTORY_SOURCE_KINDS])
-        .gte("created_at", dateFromIso)
-        .order("created_at", { ascending: false })
-        .limit(100)
-        .in("source_ref", targetUserIds);
-
-      const senderRes = await senderQuery;
-      const transactionsAsSender = senderRes.data;
-      const error2 = senderRes.error;
-
-      if (error1 || error2) {
-        console.error("[Wallet] loadTransactionHistory query error:", error1 || error2);
+      if (receiverRes.error || senderRes.error) {
+        console.error(
+          "[Wallet] loadTransactionHistory query error:",
+          receiverRes.error || senderRes.error
+        );
         throw new Error("خطا در بارگذاری تاریخچه تراکنش‌ها");
       }
 
-      const allTransactions = [
-        ...(transactionsAsReceiver || []),
-        ...(transactionsAsSender || []),
-      ];
+      const allTransactions = [...receiverRes.rows, ...senderRes.rows];
+      historyTruncated = receiverRes.truncated || senderRes.truncated;
 
       uniqueTransactions = Array.from(
         new Map(allTransactions.map((t: any) => [t.id, t])).values()
@@ -710,14 +766,16 @@ export async function loadTransactionHistory(
 
     const withdrawalPlayerByRequestId = new Map<string, string>();
     if (withdrawalRequestIds.length > 0) {
-      const { data: wrRows, error: wrError } = await supabase
-        .from("withdrawal_requests")
-        .select("id, player_id")
-        .in("id", withdrawalRequestIds);
+      for (const batch of chunkArray(withdrawalRequestIds, IN_FILTER_CHUNK)) {
+        const { data: wrRows, error: wrError } = await supabase
+          .from("withdrawal_requests")
+          .select("id, player_id")
+          .in("id", batch);
 
-      if (wrError) {
-        console.error("[Wallet] loadTransactionHistory withdrawal_requests error:", wrError);
-      } else {
+        if (wrError) {
+          console.error("[Wallet] loadTransactionHistory withdrawal_requests error:", wrError);
+          break;
+        }
         for (const row of wrRows || []) {
           if (row?.id && row?.player_id) {
             withdrawalPlayerByRequestId.set(String(row.id), String(row.player_id));
@@ -730,16 +788,18 @@ export async function loadTransactionHistory(
         (id) => !withdrawalPlayerByRequestId.has(id)
       );
       if (missingIds.length > 0) {
-        const { data: holdRows, error: holdError } = await supabase
-          .from("transactions")
-          .select("source_ref, user_id")
-          .eq("source_kind", "withdrawal_request")
-          .eq("type", "join_hold")
-          .in("source_ref", missingIds);
+        for (const batch of chunkArray(missingIds, IN_FILTER_CHUNK)) {
+          const { data: holdRows, error: holdError } = await supabase
+            .from("transactions")
+            .select("source_ref, user_id")
+            .eq("source_kind", "withdrawal_request")
+            .eq("type", "join_hold")
+            .in("source_ref", batch);
 
-        if (holdError) {
-          console.error("[Wallet] loadTransactionHistory withdrawal hold lookup error:", holdError);
-        } else {
+          if (holdError) {
+            console.error("[Wallet] loadTransactionHistory withdrawal hold lookup error:", holdError);
+            break;
+          }
           for (const row of holdRows || []) {
             const ref = String(row?.source_ref || "");
             const playerId = String(row?.user_id || "");
@@ -859,35 +919,7 @@ export async function loadTransactionHistory(
       ])
     ).filter((id) => /^[0-9a-fA-F-]{36}$/.test(id));
 
-    const userMap = new Map<
-      string,
-      {
-        username: string;
-        shortId: string;
-        role?: string;
-        adminSubRole?: string | null;
-      }
-    >();
-    if (allUserIds.length > 0) {
-      const { data: users, error: usersError } = await supabase
-        .from("users")
-        .select("id, username, role, admin_sub_role")
-        .in("id", allUserIds);
-
-      if (usersError) {
-        console.error("loadTransactionHistory users error:", usersError);
-        throw new Error("خطا در دریافت اطلاعات کاربران");
-      }
-
-      (users || []).forEach((u: any) => {
-        userMap.set(u.id, {
-          username: u.username || "نامشخص",
-          shortId: makeShortIdFromUuid(u.id),
-          role: u.role,
-          adminSubRole: u.admin_sub_role ?? null,
-        });
-      });
-    }
+    const userMap = await fetchUsernameMap(allUserIds);
 
     const actorRoleFields = (
       userId: string
@@ -1049,18 +1081,23 @@ export async function loadTransactionHistory(
       }),
     ]);
 
-    const mergedItems = [...historyItems, ...onlineDepositItems, ...cryptoWithdrawalItems]
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )
-      .slice(0, 100);
+    const mergedItems = [...historyItems, ...onlineDepositItems, ...cryptoWithdrawalItems].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    if (mergedItems.length > HISTORY_MAX_ROWS) {
+      mergedItems.length = HISTORY_MAX_ROWS;
+      historyTruncated = true;
+    }
 
     console.info("[Wallet] transaction history loaded", {
+      dateFilter,
+      dateFrom: dateFromIso,
       panelCount: historyItems.length,
       gatewayAndCryptoDepositCount: onlineDepositItems.length,
       cryptoWithdrawalCount: cryptoWithdrawalItems.length,
       totalCount: mergedItems.length,
+      truncated: historyTruncated,
     });
 
     const result: TransactionHistoryResult = {

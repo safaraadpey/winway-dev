@@ -9,6 +9,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { isTestTournamentMeta, stripTestTournamentFlag } from "@/lib/admin/testTournamentAccess";
+import { isAdminZeroUser } from "@/lib/featureFlags/adminZero";
 import {
   createServiceClient,
   createUserClientFromAccessToken,
@@ -79,7 +81,7 @@ async function requireTournamentAdmin(request: NextRequest) {
   const service = createServiceClient();
   const { data: actor, error: actorError } = await service
     .from("users")
-    .select("id, role, status")
+    .select("id, role, status, username, admin_sub_role")
     .eq("id", ctx.user.id)
     .maybeSingle();
 
@@ -127,7 +129,7 @@ export async function PATCH(
     const { ctx, service, actor } = auth as {
       ctx: Awaited<ReturnType<typeof getAdminJwtContextOrThrow>>;
       service: ReturnType<typeof createServiceClient>;
-      actor: { id: string; role: string; status: string };
+      actor: { id: string; role: string; status: string; username?: string | null; admin_sub_role?: string | null };
     };
 
     const tournamentId = parseTournamentId(params.id);
@@ -172,10 +174,46 @@ export async function PATCH(
       );
     }
 
+    const actorIsAdminZero = isAdminZeroUser(actor);
+    let nextPatch = patch;
+    if (!actorIsAdminZero) {
+      const { data: existing, error: existingError } = await service
+        .from("tournaments")
+        .select("id, meta")
+        .eq("id", tournamentId)
+        .maybeSingle();
+      if (existingError) {
+        console.error("[TournamentAdmin] test-access lookup failed", {
+          actorId: ctx.user.id,
+          tournamentId,
+          error: existingError.message,
+        });
+        return NextResponse.json(
+          { ok: false, error: "internal_error", message: "خطای داخلی سرور" },
+          { status: 500 }
+        );
+      }
+      if (isTestTournamentMeta(existing?.meta)) {
+        console.info("[TournamentAdmin] blocked test tournament update", {
+          actorId: ctx.user.id,
+          tournamentId,
+        });
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "forbidden",
+            message: "تورنومنت تستی فقط برای adminzero قابل ویرایش است.",
+          },
+          { status: 403 }
+        );
+      }
+      nextPatch = stripTestTournamentFlag(patch);
+    }
+
     const userClient = createUserClientFromAccessToken(ctx.accessToken);
     const { data, error } = await userClient.rpc("fn_admin_update_tournament", {
       p_tournament_id: tournamentId,
-      p_patch: patch,
+      p_patch: nextPatch,
     });
 
     if (error) {
@@ -200,7 +238,7 @@ export async function PATCH(
       "tournament_update",
       "tournaments",
       tournamentId,
-      { patch_keys: Object.keys(patch) },
+      { patch_keys: Object.keys(nextPatch) },
       request
     );
 
@@ -230,7 +268,7 @@ export async function DELETE(
     const { ctx, service, actor } = auth as {
       ctx: Awaited<ReturnType<typeof getAdminJwtContextOrThrow>>;
       service: ReturnType<typeof createServiceClient>;
-      actor: { id: string; role: string; status: string };
+      actor: { id: string; role: string; status: string; username?: string | null; admin_sub_role?: string | null };
     };
 
     const tournamentId = parseTournamentId(params.id);
@@ -239,6 +277,39 @@ export async function DELETE(
         { ok: false, error: "validation_error", message: "شناسه تورنومنت نامعتبر است." },
         { status: 400 }
       );
+    }
+
+    if (!isAdminZeroUser(actor)) {
+      const { data: existing, error: existingError } = await service
+        .from("tournaments")
+        .select("id, meta")
+        .eq("id", tournamentId)
+        .maybeSingle();
+      if (existingError) {
+        console.error("[TournamentAdmin] test-access lookup failed", {
+          actorId: ctx.user.id,
+          tournamentId,
+          error: existingError.message,
+        });
+        return NextResponse.json(
+          { ok: false, error: "internal_error", message: "خطای داخلی سرور" },
+          { status: 500 }
+        );
+      }
+      if (isTestTournamentMeta(existing?.meta)) {
+        console.info("[TournamentAdmin] blocked test tournament delete", {
+          actorId: ctx.user.id,
+          tournamentId,
+        });
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "forbidden",
+            message: "تورنومنت تستی فقط برای adminzero قابل حذف است.",
+          },
+          { status: 403 }
+        );
+      }
     }
 
     const userClient = createUserClientFromAccessToken(ctx.accessToken);

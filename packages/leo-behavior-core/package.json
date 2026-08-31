@@ -1,0 +1,28 @@
+{
+  "name": "@dingmoney/leo-behavior-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pure Leo behavior engine: profile presets, timeline generation, session adjustments",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "npm run typecheck",
+    "test": "node --import tsx --test src/generateWindowTimeline.test.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.5.3"
+  }
+}

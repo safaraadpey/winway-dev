@@ -12,6 +12,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { isAdminZeroUser } from "@/lib/featureFlags/adminZero";
+import { stripTestTournamentFlag } from "@/lib/admin/testTournamentAccess";
 import {
   createServiceClient,
   createUserClientFromAccessToken,
@@ -90,7 +92,7 @@ export async function POST(request: NextRequest) {
     const service = createServiceClient();
     const { data: actor, error: actorError } = await service
       .from("users")
-      .select("id, role, status")
+      .select("id, role, status, username, admin_sub_role")
       .eq("id", ctx.user.id)
       .maybeSingle();
 
@@ -153,9 +155,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const actorIsAdminZero = isAdminZeroUser(actor);
+    const createPayload = actorIsAdminZero
+      ? payload
+      : stripTestTournamentFlag(payload);
+    if (!actorIsAdminZero && payload.is_test_tournament === true) {
+      console.info("[TournamentAdmin] stripped test flag from create", {
+        actorId: ctx.user.id,
+        role: actor.role,
+      });
+    }
+
     const userClient = createUserClientFromAccessToken(ctx.accessToken);
     const { data, error } = await userClient.rpc("fn_admin_create_tournament", {
-      p_payload: payload,
+      p_payload: createPayload,
     });
 
     if (error) {

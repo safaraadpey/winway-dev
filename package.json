@@ -20,13 +20,16 @@
     "test:hamipay-deposit": "node tools/hamipay-deposit/run.mjs",
     "test:auth-form-security": "node tools/auth-form-security/run.mjs",
     "test:referral-links": "node tools/referral-links/run.mjs",
+    "dev:register-t-players": "node tools/dev/register-dev-super-t-players.cjs",
     "test:backgammon-e2e": "node tools/backgammon-e2e/run.mjs",
-    "test:tic-tac-toe-engine": "npm run test -w @dingmoney/tic-tac-toe-engine"
+    "test:tic-tac-toe-engine": "npm run test -w @dingmoney/tic-tac-toe-engine",
+    "test:leo-behavior": "npm run test -w @dingmoney/leo-behavior-core"
   },
   "dependencies": {
     "@dingmoney/backgammon-engine": "*",
     "@dingmoney/tic-tac-toe-engine": "*",
     "@dingmoney/deposit-core": "*",
+    "@dingmoney/leo-behavior-core": "*",
     "@noble/curves": "^2.2.0",
     "@noble/hashes": "^2.2.0",
     "@scure/bip32": "^2.2.0",
