@@ -46,7 +46,7 @@ export default function MenuLiveBadge({ count }: MenuLiveBadgeProps) {
 
   return (
     <span className="theme-menu-item__liveBadge" aria-hidden>
-      <span className="theme-menu-item__liveBadgeCount numeric-text">
+      <span className="theme-menu-item__liveBadgeCount numeric-text" dir="ltr">
         {count.toLocaleString("en-US")}
       </span>
       <UsersIcon />

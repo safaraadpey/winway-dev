@@ -64,10 +64,14 @@
   position: absolute;
   left: 34%;
   top: 38%;
-  transform: translate(calc(-50% + 60px), calc(-50% + 13px));
+  /* Pin the icon (right edge), so extra digits grow left — not +50% of badge width. */
+  transform: translate(calc(-100% + 86px), calc(-50% + 13px));
   display: inline-flex;
+  flex-direction: row;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.4rem;
+  direction: ltr;
   pointer-events: none;
   z-index: 2;
 }
@@ -80,8 +84,9 @@
 
 .theme-menu-item__liveBadgeCount {
   font-family: "Vazirmatn", sans-serif !important;
-  font-size: 25.92px;
-  line-height: 25.92px;
+  /* 25.92px * 0.8 — 20% smaller; icon size stays 25.92 */
+  font-size: 20.736px;
+  line-height: 20.736px;
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: "tnum" 1, "lnum" 1;
   -webkit-text-size-adjust: none;
@@ -89,19 +94,21 @@
   color: #e5e7eb;
   font-weight: 600;
   direction: ltr;
-  text-align: left;
+  text-align: right;
+  min-width: 3ch;
+  flex-shrink: 0;
 }
 
 html[data-theme="dark"] .theme-menu-item__liveBadge {
-  transform: translate(calc(-50% + 60px), calc(-50% + 9px));
+  transform: translate(calc(-100% + 86px), calc(-50% + 9px));
 }
 
 html[data-theme="dark"] .theme-menu-item[data-menu-item="gameRoom"] .theme-menu-item__liveBadge {
-  transform: translate(calc(-50% + 60px), calc(-50% + 1px));
+  transform: translate(calc(-100% + 86px), calc(-50% + 1px));
 }
 
 html[data-theme="light"] .theme-menu-item__liveBadge {
-  transform: translate(calc(-50% + 80px), calc(-50% + 7px));
+  transform: translate(calc(-100% + 106px), calc(-50% + 7px));
 }
 
 html[data-theme="light"] .theme-menu-item__liveBadgeCount {
