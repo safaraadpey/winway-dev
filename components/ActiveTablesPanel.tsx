@@ -13,6 +13,7 @@ export interface ActiveTable {
   winnerNames?: string[];
   isFinished?: boolean;
   status?: string | null;
+  isPlayerTable?: boolean;
 }
 
 const CLICKABLE_TABLE_STATUSES = new Set([
@@ -73,6 +74,7 @@ export default function ActiveTablesPanel({
               tableNo={table.tableNo}
               winnerNames={table.winnerNames}
               isFinished={table.isFinished}
+              isPlayerTable={table.isPlayerTable}
               onClick={
                 onTableClick && isActiveTableClickable(table)
                   ? () => onTableClick(table.id)

@@ -13,6 +13,7 @@ type TournamentActiveTable = {
   tableNo: number | null;
   winnerNames?: string[];
   isFinished?: boolean;
+  isPlayerTable?: boolean;
 };
 
 const FINISHED_ROOM_STATUSES = new Set(["finished", "settling", "settled"]);
@@ -221,6 +222,7 @@ export async function GET(request: Request) {
         cardCount,
         roundNo: row.round_no ?? null,
         tableNo: row.table_no ?? null,
+        isPlayerTable: stats.players.has(user.id),
         ...(isFinished ? { isFinished: true, winnerNames } : {}),
       };
     });

@@ -56,6 +56,7 @@ export default function ActiveTablesSection({
               winnerNames={table.winnerNames}
               isFinished={table.isFinished}
               hideWinnerNames={hideWinnerNames}
+              isPlayerTable={table.isPlayerTable}
               onClick={
                 onTableClick && isActiveTableClickable(table)
                   ? () => onTableClick(table.id)

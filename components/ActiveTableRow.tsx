@@ -12,16 +12,42 @@ interface ActiveTableRowProps {
   winnerNames?: string[];
   isFinished?: boolean;
   hideWinnerNames?: boolean;
+  isPlayerTable?: boolean;
   onClick?: () => void;
 }
 
 const ROUND_TONE_COUNT = 6;
 
-function tableRowToneClass(roundNo?: number | null): string {
+function roundToneIndex(roundNo?: number | null): number | null {
   if (roundNo == null || !Number.isFinite(roundNo) || roundNo < 1) {
+    return null;
+  }
+  return ((Math.trunc(roundNo) - 1) % ROUND_TONE_COUNT) + 1;
+}
+
+function tableRowToneClass(roundNo?: number | null, isPlayerTable?: boolean): string {
+  const tone = roundToneIndex(roundNo);
+
+  if (isPlayerTable) {
+    switch (tone) {
+      case 2:
+        return panelStyles.tableRowPlayerTone2;
+      case 3:
+        return panelStyles.tableRowPlayerTone3;
+      case 4:
+        return panelStyles.tableRowPlayerTone4;
+      case 5:
+        return panelStyles.tableRowPlayerTone5;
+      case 6:
+        return panelStyles.tableRowPlayerTone6;
+      default:
+        return panelStyles.tableRowPlayerTone1;
+    }
+  }
+
+  if (tone == null) {
     return panelStyles.tableRowToneDefault;
   }
-  const tone = ((Math.trunc(roundNo) - 1) % ROUND_TONE_COUNT) + 1;
   switch (tone) {
     case 1:
       return panelStyles.tableRowTone1;
@@ -50,6 +76,7 @@ export default function ActiveTableRow({
   winnerNames,
   isFinished = false,
   hideWinnerNames = false,
+  isPlayerTable = false,
   onClick,
 }: ActiveTableRowProps) {
   const formatNumber = (num: number): string => {
@@ -78,9 +105,10 @@ export default function ActiveTableRow({
 
   return (
     <div
-      className={`${panelStyles.tableRow} ${tableRowToneClass(roundNo)} ${
+      className={`${panelStyles.tableRow} ${tableRowToneClass(roundNo, isPlayerTable)} ${
         isClickable ? panelStyles.tableRowClickable : ""
       }`}
+      data-player-table={isPlayerTable ? "true" : undefined}
       onClick={isClickable ? onClick : undefined}
       role={isClickable ? "button" : undefined}
       tabIndex={isClickable ? 0 : undefined}

@@ -12,6 +12,7 @@ type FinishedTable = {
   roundNo: number | null;
   tableNo: number | null;
   winnerNames: string[];
+  isPlayerTable?: boolean;
 };
 
 const pickDisplayName = (
@@ -196,6 +197,7 @@ export async function GET(request: Request) {
         roundNo: row.round_no ?? null,
         tableNo: row.table_no ?? null,
         winnerNames,
+        isPlayerTable: stats.players.has(user.id),
       };
     });
 

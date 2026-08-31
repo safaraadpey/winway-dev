@@ -583,6 +583,90 @@
   background-color: #34d399;
 }
 
+/* میز پلیر — راند ۱ — آبی آسمانی ملایم */
+.tableRowPlayerTone1 {
+  background-color: #e0f2fe;
+  box-shadow: inset 4px 0 0 #38bdf8;
+}
+
+.tableRowClickable.tableRowPlayerTone1:hover {
+  background-color: #bae6fd;
+}
+
+.tableRowClickable.tableRowPlayerTone1:active {
+  background-color: #7dd3fc;
+}
+
+/* میز پلیر — راند ۲ — آبی کلاسیک ملایم */
+.tableRowPlayerTone2 {
+  background-color: #dbeafe;
+  box-shadow: inset 4px 0 0 #3b82f6;
+}
+
+.tableRowClickable.tableRowPlayerTone2:hover {
+  background-color: #bfdbfe;
+}
+
+.tableRowClickable.tableRowPlayerTone2:active {
+  background-color: #93c5fd;
+}
+
+/* میز پلیر — راند ۳ — آبی فیروزه‌ای ملایم */
+.tableRowPlayerTone3 {
+  background-color: #cffafe;
+  box-shadow: inset 4px 0 0 #22d3ee;
+}
+
+.tableRowClickable.tableRowPlayerTone3:hover {
+  background-color: #a5f3fc;
+}
+
+.tableRowClickable.tableRowPlayerTone3:active {
+  background-color: #67e8f9;
+}
+
+/* میز پلیر — راند ۴ — آبی روشن‌تر پررنگ */
+.tableRowPlayerTone4 {
+  background-color: #bfdbfe;
+  box-shadow: inset 4px 0 0 #2563eb;
+}
+
+.tableRowClickable.tableRowPlayerTone4:hover {
+  background-color: #93c5fd;
+}
+
+.tableRowClickable.tableRowPlayerTone4:active {
+  background-color: #60a5fa;
+}
+
+/* میز پلیر — راند ۵ — آبی یخی */
+.tableRowPlayerTone5 {
+  background-color: #ecfeff;
+  box-shadow: inset 4px 0 0 #0891b2;
+}
+
+.tableRowClickable.tableRowPlayerTone5:hover {
+  background-color: #cffafe;
+}
+
+.tableRowClickable.tableRowPlayerTone5:active {
+  background-color: #a5f3fc;
+}
+
+/* میز پلیر — راند ۶ — آبی نیلی ملایم */
+.tableRowPlayerTone6 {
+  background-color: #e0e7ff;
+  box-shadow: inset 4px 0 0 #6366f1;
+}
+
+.tableRowClickable.tableRowPlayerTone6:hover {
+  background-color: #c7d2fe;
+}
+
+.tableRowClickable.tableRowPlayerTone6:active {
+  background-color: #a5b4fc;
+}
+
 .activeCardRow {
   display: flex;
   align-items: center;
