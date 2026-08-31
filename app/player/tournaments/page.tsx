@@ -80,6 +80,12 @@ function remainingSecondsUntil(startAt: string | null, nowMs: number): number {
   return Math.max(0, Math.floor((startMs - nowMs) / 1000));
 }
 
+function startAtMs(row: TournamentRow): number {
+  if (!row.start_at) return Number.POSITIVE_INFINITY;
+  const ms = new Date(row.start_at).getTime();
+  return Number.isFinite(ms) ? ms : Number.POSITIVE_INFINITY;
+}
+
 export default function TournamentsPage() {
   const router = useRouter();
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
@@ -144,8 +150,8 @@ export default function TournamentsPage() {
           "id,title,status,start_at,currency,ticket_price,guaranteed_prize,commission_rate,meta"
         )
         .in("status", ["registration_open", "running", "settling", "finished"])
-        .order("start_at", { ascending: false })
-        .order("created_at", { ascending: false }),
+        .order("start_at", { ascending: true })
+        .order("created_at", { ascending: true }),
       supabase.auth.getUser(),
     ]);
     const myUserId = authData?.user?.id ?? null;
@@ -158,22 +164,6 @@ export default function TournamentsPage() {
       setPrizePercents({});
     } else {
       const items = ((data as TournamentRow[]) ?? []).slice();
-      const statusPriority: Record<string, number> = {
-        registration_open: 0,
-        running: 1,
-        settling: 2,
-        finished: 3,
-        draft: 4,
-      };
-      items.sort((a, b) => {
-        const pa = statusPriority[a.status ?? ""] ?? 99;
-        const pb = statusPriority[b.status ?? ""] ?? 99;
-        if (pa !== pb) return pa - pb;
-        const sa = a.start_at ? new Date(a.start_at).getTime() : Number.MIN_SAFE_INTEGER;
-        const sb = b.start_at ? new Date(b.start_at).getTime() : Number.MIN_SAFE_INTEGER;
-        if (sa !== sb) return sb - sa;
-        return 0;
-      });
 
       const tournamentIds = items.map((i) => i.id);
       if (tournamentIds.length === 0) {
@@ -272,10 +262,14 @@ export default function TournamentsPage() {
   }, []);
 
   const { activeRows, finishedRows } = useMemo(() => {
-    const active = rows.filter((row) =>
-      ["registration_open", "running", "settling"].includes(row.status ?? "")
-    );
-    const finished = rows.filter((row) => row.status === "finished");
+    const active = rows
+      .filter((row) =>
+        ["registration_open", "running", "settling"].includes(row.status ?? "")
+      )
+      .sort((a, b) => startAtMs(a) - startAtMs(b));
+    const finished = rows
+      .filter((row) => row.status === "finished")
+      .sort((a, b) => startAtMs(b) - startAtMs(a));
     return { activeRows: active, finishedRows: finished };
   }, [rows]);
 

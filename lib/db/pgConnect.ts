@@ -17,7 +17,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 export async function connectPgWithRetry(
-  pool: Pool = pgPool!
+  pool: Pool | null | undefined = pgPool
 ): Promise<PoolClient> {
   if (!pool) {
     throw new PgConnectError("DATABASE_URL is not configured");
