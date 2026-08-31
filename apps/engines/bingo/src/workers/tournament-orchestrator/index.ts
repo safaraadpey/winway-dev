@@ -49,7 +49,10 @@ export function startTournamentOrchestrator(ctx: WorkerContext): () => void {
       if (!lock.proceed) return;
       lockHeld = lock.lockHeld;
 
-      const opts = { limit: config.tournamentTickBatchLimit };
+      const opts = {
+        limit: config.tournamentTickBatchLimit,
+        roomCreateStaggerSec: config.tournamentRoomCreateStaggerSec,
+      };
       if (executesBusinessLogic(config.runtime)) {
         await tickDueTournamentsEngine(supabase, log, opts);
       } else {

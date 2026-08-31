@@ -95,6 +95,9 @@ export default function TournamentsPage() {
   const [rows, setRows] = useState<TournamentRow[]>([]);
   const [entryCounts, setEntryCounts] = useState<Record<string, number>>({});
   const [ticketTotals, setTicketTotals] = useState<Record<string, number>>({});
+  const [registeredIds, setRegisteredIds] = useState<Record<string, boolean>>(
+    {}
+  );
   const [prizePercents, setPrizePercents] = useState<Record<string, number[]>>({});
   const [openPrizeSplitIds, setOpenPrizeSplitIds] = useState<Record<string, boolean>>({});
   const [viewMode, setViewMode] = useState<"active" | "finished">("active");
@@ -123,7 +126,10 @@ export default function TournamentsPage() {
     };
   }, []);
 
-  const statusLabel = (status: string | null) => {
+  const statusLabel = (status: string | null, isRegistered: boolean) => {
+    if (status === "registration_open" && isRegistered) {
+      return "ثبت نام شده";
+    }
     switch (status) {
       case "registration_open":
         return "ثبت نام";
@@ -161,6 +167,7 @@ export default function TournamentsPage() {
       setRows([]);
       setEntryCounts({});
       setTicketTotals({});
+      setRegisteredIds({});
       setPrizePercents({});
     } else {
       const items = ((data as TournamentRow[]) ?? []).slice();
@@ -170,6 +177,7 @@ export default function TournamentsPage() {
         setRows([]);
         setEntryCounts({});
         setTicketTotals({});
+        setRegisteredIds({});
         setPrizePercents({});
       } else {
         const [
@@ -242,15 +250,21 @@ export default function TournamentsPage() {
         if (entriesError) {
           setEntryCounts({});
           setTicketTotals({});
+          setRegisteredIds({});
         } else {
           const nextCounts: Record<string, number> = {};
           const nextTickets: Record<string, number> = {};
+          const nextRegistered: Record<string, boolean> = {};
           for (const item of visibleItems) {
             nextCounts[item.id] = usersByTournament[item.id]?.size ?? 0;
             nextTickets[item.id] = ticketsByTournament[item.id] ?? 0;
+            if (myUserId && usersByTournament[item.id]?.has(myUserId)) {
+              nextRegistered[item.id] = true;
+            }
           }
           setEntryCounts(nextCounts);
           setTicketTotals(nextTickets);
+          setRegisteredIds(nextRegistered);
         }
       }
     }
@@ -356,6 +370,9 @@ export default function TournamentsPage() {
                       ? Math.max(guaranteedPrize, collectedAmount)
                       : collectedAmount;
                     const winnerPercents = prizePercents[t.id] ?? [];
+                    const isRegistered = Boolean(registeredIds[t.id]);
+                    const showRegisteredBadge =
+                      isRegistered && t.status === "registration_open";
                     const eventAt = t.start_at
                       ? getShamsiEventDateTimeParts(t.start_at)
                       : null;
@@ -413,8 +430,14 @@ export default function TournamentsPage() {
                             </div>
                             <div className={styles.field}>
                               <span className={styles.fieldLabel}>وضعیت</span>
-                              <span className={styles.statusBadge}>
-                                {statusLabel(t.status)}
+                              <span
+                                className={`${styles.statusBadge}${
+                                  showRegisteredBadge
+                                    ? ` ${styles.statusBadgeRegistered}`
+                                    : ""
+                                }`}
+                              >
+                                {statusLabel(t.status, isRegistered)}
                               </span>
                             </div>
                           </div>

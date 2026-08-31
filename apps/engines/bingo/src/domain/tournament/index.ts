@@ -16,7 +16,9 @@
 import {
   decideTournamentTick,
   mustRecountBeforeUnderMinAction,
+  nextRoomCreateBudget,
   resolveMinPlayersToStart,
+  resolveRoomCreateStaggerSec,
 } from "../../core/index.js";
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import type { Logger } from "../../metrics/logger.js";
@@ -29,6 +31,11 @@ export interface TickTournamentsOptions {
   limit: number;
   /** Optional batch_tables passthrough (NULL = all tables). */
   batchTables?: number | null;
+  /**
+   * Seconds between creating tournament rooms (0 = seat all tables in one tick).
+   * Overridden by tournament meta.room_create_stagger_seconds when set.
+   */
+  roomCreateStaggerSec?: number;
 }
 
 /**
@@ -157,11 +164,35 @@ export async function tickDueTournamentsEngine(
     }
 
     // action.kind === 'tick' → atomic per-tournament advance via DB RPC.
+    // When stagger is on, seat at most one new room per tick so starts_at
+    // (and therefore play) spread across the database instead of one burst.
+    let maxNewRooms: number | null = null;
+    if (opts.batchTables == null) {
+      const staggerSec = resolveRoomCreateStaggerSec(
+        opts.roomCreateStaggerSec ?? 0,
+        candidate.meta
+      );
+      if (staggerSec > 0) {
+        const snapshot = await repo.getRoundSeatSnapshot(candidate.id);
+        maxNewRooms = nextRoomCreateBudget(staggerSec, snapshot, Date.now());
+        if (maxNewRooms === 1) {
+          log.info("[Tournament] stagger room create", {
+            tournamentId: candidate.id,
+            staggerSec,
+            roundNo: snapshot.roundNo,
+            unseated: snapshot.unseatedCount,
+            maxNewRooms,
+          });
+        }
+      }
+    }
+
     const { error } = await supabase.rpc("fn_tick_tournament", {
       p_tournament_id: candidate.id,
       p_seed: null,
       p_batch_tables:
         opts.batchTables == null ? null : [opts.batchTables],
+      p_max_new_rooms: maxNewRooms,
     });
 
     if (!error) {

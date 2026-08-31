@@ -19,3 +19,4 @@ export * from "./prizeSplit.js";
 export * from "./ding.js";
 export * from "./wallet.js";
 export * from "./tournamentEligibility.js";
+export * from "./tournamentRoomStagger.js";

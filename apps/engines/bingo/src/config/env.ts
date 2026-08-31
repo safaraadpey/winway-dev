@@ -47,6 +47,11 @@ export interface EngineConfig {
   roomSchedulerIntervalMs: number;
   tournamentTickIntervalMs: number;
   tournamentTickBatchLimit: number;
+  /**
+   * Seconds to wait between creating tournament rooms (0 = seat all in one tick).
+   * Per-tournament meta.room_create_stagger_seconds overrides this.
+   */
+  tournamentRoomCreateStaggerSec: number;
   /** Sync full marks snapshot every N processed draws (0 = disabled). */
   roomStateCheckpointEvery: number;
   /** Requeue draw_jobs in `processing` older than this (seconds). */
@@ -184,6 +189,9 @@ export function loadConfig(): EngineConfig {
     ),
     tournamentTickBatchLimit: Number(
       process.env.TOURNAMENT_TICK_BATCH_LIMIT ?? "50"
+    ),
+    tournamentRoomCreateStaggerSec: Number(
+      process.env.TOURNAMENT_ROOM_CREATE_STAGGER_SEC ?? "3"
     ),
     roomStateCheckpointEvery: Number(
       process.env.ROOM_STATE_CHECKPOINT_EVERY ?? "10"

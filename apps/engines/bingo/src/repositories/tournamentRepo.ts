@@ -16,11 +16,39 @@
 
 import type { Pool } from "pg";
 import type { TournamentTickCandidate } from "../core/index.js";
+import type { RoundSeatSnapshot } from "../core/tournamentRoomStagger.js";
 import { getPgPool } from "../db/pg.js";
 import type { SupabaseAdmin } from "../db/supabase-admin.js";
 
 function fail(op: string, message: string): never {
   throw new Error(`tournamentRepo ${op}: ${message}`);
+}
+
+function parseTimeMs(raw: unknown): number | null {
+  if (raw == null) return null;
+  if (raw instanceof Date) {
+    const ms = raw.getTime();
+    return Number.isFinite(ms) ? ms : null;
+  }
+  const ms = Date.parse(`${raw}`);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function parseRoundSeatSnapshot(row: {
+  round_no?: string | number;
+  table_count?: string | number;
+  unseated_count?: string | number;
+  last_room_created_at?: Date | string | null;
+} | undefined): RoundSeatSnapshot {
+  const roundNo = Number(row?.round_no ?? 0);
+  const tableCount = Number(row?.table_count ?? 0);
+  const unseatedCount = Number(row?.unseated_count ?? 0);
+  return {
+    roundNo: Number.isFinite(roundNo) ? roundNo : 0,
+    tableCount: Number.isFinite(tableCount) ? tableCount : 0,
+    unseatedCount: Number.isFinite(unseatedCount) ? unseatedCount : 0,
+    lastRoomCreatedAtMs: parseTimeMs(row?.last_room_created_at ?? null),
+  };
 }
 
 function parseExactCount(raw: unknown, source: string): number {
@@ -116,6 +144,101 @@ export class TournamentRepo {
       .eq("status", "created");
     if (error) fail("countDistinctCreatedPlayers", error.message);
     return parseExactCount(count, "supabase_count");
+  }
+
+  /**
+   * Current-round seating snapshot: how many tables still need a room, and when
+   * the last room was created. Used to stagger fn_tick_tournament seating.
+   */
+  async getRoundSeatSnapshot(tournamentId: string): Promise<RoundSeatSnapshot> {
+    if (this.pg) {
+      const result = await this.pg.query<{
+        round_no: string | number;
+        table_count: string | number;
+        unseated_count: string | number;
+        last_room_created_at: Date | string | null;
+      }>(
+        `
+        WITH curr AS (
+          SELECT COALESCE(MAX(round_no), 0) AS round_no
+            FROM public.tournament_round_rooms
+           WHERE tournament_id = $1::uuid
+        )
+        SELECT
+          c.round_no,
+          COUNT(trr.id)::int AS table_count,
+          COUNT(trr.id) FILTER (WHERE trr.room_id IS NULL)::int AS unseated_count,
+          MAX(COALESCE(r.created_at, (trr.meta->>'room_created_at')::timestamptz))
+            AS last_room_created_at
+          FROM curr c
+          LEFT JOIN public.tournament_round_rooms trr
+            ON trr.tournament_id = $1::uuid
+           AND trr.round_no = c.round_no
+           AND c.round_no > 0
+          LEFT JOIN public.rooms r ON r.id = trr.room_id
+         GROUP BY c.round_no
+        `,
+        [tournamentId]
+      );
+      const row = result.rows[0];
+      return parseRoundSeatSnapshot(row);
+    }
+
+    const maxRound = await this.db
+      .from("tournament_round_rooms")
+      .select("round_no")
+      .eq("tournament_id", tournamentId)
+      .order("round_no", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (maxRound.error) fail("getRoundSeatSnapshot(round)", maxRound.error.message);
+
+    const roundNo = Number((maxRound.data as { round_no?: number } | null)?.round_no ?? 0);
+    if (!roundNo) {
+      return { roundNo: 0, tableCount: 0, unseatedCount: 0, lastRoomCreatedAtMs: null };
+    }
+
+    const tables = await this.db
+      .from("tournament_round_rooms")
+      .select("id,room_id,meta")
+      .eq("tournament_id", tournamentId)
+      .eq("round_no", roundNo);
+    if (tables.error) fail("getRoundSeatSnapshot(tables)", tables.error.message);
+
+    type TrRow = {
+      id: string;
+      room_id: string | null;
+      meta: Record<string, unknown> | null;
+    };
+    const rows = (tables.data ?? []) as TrRow[];
+    const roomIds = rows.map((r) => r.room_id).filter((id): id is string => !!id);
+    let lastRoomCreatedAtMs: number | null = null;
+    for (const row of rows) {
+      const metaAt = parseTimeMs(row.meta?.["room_created_at"]);
+      if (metaAt != null && (lastRoomCreatedAtMs == null || metaAt > lastRoomCreatedAtMs)) {
+        lastRoomCreatedAtMs = metaAt;
+      }
+    }
+    if (roomIds.length > 0) {
+      const rooms = await this.db
+        .from("rooms")
+        .select("created_at")
+        .in("id", roomIds);
+      if (rooms.error) fail("getRoundSeatSnapshot(rooms)", rooms.error.message);
+      for (const room of rooms.data ?? []) {
+        const created = parseTimeMs((room as { created_at?: string | null }).created_at);
+        if (created != null && (lastRoomCreatedAtMs == null || created > lastRoomCreatedAtMs)) {
+          lastRoomCreatedAtMs = created;
+        }
+      }
+    }
+
+    return {
+      roundNo,
+      tableCount: rows.length,
+      unseatedCount: rows.filter((r) => !r.room_id).length,
+      lastRoomCreatedAtMs,
+    };
   }
 
   /** Push start_at (the "not enough players + auto-extend" branch). */
