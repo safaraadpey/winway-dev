@@ -75,6 +75,11 @@ export type LeoBandStakeCap = {
   busyCount: number;
 };
 
+export type LeoBandStakeCapInput = Pick<
+  LeoBandStakeCap,
+  "stakeTier" | "maxActivePlayers" | "shuffleEnabled"
+>;
+
 export type LeoBandCap = {
   timeBand: LeoTimeBand;
   stakes: LeoBandStakeCap[];

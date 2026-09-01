@@ -4,7 +4,7 @@ import {
   LEO_TIME_BANDS,
   isLeoStakeTier,
 } from "@dingmoney/leo-behavior-core";
-import type { LeoSaveUserConfigPayload, LeoStakeTier, LeoTimeBand } from "@/src/types/leo";
+import type { LeoBandStakeCapInput, LeoSaveUserConfigPayload, LeoTimeBand } from "@/src/types/leo";
 
 export function parseLeoUserConfigPayload(body: unknown): LeoSaveUserConfigPayload {
   const raw = body as Record<string, unknown>;
@@ -51,11 +51,7 @@ export function parseLeoPresetName(body: unknown): string {
   return name;
 }
 
-function parseStakeCap(item: unknown): {
-  stakeTier: LeoStakeTier;
-  maxActivePlayers: number;
-  shuffleEnabled: boolean;
-} {
+function parseStakeCap(item: unknown): LeoBandStakeCapInput {
   const row = item as Record<string, unknown>;
   const stakeTier = String(row?.stakeTier ?? "");
   if (!isLeoStakeTier(stakeTier)) {
@@ -75,11 +71,7 @@ function parseStakeCap(item: unknown): {
 export function parseLeoBandCapsPayload(body: unknown): {
   bands: Array<{
     timeBand: LeoTimeBand;
-    stakes: Array<{
-      stakeTier: LeoStakeTier;
-      maxActivePlayers: number;
-      shuffleEnabled: boolean;
-    }>;
+    stakes: LeoBandStakeCapInput[];
   }>;
   maxLeoPlayersPerWaitingRoom: number;
   maxLeoCardsPerJoin: number;

@@ -20,6 +20,7 @@ import {
   type LeoSettings,
   type LeoBandCap,
   type LeoBandStakeCap,
+  type LeoBandStakeCapInput,
   type LeoTemplateOption,
   type LeoUserConfig,
   type LeoUserDetail,
@@ -344,7 +345,7 @@ export async function patchLeoSettings(payload: {
 }
 
 export async function saveLeoBandCaps(
-  caps: Array<Pick<LeoBandCap, "timeBand" | "stakes">>,
+  caps: Array<{ timeBand: LeoBandCap["timeBand"]; stakes: LeoBandStakeCapInput[] }>,
   maxLeoPlayersPerWaitingRoom: number,
   maxLeoCardsPerJoin: number
 ): Promise<{
