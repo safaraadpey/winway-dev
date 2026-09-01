@@ -1675,6 +1675,7 @@ export async function toggleUserSuspension(userId: string): Promise<{ success: b
  * - Player می‌تواند به Agent، Super یا Admin تبدیل شود (فقط توسط Admin)
  * - Agent می‌تواند به Super تبدیل شود
  * - Super فقط می‌تواند Player را به Agent تبدیل کند
+ * - Agent فقط وقتی سوپر بالاسری ندارد می‌تواند Player را به Agent تبدیل کند
  * - فقط Admin می‌تواند نقش را به Super یا Admin تبدیل کند
  * - parent_id حفظ می‌شود (اگر کاربر قبلاً یک parent داشت)
  * 

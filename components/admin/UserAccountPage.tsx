@@ -122,6 +122,9 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
   const [currentUserAdminSubRole, setCurrentUserAdminSubRole] = useState<AdminSubRole | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserParentId, setCurrentUserParentId] = useState<string | null>(null);
+  const [currentUserParentRole, setCurrentUserParentRole] = useState<
+    "admin" | "super" | "agent" | "player" | null
+  >(null);
   const [adminZeroId, setAdminZeroId] = useState<string | null>(null);
   const [currentUserCommissionPercent, setCurrentUserCommissionPercent] = useState<number | null>(null);
   const roleDropdownRef = useRef<HTMLDivElement>(null);
@@ -177,7 +180,28 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
             setCurrentUserAdminSubRole(
               ((userData as any).admin_sub_role as AdminSubRole | null) ?? null
             );
-            setCurrentUserParentId((userData as any).parent_id || null);
+            const parentId = ((userData as { parent_id?: string | null }).parent_id || null) as
+              | string
+              | null;
+            setCurrentUserParentId(parentId);
+            if (parentId) {
+              const { data: parentUser } = await supabase
+                .from("users")
+                .select("role")
+                .eq("id", parentId)
+                .maybeSingle();
+              const parentRole = (parentUser as { role?: string } | null)?.role;
+              setCurrentUserParentRole(
+                parentRole === "admin" ||
+                  parentRole === "super" ||
+                  parentRole === "agent" ||
+                  parentRole === "player"
+                  ? parentRole
+                  : null
+              );
+            } else {
+              setCurrentUserParentRole(null);
+            }
 
             // Load current user's commission percent (used for super->agent cap).
             const { data: commissionRow } = await supabase
@@ -389,6 +413,9 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
 
   const isCurrentUserAdminZero =
     Boolean(currentUserId && adminZeroId && currentUserId === adminZeroId);
+  const actorAgentHasSuperUpline =
+    currentUserRole === "agent" &&
+    (currentUserParentRole === "super" || Boolean(data?.user.superId));
 
   // آماده‌سازی تغییر نقش و نمایش مودال هشدار
   const handleRoleChange = (
@@ -397,6 +424,16 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
   ) => {
     if (changingRole) return;
     if (!data) return;
+
+    if (
+      actorAgentHasSuperUpline &&
+      newRole === "agent" &&
+      data.user.role === "player"
+    ) {
+      toast.error("ایجنت دارای سوپر بالاسری نمی‌تواند پلیر را به ایجنت تبدیل کند");
+      setShowRoleDropdown(false);
+      return;
+    }
 
     const currentRole = data.user.role;
     // اگر نقش همان است و admin نیست، یا اگر admin است و sub_role هم همان است
@@ -588,15 +625,13 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
       });
     }
 
-    // Agent فقط می‌تواند Player را به Agent تبدیل کند
+    // Agent فقط می‌تواند Player را به Agent تبدیل کند — و فقط اگر خودش سوپر بالاسری نداشته باشد
     if (currentUserRole === "agent") {
-      if (targetRole !== "player") {
-        // Agent نمی‌تواند نقش کسی را تغییر دهد (به جز Player)
+      if (targetRole !== "player" || actorAgentHasSuperUpline) {
         roles.forEach((r) => {
           r.disabled = true;
         });
       } else {
-        // Agent فقط می‌تواند Player را به Agent تبدیل کند
         roles.forEach((r) => {
           if (r.value !== "agent") r.disabled = true;
         });
@@ -989,7 +1024,12 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
             <div className="flex-1 relative" ref={roleDropdownRef}>
                 <button
                   onClick={() => setShowRoleDropdown(!showRoleDropdown)}
-                  disabled={changingRole || !currentUserRole || currentUserRole === "player"}
+                  disabled={
+                    changingRole ||
+                    !currentUserRole ||
+                    currentUserRole === "player" ||
+                    actorAgentHasSuperUpline
+                  }
                   className="w-full py-2 rounded-xl bg-[#1f2933] text-sm text-gray-300 flex items-center justify-between px-3 hover:bg-[#2a3441] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span>

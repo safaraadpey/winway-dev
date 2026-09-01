@@ -186,6 +186,57 @@ export async function POST(request: NextRequest) {
           { status: 403 }
         )
       }
+
+      // ایجنتی که خودش سوپر بالاسری دارد نباید ایجنت جدید بسازد (سلسله agent-under-agent)
+      const { data: actorUser, error: actorUserError } = await supabase
+        .from('users')
+        .select('parent_id')
+        .eq('id', currentUserId)
+        .single()
+
+      if (actorUserError || !actorUser) {
+        return NextResponse.json(
+          { ok: false, error: 'user_not_found', message: 'actor user not found' },
+          { status: 404 }
+        )
+      }
+
+      const actorParentId = (actorUser as { parent_id?: string | null }).parent_id ?? null
+      if (actorParentId) {
+        const { data: actorParent, error: actorParentError } = await supabase
+          .from('users')
+          .select('id, role')
+          .eq('id', actorParentId)
+          .maybeSingle()
+
+        if (actorParentError) {
+          console.error('[Role] failed to load actor parent for promote check', {
+            actorId: currentUserId,
+            actorParentId,
+            error: actorParentError.message,
+          })
+          return NextResponse.json(
+            { ok: false, error: 'database_error', message: actorParentError.message },
+            { status: 500 }
+          )
+        }
+
+        if ((actorParent as { role?: string } | null)?.role === 'super') {
+          console.log('[Role] agent promote blocked: actor has super upline', {
+            actorId: currentUserId,
+            targetId: user_id,
+            superId: actorParentId,
+          })
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'forbidden_agent_has_super',
+              message: 'ایجنت دارای سوپر بالاسری نمی‌تواند پلیر را به ایجنت تبدیل کند',
+            },
+            { status: 403 }
+          )
+        }
+      }
     }
 
     // 7. بررسی قوانین business (جلوگیری از تنزل نقش)
