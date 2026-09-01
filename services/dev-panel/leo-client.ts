@@ -1,5 +1,7 @@
 import { callDevPanelApi } from "@/lib/devPanelApiClient";
 import type {
+  LeoBandCap,
+  LeoBandCapsSaveResult,
   LeoConfigPreset,
   LeoOverview,
   LeoPreviewPayload,
@@ -22,6 +24,17 @@ export async function patchLeoSettings(payload: {
   return callDevPanelApi<LeoSettings>("/api/dev-panel/leo", {
     method: "PATCH",
     body: payload,
+  });
+}
+
+export async function saveLeoBandCaps(
+  bands: LeoBandCap[],
+  maxLeoPlayersPerWaitingRoom: number,
+  maxLeoCardsPerJoin: number
+): Promise<LeoBandCapsSaveResult> {
+  return callDevPanelApi<LeoBandCapsSaveResult>("/api/dev-panel/leo/band-caps", {
+    method: "PUT",
+    body: { bands, maxLeoPlayersPerWaitingRoom, maxLeoCardsPerJoin },
   });
 }
 
@@ -74,6 +87,26 @@ export async function saveLeoPreset(payload: {
   return callDevPanelApi<LeoConfigPreset>("/api/dev-panel/leo/presets", {
     method: "POST",
     body: payload,
+  });
+}
+
+export async function createLeoPresetFromUser(payload: {
+  name: string;
+  sourceUserId: string;
+}): Promise<LeoConfigPreset> {
+  return callDevPanelApi<LeoConfigPreset>("/api/dev-panel/leo/presets", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function renameLeoPreset(
+  presetId: string,
+  name: string
+): Promise<LeoConfigPreset> {
+  return callDevPanelApi<LeoConfigPreset>(`/api/dev-panel/leo/presets/${presetId}`, {
+    method: "PATCH",
+    body: { name },
   });
 }
 

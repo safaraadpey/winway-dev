@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import DevLeoBandCapsPanel from "@/components/dev-panel/DevLeoBandCapsPanel";
+import DevLeoLiveStatsPanel from "@/components/dev-panel/DevLeoLiveStatsPanel";
+import DevLeoPresetLibraryPanel from "@/components/dev-panel/DevLeoPresetLibraryPanel";
 import DevLeoUserList from "@/components/dev-panel/DevLeoUserList";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { loadDevPlayerProfileOperators } from "@/services/dev-panel/dev-player-profiles";
@@ -12,9 +15,12 @@ import {
   loadLeoUserDetail,
   loadLeoUsers,
   patchLeoSettings,
+  saveLeoUserConfig,
 } from "@/services/dev-panel/leo-client";
 import type { DevPlayerProfileOperator } from "@/src/types/dev-player-profiles";
-import type { LeoTemplateOption, LeoUserDetail, LeoUserListRow } from "@/src/types/leo";
+import type { LeoBandCap, LeoLiveStats, LeoTemplateOption, LeoUserDetail, LeoUserListRow } from "@/src/types/leo";
+
+const DEFAULT_LEO_OPERATOR_USERNAME = "mexic";
 
 export default function DevLeoManager() {
   const router = useRouter();
@@ -26,6 +32,7 @@ export default function DevLeoManager() {
   const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState("");
   const [operatorId, setOperatorId] = useState("");
+  const [operatorReady, setOperatorReady] = useState(false);
   const [operators, setOperators] = useState<DevPlayerProfileOperator[]>([]);
   const [users, setUsers] = useState<LeoUserListRow[]>([]);
   const [templates, setTemplates] = useState<LeoTemplateOption[]>([]);
@@ -34,6 +41,16 @@ export default function DevLeoManager() {
   const [loadingUserId, setLoadingUserId] = useState<string | null>(null);
   const [systemEnabled, setSystemEnabled] = useState(false);
   const [enabledCount, setEnabledCount] = useState(0);
+  const [bandCaps, setBandCaps] = useState<LeoBandCap[]>([]);
+  const [maxLeoPlayersPerWaitingRoom, setMaxLeoPlayersPerWaitingRoom] = useState(3);
+  const [maxLeoCardsPerJoin, setMaxLeoCardsPerJoin] = useState(0);
+  const [liveStats, setLiveStats] = useState<LeoLiveStats>({
+    activeLeoPlayers: 0,
+    leoRoomCount: 0,
+    nonLeoPlayersInLeoRooms: 0,
+  });
+  const [pendingEventCount, setPendingEventCount] = useState(0);
+  const [presetsRevision, setPresetsRevision] = useState(0);
 
   useEffect(() => {
     setShowHeader(true);
@@ -57,19 +74,50 @@ export default function DevLeoManager() {
     ]);
     setSystemEnabled(overview.settings.systemEnabled);
     setEnabledCount(overview.enabledUserCount);
+    setBandCaps(overview.bandCaps ?? []);
+    setMaxLeoPlayersPerWaitingRoom(overview.settings.maxLeoPlayersPerWaitingRoom ?? 3);
+    setMaxLeoCardsPerJoin(overview.settings.maxLeoCardsPerJoin ?? 0);
+    setLiveStats(overview.liveStats);
+    setPendingEventCount(overview.pendingEventCount);
     setUsers(userRows);
     setTemplates(templateRows);
   }, [search, operatorId]);
 
   useEffect(() => {
+    let cancelled = false;
+
     loadDevPlayerProfileOperators()
-      .then(setOperators)
+      .then((rows) => {
+        if (cancelled) return;
+        setOperators(rows);
+        const defaultOperator = rows.find(
+          (operator) => operator.username.trim().toLowerCase() === DEFAULT_LEO_OPERATOR_USERNAME
+        );
+        if (defaultOperator) {
+          setOperatorId(defaultOperator.id);
+          console.log("[Leo] default operator", {
+            operatorId: defaultOperator.id,
+            username: defaultOperator.username,
+          });
+        }
+      })
       .catch((error) => {
-        console.error("[Leo] load operators error:", error);
+        if (!cancelled) {
+          console.error("[Leo] load operators error:", error);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setOperatorReady(true);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
+    if (!operatorReady) return;
+
     let cancelled = false;
 
     if (isFirstLoad.current) {
@@ -96,7 +144,25 @@ export default function DevLeoManager() {
     return () => {
       cancelled = true;
     };
-  }, [refreshList]);
+  }, [operatorReady, refreshList]);
+
+  useEffect(() => {
+    if (!systemEnabled) return;
+
+    const intervalId = window.setInterval(() => {
+      void loadLeoOverview()
+        .then((overview) => {
+          setLiveStats(overview.liveStats);
+          setPendingEventCount(overview.pendingEventCount);
+          setEnabledCount(overview.enabledUserCount);
+        })
+        .catch((error) => {
+          console.error("[Leo] live stats poll error:", error);
+        });
+    }, 30_000);
+
+    return () => window.clearInterval(intervalId);
+  }, [systemEnabled]);
 
   const toggleUser = async (userId: string) => {
     if (expandedUserId === userId) {
@@ -120,12 +186,69 @@ export default function DevLeoManager() {
     }
   };
 
+  const toggleLeoEnabled = async (user: LeoUserListRow) => {
+    if (submitting) return;
+    if (user.devPlayerActive && !user.leoEnabled) {
+      toast.error(
+        "این کاربر در Dev Player فعال است. برای فعال‌سازی لئو ابتدا Dev Player را غیرفعال کنید."
+      );
+      return;
+    }
+
+    const nextEnabled = !user.leoEnabled;
+    setSubmitting(true);
+    console.log(`[Leo] toggle enabled user=${user.userId} next=${nextEnabled}`);
+
+    try {
+      const detail =
+        expandedUser?.userId === user.userId
+          ? expandedUser
+          : await loadLeoUserDetail(user.userId);
+      if (!detail) {
+        throw new Error("user not found");
+      }
+
+      const saved = await saveLeoUserConfig(user.userId, {
+        isEnabled: nextEnabled,
+        activeTimeBands: detail.activeTimeBands,
+        behaviorProfile: detail.behaviorProfile,
+        sessionBudget: detail.sessionBudget,
+        hardStopLoss: detail.hardStopLoss,
+        maxConcurrentTables: detail.maxConcurrentTables,
+        preferredTemplateIds: detail.preferredTemplateIds,
+        randomTemplateIds: detail.randomTemplateIds,
+        appliedPresetName: detail.appliedPresetName,
+      });
+
+      setUsers((current) =>
+        current.map((row) =>
+        row.userId === user.userId
+          ? { ...row, leoEnabled: saved.isEnabled, appliedPresetName: saved.appliedPresetName }
+          : row
+        )
+      );
+      if (expandedUser?.userId === user.userId) {
+        setExpandedUser(saved);
+      }
+      toast.success(saved.isEnabled ? "لئو فعال شد" : "لئو غیرفعال شد");
+      void refreshList();
+    } catch (error) {
+      console.error("[Leo] toggle enabled error:", error);
+      toast.error(error instanceof Error ? error.message : "خطا در تغییر وضعیت لئو");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const toggleSystem = async () => {
     setSubmitting(true);
     try {
       const next = !systemEnabled;
       await patchLeoSettings({ systemEnabled: next, schedulerEnabled: next });
       setSystemEnabled(next);
+      if (next) {
+        void refreshList();
+      }
       toast.success(next ? "سیستم لئو روشن شد" : "سیستم لئو خاموش شد");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "خطا");
@@ -173,6 +296,53 @@ export default function DevLeoManager() {
           </button>
         </div>
 
+        {systemEnabled ? (
+          <DevLeoLiveStatsPanel stats={liveStats} pendingEventCount={pendingEventCount} />
+        ) : null}
+
+        <DevLeoBandCapsPanel
+          caps={bandCaps}
+          maxLeoPlayersPerWaitingRoom={maxLeoPlayersPerWaitingRoom}
+          maxLeoCardsPerJoin={maxLeoCardsPerJoin}
+          submitting={submitting}
+          onSubmittingChange={setSubmitting}
+          onSaved={(saved) => {
+            setMaxLeoPlayersPerWaitingRoom(saved.maxLeoPlayersPerWaitingRoom);
+            setMaxLeoCardsPerJoin(saved.maxLeoCardsPerJoin);
+            setBandCaps((current) =>
+              saved.bandCaps.map((cap) => {
+                const previous = current.find((item) => item.timeBand === cap.timeBand);
+                const stakes = (cap.stakes ?? []).map((stake) => {
+                  const previousStake = previous?.stakes.find(
+                    (item) => item.stakeTier === stake.stakeTier
+                  );
+                  return {
+                    ...stake,
+                    readyCount: previousStake?.readyCount ?? stake.readyCount ?? 0,
+                    busyCount: previousStake?.busyCount ?? stake.busyCount ?? 0,
+                  };
+                });
+                return {
+                  ...cap,
+                  stakes,
+                  readyCount: stakes.reduce((sum, stake) => sum + stake.readyCount, 0),
+                  busyCount: stakes.reduce((sum, stake) => sum + stake.busyCount, 0),
+                };
+              })
+            );
+          }}
+        />
+
+        <DevLeoPresetLibraryPanel
+          users={users}
+          submitting={submitting}
+          onSubmittingChange={setSubmitting}
+          onChanged={() => {
+            setPresetsRevision((current) => current + 1);
+            void refreshList();
+          }}
+        />
+
         <DevLeoUserList
           users={users}
           listLoading={listLoading}
@@ -188,8 +358,22 @@ export default function DevLeoManager() {
           submitting={submitting}
           onSubmittingChange={setSubmitting}
           onToggleUser={(userId) => void toggleUser(userId)}
+          onToggleEnabled={(user) => void toggleLeoEnabled(user)}
+          presetsRevision={presetsRevision}
           onSaved={(saved) => {
             setExpandedUser(saved);
+            setUsers((current) =>
+              current.map((row) =>
+                row.userId === saved.userId
+                  ? {
+                      ...row,
+                      leoEnabled: saved.isEnabled,
+                      behaviorProfile: saved.behaviorProfile,
+                      appliedPresetName: saved.appliedPresetName,
+                    }
+                  : row
+              )
+            );
             void refreshList();
           }}
         />

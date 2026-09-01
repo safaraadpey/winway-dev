@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import DevLeoPresetPanel from "@/components/dev-panel/DevLeoPresetPanel";
 import DevLeoTimelinePreview from "@/components/dev-panel/DevLeoTimelinePreview";
@@ -9,6 +9,8 @@ import {
   ALL_TIME_BANDS,
   bandLabel,
   profileLabel,
+  stakeLabel,
+  stakeTierFromPrice,
 } from "@/components/dev-panel/leo-utils";
 import { previewLeoTimeline, saveLeoUserConfig } from "@/services/dev-panel/leo-client";
 import type {
@@ -26,6 +28,7 @@ type Props = {
   templates: LeoTemplateOption[];
   submitting: boolean;
   inline?: boolean;
+  presetsRevision?: number;
   onSubmittingChange: (value: boolean) => void;
   onSaved: (user: LeoUserDetail) => void;
   onBack?: () => void;
@@ -36,6 +39,7 @@ export default function DevLeoUserEditor({
   templates,
   submitting,
   inline = false,
+  presetsRevision = 0,
   onSubmittingChange,
   onSaved,
   onBack,
@@ -50,24 +54,27 @@ export default function DevLeoUserEditor({
     user.preferredTemplateIds
   );
   const [randomTemplateIds, setRandomTemplateIds] = useState<string[]>(user.randomTemplateIds);
+  const [appliedPresetName, setAppliedPresetName] = useState<string | null>(user.appliedPresetName);
   const [previewBand, setPreviewBand] = useState<LeoTimeBand>(
     user.activeTimeBands[0] ?? "afternoon"
   );
   const [preview, setPreview] = useState<LeoPreviewResult | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  const getCurrentConfig = (): LeoSaveUserConfigPayload => ({
-    isEnabled,
-    activeTimeBands,
-    behaviorProfile,
-    sessionBudget: Number(sessionBudget) || 0,
-    hardStopLoss: Number(hardStopLoss) || 0,
-    maxConcurrentTables: Number(maxConcurrentTables) || 0,
-    preferredTemplateIds,
-    randomTemplateIds,
-  });
+  useEffect(() => {
+    setIsEnabled(user.isEnabled);
+  }, [user.isEnabled]);
 
-  const applyPreset = (config: LeoSaveUserConfigPayload) => {
+  useEffect(() => {
+    setAppliedPresetName(user.appliedPresetName);
+  }, [user.appliedPresetName]);
+
+  const applyPreset = (config: LeoSaveUserConfigPayload, presetName: string) => {
+    if (config.isEnabled && user.devPlayerActive) {
+      toast.error(user.conflictMessage ?? "تداخل با Dev Player");
+      return;
+    }
+
     setIsEnabled(config.isEnabled);
     setActiveTimeBands(config.activeTimeBands);
     setBehaviorProfile(config.behaviorProfile);
@@ -76,8 +83,26 @@ export default function DevLeoUserEditor({
     setMaxConcurrentTables(String(config.maxConcurrentTables));
     setPreferredTemplateIds(config.preferredTemplateIds);
     setRandomTemplateIds(config.randomTemplateIds);
+    setAppliedPresetName(presetName);
     setPreviewBand(config.activeTimeBands[0] ?? "afternoon");
     setPreview(null);
+
+    console.log(`[Leo] apply preset user=${user.userId} name=${presetName}`);
+    onSubmittingChange(true);
+    void saveLeoUserConfig(user.userId, {
+      ...config,
+      appliedPresetName: presetName,
+    })
+      .then((saved) => {
+        toast.success(`پریست «${presetName}» اعمال شد`);
+        onSaved(saved);
+      })
+      .catch((error) => {
+        toast.error(error instanceof Error ? error.message : "خطا در اعمال پریست");
+      })
+      .finally(() => {
+        onSubmittingChange(false);
+      });
   };
 
   const templateMap = useMemo(
@@ -109,6 +134,7 @@ export default function DevLeoUserEditor({
         maxConcurrentTables: Number(maxConcurrentTables) || 0,
         preferredTemplateIds,
         randomTemplateIds,
+        appliedPresetName,
       });
       toast.success("تنظیمات لئو ذخیره شد");
       onSaved(saved);
@@ -173,26 +199,14 @@ export default function DevLeoUserEditor({
       ) : null}
 
       <DevLeoPresetPanel
-        sourceUserId={user.userId}
-        getCurrentConfig={getCurrentConfig}
         onApplyPreset={applyPreset}
         disabled={submitting || previewLoading}
+        presetsRevision={presetsRevision}
       />
 
       <div
         className={`space-y-4 ${inline ? "rounded-xl border border-violet-900/40 bg-[#151515] p-3" : "rounded-2xl border border-violet-900/60 bg-[#151515] p-4"}`}
       >
-        <label className="flex min-h-[44px] cursor-pointer items-center justify-between gap-3">
-          <span className="text-sm text-white">فعال‌سازی لئو</span>
-          <input
-            type="checkbox"
-            checked={isEnabled}
-            disabled={user.devPlayerActive}
-            onChange={(e) => setIsEnabled(e.target.checked)}
-            className="h-5 w-5 rounded border-gray-600 bg-[#1f2933] text-violet-600 disabled:opacity-50"
-          />
-        </label>
-
         <section>
           <h2 className="mb-2 text-xs font-semibold text-gray-400">۱. زمان فعالیت</h2>
           <div className="flex flex-wrap gap-2">
@@ -292,6 +306,7 @@ export default function DevLeoUserEditor({
               templates={templates}
               selected={preferredTemplateIds}
               templateMap={templateMap}
+              showStakePresets
               onChangeSelected={(ids) => {
                 setPreferredTemplateIds(ids);
                 setPreview(null);
@@ -350,24 +365,78 @@ export default function DevLeoUserEditor({
   );
 }
 
+function unionIds(current: string[], extra: string[]): string[] {
+  return Array.from(new Set([...current, ...extra]));
+}
+
+function StakeGroupToggle({
+  label,
+  templates,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  templates: LeoTemplateOption[];
+  selected: string[];
+  onToggle: () => void;
+}) {
+  const allSelected =
+    templates.length > 0 && templates.every((template) => selected.includes(template.id));
+  const someSelected =
+    templates.some((template) => selected.includes(template.id)) && !allSelected;
+
+  return (
+    <label
+      className={`flex min-h-[36px] items-center gap-2 ${
+        templates.length === 0 ? "cursor-not-allowed opacity-40" : "cursor-pointer"
+      }`}
+    >
+      <input
+        type="checkbox"
+        checked={allSelected}
+        disabled={templates.length === 0}
+        ref={(el) => {
+          if (el) el.indeterminate = someSelected;
+        }}
+        onChange={onToggle}
+        className="h-4 w-4 rounded border-gray-600 bg-[#1f2933] text-violet-600"
+      />
+      <span className="text-xs text-gray-400">{label}</span>
+    </label>
+  );
+}
+
 function TemplateMultiSelect({
   title,
   templates,
   selected,
   templateMap,
   onChangeSelected,
+  showStakePresets = false,
 }: {
   title: string;
   templates: LeoTemplateOption[];
   selected: string[];
   templateMap: Map<string, LeoTemplateOption>;
   onChangeSelected: (ids: string[]) => void;
+  showStakePresets?: boolean;
 }) {
   const allSelected = templates.length > 0 && selected.length === templates.length;
   const someSelected = selected.length > 0 && selected.length < templates.length;
+  const lightTemplates = templates.filter((template) => stakeTierFromPrice(template.price) === "light");
+  const mediumTemplates = templates.filter((template) => stakeTierFromPrice(template.price) === "medium");
+  const heavyTemplates = templates.filter((template) => stakeTierFromPrice(template.price) === "heavy");
 
   const toggleAll = () => {
     onChangeSelected(allSelected ? [] : templates.map((t) => t.id));
+  };
+
+  const toggleGroup = (group: LeoTemplateOption[]) => {
+    const ids = group.map((template) => template.id);
+    const groupAllSelected = ids.length > 0 && ids.every((id) => selected.includes(id));
+    onChangeSelected(
+      groupAllSelected ? selected.filter((id) => !ids.includes(id)) : unionIds(selected, ids)
+    );
   };
 
   const toggleOne = (id: string) => {
@@ -378,24 +447,48 @@ function TemplateMultiSelect({
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between gap-2">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-gray-400">{title}</span>
         {templates.length > 0 ? (
-          <label className="flex min-h-[36px] cursor-pointer items-center gap-2">
-            <input
-              type="checkbox"
-              checked={allSelected}
-              ref={(el) => {
-                if (el) el.indeterminate = someSelected;
-              }}
-              onChange={toggleAll}
-              className="h-4 w-4 rounded border-gray-600 bg-[#1f2933] text-violet-600"
-            />
-            <span className="text-xs text-gray-400">انتخاب همه</span>
-            <span className="numeric-text numeric-text--11 text-violet-300" dir="ltr">
-              {selected.length.toLocaleString("en-US")} / {templates.length.toLocaleString("en-US")}
-            </span>
-          </label>
+          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+            {showStakePresets ? (
+              <>
+                <StakeGroupToggle
+                  label={stakeLabel("light")}
+                  templates={lightTemplates}
+                  selected={selected}
+                  onToggle={() => toggleGroup(lightTemplates)}
+                />
+                <StakeGroupToggle
+                  label={stakeLabel("medium")}
+                  templates={mediumTemplates}
+                  selected={selected}
+                  onToggle={() => toggleGroup(mediumTemplates)}
+                />
+                <StakeGroupToggle
+                  label={stakeLabel("heavy")}
+                  templates={heavyTemplates}
+                  selected={selected}
+                  onToggle={() => toggleGroup(heavyTemplates)}
+                />
+              </>
+            ) : null}
+            <label className="flex min-h-[36px] cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                ref={(el) => {
+                  if (el) el.indeterminate = someSelected;
+                }}
+                onChange={toggleAll}
+                className="h-4 w-4 rounded border-gray-600 bg-[#1f2933] text-violet-600"
+              />
+              <span className="text-xs text-gray-400">انتخاب همه</span>
+              <span className="numeric-text numeric-text--11 text-violet-300" dir="ltr">
+                {selected.length.toLocaleString("en-US")} / {templates.length.toLocaleString("en-US")}
+              </span>
+            </label>
+          </div>
         ) : null}
       </div>
       {templates.length === 0 ? (

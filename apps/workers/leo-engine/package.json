@@ -8,6 +8,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test src/bandRoster.test.ts src/processorSchedule.test.ts",
     "build": "npm run typecheck"
   },
   "engines": {

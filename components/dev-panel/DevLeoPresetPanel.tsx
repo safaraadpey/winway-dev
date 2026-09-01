@@ -3,32 +3,23 @@
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { profileLabel } from "@/components/dev-panel/leo-utils";
-import {
-  deleteLeoPreset,
-  loadLeoPresets,
-  saveLeoPreset,
-} from "@/services/dev-panel/leo-client";
+import { loadLeoPresets } from "@/services/dev-panel/leo-client";
 import type { LeoConfigPreset, LeoSaveUserConfigPayload } from "@/src/types/leo";
 
 type Props = {
-  sourceUserId: string;
-  getCurrentConfig: () => LeoSaveUserConfigPayload;
-  onApplyPreset: (config: LeoSaveUserConfigPayload) => void;
+  onApplyPreset: (config: LeoSaveUserConfigPayload, presetName: string) => void;
   disabled?: boolean;
+  presetsRevision?: number;
 };
 
 export default function DevLeoPresetPanel({
-  sourceUserId,
-  getCurrentConfig,
   onApplyPreset,
   disabled = false,
+  presetsRevision = 0,
 }: Props) {
   const [presets, setPresets] = useState<LeoConfigPreset[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPresetId, setSelectedPresetId] = useState("");
-  const [presetName, setPresetName] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   const refreshPresets = useCallback(async () => {
     const rows = await loadLeoPresets();
@@ -54,7 +45,7 @@ export default function DevLeoPresetPanel({
     return () => {
       cancelled = true;
     };
-  }, [refreshPresets]);
+  }, [refreshPresets, presetsRevision]);
 
   const selectedPreset = presets.find((preset) => preset.id === selectedPresetId) ?? null;
 
@@ -64,69 +55,28 @@ export default function DevLeoPresetPanel({
       return;
     }
 
-    onApplyPreset({
-      isEnabled: selectedPreset.isEnabled,
-      activeTimeBands: selectedPreset.activeTimeBands,
-      behaviorProfile: selectedPreset.behaviorProfile,
-      sessionBudget: selectedPreset.sessionBudget,
-      hardStopLoss: selectedPreset.hardStopLoss,
-      maxConcurrentTables: selectedPreset.maxConcurrentTables,
-      preferredTemplateIds: selectedPreset.preferredTemplateIds,
-      randomTemplateIds: selectedPreset.randomTemplateIds,
-    });
-    toast.success(`پریست «${selectedPreset.name}» اعمال شد`);
-  };
-
-  const handleSave = async () => {
-    const name = presetName.trim();
-    if (!name) {
-      toast.error("نام پریست را وارد کنید");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const saved = await saveLeoPreset({
-        name,
-        sourceUserId,
-        ...getCurrentConfig(),
-      });
-      setPresetName("");
-      setSelectedPresetId(saved.id);
-      await refreshPresets();
-      toast.success(`پریست «${saved.name}» ذخیره شد`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "خطا در ذخیره پریست");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!selectedPreset) {
-      toast.error("یک پریست انتخاب کنید");
-      return;
-    }
-
-    setDeleting(true);
-    try {
-      await deleteLeoPreset(selectedPreset.id);
-      setSelectedPresetId("");
-      await refreshPresets();
-      toast.success(`پریست «${selectedPreset.name}» حذف شد`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "خطا در حذف پریست");
-    } finally {
-      setDeleting(false);
-    }
+    onApplyPreset(
+      {
+        isEnabled: selectedPreset.isEnabled,
+        activeTimeBands: selectedPreset.activeTimeBands,
+        behaviorProfile: selectedPreset.behaviorProfile,
+        sessionBudget: selectedPreset.sessionBudget,
+        hardStopLoss: selectedPreset.hardStopLoss,
+        maxConcurrentTables: selectedPreset.maxConcurrentTables,
+        preferredTemplateIds: selectedPreset.preferredTemplateIds,
+        randomTemplateIds: selectedPreset.randomTemplateIds,
+        appliedPresetName: selectedPreset.name,
+      },
+      selectedPreset.name
+    );
   };
 
   return (
     <div className="space-y-3 rounded-xl border border-gray-700 bg-[#121820] p-3">
       <div>
-        <h2 className="text-sm font-semibold text-white">پریست تنظیمات</h2>
+        <h2 className="text-sm font-semibold text-white">اعمال پریست</h2>
         <p className="mt-1 text-[11px] text-gray-500">
-          تنظیمات فعلی را ذخیره کنید یا پریست ذخیره‌شده را روی این کاربر اعمال کنید
+          پریست ذخیره‌شده را روی این پلیر اعمال کنید
         </p>
       </div>
 
@@ -175,35 +125,6 @@ export default function DevLeoPresetPanel({
           </span>{" "}
           میز
         </div>
-      ) : null}
-
-      <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-        <input
-          value={presetName}
-          disabled={disabled || saving}
-          onChange={(e) => setPresetName(e.target.value)}
-          placeholder="نام پریست جدید..."
-          className="w-full rounded-lg border border-gray-700 bg-[#1f2933] px-3 py-2 text-sm text-white placeholder:text-gray-500"
-        />
-        <button
-          type="button"
-          disabled={disabled || saving}
-          onClick={() => void handleSave()}
-          className="rounded-lg bg-violet-800 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
-        >
-          ذخیره پریست
-        </button>
-      </div>
-
-      {selectedPreset ? (
-        <button
-          type="button"
-          disabled={disabled || deleting}
-          onClick={() => void handleDelete()}
-          className="w-full rounded-lg border border-red-900/60 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-950/30 disabled:opacity-60"
-        >
-          حذف پریست انتخاب‌شده
-        </button>
       ) : null}
     </div>
   );

@@ -1,5 +1,6 @@
 export * from "./types";
 export * from "./timeBands";
+export * from "./stakeTiers";
 export * from "./profilePresets";
 export * from "./random";
 export * from "./selectTable";

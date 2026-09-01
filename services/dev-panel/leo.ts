@@ -1,8 +1,10 @@
 import {
   generateWindowTimeline,
   LEO_BEHAVIOR_PROFILES,
+  LEO_STAKE_TIERS,
   LEO_TIME_BANDS,
   type LeoBehaviorProfile,
+  type LeoStakeTier,
   type LeoTimeBand,
 } from "@dingmoney/leo-behavior-core";
 import { connectPgWithRetry } from "@/lib/db/pgConnect";
@@ -16,10 +18,13 @@ import {
   type LeoConfigPreset,
   type LeoSaveUserConfigPayload,
   type LeoSettings,
+  type LeoBandCap,
+  type LeoBandStakeCap,
   type LeoTemplateOption,
   type LeoUserConfig,
   type LeoUserDetail,
   type LeoUserListRow,
+  type LeoLiveStats,
 } from "@/src/types/leo";
 
 const LOG_PREFIX = "[Leo]";
@@ -33,6 +38,8 @@ function mapSettings(row: {
   scheduler_tick_seconds: number;
   processor_tick_seconds: number;
   timezone: string;
+  max_leo_players_per_waiting_room?: number;
+  max_leo_cards_per_join?: number;
   updated_at: string | null;
 }): LeoSettings {
   return {
@@ -41,8 +48,78 @@ function mapSettings(row: {
     schedulerTickSeconds: row.scheduler_tick_seconds,
     processorTickSeconds: row.processor_tick_seconds,
     timezone: row.timezone,
+    maxLeoPlayersPerWaitingRoom: Number(row.max_leo_players_per_waiting_room ?? 3),
+    maxLeoCardsPerJoin: Number(row.max_leo_cards_per_join ?? 0),
     updatedAt: row.updated_at,
   };
+}
+
+const BAND_ORDER: LeoTimeBand[] = [
+  "midnight",
+  "dawn",
+  "morning",
+  "noon",
+  "afternoon",
+  "evening",
+];
+
+type BandCapRow = {
+  time_band: string;
+  light_max_active_players: number;
+  light_shuffle_enabled: boolean;
+  medium_max_active_players: number;
+  medium_shuffle_enabled: boolean;
+  heavy_max_active_players: number;
+  heavy_shuffle_enabled: boolean;
+};
+
+function emptyStake(stakeTier: LeoStakeTier, readyCount = 0, busyCount = 0): LeoBandStakeCap {
+  return {
+    stakeTier,
+    maxActivePlayers: 0,
+    shuffleEnabled: false,
+    readyCount,
+    busyCount,
+  };
+}
+
+function mapBandCaps(
+  rows: BandCapRow[],
+  stats?: Map<string, { readyCount: number; busyCount: number }>
+): LeoBandCap[] {
+  const byBand = new Map(rows.map((row) => [row.time_band, row]));
+  return BAND_ORDER.map((timeBand) => {
+    const row = byBand.get(timeBand);
+    const stakes: LeoBandStakeCap[] = LEO_STAKE_TIERS.map((stakeTier) => {
+      const stat = stats?.get(`${timeBand}:${stakeTier}`);
+      if (!row) return emptyStake(stakeTier, stat?.readyCount ?? 0, stat?.busyCount ?? 0);
+      const maxActivePlayers =
+        stakeTier === "light"
+          ? Number(row.light_max_active_players ?? 0)
+          : stakeTier === "medium"
+            ? Number(row.medium_max_active_players ?? 0)
+            : Number(row.heavy_max_active_players ?? 0);
+      const shuffleEnabled =
+        stakeTier === "light"
+          ? row.light_shuffle_enabled === true
+          : stakeTier === "medium"
+            ? row.medium_shuffle_enabled === true
+            : row.heavy_shuffle_enabled === true;
+      return {
+        stakeTier,
+        maxActivePlayers,
+        shuffleEnabled,
+        readyCount: stat?.readyCount ?? 0,
+        busyCount: stat?.busyCount ?? 0,
+      };
+    });
+    return {
+      timeBand,
+      stakes,
+      readyCount: stakes.reduce((sum, stake) => sum + stake.readyCount, 0),
+      busyCount: stakes.reduce((sum, stake) => sum + stake.busyCount, 0),
+    };
+  });
 }
 
 function mapUserConfig(row: {
@@ -55,6 +132,7 @@ function mapUserConfig(row: {
   max_concurrent_tables?: string | number;
   preferred_template_ids: string[];
   random_template_ids: string[];
+  applied_preset_name?: string | null;
   updated_at: string | null;
 }): LeoUserConfig {
   return {
@@ -67,6 +145,7 @@ function mapUserConfig(row: {
     maxConcurrentTables: Number(row.max_concurrent_tables ?? 0),
     preferredTemplateIds: row.preferred_template_ids ?? [],
     randomTemplateIds: row.random_template_ids ?? [],
+    appliedPresetName: row.applied_preset_name?.trim() || null,
     updatedAt: row.updated_at,
   };
 }
@@ -86,10 +165,12 @@ export async function loadLeoOverview(): Promise<LeoOverview> {
   const client = await connectPgWithRetry(pgPool);
 
   try {
-    const [settingsResult, enabledResult, pendingResult] = await Promise.all([
+    const [settingsResult, enabledResult, pendingResult, bandCapResult, bandStatResult, liveStatsResult] =
+      await Promise.all([
       client.query(
         `SELECT system_enabled, scheduler_enabled, scheduler_tick_seconds,
-                processor_tick_seconds, timezone, updated_at
+                processor_tick_seconds, timezone, max_leo_players_per_waiting_room,
+                max_leo_cards_per_join, updated_at
            FROM public.leo_settings
           WHERE id = true`
       ),
@@ -99,6 +180,108 @@ export async function loadLeoOverview(): Promise<LeoOverview> {
       client.query<{ count: string }>(
         `SELECT COUNT(*)::text AS count FROM public.leo_execution_queue WHERE status = 'pending'`
       ),
+      client.query<BandCapRow>(
+        `SELECT time_band,
+                light_max_active_players, light_shuffle_enabled,
+                medium_max_active_players, medium_shuffle_enabled,
+                heavy_max_active_players, heavy_shuffle_enabled
+           FROM public.leo_band_caps
+          ORDER BY time_band`
+      ),
+      client.query<{
+        time_band: string;
+        stake_tier: string;
+        ready_count: string;
+        busy_count: string;
+      }>(
+        `WITH template_tier AS (
+           SELECT id,
+                  CASE
+                    WHEN price < 50000 THEN 'light'
+                    WHEN price < 200000 THEN 'medium'
+                    ELSE 'heavy'
+                  END AS stake_tier
+             FROM public.room_templates
+            WHERE status = 'active'
+              AND COALESCE(room_type, 'normal') <> 'tournament'
+         ),
+         eligible AS (
+           SELECT DISTINCT c.user_id, band.time_band, tt.stake_tier
+             FROM public.leo_user_configs c
+             CROSS JOIN LATERAL unnest(c.active_time_bands) AS band(time_band)
+             CROSS JOIN LATERAL unnest(
+               COALESCE(c.preferred_template_ids, '{}'::uuid[])
+               || COALESCE(c.random_template_ids, '{}'::uuid[])
+             ) AS tid(template_id)
+             JOIN template_tier tt ON tt.id = tid.template_id
+            WHERE c.is_enabled = true
+              AND NOT EXISTS (
+                SELECT 1
+                  FROM public.dev_player_configs d
+                 WHERE d.user_id = c.user_id
+                   AND d.is_enabled = true
+              )
+              AND NOT EXISTS (
+                SELECT 1
+                  FROM public.dev_player_profile_members m
+                  JOIN public.dev_player_profiles p ON p.id = m.profile_id
+                 WHERE m.user_id = c.user_id
+                   AND p.engine_enabled = true
+              )
+         ),
+         busy_users AS (
+           SELECT DISTINCT t.player_user_id AS user_id, tt.stake_tier
+             FROM public.tickets t
+             JOIN public.rooms r ON r.id = t.room_id
+             JOIN template_tier tt ON tt.id = r.room_template_id
+            WHERE t.reservation_status IN ('reserved', 'confirmed', 'consumed')
+              AND r.status IN ('waiting', 'playing', 'live', 'settling')
+         )
+         SELECT
+           b.time_band,
+           s.stake_tier,
+           COUNT(e.user_id) FILTER (WHERE bu.user_id IS NULL)::text AS ready_count,
+           COUNT(e.user_id) FILTER (WHERE bu.user_id IS NOT NULL)::text AS busy_count
+           FROM unnest(ARRAY['midnight','dawn','morning','noon','afternoon','evening']::text[]) AS b(time_band)
+           CROSS JOIN unnest(ARRAY['light','medium','heavy']::text[]) AS s(stake_tier)
+           LEFT JOIN eligible e ON e.time_band = b.time_band AND e.stake_tier = s.stake_tier
+           LEFT JOIN busy_users bu ON bu.user_id = e.user_id AND bu.stake_tier = s.stake_tier
+          GROUP BY b.time_band, s.stake_tier`
+      ),
+      client.query<{
+        active_leo_players: string;
+        leo_room_count: string;
+        non_leo_players: string;
+      }>(
+        `WITH active_seats AS (
+           SELECT DISTINCT t.room_id, t.player_user_id
+             FROM public.tickets t
+             JOIN public.rooms r ON r.id = t.room_id
+            WHERE t.reservation_status IN ('reserved', 'confirmed', 'consumed')
+              AND r.status IN ('waiting', 'playing', 'live', 'settling')
+         ),
+         leo_users AS (
+           SELECT user_id FROM public.leo_user_configs WHERE is_enabled = true
+         ),
+         leo_seats AS (
+           SELECT a.room_id, a.player_user_id
+             FROM active_seats a
+             JOIN leo_users l ON l.user_id = a.player_user_id
+         ),
+         leo_rooms AS (
+           SELECT DISTINCT room_id FROM leo_seats
+         )
+         SELECT
+           (SELECT COUNT(DISTINCT player_user_id)::text FROM leo_seats) AS active_leo_players,
+           (SELECT COUNT(*)::text FROM leo_rooms) AS leo_room_count,
+           (
+             SELECT COUNT(DISTINCT a.player_user_id)::text
+               FROM active_seats a
+               JOIN leo_rooms lr ON lr.room_id = a.room_id
+               LEFT JOIN leo_users l ON l.user_id = a.player_user_id
+              WHERE l.user_id IS NULL
+           ) AS non_leo_players`
+      ),
     ]);
 
     const settingsRow = settingsResult.rows[0];
@@ -106,10 +289,30 @@ export async function loadLeoOverview(): Promise<LeoOverview> {
       throw new Error("leo settings not found");
     }
 
+    const liveStatsRow = liveStatsResult.rows[0];
+    const liveStats: LeoLiveStats = {
+      activeLeoPlayers: Number(liveStatsRow?.active_leo_players ?? 0),
+      leoRoomCount: Number(liveStatsRow?.leo_room_count ?? 0),
+      nonLeoPlayersInLeoRooms: Number(liveStatsRow?.non_leo_players ?? 0),
+    };
+
     return {
       settings: mapSettings(settingsRow),
       enabledUserCount: Number(enabledResult.rows[0]?.count ?? 0),
       pendingEventCount: Number(pendingResult.rows[0]?.count ?? 0),
+      bandCaps: mapBandCaps(
+        bandCapResult.rows,
+        new Map(
+          bandStatResult.rows.map((row) => [
+            `${row.time_band}:${row.stake_tier}`,
+            {
+              readyCount: Number(row.ready_count ?? 0),
+              busyCount: Number(row.busy_count ?? 0),
+            },
+          ])
+        )
+      ),
+      liveStats,
     };
   } finally {
     client.release();
@@ -130,10 +333,124 @@ export async function patchLeoSettings(payload: {
               updated_at = now()
         WHERE id = true
         RETURNING system_enabled, scheduler_enabled, scheduler_tick_seconds,
-                  processor_tick_seconds, timezone, updated_at`,
+                  processor_tick_seconds, timezone, max_leo_players_per_waiting_room,
+                  max_leo_cards_per_join, updated_at`,
       [payload.systemEnabled ?? null, payload.schedulerEnabled ?? null]
     );
     return mapSettings(rows[0]);
+  } finally {
+    client.release();
+  }
+}
+
+export async function saveLeoBandCaps(
+  caps: Array<Pick<LeoBandCap, "timeBand" | "stakes">>,
+  maxLeoPlayersPerWaitingRoom: number,
+  maxLeoCardsPerJoin: number
+): Promise<{
+  bandCaps: LeoBandCap[];
+  maxLeoPlayersPerWaitingRoom: number;
+  maxLeoCardsPerJoin: number;
+}> {
+  const client = await connectPgWithRetry(pgPool);
+  let inTransaction = false;
+  const perRoomCap = Math.max(0, Math.min(50, Math.floor(Number(maxLeoPlayersPerWaitingRoom) || 0)));
+  const cardsCap = Math.max(0, Math.min(99, Math.floor(Number(maxLeoCardsPerJoin) || 0)));
+
+  try {
+    await client.query("BEGIN");
+    inTransaction = true;
+    await client.query(
+      `UPDATE public.leo_settings
+          SET max_leo_players_per_waiting_room = $1,
+              max_leo_cards_per_join = $2,
+              updated_at = now()
+        WHERE id = true`,
+      [perRoomCap, cardsCap]
+    );
+    for (const cap of caps) {
+      if (!LEO_TIME_BANDS.includes(cap.timeBand)) {
+        throw new Error("invalid time band");
+      }
+      const byTier = new Map(
+        (cap.stakes ?? []).map((stake) => [stake.stakeTier, stake] as const)
+      );
+      const light = byTier.get("light");
+      const medium = byTier.get("medium");
+      const heavy = byTier.get("heavy");
+      if (!light || !medium || !heavy) {
+        throw new Error("stakes must include light, medium, and heavy");
+      }
+      const clampCap = (value: number) => Math.max(0, Math.min(500, Math.floor(Number(value) || 0)));
+      const lightMax = clampCap(light.maxActivePlayers);
+      const mediumMax = clampCap(medium.maxActivePlayers);
+      const heavyMax = clampCap(heavy.maxActivePlayers);
+      const anyShuffle = Boolean(light.shuffleEnabled || medium.shuffleEnabled || heavy.shuffleEnabled);
+      const overallMax = Math.min(500, lightMax + mediumMax + heavyMax);
+      await client.query(
+        `INSERT INTO public.leo_band_caps (
+           time_band,
+           max_active_players, shuffle_enabled,
+           light_max_active_players, light_shuffle_enabled,
+           medium_max_active_players, medium_shuffle_enabled,
+           heavy_max_active_players, heavy_shuffle_enabled,
+           updated_at
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+         ON CONFLICT (time_band) DO UPDATE SET
+           max_active_players = EXCLUDED.max_active_players,
+           shuffle_enabled = EXCLUDED.shuffle_enabled,
+           light_max_active_players = EXCLUDED.light_max_active_players,
+           light_shuffle_enabled = EXCLUDED.light_shuffle_enabled,
+           medium_max_active_players = EXCLUDED.medium_max_active_players,
+           medium_shuffle_enabled = EXCLUDED.medium_shuffle_enabled,
+           heavy_max_active_players = EXCLUDED.heavy_max_active_players,
+           heavy_shuffle_enabled = EXCLUDED.heavy_shuffle_enabled,
+           updated_at = now()`,
+        [
+          cap.timeBand,
+          overallMax,
+          anyShuffle,
+          lightMax,
+          Boolean(light.shuffleEnabled),
+          mediumMax,
+          Boolean(medium.shuffleEnabled),
+          heavyMax,
+          Boolean(heavy.shuffleEnabled),
+        ]
+      );
+    }
+    await client.query("COMMIT");
+    inTransaction = false;
+    console.log(
+      `${LOG_PREFIX} saved band caps perRoomCap=${perRoomCap} cardsCap=${cardsCap} ${caps
+        .map((cap) => {
+          const parts = (cap.stakes ?? []).map(
+            (stake) => `${stake.stakeTier}:${stake.maxActivePlayers}:${stake.shuffleEnabled ? "shuffle" : "static"}`
+          );
+          return `${cap.timeBand}[${parts.join("|")}]`;
+        })
+        .join(",")}`
+    );
+
+    const { rows } = await client.query<BandCapRow>(
+      `SELECT time_band,
+              light_max_active_players, light_shuffle_enabled,
+              medium_max_active_players, medium_shuffle_enabled,
+              heavy_max_active_players, heavy_shuffle_enabled
+         FROM public.leo_band_caps
+        ORDER BY time_band`
+    );
+    return {
+      bandCaps: mapBandCaps(rows),
+      maxLeoPlayersPerWaitingRoom: perRoomCap,
+      maxLeoCardsPerJoin: cardsCap,
+    };
+  } catch (error) {
+    if (inTransaction) {
+      await client.query("ROLLBACK");
+    }
+    throw error;
   } finally {
     client.release();
   }
@@ -157,6 +474,7 @@ export async function loadLeoUsers(params?: {
       role: string;
       leo_enabled: boolean;
       behavior_profile: string | null;
+      applied_preset_name: string | null;
       dev_player_active: boolean;
     }>(
       `SELECT
@@ -166,6 +484,7 @@ export async function loadLeoUsers(params?: {
          u.role::text AS role,
          COALESCE(c.is_enabled, false) AS leo_enabled,
          c.behavior_profile,
+         c.applied_preset_name,
          public.fn_user_has_active_dev_player(u.id) AS dev_player_active
        FROM public.users u
        LEFT JOIN public.user_profiles p ON p.user_id = u.id
@@ -198,6 +517,7 @@ export async function loadLeoUsers(params?: {
       role: row.role,
       leoEnabled: row.leo_enabled,
       behaviorProfile: (row.behavior_profile as LeoBehaviorProfile | null) ?? null,
+      appliedPresetName: row.applied_preset_name?.trim() || null,
       devPlayerActive: row.dev_player_active,
     }));
   } finally {
@@ -221,6 +541,7 @@ export async function loadLeoUserDetail(userId: string): Promise<LeoUserDetail |
       max_concurrent_tables: string;
       preferred_template_ids: string[];
       random_template_ids: string[];
+      applied_preset_name: string | null;
       updated_at: string | null;
       dev_player_active: boolean;
     }>(
@@ -236,6 +557,7 @@ export async function loadLeoUserDetail(userId: string): Promise<LeoUserDetail |
          COALESCE(c.max_concurrent_tables, 0) AS max_concurrent_tables,
          COALESCE(c.preferred_template_ids, '{}'::uuid[]) AS preferred_template_ids,
          COALESCE(c.random_template_ids, '{}'::uuid[]) AS random_template_ids,
+         c.applied_preset_name,
          c.updated_at,
          public.fn_user_has_active_dev_player(u.id) AS dev_player_active
        FROM public.users u
@@ -259,6 +581,7 @@ export async function loadLeoUserDetail(userId: string): Promise<LeoUserDetail |
       max_concurrent_tables: row.max_concurrent_tables,
       preferred_template_ids: row.preferred_template_ids,
       random_template_ids: row.random_template_ids,
+      applied_preset_name: row.applied_preset_name,
       updated_at: row.updated_at,
     });
 
@@ -305,8 +628,8 @@ export async function saveLeoUserConfig(params: {
       `INSERT INTO public.leo_user_configs (
          user_id, is_enabled, active_time_bands, behavior_profile,
          session_budget, hard_stop_loss, max_concurrent_tables,
-         preferred_template_ids, random_template_ids, updated_by
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         preferred_template_ids, random_template_ids, applied_preset_name, updated_by
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        ON CONFLICT (user_id) DO UPDATE SET
          is_enabled = EXCLUDED.is_enabled,
          active_time_bands = EXCLUDED.active_time_bands,
@@ -316,6 +639,7 @@ export async function saveLeoUserConfig(params: {
          max_concurrent_tables = EXCLUDED.max_concurrent_tables,
          preferred_template_ids = EXCLUDED.preferred_template_ids,
          random_template_ids = EXCLUDED.random_template_ids,
+         applied_preset_name = COALESCE(EXCLUDED.applied_preset_name, public.leo_user_configs.applied_preset_name),
          updated_by = EXCLUDED.updated_by,
          updated_at = now()`,
       [
@@ -328,12 +652,13 @@ export async function saveLeoUserConfig(params: {
         params.payload.maxConcurrentTables,
         params.payload.preferredTemplateIds,
         params.payload.randomTemplateIds,
+        params.payload.appliedPresetName?.trim().slice(0, 80) || null,
         params.updatedBy,
       ]
     );
 
     console.log(
-      `${LOG_PREFIX} saved user=${params.userId} enabled=${params.payload.isEnabled} profile=${params.payload.behaviorProfile}`
+      `${LOG_PREFIX} saved user=${params.userId} enabled=${params.payload.isEnabled} profile=${params.payload.behaviorProfile} preset=${params.payload.appliedPresetName ?? "-"}`
     );
 
     const detail = await loadLeoUserDetail(params.userId);
@@ -510,13 +835,6 @@ export async function createLeoPreset(params: {
 
     const preset = mapPresetRow(rows[0]);
     console.log(`${LOG_PREFIX} preset created id=${preset.id} name=${preset.name}`);
-
-    if (params.sourceUserId) {
-      const detail = await loadLeoPresets();
-      const created = detail.find((item) => item.id === preset.id);
-      return created ?? preset;
-    }
-
     return preset;
   } catch (error: unknown) {
     if (
@@ -531,6 +849,104 @@ export async function createLeoPreset(params: {
   } finally {
     client.release();
   }
+}
+
+export async function createLeoPresetFromUser(params: {
+  name: string;
+  sourceUserId: string;
+  createdBy: string;
+}): Promise<LeoConfigPreset> {
+  const detail = await loadLeoUserDetail(params.sourceUserId);
+  if (!detail) {
+    throw new Error("user not found");
+  }
+
+  return createLeoPreset({
+    name: params.name,
+    sourceUserId: params.sourceUserId,
+    createdBy: params.createdBy,
+    payload: {
+      isEnabled: detail.isEnabled,
+      activeTimeBands: detail.activeTimeBands,
+      behaviorProfile: detail.behaviorProfile,
+      sessionBudget: detail.sessionBudget,
+      hardStopLoss: detail.hardStopLoss,
+      maxConcurrentTables: detail.maxConcurrentTables,
+      preferredTemplateIds: detail.preferredTemplateIds,
+      randomTemplateIds: detail.randomTemplateIds,
+    },
+  });
+}
+
+export async function renameLeoPreset(params: {
+  presetId: string;
+  name: string;
+}): Promise<LeoConfigPreset> {
+  const name = params.name.trim();
+  if (!name) {
+    throw new Error("preset name is required");
+  }
+  if (name.length > 80) {
+    throw new Error("preset name too long");
+  }
+
+  const client = await connectPgWithRetry(pgPool);
+
+  try {
+    await client.query("BEGIN");
+
+    const existing = await client.query<{ name: string }>(
+      `SELECT name FROM public.leo_config_presets WHERE id = $1::uuid FOR UPDATE`,
+      [params.presetId]
+    );
+    const oldName = existing.rows[0]?.name;
+    if (!oldName) {
+      throw new Error("preset not found");
+    }
+
+    await client.query(
+      `UPDATE public.leo_config_presets
+          SET name = $2,
+              updated_at = now()
+        WHERE id = $1::uuid`,
+      [params.presetId, name]
+    );
+
+    if (oldName !== name) {
+      const renamed = await client.query(
+        `UPDATE public.leo_user_configs
+            SET applied_preset_name = $2,
+                updated_at = now()
+          WHERE applied_preset_name = $1`,
+        [oldName, name]
+      );
+      console.log(
+        `${LOG_PREFIX} preset renamed id=${params.presetId} from=${oldName} to=${name} users=${renamed.rowCount ?? 0}`
+      );
+    }
+
+    await client.query("COMMIT");
+  } catch (error: unknown) {
+    await client.query("ROLLBACK").catch(() => {});
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      (error as { code?: string }).code === "23505"
+    ) {
+      throw new Error("preset name already exists");
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  const presets = await loadLeoPresets();
+  const renamed = presets.find((item) => item.id === params.presetId);
+  if (!renamed) {
+    throw new Error("preset not found");
+  }
+  return renamed;
 }
 
 export async function deleteLeoPreset(presetId: string): Promise<void> {

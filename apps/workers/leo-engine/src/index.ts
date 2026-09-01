@@ -1,18 +1,13 @@
 import "dotenv/config";
 import http from "node:http";
 import { Pool } from "pg";
+import { nextProcessorDelayMs, parsePositiveInt } from "./processorSchedule.js";
 import { runLeoProcessorTick, runLeoSchedulerTick } from "./tick.js";
 
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`Missing required env: ${name}`);
   return value;
-}
-
-function parsePositiveInt(raw: string | undefined, fallback: number): number {
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n <= 0) return fallback;
-  return Math.floor(n);
 }
 
 async function main(): Promise<void> {
@@ -24,7 +19,6 @@ async function main(): Promise<void> {
 
   const httpPort = parsePositiveInt(process.env.LEO_ENGINE_HTTP_PORT, 8081);
   const schedulerMs = parsePositiveInt(process.env.LEO_SCHEDULER_INTERVAL_MS, 60_000);
-  const processorMs = parsePositiveInt(process.env.LEO_PROCESSOR_INTERVAL_MS, 30_000);
 
   http
     .createServer((_req, res) => {
@@ -44,20 +38,23 @@ async function main(): Promise<void> {
     }
   };
 
-  const runProcessor = async () => {
+  const runProcessorLoop = async () => {
     try {
       const count = await runLeoProcessorTick(pool);
       if (count > 0) console.log("[Leo] processor processed", count);
     } catch (error) {
       console.error("[Leo] processor tick error", error);
     }
+    const delayMs = nextProcessorDelayMs();
+    setTimeout(() => void runProcessorLoop(), delayMs);
   };
 
+  console.log("[Leo] processor interval random 15-40s (LEO_PROCESSOR_INTERVAL_MIN_MS / MAX_MS)");
+
   void runScheduler();
-  void runProcessor();
+  void runProcessorLoop();
 
   setInterval(() => void runScheduler(), schedulerMs);
-  setInterval(() => void runProcessor(), processorMs);
 
   const shutdown = async () => {
     await pool.end();

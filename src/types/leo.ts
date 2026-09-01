@@ -1,10 +1,17 @@
 import type {
   LeoBehaviorProfile,
+  LeoStakeTier,
   LeoTimeBand,
   LeoTimelineEvent,
 } from "@dingmoney/leo-behavior-core";
 
-export type { LeoBehaviorProfile, LeoTimeBand, LeoTimelineEvent };
+export type { LeoBehaviorProfile, LeoStakeTier, LeoTimeBand, LeoTimelineEvent };
+
+export const LEO_STAKE_LABELS: Record<LeoStakeTier, string> = {
+  light: "سبک",
+  medium: "متوسط",
+  heavy: "سنگین",
+};
 
 export const LEO_PROFILE_LABELS: Record<
   LeoBehaviorProfile,
@@ -47,7 +54,32 @@ export type LeoSettings = {
   schedulerTickSeconds: number;
   processorTickSeconds: number;
   timezone: string;
+  /** Max Leo players per waiting room; 0 = unlimited */
+  maxLeoPlayersPerWaitingRoom: number;
+  /** Max cards per round_join; 0 = unlimited */
+  maxLeoCardsPerJoin: number;
   updatedAt: string | null;
+};
+
+export type LeoBandCapsSaveResult = {
+  bandCaps: LeoBandCap[];
+  maxLeoPlayersPerWaitingRoom: number;
+  maxLeoCardsPerJoin: number;
+};
+
+export type LeoBandStakeCap = {
+  stakeTier: LeoStakeTier;
+  maxActivePlayers: number;
+  shuffleEnabled: boolean;
+  readyCount: number;
+  busyCount: number;
+};
+
+export type LeoBandCap = {
+  timeBand: LeoTimeBand;
+  stakes: LeoBandStakeCap[];
+  readyCount: number;
+  busyCount: number;
 };
 
 export type LeoUserConfig = {
@@ -58,9 +90,10 @@ export type LeoUserConfig = {
   sessionBudget: number;
   hardStopLoss: number;
   maxConcurrentTables: number;
-  preferredTemplateIds: string[];
-  randomTemplateIds: string[];
-  updatedAt: string | null;
+    preferredTemplateIds: string[];
+    randomTemplateIds: string[];
+    appliedPresetName: string | null;
+    updatedAt: string | null;
 };
 
 export type LeoUserListRow = {
@@ -70,6 +103,7 @@ export type LeoUserListRow = {
   role: string;
   leoEnabled: boolean;
   behaviorProfile: LeoBehaviorProfile | null;
+  appliedPresetName: string | null;
   devPlayerActive: boolean;
 };
 
@@ -81,10 +115,21 @@ export type LeoTemplateOption = {
   roomType: string;
 };
 
+export type LeoLiveStats = {
+  /** Leo-enabled users currently seated in active rooms */
+  activeLeoPlayers: number;
+  /** Active rooms with at least one Leo player */
+  leoRoomCount: number;
+  /** Non-Leo players seated in Leo rooms */
+  nonLeoPlayersInLeoRooms: number;
+};
+
 export type LeoOverview = {
   settings: LeoSettings;
   enabledUserCount: number;
   pendingEventCount: number;
+  bandCaps: LeoBandCap[];
+  liveStats: LeoLiveStats;
 };
 
 export type LeoUserDetail = LeoUserConfig & {
@@ -135,6 +180,7 @@ export type LeoSaveUserConfigPayload = {
   maxConcurrentTables: number;
   preferredTemplateIds: string[];
   randomTemplateIds: string[];
+  appliedPresetName?: string | null;
 };
 
 export type LeoConfigPreset = LeoSaveUserConfigPayload & {
