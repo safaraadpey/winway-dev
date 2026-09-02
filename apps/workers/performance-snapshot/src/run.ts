@@ -14,6 +14,7 @@ export type SnapshotRunConfig = {
 export type SnapshotRunResult = {
   snapshotDate: string;
   rowCount: number;
+  lifetimeRowCount: number;
   status: string;
   windowFrom: string | null;
   windowTo: string | null;
@@ -41,9 +42,10 @@ export async function executeSnapshotRun(
     const { rows } = await client.query<{
       out_snapshot_date: string;
       out_row_count: number;
+      out_lifetime_row_count: number;
       out_status: string;
     }>(
-      `SELECT out_snapshot_date, out_row_count, out_status
+      `SELECT out_snapshot_date, out_row_count, out_lifetime_row_count, out_status
        FROM public.fn_performance_snapshot_run($1::date)`,
       [snapshotDate]
     );
@@ -67,6 +69,7 @@ export async function executeSnapshotRun(
     const payload: SnapshotRunResult = {
       snapshotDate: result.out_snapshot_date,
       rowCount: Number(result.out_row_count ?? 0),
+      lifetimeRowCount: Number(result.out_lifetime_row_count ?? 0),
       status: String(result.out_status ?? "unknown"),
       windowFrom: window?.window_from?.toISOString() ?? null,
       windowTo: window?.window_to?.toISOString() ?? null,

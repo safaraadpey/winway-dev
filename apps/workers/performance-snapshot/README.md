@@ -66,13 +66,19 @@ curl http://localhost:8081/health
 
 - `public.performance_snapshot_runs` — one row per accounting day (status, window, row count)
 - `public.performance_daily_stats` — base metrics per `(snapshot_date, user_id, role)`
+- `public.performance_lifetime_stats` — overall base metrics per `(user_id, role)` through last closed accounting day
+
+**Overall** means through the last **08:00 Asia/Tehran** closed window (`through_snapshot_date`), not through the current moment. After each daily close, `fn_performance_rebuild_lifetime_stats()` rebuilds lifetime from `SUM(performance_daily_stats)` (full DELETE + INSERT, not incremental `+=`).
 
 Derived dashboard fields (کانیات کل، عملکرد بازی، بیلان، …) are **not** stored; compute at read time from base columns.
+
+Apply migration [`sql/migrations/20260902150000_performance_lifetime_stats.sql`](../../../sql/migrations/20260902150000_performance_lifetime_stats.sql) after the daily snapshot migration.
 
 ## Idempotency
 
 - Advisory lock prevents concurrent runs on one DB
 - Re-run for the same `snapshot_date` deletes and rebuilds that day's stats rows
+- Lifetime table is fully rebuilt from daily SUM after each successful day (safe on retry/backfill)
 - `performance_snapshot_runs` row is overwritten on retry
 
 ## Manual verification
