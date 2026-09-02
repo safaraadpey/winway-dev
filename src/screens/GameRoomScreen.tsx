@@ -1,12 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/contexts/SessionContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 import useScreenWakeLock from "@/lib/hooks/useScreenWakeLock";
-import PageLoading from "@/components/PageLoading";
 import BuyCardsPanel from "@/components/room/BuyCardsPanel";
 import ActiveCardsStatus, {
   ActiveCardStatus,
@@ -37,11 +36,19 @@ import {
   stopAutoBuy,
 } from "@/lib/autoBuy/client";
 import type { AutoBuySnapshot } from "@/lib/autoBuy/types";
+import {
+  buildGameRoomShell,
+  gameRoomSessionKey,
+  mergeShellForRoomIdTransition,
+  persistGameRoomShellFromSnapshot,
+} from "@/lib/gameroom/gameRoomShell";
 import styles from "./GameRoomScreen.module.css";
 
 interface GameRoomScreenProps {
   roomId?: string;
   templateId?: string;
+  priceHint?: number;
+  roomNameHint?: string;
   /** Explicit watch of a live table (active-table click). Do not bounce to buy page. */
   spectate?: boolean;
   onEnterLive?: (roomId: string) => void;
@@ -255,6 +262,8 @@ function applyTicketEventToActiveCards(
 export default function GameRoomScreen({
   roomId,
   templateId,
+  priceHint,
+  roomNameHint,
   spectate = false,
   onEnterLive,
 }: GameRoomScreenProps) {
@@ -265,8 +274,13 @@ export default function GameRoomScreen({
     useActiveGamesContext();
   useScreenWakeLock(Boolean(roomId));
 
-  // State برای اطلاعات روم
-  const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
+  // State برای اطلاعات روم — shell فوری، hydrate از snapshot در پس‌زمینه
+  const [roomInfo, setRoomInfo] = useState<RoomInfo>(() =>
+    buildGameRoomShell({ roomId, templateId, priceHint, roomNameHint }).roomInfo
+  );
+  const [hasLiveSnapshot, setHasLiveSnapshot] = useState(false);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
+  const sessionKeyRef = useRef(gameRoomSessionKey({ roomId, templateId }));
   const [gameMode, setGameMode] = useState<GameRoomView["mode"]>("preview");
   const enteredLiveRef = useRef(false);
   const releasedTemplateIdRef = useRef<string | null>(null);
@@ -277,12 +291,11 @@ export default function GameRoomScreen({
   const hadPositiveCountdownRef = useRef(false);
   const countdownDeadlineRef = useRef<number | null>(null);
   const autoBuyLastRoomRef = useRef<string | null>(null);
-  const roomInfoRef = useRef<RoomInfo | null>(null);
+  const roomInfoRef = useRef<RoomInfo>(roomInfo);
   const fetchRoomDataRef = useRef<(isInitial: boolean) => Promise<void>>(async () => {});
   const pollIntervalMsRef = useRef(LOBBY_POLL_MS);
   const userIdRef = useRef<string | null>(null);
   const hasCardsRef = useRef(false);
-  const [loading, setLoading] = useState(true);
   const [globalRegistrationLocked, setGlobalRegistrationLocked] = useState(false);
   const [globalRegistrationLockReason, setGlobalRegistrationLockReason] = useState<string | null>(null);
 
@@ -425,21 +438,57 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     roomInfoRef.current = roomInfo;
   }, [roomInfo]);
 
+  useLayoutEffect(() => {
+    const nextSessionKey = gameRoomSessionKey({ roomId, templateId });
+    const prevSessionKey = sessionKeyRef.current;
+    const isTemplateToRoomTransition =
+      prevSessionKey.startsWith("tpl:") &&
+      nextSessionKey.startsWith("room:") &&
+      Boolean(roomInfoRef.current.templateId);
+
+    if (isTemplateToRoomTransition && roomId) {
+      console.info("[Room] Preserved UI on templateId→roomId transition", {
+        roomId,
+        templateId: roomInfoRef.current.templateId,
+      });
+      setRoomInfo(
+        mergeShellForRoomIdTransition(
+          roomInfoRef.current,
+          roomId,
+          roomInfoRef.current.templateId
+        )
+      );
+      sessionKeyRef.current = nextSessionKey;
+      return;
+    }
+
+    if (prevSessionKey !== nextSessionKey) {
+      const { roomInfo: shell } = buildGameRoomShell({
+        roomId,
+        templateId,
+        priceHint,
+        roomNameHint,
+      });
+      setRoomInfo(shell);
+      setHasLiveSnapshot(false);
+      setSnapshotError(null);
+      sessionKeyRef.current = nextSessionKey;
+    }
+  }, [roomId, templateId, priceHint, roomNameHint]);
+
   // بارگذاری اطلاعات روم یا تمپلیت
   useEffect(() => {
     async function fetchRoomData(isInitial: boolean) {
       if (isHardExiting()) return;
+      let nextError: string | null = null;
       try {
         if (isInitial) {
-          setLoading(true);
+          console.info("[Room] Fetching gameroom snapshot", { roomId, templateId });
         }
 
         if (!roomId && !templateId && !releasedTemplateIdRef.current) {
           console.warn("[GAME_ROOM][INVALID_STATE]: No roomId and no templateId");
           toast.error("ورود به اتاق نامعتبر است");
-          if (isInitial) {
-            setLoading(false);
-          }
           return;
         }
 
@@ -563,13 +612,19 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
             view,
           });
           toast.error("روم یافت نشد");
-          if (isInitial) {
-            setLoading(false);
-          }
+          nextError = "روم یافت نشد";
           return;
         }
 
         setRoomInfo(mappedRoom);
+        setHasLiveSnapshot(true);
+        setSnapshotError(null);
+        persistGameRoomShellFromSnapshot(mappedRoom, { roomId, templateId });
+        console.info("[Room] Hydrated from snapshot", {
+          roomId,
+          templateId,
+          mode: view.mode,
+        });
         setGameMode(showTemplatePreview ? "preview" : view.mode);
         if (!releasedTemplateIdRef.current && view.mode === "running") {
           tryEnterLive({
@@ -622,18 +677,19 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           mergeActiveCardStatuses(activeCardsList, prev)
         );
       } catch (error: any) {
-        console.error("Error loading room data:", error);
-        toast.error(error.message || "خطا در بارگذاری اطلاعات روم");
+        console.error("[Room] Error loading room data:", error);
+        nextError = error.message || "خطا در بارگذاری اطلاعات روم";
+        toast.error(nextError);
       } finally {
-        if (isInitial) {
-          setLoading(false);
+        if (nextError) {
+          setSnapshotError(nextError);
         }
       }
     }
 
     fetchRoomDataRef.current = fetchRoomData;
 
-    // بارگذاری اولیه با spinner
+    // بارگذاری اولیه در پس‌زمینه — UI از shell فوری رندر می‌شود
     fetchRoomData(true);
 
     let cancelled = false;
@@ -1443,18 +1499,14 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
   };
 
   const isTournamentRoom =
-    (roomInfo?.roomType || "").toLowerCase() === "tournament";
+    (roomInfo.roomType || "").toLowerCase() === "tournament";
   const purchaseLockedByAdmin = globalRegistrationLocked && !canCancel;
+  const shellPurchaseBlocked = roomInfo.cardPrice <= 0 && !hasLiveSnapshot;
   const tourReady =
-    !loading &&
-    Boolean(roomInfo) &&
+    hasLiveSnapshot &&
     !isTournamentRoom &&
     !purchaseLockedByAdmin;
   useAutoStartTour(GAME_ROOM_TOUR_ID, tourReady, { preferQueuedIntent: true });
-
-  if (loading || !roomInfo) {
-    return <PageLoading />;
-  }
 
   const autoBuyPanelAvailable =
     !isTournamentRoom &&
@@ -1467,6 +1519,11 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
   return (
     <div className={styles.root}>
       <div className="px-4 space-y-1 pt-4">
+        {snapshotError && (
+          <div className="rounded-xl border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm text-white text-right">
+            {snapshotError}
+          </div>
+        )}
         {purchaseLockedByAdmin && (
           <div className="rounded-xl border border-red-500/50 bg-amber-500/10 px-3 py-2 text-sm text-white text-right">
             {globalRegistrationLockReason
@@ -1486,6 +1543,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
             showMusicToggle
             onConfirm={handleAddToList}
             disabled={
+              shellPurchaseBlocked ||
               purchaseLockedByAdmin ||
               Boolean(
                 roomId &&

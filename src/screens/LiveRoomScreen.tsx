@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   fetchLiveRoomSnapshot,
   type LiveRoomSnapshot,
@@ -39,8 +39,11 @@ import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 import { useSession } from "@/lib/contexts/SessionContext";
 import { isHardExiting } from "@/lib/auth/hardExit";
 import { shouldUseDrawsOnlyLiveRoomFallback } from "@/lib/cardPool/client";
+import {
+  buildLiveRoomShell,
+  persistLiveRoomShellCache,
+} from "@/lib/liveRoom/liveRoomShell";
 import styles from "./LiveRoomScreen.module.css";
-import loadingStyles from "@/components/playerScreenLoading.module.css";
 
 type CardWinner = {
   ticketId: string;
@@ -191,9 +194,11 @@ export default function LiveRoomScreen({
     [guestSpectate]
   );
 
-  const [data, setData] = useState<LiveRoomSnapshot | null>(null);
+  const [data, setData] = useState<LiveRoomSnapshot>(() =>
+    buildLiveRoomShell(roomId).snapshot
+  );
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [hasLiveSnapshot, setHasLiveSnapshot] = useState(false);
 
   const [lineWinners, setLineWinners] = useState<LineWinner[]>([]);
   const [fullWinners, setFullWinners] = useState<FullWinner[]>([]);
@@ -356,10 +361,17 @@ export default function LiveRoomScreen({
   const [firstDrawCountdownSec, setFirstDrawCountdownSec] = useState<number | null>(null);
 
   // برای استفاده داخل callback های realtime (جلوگیری از stale closure)
-  const dataRef = useRef<LiveRoomSnapshot | null>(null);
+  const dataRef = useRef<LiveRoomSnapshot>(data);
   useEffect(() => {
     dataRef.current = data;
   }, [data]);
+
+  useLayoutEffect(() => {
+    const { snapshot } = buildLiveRoomShell(roomId);
+    setData(snapshot);
+    setHasLiveSnapshot(false);
+    setError(null);
+  }, [roomId]);
 
   const countMatchedMyCards = useCallback(
     (number: number, snapshot: LiveRoomSnapshot | null | undefined): number => {
@@ -458,7 +470,7 @@ export default function LiveRoomScreen({
   useEffect(() => {
     const authCount = sortDraws(data?.draws ?? []).length;
 
-    if (loading) return;
+    if (!hasLiveSnapshot) return;
 
     if (!drawsHydratedRef.current) {
       drawsHydratedRef.current = true;
@@ -476,7 +488,7 @@ export default function LiveRoomScreen({
     if (authCount > revealedDrawCountRef.current) {
       scheduleNextDrawRevealRef.current();
     }
-  }, [data?.draws, loading]);
+  }, [data?.draws, hasLiveSnapshot]);
 
   useEffect(() => {
     if (replayModeRef.current) return;
@@ -758,9 +770,8 @@ export default function LiveRoomScreen({
 
     async function loadInitialSnapshot() {
       if (!roomId || isHardExiting()) return;
-      setLoading(true);
       try {
-        console.log("[LiveRoom] loading snapshot for room", roomId);
+        console.info("[LiveRoom] Fetching live-room snapshot", { roomId });
         const snapshot = await fetchSnapshot(roomId);
         if (!isMounted) return;
 
@@ -775,13 +786,15 @@ export default function LiveRoomScreen({
           });
         }
         setData(snapshot);
+        setHasLiveSnapshot(true);
+        persistLiveRoomShellCache(roomId, snapshot);
         markDrawSynced();
         setError(null);
 
-        console.log(
-          "[LiveRoom] snapshot loaded, draws:",
-          snapshot.draws.map((d) => d.number)
-        );
+        console.info("[LiveRoom] Hydrated from snapshot", {
+          roomId,
+          draws: snapshot.draws.map((d) => d.number),
+        });
 
         if (
           isMounted &&
@@ -802,8 +815,6 @@ export default function LiveRoomScreen({
         if (isMounted) {
           setError(err.message || "خطا در بارگذاری اطلاعات بازی");
         }
-      } finally {
-        if (isMounted) setLoading(false);
       }
     }
 
@@ -1164,25 +1175,6 @@ export default function LiveRoomScreen({
   ]);
 
   // ---- رندر ----
-
-  if (loading && !data) {
-    return (
-      <div className={`${loadingStyles.page} ${loadingStyles.pageCentered}`}>
-        <div className={loadingStyles.spinner} aria-hidden="true" />
-        <p className={loadingStyles.message}>در حال بارگذاری بازی زنده...</p>
-      </div>
-    );
-  }
-
-  if (error && !data) {
-    return (
-      <div className={`${loadingStyles.page} ${loadingStyles.pageCentered}`}>
-        <p className={loadingStyles.message}>{error}</p>
-      </div>
-    );
-  }
-
-  if (!data) return null;
 
   const latestNumber = displayedCalledNumbers.length
     ? displayedCalledNumbers[displayedCalledNumbers.length - 1]

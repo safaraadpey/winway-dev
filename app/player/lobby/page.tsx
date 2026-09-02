@@ -286,19 +286,47 @@ export default function LobbyPage() {
     };
   }, [sessionSnap.accessToken]);
 
+  const buildGameRoomHref = (params: {
+    templateId?: string | null;
+    entryRoomId?: string | null;
+    price: number;
+    roomName?: string | null;
+  }) => {
+    const search = new URLSearchParams();
+    if (params.templateId) {
+      search.set("templateId", params.templateId);
+    }
+    if (params.entryRoomId) {
+      search.set("roomId", params.entryRoomId);
+    }
+    if (params.price > 0) {
+      search.set("price", String(params.price));
+    }
+    const trimmedName = params.roomName?.trim();
+    if (trimmedName) {
+      search.set("roomName", trimmedName);
+    }
+    return `/player/gameroom?${search.toString()}`;
+  };
+
   // تابع برای کلیک روی روم
   const handleRoomClick = async (
     price: number,
     templateId?: string | null,
-    entryRoomId?: string | null
+    entryRoomId?: string | null,
+    roomName?: string | null
   ) => {
     if (templateId) {
-      router.push(`/player/gameroom?templateId=${templateId}`);
+      router.push(
+        buildGameRoomHref({ templateId, price, roomName })
+      );
       return;
     }
 
     if (entryRoomId) {
-      router.push(`/player/gameroom?roomId=${entryRoomId}`);
+      router.push(
+        buildGameRoomHref({ entryRoomId, price, roomName })
+      );
       return;
     }
 
@@ -356,7 +384,9 @@ export default function LobbyPage() {
               entryRoomId={group.entryRoomId}
               autoBuyFundDisplay={autoBuyFundDisplay}
               variant="minimal" // TODO: از تنظیمات ادمین بگیرید
-              onClick={handleRoomClick}
+              onClick={(price, templateId, entryRoomId) =>
+                handleRoomClick(price, templateId, entryRoomId, group.roomName)
+              }
               dataTourId={
                 index === 0 ? "game-browser-first-room" : undefined
               }

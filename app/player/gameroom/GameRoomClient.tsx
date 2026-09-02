@@ -2,7 +2,6 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import PageLoading from "@/components/PageLoading";
 import GameRoomScreen from "@/src/screens/GameRoomScreen";
 import LiveRoomScreen from "@/src/screens/LiveRoomScreen";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
@@ -33,6 +32,12 @@ export default function GameRoomClient() {
   const templateId = searchParams.get("templateId") ?? undefined;
   const spectate = searchParams.get("spectate") === "1";
   const queryTournamentId = searchParams.get("tournamentId");
+  const priceHintRaw = searchParams.get("price");
+  const priceHint =
+    priceHintRaw != null && priceHintRaw !== ""
+      ? Number(priceHintRaw)
+      : undefined;
+  const roomNameHint = searchParams.get("roomName") ?? undefined;
   const enterLiveFromChip =
     searchParams.get(ACTIVE_GAME_ENTER_LIVE_PARAM) === "1";
   const { rooms: activeRooms } = useActiveGamesContext();
@@ -246,7 +251,7 @@ export default function GameRoomClient() {
   }, [roomId, router]);
 
   if (!roomId && !templateId) {
-    return <PageLoading />;
+    return null;
   }
 
   if (roomId && liveRoomId === roomId) {
@@ -262,6 +267,12 @@ export default function GameRoomClient() {
     <GameRoomScreen
       roomId={roomId}
       templateId={templateId}
+      priceHint={
+        priceHint != null && Number.isFinite(priceHint) && priceHint > 0
+          ? priceHint
+          : undefined
+      }
+      roomNameHint={roomNameHint}
       spectate={spectate}
       onEnterLive={handleEnterLive}
     />
