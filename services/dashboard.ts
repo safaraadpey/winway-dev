@@ -129,6 +129,10 @@ function isAdminPanelRoute(): boolean {
   return typeof window !== "undefined" && window.location.pathname.startsWith("/admin");
 }
 
+function isAgentPanelRoute(): boolean {
+  return typeof window !== "undefined" && window.location.pathname.startsWith("/agent");
+}
+
 async function loadDashboardDataFromAdminSnapshot(options?: {
   maxAgeMs?: number;
   force?: boolean;
@@ -156,6 +160,33 @@ async function loadDashboardDataFromAdminSnapshot(options?: {
   return data;
 }
 
+async function loadDashboardDataFromOperatorSnapshot(options?: {
+  maxAgeMs?: number;
+  force?: boolean;
+}): Promise<DashboardData> {
+  const maxAgeMs = options?.maxAgeMs ?? 30_000;
+  const cacheKey = "agent-snapshot|v1";
+
+  if (!options?.force && dashboardCache?.key === cacheKey) {
+    const ageMs = Date.now() - dashboardCache.fetchedAtMs;
+    if (ageMs >= 0 && ageMs <= maxAgeMs) {
+      return dashboardCache.data;
+    }
+  }
+
+  const data = await callAdminApi<DashboardData>("/api/agent/dashboard/snapshot", {
+    method: "GET",
+  });
+
+  dashboardCache = {
+    key: cacheKey,
+    fetchedAtMs: Date.now(),
+    data,
+  };
+
+  return data;
+}
+
 export function getCachedDashboardData(): DashboardData | null {
   return dashboardCache?.data ?? null;
 }
@@ -166,30 +197,43 @@ export function clearDashboardCache() {
 }
 
 type DashboardDayCache = {
+  key: string;
   fetchedAtMs: number;
   summary: FinancialSummary;
 };
 
 let dashboardDayCache: DashboardDayCache | null = null;
 
+function dashboardDayCacheKey(): string {
+  if (isAdminPanelRoute()) return "admin";
+  if (isAgentPanelRoute()) return "agent";
+  return "legacy";
+}
+
 export async function loadDashboardDaySummary(options?: {
   maxAgeMs?: number;
   force?: boolean;
 }): Promise<FinancialSummary> {
   const maxAgeMs = options?.maxAgeMs ?? 30_000;
+  const cacheKey = dashboardDayCacheKey();
 
-  if (!options?.force && dashboardDayCache) {
+  if (!options?.force && dashboardDayCache?.key === cacheKey) {
     const ageMs = Date.now() - dashboardDayCache.fetchedAtMs;
     if (ageMs >= 0 && ageMs <= maxAgeMs) {
       return dashboardDayCache.summary;
     }
   }
 
-  const summary = await callAdminApi<FinancialSummary>("/api/admin/dashboard/snapshot-day", {
+  const dayPath = isAgentPanelRoute()
+    ? "/api/agent/dashboard/snapshot-day"
+    : "/api/admin/dashboard/snapshot-day";
+
+  const summary = await callAdminApi<FinancialSummary>(dayPath, {
     method: "GET",
   });
 
   dashboardDayCache = {
+    key: cacheKey,
     fetchedAtMs: Date.now(),
     summary,
   };
@@ -348,6 +392,33 @@ export async function loadDashboardRangeSummary(params: {
       withdrawals: data.withdrawals ?? 0,
       net: data.net ?? 0,
       panelOperators: Array.isArray(data.panelOperators) ? data.panelOperators : [],
+    };
+  }
+
+  if (isAgentPanelRoute()) {
+    if (!params.from || !params.to || params.from >= params.to) {
+      throw new Error("بازه تاریخ نامعتبر است");
+    }
+
+    const data = await callAdminApi<DashboardRangeSummary>(
+      `/api/agent/dashboard/snapshot-range?fromDate=${encodeURIComponent(params.from)}&toDate=${encodeURIComponent(params.to)}`,
+      { method: "GET" }
+    );
+
+    return {
+      ticketsVolume: data.ticketsVolume ?? 0,
+      ticketsVolumeTotal: data.ticketsVolumeTotal ?? 0,
+      tournamentTicketsVolumeTotal: data.tournamentTicketsVolumeTotal ?? 0,
+      tournamentCommission: data.tournamentCommission ?? 0,
+      directPlayerCommission: data.directPlayerCommission ?? 0,
+      tournamentGuaranteePayout: data.tournamentGuaranteePayout ?? 0,
+      gatewayPurchases: data.gatewayPurchases ?? 0,
+      deposits: data.deposits ?? 0,
+      withdrawals: data.withdrawals ?? 0,
+      net: data.net ?? 0,
+      playerWinnings: data.playerWinnings ?? 0,
+      playerPurchases: data.playerPurchases ?? 0,
+      panelOperators: [],
     };
   }
 
@@ -693,6 +764,10 @@ function commissionTotalsFromDailyRows(
 export async function loadDashboardData(options?: { maxAgeMs?: number; force?: boolean }): Promise<DashboardData> {
   if (isAdminPanelRoute()) {
     return loadDashboardDataFromAdminSnapshot(options);
+  }
+
+  if (isAgentPanelRoute()) {
+    return loadDashboardDataFromOperatorSnapshot(options);
   }
 
   const user = await loadDashboardUserInfo();

@@ -54,7 +54,7 @@ export default function AgentLayout({
 
   return (
     <HeaderVisibilityProvider>
-      <ClientAuthGuard>
+      <ClientAuthGuard blockShell={false} loginPath="/agent/login">
         <AgentLayoutContent>{children}</AgentLayoutContent>
       </ClientAuthGuard>
     </HeaderVisibilityProvider>

@@ -3,6 +3,7 @@
 import { Suspense, useEffect } from "react";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import TransactionsManager from "@/components/admin/TransactionsManager";
+import TransactionsTabSkeleton from "@/components/admin/TransactionsTabSkeleton";
 
 export default function AgentTransactionsPage() {
   const { setShowHeader, setShowBackButton, setOnBackClick } = useHeaderVisibility();
@@ -19,7 +20,7 @@ export default function AgentTransactionsPage() {
   }, [setShowHeader, setShowBackButton, setOnBackClick]);
 
   return (
-    <Suspense fallback={<div className="p-4 text-center text-gray-400">در حال بارگذاری...</div>}>
+    <Suspense fallback={<TransactionsTabSkeleton />}>
       <TransactionsManager pageTitle="مدیریت تراکنش‌ها" />
     </Suspense>
   );

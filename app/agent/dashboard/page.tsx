@@ -3,19 +3,25 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
-import { loadDashboardData, loadDashboardRangeSummary } from "@/services/dashboard";
+import {
+  getCachedDashboardData,
+  loadDashboardData,
+  loadDashboardDaySummary,
+  loadDashboardRangeSummary,
+} from "@/services/dashboard";
+import type { DashboardRangeSummary } from "@/services/dashboard";
 import { hardExitFromCurrentPanel } from "@/lib/auth/hardExit";
-import type { DashboardPeriod, DashboardData } from "@/src/types/dashboard";
+import type { DashboardPeriod, DashboardData, FinancialSummary } from "@/src/types/dashboard";
 import ShamsiDateInput from "@/components/common/ShamsiDateInput";
 import ReferralRegistrationLink from "@/components/admin/ReferralRegistrationLink";
 import PendingWithdrawalAlertBadge from "@/components/admin/PendingWithdrawalAlertBadge";
+import AdminDashboardReportSkeleton from "@/components/admin/AdminDashboardReportSkeleton";
 import { useReferralCodeDashboardSync } from "@/lib/referral/useReferralCodeDashboardSync";
 import InstallAppButton from "@/components/InstallAppButton";
 
-const PERIOD_LABELS: Record<DashboardPeriod, string> = {
+const PERIOD_LABELS: Partial<Record<DashboardPeriod, string>> = {
   day: "روز",
   week: "هفته",
-  month: "ماه",
   overall: "کل",
 };
 
@@ -37,21 +43,15 @@ export default function AgentDashboardPage() {
   type PeriodTab = DashboardPeriod | "range";
   const router = useRouter();
   const { setShowHeader, setShowBackButton, setOnBackClick } = useHeaderVisibility();
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [activePeriod, setActivePeriod] = useState<PeriodTab>("day");
+  const [data, setData] = useState<DashboardData | null>(() => getCachedDashboardData());
+  const [reportLoading, setReportLoading] = useState(() => getCachedDashboardData() === null);
+  const [activePeriod, setActivePeriod] = useState<PeriodTab>("week");
+  const [daySummary, setDaySummary] = useState<FinancialSummary | null>(null);
+  const [dayLoading, setDayLoading] = useState(false);
   const [rangeFrom, setRangeFrom] = useState("");
   const [rangeTo, setRangeTo] = useState("");
   const [rangeLoading, setRangeLoading] = useState(false);
-  const [rangeSummary, setRangeSummary] = useState<{
-    ticketsVolume: number;
-    ticketsVolumeTotal: number;
-    tournamentCommission: number;
-    deposits: number;
-    withdrawals: number;
-    playerWinnings?: number;
-    playerPurchases?: number;
-  } | null>(null);
+  const [rangeSummary, setRangeSummary] = useState<DashboardRangeSummary | null>(null);
 
   useEffect(() => {
     setShowHeader(true);
@@ -62,23 +62,34 @@ export default function AgentDashboardPage() {
   useReferralCodeDashboardSync(setData);
 
   useEffect(() => {
-    async function fetchData() {
+    let cancelled = false;
+
+    async function loadReports() {
       try {
-        const result = await loadDashboardData({ force: true });
+        const result = await loadDashboardData({ maxAgeMs: 30_000, force: true });
+        if (cancelled) return;
         setData(result);
       } catch (error) {
-        console.error("Error loading agent dashboard data:", error);
+        console.error("Error loading agent dashboard reports:", error);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setReportLoading(false);
+        }
       }
     }
 
-    fetchData();
+    void loadReports();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const summary =
     activePeriod === "range"
       ? rangeSummary
+      : activePeriod === "day"
+      ? daySummary
       : data?.summaries[activePeriod];
   const hasReferralCode = Boolean(data?.user?.referralCode);
   const userRole = data?.user?.role;
@@ -91,33 +102,130 @@ export default function AgentDashboardPage() {
       ? "ادمین"
       : "کاربر";
 
+  const handleLoadDaySummary = async (options?: { force?: boolean }) => {
+    if (dayLoading) return;
+    try {
+      setDayLoading(true);
+      const result = await loadDashboardDaySummary({
+        maxAgeMs: 30_000,
+        force: options?.force,
+      });
+      setDaySummary(result);
+    } catch (error) {
+      console.error("Error loading agent dashboard day summary:", error);
+      if (!options?.force) {
+        setDaySummary(null);
+      }
+    } finally {
+      setDayLoading(false);
+    }
+  };
+
+  const handlePeriodChange = (period: PeriodTab) => {
+    setActivePeriod(period);
+    if (period === "day") {
+      void handleLoadDaySummary();
+    }
+  };
+
   const handleLogout = () => {
     hardExitFromCurrentPanel();
   };
 
   const handleLoadRange = async () => {
-    if (!rangeFrom || !rangeTo || rangeFrom > rangeTo) return;
+    if (!rangeFrom || !rangeTo) return;
+    if (rangeFrom >= rangeTo) return;
     try {
       setRangeLoading(true);
       const result = await loadDashboardRangeSummary({
         from: rangeFrom,
         to: rangeTo,
       });
-      setRangeSummary({
-        ticketsVolume: result.ticketsVolume,
-        ticketsVolumeTotal: result.ticketsVolumeTotal,
-        tournamentCommission: result.tournamentCommission,
-        deposits: result.deposits,
-        withdrawals: result.withdrawals,
-        playerWinnings: result.playerWinnings ?? 0,
-        playerPurchases: result.playerPurchases ?? 0,
-      });
+      setRangeSummary(result);
     } catch (error) {
       console.error("Error loading range dashboard summary:", error);
       setRangeSummary(null);
     } finally {
       setRangeLoading(false);
     }
+  };
+
+  const renderReportContent = () => {
+    if (activePeriod === "range") {
+      if (!rangeFrom || !rangeTo || rangeFrom >= rangeTo) {
+        return <div className="text-center py-4 text-gray-400">بازه تاریخ معتبر انتخاب کنید</div>;
+      }
+      if (rangeLoading) {
+        return <AdminDashboardReportSkeleton />;
+      }
+      if (!rangeSummary) {
+        return <div className="text-center py-4 text-gray-400">بازه را اعمال کنید</div>;
+      }
+    } else if (activePeriod === "day") {
+      if (dayLoading && !daySummary) {
+        return <AdminDashboardReportSkeleton />;
+      }
+      if (!daySummary) {
+        return <div className="text-center py-4 text-gray-400">در حال بارگذاری...</div>;
+      }
+    } else if (reportLoading && !summary) {
+      return <AdminDashboardReportSkeleton />;
+    } else if (!summary) {
+      return <div className="text-center py-4 text-gray-400">داده‌ای موجود نیست</div>;
+    }
+
+    const report = summary!;
+
+    return (
+      <div className="grid grid-cols-2 gap-y-1">
+        <span>کانیات من</span>
+        <span className="text-right">
+          <DashboardAmount value={report.ticketsVolume} />
+        </span>
+        <span>کانیات کل</span>
+        <span className="text-right">
+          <DashboardAmount value={report.ticketsVolumeTotal} />
+        </span>
+        <span>کانیات از تورنومنت</span>
+        <span className="text-right">
+          <DashboardAmount value={report.tournamentCommission ?? 0} />
+        </span>
+        <span>کانیات از بازی</span>
+        <span className="text-right">
+          <DashboardAmount
+            value={Math.max(0, report.ticketsVolume - (report.tournamentCommission ?? 0))}
+          />
+        </span>
+        <span>مجموع برد پلیر</span>
+        <span className="text-right">
+          <DashboardAmount value={report.playerWinnings ?? 0} />
+        </span>
+        <span>مجموع باخت پلیر</span>
+        <span className="text-right">
+          <DashboardAmount value={report.playerPurchases ?? 0} />
+        </span>
+        <span>عملکرد بازی</span>
+        <span
+          className={`text-right ${
+            (report.playerWinnings ?? 0) - (report.playerPurchases ?? 0) >= 0
+              ? "text-emerald-400"
+              : "text-rose-400"
+          }`}
+        >
+          <DashboardAmount
+            value={(report.playerWinnings ?? 0) - (report.playerPurchases ?? 0)}
+          />
+        </span>
+        <span>واریز</span>
+        <span className="text-right">
+          <DashboardAmount value={report.deposits} />
+        </span>
+        <span>برداشت</span>
+        <span className="text-right">
+          <DashboardAmount value={report.withdrawals} />
+        </span>
+      </div>
+    );
   };
 
   return (
@@ -127,7 +235,6 @@ export default function AgentDashboardPage() {
           <InstallAppButton label="نصب اپ ایجنت" />
         </div>
 
-        {/* کارت اطلاعات کاربر و ردیف کد معرف */}
         <div className="mb-4">
           <div className="flex items-center justify-between gap-3 mb-3">
             <div className="flex items-center gap-3">
@@ -139,7 +246,6 @@ export default function AgentDashboardPage() {
                   {data?.user?.displayName || roleLabel}
                 </span>
                 <span className="text-gray-300 text-xs">{roleLabel}</span>
-                {/* نمایش ID حذف شد؛ فقط نام کاربری/نمایشی باقی می‌ماند */}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -165,13 +271,12 @@ export default function AgentDashboardPage() {
           />
         </div>
 
-        {/* تب‌های بازه زمانی و کارت آمار مالی */}
         <div className="rounded-2xl bg-[#151515] border border-gray-800 mb-6">
-          <div className="grid grid-cols-5 text-center text-sm font-semibold">
-            {(["day", "week", "month", "overall"] as DashboardPeriod[]).map((period) => (
+          <div className="grid grid-cols-4 text-center text-sm font-semibold">
+            {(["day", "week", "overall"] as DashboardPeriod[]).map((period) => (
               <button
                 key={period}
-                onClick={() => setActivePeriod(period)}
+                onClick={() => handlePeriodChange(period)}
                 className={`py-3 ${
                   activePeriod === period ? "bg-teal-500 text-black" : "text-gray-300"
                 }`}
@@ -180,7 +285,7 @@ export default function AgentDashboardPage() {
               </button>
             ))}
             <button
-              onClick={() => setActivePeriod("range")}
+              onClick={() => handlePeriodChange("range")}
               className={`py-3 ${
                 activePeriod === "range" ? "bg-teal-500 text-black" : "text-gray-300"
               }`}
@@ -197,74 +302,17 @@ export default function AgentDashboardPage() {
                 </div>
                 <button
                   onClick={handleLoadRange}
-                  disabled={!rangeFrom || !rangeTo || rangeFrom > rangeTo || rangeLoading}
+                  disabled={!rangeFrom || !rangeTo || rangeFrom >= rangeTo || rangeLoading}
                   className="w-full rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold disabled:opacity-50"
                 >
                   {rangeLoading ? "در حال محاسبه..." : "اعمال بازه"}
                 </button>
               </div>
             )}
-            {activePeriod === "range" && (!rangeFrom || !rangeTo || rangeFrom > rangeTo) ? (
-              <div className="text-center py-4 text-gray-400">بازه تاریخ معتبر انتخاب کنید</div>
-            ) : loading || !summary || (activePeriod === "range" && !rangeSummary && !rangeLoading) ? (
-              <div className="text-center py-4 text-gray-400">در حال بارگذاری...</div>
-            ) : (
-              <div className="grid grid-cols-2 gap-y-1">
-                <span>کانیات من</span>
-                <span className="text-right">
-                  <DashboardAmount value={summary.ticketsVolume} />
-                </span>
-                <span>کانیات کل</span>
-                <span className="text-right">
-                  <DashboardAmount value={summary.ticketsVolumeTotal} />
-                </span>
-                <span>کانیات از تورنومنت</span>
-                <span className="text-right">
-                  <DashboardAmount value={summary.tournamentCommission ?? 0} />
-                </span>
-                <span>کانیات از بازی</span>
-                <span className="text-right">
-                  <DashboardAmount
-                    value={Math.max(
-                      0,
-                      summary.ticketsVolume - (summary.tournamentCommission ?? 0)
-                    )}
-                  />
-                </span>
-                <span>مجموع برد پلیر</span>
-                <span className="text-right">
-                  <DashboardAmount value={summary.playerWinnings ?? 0} />
-                </span>
-                <span>مجموع باخت پلیر</span>
-                <span className="text-right">
-                  <DashboardAmount value={summary.playerPurchases ?? 0} />
-                </span>
-                <span>عملکرد بازی</span>
-                <span
-                  className={`text-right ${
-                    (summary.playerWinnings ?? 0) - (summary.playerPurchases ?? 0) >= 0
-                      ? "text-emerald-400"
-                      : "text-rose-400"
-                  }`}
-                >
-                  <DashboardAmount
-                    value={(summary.playerWinnings ?? 0) - (summary.playerPurchases ?? 0)}
-                  />
-                </span>
-                <span>واریز</span>
-                <span className="text-right">
-                  <DashboardAmount value={summary.deposits} />
-                </span>
-                <span>برداشت</span>
-                <span className="text-right">
-                  <DashboardAmount value={summary.withdrawals} />
-                </span>
-              </div>
-            )}
+            {renderReportContent()}
           </div>
         </div>
 
-        {/* منوهای ناوبری اصلی */}
         <div className="space-y-3">
           <button
             onClick={() => router.push("/agent/tournaments/report")}
@@ -306,4 +354,3 @@ export default function AgentDashboardPage() {
     </div>
   );
 }
-
