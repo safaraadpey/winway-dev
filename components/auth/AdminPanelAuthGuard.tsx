@@ -30,7 +30,7 @@ export default function AdminPanelAuthGuard({
 
         if (!roleInfo) {
           redirectingRef.current = true;
-          router.replace("/login");
+          router.replace("/admin/login");
           return;
         }
 
@@ -45,12 +45,12 @@ export default function AdminPanelAuthGuard({
         }
 
         redirectingRef.current = true;
-        router.replace("/login");
+        router.replace("/admin/login");
       } catch (error) {
         console.error("AdminPanelAuthGuard error:", error);
         if (!cancelled && !redirectingRef.current) {
           redirectingRef.current = true;
-          router.replace("/login");
+          router.replace("/admin/login");
         }
       }
     }

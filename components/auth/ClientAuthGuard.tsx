@@ -7,11 +7,19 @@ import { isHardExiting } from "@/lib/auth/hardExit";
 
 const REDIRECT_GRACE_MS = 1500;
 
+type ClientAuthGuardProps = {
+  children: React.ReactNode;
+  /** When false, shell renders immediately; redirect runs in background. Default true. */
+  blockShell?: boolean;
+  /** Login route after grace period when user identity is missing. Default /login. */
+  loginPath?: string;
+};
+
 export default function ClientAuthGuard({
   children,
-}: {
-  children: React.ReactNode;
-}) {
+  blockShell = true,
+  loginPath = "/login",
+}: ClientAuthGuardProps) {
   const router = useRouter();
   const { authReady, userId } = useSession();
   const redirectingRef = useRef(false);
@@ -39,9 +47,10 @@ export default function ClientAuthGuard({
       redirectTimerRef.current = null;
       if (redirectingRef.current) return;
       redirectingRef.current = true;
-      router.replace("/login");
+      console.log("[Auth] ClientAuthGuard redirect", { loginPath });
+      router.replace(loginPath);
     }, REDIRECT_GRACE_MS);
-  }, [authReady, userId, router]);
+  }, [authReady, userId, loginPath, router]);
 
   useEffect(() => {
     return () => {
@@ -52,8 +61,13 @@ export default function ClientAuthGuard({
     };
   }, []);
 
+  if (isHardExiting()) return null;
+
+  if (!blockShell) {
+    return <>{children}</>;
+  }
+
   if (!authReady) {
-    if (isHardExiting()) return null;
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-solid border-gray-300 border-r-transparent" />
@@ -64,7 +78,6 @@ export default function ClientAuthGuard({
   // Preserve UX stability: keep the user in-app when identity exists,
   // even if accessToken is briefly unavailable.
   if (!userId) {
-    if (isHardExiting()) return null;
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-solid border-gray-300 border-r-transparent" />

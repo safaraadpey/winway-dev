@@ -47,7 +47,7 @@ export default function AdminLayoutClient({
 
   return (
     <HeaderVisibilityProvider>
-      <ClientAuthGuard>
+      <ClientAuthGuard blockShell={false} loginPath="/admin/login">
         <AdminPanelAuthGuard>
           <AdminLayoutContent>{children}</AdminLayoutContent>
         </AdminPanelAuthGuard>
