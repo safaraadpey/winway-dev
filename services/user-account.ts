@@ -163,10 +163,10 @@ type SnapshotActivityPayload = {
   net?: number;
 };
 
-type SnapshotAccountRole = Extract<UserAccountInfo["role"], "player" | "agent" | "super">;
+type SnapshotAccountRole = Extract<UserAccountInfo["role"], "player" | "agent" | "super" | "admin">;
 
 function isSnapshotAccountRole(role: UserAccountInfo["role"]): role is SnapshotAccountRole {
-  return role === "player" || role === "agent" || role === "super";
+  return role === "player" || role === "agent" || role === "super" || role === "admin";
 }
 
 async function fetchLifetimeSnapshotActivity(
@@ -698,29 +698,21 @@ async function loadMonthlyActivitySource(
       .eq("source_kind", "ticket_commission")
       .gte("created_at", dataStartIso ?? "1970-01-01T00:00:00.000Z");
 
-    const [resultsRes, panelCashflowRows, commRes, ticketsRes] = await Promise.all([
-      resultsPromise,
+    const [panelCashflowRows, commRes] = await Promise.all([
       panelCashflowPromise,
       adminCommissionPromise,
-      ticketsPromise,
     ]);
 
-    if (resultsRes.error) {
-      console.error("loadMonthlyActivitySource: results error", resultsRes.error);
-    }
     if (commRes.error) {
       console.error("loadMonthlyActivitySource: admin commission tx error", commRes.error);
-    }
-    if (ticketsRes.error) {
-      console.error("loadMonthlyActivitySource: tickets error", ticketsRes.error);
     }
 
     return {
       kind: "admin_commission_tx",
-      resultsRows: (resultsRes.data || []) as any,
+      resultsRows: [],
       panelCashflowRows,
       commissionTxRows: (commRes.data || []) as any,
-      ticketRows: (ticketsRes.data || []) as TicketActivityRow[],
+      ticketRows: [],
     };
   }
 
@@ -905,7 +897,8 @@ function buildActivitiesFromMonthlySource(
     week: buildOne("week", weekStartMs),
     month:
       userRole === "player" ? emptyUserAccountActivity("month") : buildOne("month", monthStartMs),
-    overall: buildOne("overall", null),
+    overall:
+      userRole === "admin" ? emptyUserAccountActivity("overall") : buildOne("overall", null),
   };
 }
 
@@ -1330,6 +1323,11 @@ async function calculateUserActivity(
   period: UserAccountPeriod,
   userRole: UserAccountInfo["role"]
 ): Promise<UserAccountActivity> {
+  if (userRole === "admin" && period === "overall") {
+    console.warn("[UserAccount] admin overall legacy path blocked", { userId, period });
+    return emptyUserAccountActivity("overall");
+  }
+
   try {
     const periodStart = getPeriodStart(period);
     const periodStartIso = periodStart?.toISOString() ?? null;

@@ -529,7 +529,7 @@ export async function loadUserAccountDetailsSnapshot(
   }
 
   const role = profileRow.role as PerformanceLifetimeRole;
-  if (role !== "player" && role !== "agent" && role !== "super") {
+  if (role !== "player" && role !== "agent" && role !== "super" && role !== "admin") {
     console.warn("[UserAccount] details snapshot unsupported target role", {
       targetUserId,
       role,

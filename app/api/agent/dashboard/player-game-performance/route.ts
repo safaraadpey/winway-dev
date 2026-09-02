@@ -5,6 +5,7 @@ import {
   loadOperatorPlayerGamePerformanceInRange,
   type OperatorPlayerGameRole,
 } from "@/lib/dashboard/loadOperatorPlayerGamePerformance";
+import { getTehranInclusiveDateRangeIso } from "@/lib/dashboard/tehranAccountingWindow";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,9 +45,8 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      const from = new Date(`${fromStr}T00:00:00.000Z`);
-      const to = new Date(`${toStr}T23:59:59.999Z`);
-      if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from > to) {
+      const rangeIso = getTehranInclusiveDateRangeIso(fromStr, toStr);
+      if (!rangeIso) {
         return NextResponse.json(
           { ok: false, error: "validation_error", message: "بازه تاریخ نامعتبر است." },
           { status: 400 }
@@ -56,8 +56,8 @@ export async function GET(request: NextRequest) {
       const data = await loadOperatorPlayerGamePerformanceInRange({
         operatorId,
         role: operatorRole,
-        fromIso: from.toISOString(),
-        toIso: to.toISOString(),
+        fromIso: rangeIso.fromIso,
+        toIso: rangeIso.toIso,
       });
 
       return NextResponse.json({ ok: true, data }, { status: 200 });

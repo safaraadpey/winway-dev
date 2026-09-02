@@ -47,17 +47,17 @@ function periodLabelForRole(
   role: UserAccountData["user"]["role"],
   period: UserAccountPeriod
 ): string {
-  if ((role === "player" || role === "agent" || role === "super") && period === "overall") {
+  if (
+    (role === "player" || role === "agent" || role === "super" || role === "admin") &&
+    period === "overall"
+  ) {
     return "آمار کل";
   }
   return PERIOD_LABELS[period];
 }
 
 function periodTabsForRole(role: UserAccountData["user"]["role"]): UserAccountPeriod[] {
-  if (role === "agent" || role === "super") {
-    return ["day", "week", "overall"];
-  }
-  if (role === "player") {
+  if (role === "agent" || role === "super" || role === "player" || role === "admin") {
     return ["day", "week", "overall"];
   }
   return ["day", "week"];
@@ -77,14 +77,14 @@ function isInvalidActivityRange(
   role: UserAccountInfo["role"]
 ): boolean {
   if (!from || !to) return true;
-  if (role === "player" || role === "agent" || role === "super") {
+  if (role === "player" || role === "agent" || role === "super" || role === "admin") {
     return from >= to;
   }
   return from > to;
 }
 
 function usesTehranSnapshotRange(role: UserAccountInfo["role"]): boolean {
-  return role === "player" || role === "agent" || role === "super";
+  return role === "player" || role === "agent" || role === "super" || role === "admin";
 }
 
 function AccountAmount({

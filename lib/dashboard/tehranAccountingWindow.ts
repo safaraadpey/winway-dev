@@ -187,3 +187,45 @@ export function getTehranWeekClosedPeriodIsoBounds(now = new Date()): {
   if (!bounds) return null;
   return { fromSnapshotDate, throughSnapshotDate, ...bounds };
 }
+
+/** Inclusive calendar dates in Tehran → UTC ISO bounds for dashboard range queries. */
+export function getTehranInclusiveDateRangeIso(
+  fromDate: string,
+  toDate: string,
+  now = new Date()
+): { fromIso: string; toIso: string } | null {
+  const fromIso = tehranSnapshotDateToWindowStartIso(fromDate);
+  const toParts = parseTehranDateString(toDate);
+  if (!fromIso || !toParts) return null;
+
+  const nextDay = addTehranCalendarDays(toParts, 1);
+  const toExclusiveIso = tehranSnapshotDateToWindowStartIso(tehranDateString(nextDay));
+  if (!toExclusiveIso) return null;
+
+  const openFromMs = getOpenTehranAccountingWindowFrom(now).getTime();
+  const toIso =
+    Date.parse(toExclusiveIso) > openFromMs
+      ? now.toISOString()
+      : toInclusiveEndIso(toExclusiveIso);
+
+  if (Date.parse(fromIso) > Date.parse(toIso)) return null;
+  return { fromIso, toIso };
+}
+
+/** Calendar month in Tehran through last closed accounting day (inclusive snapshot_date). */
+export function getTehranMonthSnapshotDateRange(now = new Date()): {
+  fromSnapshotDate: string;
+  throughSnapshotDate: string;
+} {
+  const p = tehranParts(now);
+  const fromSnapshotDate = tehranDateString({
+    year: p.year,
+    month: p.month,
+    day: 1,
+  });
+  const throughSnapshotDate = getLastClosedTehranSnapshotDate(now);
+  if (fromSnapshotDate > throughSnapshotDate) {
+    return { fromSnapshotDate: throughSnapshotDate, throughSnapshotDate };
+  }
+  return { fromSnapshotDate, throughSnapshotDate };
+}

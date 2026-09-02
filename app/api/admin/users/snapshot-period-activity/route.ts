@@ -14,8 +14,8 @@ export const dynamic = "force-dynamic";
 const VALID_ROLES = new Set<PerformanceLifetimeRole>(["player", "agent", "super", "admin"]);
 
 /**
- * GET /api/admin/users/snapshot-period-activity?userId=...&role=player|agent|super&period=week
- * GET /api/admin/users/snapshot-period-activity?userId=...&role=player|agent|super&period=range&fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD
+ * GET /api/admin/users/snapshot-period-activity?userId=...&role=player|agent|super|admin&period=week
+ * GET /api/admin/users/snapshot-period-activity?userId=...&role=player|agent|super|admin&period=range&fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD
  *
  * Closed snapshot aggregates from performance_daily_stats (no live tail).
  * Range uses 08:00 Asia/Tehran boundaries: [fromDate 08:00, toDate 08:00).

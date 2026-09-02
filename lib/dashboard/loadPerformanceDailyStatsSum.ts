@@ -93,11 +93,11 @@ function mapDailySumRow(role: PerformanceLifetimeRole, row: DailySumRow): Perfor
 
   return {
     throughSnapshotDate,
-    gamesPlayed: 0,
-    lineWins: 0,
-    fullWins: 0,
-    playerWinnings: 0,
-    playerPurchases: 0,
+    gamesPlayed: toAmount(row.games_played),
+    lineWins: toAmount(row.line_wins_count),
+    fullWins: toAmount(row.full_wins_count),
+    playerWinnings: toAmount(row.player_winnings),
+    playerPurchases: toAmount(row.cards_amount),
     commission,
     commissionTotal: commissionBase,
     deposits,

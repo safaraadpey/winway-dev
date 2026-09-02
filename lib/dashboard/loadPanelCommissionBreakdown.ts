@@ -2,6 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { pgPool } from "@/lib/pg";
 import { getRollingWeekStart, getRollingMonthStart } from "@/lib/dashboard/loadCommissionDailyStats";
 import {
+  getOpenTehranAccountingWindow,
+  getTehranSnapshotDateRangeFromBounds,
+} from "@/lib/dashboard/tehranAccountingWindow";
+import {
   loadOperatorPlayedPlayerCountsByPeriod,
   loadOperatorPlayedPlayerCountsInRange,
   type OperatorPlayedCount,
@@ -28,6 +32,23 @@ type RangeAmountRow = {
   amount: string | number;
   admin_amount?: string | number;
 };
+
+type PanelBreakdownTotals = {
+  userId: string;
+  role: "agent" | "super";
+  displayName: string;
+  amount: number;
+  adminAmount: number;
+};
+
+const RANGE_CACHE_TTL_MS = 60_000;
+
+type RangeCacheEntry = {
+  expiresAt: number;
+  data: DashboardPanelOperator[];
+};
+
+const rangeCache = new Map<string, RangeCacheEntry>();
 
 function emptyPeriods(): Record<Exclude<DashboardPeriod, "overall">, DashboardPanelOperator[]> {
   return { day: [], week: [], month: [] };
@@ -72,6 +93,53 @@ function toOperator(
     playedPlayersCount,
     playingPlayersCount: 0,
   };
+}
+
+function rangeCacheGet(key: string): DashboardPanelOperator[] | null {
+  const entry = rangeCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    rangeCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function rangeCacheSet(key: string, data: DashboardPanelOperator[]): DashboardPanelOperator[] {
+  rangeCache.set(key, { expiresAt: Date.now() + RANGE_CACHE_TTL_MS, data });
+  return data;
+}
+
+function toPanelAmount(value: string | number | null | undefined): number {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function mergePanelBreakdownRows(
+  closed: PanelBreakdownTotals[],
+  live: PanelBreakdownTotals[]
+): DashboardPanelOperator[] {
+  const byKey = new Map<string, PanelBreakdownTotals>();
+
+  for (const row of [...closed, ...live]) {
+    const key = `${row.userId}|${row.role}`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, { ...row });
+      continue;
+    }
+    existing.amount += row.amount;
+    existing.adminAmount += row.adminAmount;
+    if (!existing.displayName && row.displayName) {
+      existing.displayName = row.displayName;
+    }
+  }
+
+  return sortOperators(
+    [...byKey.values()].map((row) =>
+      toOperator(row.userId, row.role, row.displayName, row.amount, 0, row.adminAmount)
+    )
+  );
 }
 
 function mergePlayedCounts(
@@ -675,11 +743,57 @@ async function loadPeriodFromPostgres(): Promise<Record<
   return byPeriod;
 }
 
-async function loadRangeFromPostgres(
+async function loadClosedPanelBreakdownFromSnapshot(
+  fromSnapshotDate: string,
+  throughSnapshotDate: string
+): Promise<PanelBreakdownTotals[]> {
+  if (!pgPool) return [];
+  if (fromSnapshotDate > throughSnapshotDate) return [];
+
+  const result = await pgPool.query<RangeAmountRow>(
+    `
+    SELECT
+      d.user_id::text AS user_id,
+      d.role::text AS role,
+      coalesce(nullif(btrim(pr.nickname), ''), nullif(btrim(u.username), ''), 'پنل') AS display_name,
+      CASE
+        WHEN d.role = 'agent' THEN COALESCE(SUM(d.agent_amount), 0)
+        WHEN d.role = 'super' THEN COALESCE(SUM(d.super_amount), 0)
+        ELSE 0
+      END AS amount,
+      COALESCE(SUM(d.admin_amount), 0) AS admin_amount
+    FROM public.performance_daily_stats d
+    JOIN public.users u ON u.id = d.user_id
+    LEFT JOIN public.user_profiles pr ON pr.user_id = u.id
+    WHERE d.role IN ('agent', 'super')
+      AND d.snapshot_date >= $1::date
+      AND d.snapshot_date <= $2::date
+    GROUP BY d.user_id, d.role, u.username, pr.nickname
+    HAVING
+      CASE
+        WHEN d.role = 'agent' THEN COALESCE(SUM(d.agent_amount), 0)
+        WHEN d.role = 'super' THEN COALESCE(SUM(d.super_amount), 0)
+        ELSE 0
+      END > 0
+      OR COALESCE(SUM(d.admin_amount), 0) > 0
+    `,
+    [fromSnapshotDate, throughSnapshotDate]
+  );
+
+  return result.rows.map((row) => ({
+    userId: row.user_id,
+    role: normalizeRole(row.role),
+    displayName: row.display_name?.trim() || "پنل",
+    amount: toPanelAmount(row.amount),
+    adminAmount: toPanelAmount(row.admin_amount),
+  }));
+}
+
+async function loadLivePanelBreakdownTail(
   fromIso: string,
   toIso: string
-): Promise<DashboardPanelOperator[] | null> {
-  if (!pgPool) return null;
+): Promise<PanelBreakdownTotals[]> {
+  if (!pgPool) return [];
 
   const result = await pgPool.query<RangeAmountRow>(
     `
@@ -753,7 +867,7 @@ async function loadRangeFromPostgres(
       coalesce(pa.amount, 0) as amount,
       coalesce(aa.amount, 0) as admin_amount
     from panel_agg pa
-    full outer join admin_agg aa on aa.user_id = pa.user_id
+    full outer join admin_agg aa on aa.user_id = pa.user_id and aa.role = pa.role
     join public.users u on u.id = coalesce(pa.user_id, aa.user_id)
     left join public.user_profiles pr on pr.user_id = u.id
     where u.role in ('agent', 'super')
@@ -762,11 +876,143 @@ async function loadRangeFromPostgres(
     [fromIso, toIso]
   );
 
-  return sortOperators(
-    result.rows.map((row) =>
-      toOperator(row.user_id, row.role, row.display_name, row.amount, 0, row.admin_amount)
-    )
+  return result.rows.map((row) => ({
+    userId: row.user_id,
+    role: normalizeRole(row.role),
+    displayName: row.display_name?.trim() || "پنل",
+    amount: toPanelAmount(row.amount),
+    adminAmount: toPanelAmount(row.admin_amount),
+  }));
+}
+
+async function loadRangeFromSnapshotAndLiveTail(
+  fromIso: string,
+  toIso: string
+): Promise<DashboardPanelOperator[] | null> {
+  if (!pgPool) return null;
+
+  const fromDate = fromIso.slice(0, 10);
+  const toDate = toIso.slice(0, 10);
+  const snapshotBounds = getTehranSnapshotDateRangeFromBounds(fromDate, toDate);
+
+  let closed: PanelBreakdownTotals[] = [];
+  if (snapshotBounds) {
+    closed = await loadClosedPanelBreakdownFromSnapshot(
+      snapshotBounds.fromSnapshotDate,
+      snapshotBounds.throughSnapshotDate
+    );
+  }
+
+  const open = getOpenTehranAccountingWindow();
+  let live: PanelBreakdownTotals[] = [];
+  const openFromMs = Date.parse(open.fromIso);
+  const rangeToMs = Date.parse(toIso);
+
+  if (rangeToMs >= openFromMs) {
+    const rangeFromMs = Date.parse(fromIso);
+    const liveFromIso = rangeFromMs > openFromMs ? fromIso : open.fromIso;
+    const liveToIso = rangeToMs < Date.parse(open.toIso) ? toIso : open.toIso;
+    if (Date.parse(liveFromIso) <= Date.parse(liveToIso)) {
+      live = await loadLivePanelBreakdownTail(liveFromIso, liveToIso);
+    }
+  }
+
+  return mergePanelBreakdownRows(closed, live);
+}
+
+async function loadClosedPanelBreakdownFromSupabase(
+  supabase: SupabaseClient,
+  fromSnapshotDate: string,
+  throughSnapshotDate: string
+): Promise<PanelBreakdownTotals[]> {
+  const { data, error } = await supabase
+    .from("performance_daily_stats")
+    .select("user_id, role, agent_amount, super_amount, admin_amount")
+    .in("role", ["agent", "super"])
+    .gte("snapshot_date", fromSnapshotDate)
+    .lte("snapshot_date", throughSnapshotDate);
+
+  if (error) {
+    console.error("[Dashboard] panel breakdown snapshot fallback error:", error.message);
+    return [];
+  }
+
+  const byKey = new Map<string, PanelBreakdownTotals>();
+
+  for (const row of data || []) {
+    const userId = String((row as { user_id?: string }).user_id ?? "");
+    const roleRaw = String((row as { role?: string }).role ?? "");
+    if (!userId || (roleRaw !== "agent" && roleRaw !== "super")) continue;
+
+    const role = normalizeRole(roleRaw);
+    const key = `${userId}|${role}`;
+    const agentAmount = toPanelAmount((row as { agent_amount?: number }).agent_amount);
+    const superAmount = toPanelAmount((row as { super_amount?: number }).super_amount);
+    const adminAmount = toPanelAmount((row as { admin_amount?: number }).admin_amount);
+    const amount = role === "agent" ? agentAmount : superAmount;
+
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, { userId, role, displayName: "پنل", amount, adminAmount });
+      continue;
+    }
+    existing.amount += amount;
+    existing.adminAmount += adminAmount;
+  }
+
+  const rows = [...byKey.values()].filter((row) => row.amount > 0 || row.adminAmount > 0);
+  if (rows.length === 0) return [];
+
+  const names = await resolveOperatorNames(
+    supabase,
+    rows.map((row) => row.userId)
   );
+  return rows.map((row) => ({
+    ...row,
+    displayName: names.get(row.userId)?.displayName ?? row.displayName,
+  }));
+}
+
+async function loadRangeFromSnapshotAndLiveTailSupabase(
+  supabase: SupabaseClient,
+  fromIso: string,
+  toIso: string
+): Promise<DashboardPanelOperator[]> {
+  const fromDate = fromIso.slice(0, 10);
+  const toDate = toIso.slice(0, 10);
+  const snapshotBounds = getTehranSnapshotDateRangeFromBounds(fromDate, toDate);
+
+  let closed: PanelBreakdownTotals[] = [];
+  if (snapshotBounds) {
+    closed = await loadClosedPanelBreakdownFromSupabase(
+      supabase,
+      snapshotBounds.fromSnapshotDate,
+      snapshotBounds.throughSnapshotDate
+    );
+  }
+
+  const open = getOpenTehranAccountingWindow();
+  let live: PanelBreakdownTotals[] = [];
+  const openFromMs = Date.parse(open.fromIso);
+  const rangeToMs = Date.parse(toIso);
+
+  if (rangeToMs >= openFromMs && pgPool) {
+    const rangeFromMs = Date.parse(fromIso);
+    const liveFromIso = rangeFromMs > openFromMs ? fromIso : open.fromIso;
+    const liveToIso = rangeToMs < Date.parse(open.toIso) ? toIso : open.toIso;
+    if (Date.parse(liveFromIso) <= Date.parse(liveToIso)) {
+      live = await loadLivePanelBreakdownTail(liveFromIso, liveToIso);
+    }
+  }
+
+  return mergePanelBreakdownRows(closed, live);
+}
+
+async function loadRangeFromPostgres(
+  fromIso: string,
+  toIso: string
+): Promise<DashboardPanelOperator[] | null> {
+  return loadRangeFromSnapshotAndLiveTail(fromIso, toIso);
 }
 
 async function resolveOperatorNames(
@@ -868,11 +1114,7 @@ async function loadRangeFromSupabase(
   fromIso: string,
   toIso: string
 ): Promise<DashboardPanelOperator[]> {
-  const events = await loadOperatorEarnedEventsFromSupabase(supabase, fromIso, toIso);
-  const amounts = collectAmountsSince(events.panel, fromIso, toIso);
-  const adminAmounts = collectAmountsSince(events.admin, fromIso, toIso);
-  const names = await resolveOperatorNames(supabase, [...amounts.keys(), ...adminAmounts.keys()]);
-  return operatorsFromAmountMap(amounts, names, adminAmounts);
+  return loadRangeFromSnapshotAndLiveTailSupabase(supabase, fromIso, toIso);
 }
 
 /**
@@ -948,18 +1190,35 @@ export async function loadPanelCommissionBreakdownInRange(
   toIso: string,
   supabase?: SupabaseClient
 ): Promise<DashboardPanelOperator[]> {
+  const cacheKey = `${fromIso}|${toIso}`;
+  const cached = rangeCacheGet(cacheKey);
+  if (cached) {
+    console.log("[Dashboard] panel breakdown range loaded", {
+      source: "cache",
+      count: cached.length,
+      fromIso,
+      toIso,
+    });
+    const [played, playingCounts] = await Promise.all([
+      loadOperatorPlayedPlayerCountsInRange(fromIso, toIso, supabase),
+      loadOperatorPlayingPlayerCounts(supabase),
+    ]);
+    const withPlayed = mergePlayedCounts(cached, played);
+    const withPlaying = attachPlayingCounts(withPlayed, playingCounts);
+    const flaggedAgentIds = await loadTakesFullSuperCommissionIds(
+      uniqueOperatorIds(withPlaying),
+      supabase
+    );
+    return applyTakesFullSuperCommission(withPlaying, flaggedAgentIds);
+  }
+
   const playedPromise = loadOperatorPlayedPlayerCountsInRange(fromIso, toIso, supabase);
   let list: DashboardPanelOperator[] | null = null;
+  let source: "snapshot+live_tail" | "supabase" = "snapshot+live_tail";
 
   try {
     const fromPg = await loadRangeFromPostgres(fromIso, toIso);
     if (fromPg) {
-      console.log("[Dashboard] panel breakdown range loaded", {
-        source: "postgres",
-        count: fromPg.length,
-        fromIso,
-        toIso,
-      });
       list = fromPg;
     }
   } catch (err) {
@@ -967,25 +1226,28 @@ export async function loadPanelCommissionBreakdownInRange(
   }
 
   if (!list) {
+    source = "supabase";
     if (!supabase) {
       console.warn("[Dashboard] panel breakdown range fallback skipped: no supabase client");
       list = [];
     } else {
       try {
-        const fromSupabase = await loadRangeFromSupabase(supabase, fromIso, toIso);
-        console.log("[Dashboard] panel breakdown range loaded", {
-          source: "supabase",
-          count: fromSupabase.length,
-          fromIso,
-          toIso,
-        });
-        list = fromSupabase;
+        list = await loadRangeFromSupabase(supabase, fromIso, toIso);
       } catch (err) {
         console.error("[Dashboard] panel breakdown supabase range error:", err);
         list = [];
       }
     }
   }
+
+  console.log("[Dashboard] panel breakdown range loaded", {
+    source,
+    count: list.length,
+    fromIso,
+    toIso,
+  });
+
+  rangeCacheSet(cacheKey, list);
 
   const [played, playingCounts] = await Promise.all([
     playedPromise,
