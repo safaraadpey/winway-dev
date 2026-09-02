@@ -45,7 +45,7 @@ export async function canViewManagedUserStats(
   if (target.parent_id) {
     const { data: parentUser } = await supabase
       .from("users")
-      .select("role, parent_id")
+      .select("id, role, parent_id")
       .eq("id", target.parent_id)
       .maybeSingle();
     if (parentUser?.role === "agent" && parentUser.parent_id === actorId) return true;

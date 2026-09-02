@@ -3,7 +3,7 @@
 // Service helpers for user account detail page (admin / agent / super).
 
 import { supabase } from "@/lib/supabaseClient";
-import { callAdminApi } from "@/lib/adminApiClient";
+import { callAdminApi, AdminApiError } from "@/lib/adminApiClient";
 import {
   emptyOperatorPlayerGamePerformanceByPeriod,
   emptyPlayerGamePerformance,
@@ -62,7 +62,7 @@ type UserAccountDataCacheEntry = {
 // Note: this runs in the browser only; it resets on full refresh.
 const userAccountDataCache = new Map<string, UserAccountDataCacheEntry>();
 
-const USER_ACCOUNT_CACHE_VERSION = "v4-lazy-day-overall";
+const USER_ACCOUNT_CACHE_VERSION = "v5-pg-details";
 
 function userAccountCacheKey(userId: string): string {
   return `${USER_ACCOUNT_CACHE_VERSION}:${userId}`;
@@ -2125,6 +2125,53 @@ export async function loadUserAccountRangeActivity(
 }
 
 /**
+ * Legacy client-side load (admin targets or API fallback).
+ */
+async function loadUserAccountDataLegacy(userId: string): Promise<UserAccountData | null> {
+  const user = await loadUserAccountInfo(userId);
+  if (!user) {
+    return null;
+  }
+
+  let activities: Record<UserAccountPeriod, UserAccountActivity>;
+
+  if (isSnapshotAccountRole(user.role)) {
+    const week = await fetchSnapshotWeekActivity(userId, user.role);
+    activities = {
+      day: emptyUserAccountActivity("day"),
+      week,
+      month: emptyUserAccountActivity("month"),
+      overall: emptyUserAccountActivity("overall"),
+    };
+    console.info("[UserAccount] legacy snapshot initial load (week only)", {
+      userId,
+      role: user.role,
+    });
+  } else {
+    try {
+      const monthly = await loadMonthlyActivitySource(userId, user.role);
+      activities = buildActivitiesFromMonthlySource(monthly, user.role);
+    } catch (err) {
+      console.error("loadUserAccountData: monthly aggregation failed, fallback to per-period", err);
+      activities = {
+        day: await calculateUserActivity(userId, "day", user.role),
+        week: await calculateUserActivity(userId, "week", user.role),
+        month: await calculateUserActivity(userId, "month", user.role),
+        overall: await calculateUserActivity(userId, "overall", user.role),
+      };
+    }
+  }
+
+  const transactions = await loadUserTransactions(userId);
+
+  return {
+    user,
+    activities,
+    transactions,
+  };
+}
+
+/**
  * بارگذاری کامل اطلاعات حساب کاربر
  */
 export async function loadUserAccountData(
@@ -2139,52 +2186,32 @@ export async function loadUserAccountData(
       if (cached) return cached;
     }
 
-    const user = await loadUserAccountInfo(userId);
-    if (!user) {
-      primeUserAccountDataCache(userId, null);
-      return null;
-    }
-
-    let activities: Record<UserAccountPeriod, UserAccountActivity>;
-
-    if (isSnapshotAccountRole(user.role)) {
-      // Initial load: closed week snapshot only. Day + overall are lazy-loaded on tab click.
-      const week = await fetchSnapshotWeekActivity(userId, user.role);
-      activities = {
-        day: emptyUserAccountActivity("day"),
-        week,
-        month: emptyUserAccountActivity("month"),
-        overall: emptyUserAccountActivity("overall"),
-      };
-      console.info("[UserAccount] snapshot initial load (week only)", {
-        userId,
-        role: user.role,
-      });
-    } else {
-      // Fetch "month" sources once and aggregate day/week/month locally.
-      try {
-        const monthly = await loadMonthlyActivitySource(userId, user.role);
-        activities = buildActivitiesFromMonthlySource(monthly, user.role);
-      } catch (err) {
-        console.error("loadUserAccountData: monthly aggregation failed, fallback to per-period", err);
-        activities = {
-          day: await calculateUserActivity(userId, "day", user.role),
-          week: await calculateUserActivity(userId, "week", user.role),
-          month: await calculateUserActivity(userId, "month", user.role),
-          overall: await calculateUserActivity(userId, "overall", user.role),
-        };
+    try {
+      const result = await callAdminApi<UserAccountData>(
+        `/api/admin/users/${encodeURIComponent(userId)}/details`,
+        { method: "GET" }
+      );
+      if (result?.user) {
+        console.info("[UserAccount] details API loaded", {
+          userId,
+          role: result.user.role,
+          source: "postgresql_details_api",
+        });
+        primeUserAccountDataCache(userId, result);
+        return result;
       }
+    } catch (err) {
+      const statusCode = err instanceof AdminApiError ? err.statusCode : undefined;
+      console.warn("[UserAccount] details API unavailable, using legacy loader", {
+        userId,
+        statusCode,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
 
-    const transactions = await loadUserTransactions(userId);
-
-    const result: UserAccountData = {
-      user,
-      activities,
-      transactions,
-    };
-    primeUserAccountDataCache(userId, result);
-    return result;
+    const legacy = await loadUserAccountDataLegacy(userId);
+    primeUserAccountDataCache(userId, legacy);
+    return legacy;
   } catch (err) {
     console.error("loadUserAccountData unexpected error:", err);
     return null;

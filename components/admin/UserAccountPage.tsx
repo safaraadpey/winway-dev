@@ -312,7 +312,10 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
     async function fetchData() {
       try {
         if (!safeCached) setLoading(true);
-        const result = await loadUserAccountData(userId, { maxAgeMs: 30_000, force: true });
+        const result = await loadUserAccountData(userId, {
+          maxAgeMs: 30_000,
+          force: !safeCached,
+        });
         if (!isMounted) return;
         setData(result);
         // بارگذاری درصد کانیات
