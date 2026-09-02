@@ -54,11 +54,25 @@ export function passesNormalPlayersPerRoomGate(
   return normalPlayerCount >= minNormalPlayersPerRoom;
 }
 
+export const MIN_MAX_DEV_PLAYERS_PER_ROOM = 0;
+export const MAX_MAX_DEV_PLAYERS_PER_ROOM = 99;
+
+/** Null / empty = unlimited. Integer 0..99 otherwise. */
+export function normalizeMaxDevPlayersPerRoom(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const num = Number(value);
+  if (!Number.isInteger(num)) return null;
+  if (num < MIN_MAX_DEV_PLAYERS_PER_ROOM) return MIN_MAX_DEV_PLAYERS_PER_ROOM;
+  if (num > MAX_MAX_DEV_PLAYERS_PER_ROOM) return MAX_MAX_DEV_PLAYERS_PER_ROOM;
+  return num;
+}
+
 /** Cap dev players in the join-target waiting room (oldest waiting, or new room => 0). */
 export function passesDevPlayerMaxPerRoomGate(
   devPlayerCount: number,
   maxDevPlayersPerRoom: number | null
 ): boolean {
-  if (maxDevPlayersPerRoom === null) return true;
-  return devPlayerCount < maxDevPlayersPerRoom;
+  const cap = normalizeMaxDevPlayersPerRoom(maxDevPlayersPerRoom);
+  if (cap === null) return true;
+  return devPlayerCount < cap;
 }

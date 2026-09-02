@@ -12,7 +12,6 @@ function collectTests(dir: string): string[] {
     if (statSync(path).isDirectory()) {
       out.push(...collectTests(path));
     } else if (name.endsWith(".test.ts") && !path.includes("benchmarks")) {
-      if (name === "templateGates.test.ts") continue;
       out.push(path);
     }
   }

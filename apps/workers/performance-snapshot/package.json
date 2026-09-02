@@ -1,0 +1,26 @@
+{
+  "name": "@dingmoney/performance-snapshot-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Railway worker: daily performance snapshot (08:00–08:00 Asia/Tehran accounting window)",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "npm run typecheck"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "pg": "^8.13.1",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.5.3"
+  }
+}

@@ -55,13 +55,26 @@ export async function saveDevPlayerJoinPreset(
 export type SaveDevPlayerTemplateJoinSettingPayload = {
   template_id: string;
   join_delay_max_seconds: number;
+  max_dev_players_per_room: number | null;
 };
 
 export async function saveDevPlayerTemplateJoinSettings(
   settings: SaveDevPlayerTemplateJoinSettingPayload[]
-): Promise<Array<{ templateId: string; joinDelayMaxSeconds: number; updatedAt: string | null }>> {
+): Promise<
+  Array<{
+    templateId: string;
+    joinDelayMaxSeconds: number;
+    maxDevPlayersPerRoom: number | null;
+    updatedAt: string | null;
+  }>
+> {
   return callDevPanelApi<
-    Array<{ templateId: string; joinDelayMaxSeconds: number; updatedAt: string | null }>
+    Array<{
+      templateId: string;
+      joinDelayMaxSeconds: number;
+      maxDevPlayersPerRoom: number | null;
+      updatedAt: string | null;
+    }>
   >("/api/dev-panel/template-join-settings", {
     method: "PUT",
     body: { settings },

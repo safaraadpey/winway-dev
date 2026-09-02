@@ -3,7 +3,7 @@ import type { Logger } from "../../metrics/logger.js";
 import { isPlayerEligibleForTemplate } from "./playerProfileEligibility.js";
 import { scheduledAtWithJoinDelay } from "./joinDelay.js";
 import { pickDevPlayerForJoin } from "./selectDevPlayer.js";
-import { isTemplateJoinable } from "./templateGates.js";
+import { isTemplateJoinable, passesDevPlayerMaxPerRoomGate } from "./templateGates.js";
 import { rollTicketCount } from "./ticketRoll.js";
 import type {
   BuildScheduleBatchOptions,
@@ -45,6 +45,7 @@ function emptySkipped(): BuildScheduleBatchResult["skipped"] {
     noDistinctBot: 0,
     dripNotDue: 0,
     templateJoinPending: 0,
+    devPlayerCapReached: 0,
     insertBudgetExhausted: 0,
     cycleIdle: 0,
   };
@@ -160,10 +161,10 @@ export async function runDevPlayerManager(
     return { created: 0, skipped };
   }
 
-  const [players, templates, joinDelaySettings] = await Promise.all([
+  const [players, templates, joinSettings] = await Promise.all([
     repo.getEnabledPlayerConfigs(),
     repo.getTemplatesForEnabledProfiles(),
-    repo.getTemplateJoinDelaySettings(),
+    repo.getTemplateJoinSettings(),
   ]);
 
   if (players.length === 0 || templates.length === 0) {
@@ -184,6 +185,10 @@ export async function runDevPlayerManager(
   const inserts: ScheduleInsertRow[] = [];
   let insertBudget = maxInsertsPerTick;
   const excludedUserIds = new Set<string>(occupiedDevPlayerIds);
+  const joinTargetCounts = await repo.getJoinTargetRoomPlayerCounts(
+    templates.map((template) => template.id),
+    players.map((player) => player.userId)
+  );
 
   for (const template of templates) {
     if (insertBudget <= 0) {
@@ -196,12 +201,22 @@ export async function runDevPlayerManager(
       continue;
     }
 
+    const joinTarget = joinTargetCounts.get(template.id) ?? {
+      devPlayers: 0,
+      normalPlayers: 0,
+    };
+    const maxDevPlayersPerRoom = repo.getMaxDevPlayersPerRoom(template.id, joinSettings);
+    if (!passesDevPlayerMaxPerRoomGate(joinTarget.devPlayers, maxDevPlayersPerRoom)) {
+      skipped.devPlayerCapReached += 1;
+      continue;
+    }
+
     if (await repo.hasPendingScheduleForTemplate(template.id)) {
       skipped.templateJoinPending += 1;
       continue;
     }
 
-    const joinDelayMaxSeconds = repo.getJoinDelayMaxSeconds(template.id, joinDelaySettings);
+    const joinDelayMaxSeconds = repo.getJoinDelayMaxSeconds(template.id, joinSettings);
 
     const row = await tryScheduleOne({
       repo,
@@ -224,7 +239,7 @@ export async function runDevPlayerManager(
 
   const created = inserts.length > 0 ? await repo.insertSchedules(inserts) : 0;
 
-  if (created > 0) {
+  if (created > 0 || skipped.devPlayerCapReached > 0) {
     log.info("dev-player-manager tick", {
       created,
       enabledProfileCount: enabledProfiles.length,

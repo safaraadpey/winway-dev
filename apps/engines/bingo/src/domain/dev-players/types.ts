@@ -100,6 +100,11 @@ export interface RoomTemplateSnapshot {
   maxPlayers: number | null;
 }
 
+export interface TemplateJoinSettingsSnapshot {
+  joinDelayMaxSeconds: number;
+  maxDevPlayersPerRoom: number | null;
+}
+
 export interface TemplateRuntimeSnapshot {
   templateId: string;
   waitingRoomsCount: number;
@@ -142,6 +147,7 @@ export interface BuildScheduleBatchResult {
     noDistinctBot: number;
     dripNotDue: number;
     templateJoinPending: number;
+    devPlayerCapReached: number;
     insertBudgetExhausted: number;
     cycleIdle: number;
   };

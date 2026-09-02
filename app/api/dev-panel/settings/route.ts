@@ -266,13 +266,20 @@ async function loadSettingsBundle(supabase: any) {
 
   const { data: joinDelayRows, error: joinDelayError } = await supabase
     .from("dev_player_template_join_settings")
-    .select("template_id, join_delay_max_seconds");
+    .select("template_id, join_delay_max_seconds, max_dev_players_per_room");
 
   if (joinDelayError) throw joinDelayError;
 
   const joinDelayByTemplateId = new Map<string, number>();
+  const maxDevPlayersByTemplateId = new Map<string, number | null>();
   for (const row of joinDelayRows || []) {
     joinDelayByTemplateId.set(String(row.template_id), Number(row.join_delay_max_seconds ?? 0));
+    maxDevPlayersByTemplateId.set(
+      String(row.template_id),
+      row.max_dev_players_per_room === null || row.max_dev_players_per_room === undefined
+        ? null
+        : Number(row.max_dev_players_per_room)
+    );
   }
 
   const { data: presetRows, error: presetsError } = await supabase
@@ -351,8 +358,8 @@ async function loadSettingsBundle(supabase: any) {
       joinIntervalSeconds: limit?.join_interval_seconds ?? null,
       maxJoinsPerTick: limit?.max_joins_per_tick ?? null,
       minNormalPlayersPerRoom: limit?.min_normal_players_per_room ?? null,
-      maxDevPlayersPerRoom: limit?.max_dev_players_per_room ?? null,
       joinDelayMaxSeconds: joinDelayByTemplateId.get(String(row.id)) ?? DEFAULT_TEMPLATE_JOIN_DELAY_MAX_SECONDS,
+      maxDevPlayersPerRoom: maxDevPlayersByTemplateId.get(String(row.id)) ?? null,
     };
   });
 

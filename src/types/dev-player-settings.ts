@@ -92,6 +92,8 @@ export interface DevPlayerTemplateOption {
   joinIntervalSeconds: number | null;
   maxJoinsPerTick: number | null;
   joinDelayMaxSeconds: number;
+  /** Null = unlimited Dev Players in the join-target waiting room. */
+  maxDevPlayersPerRoom: number | null;
 }
 
 export const DEFAULT_TEMPLATE_JOIN_INTERVAL_SECONDS = 300;
@@ -100,6 +102,28 @@ export const MAX_TEMPLATE_JOIN_INTERVAL_SECONDS = 7200;
 export const DEFAULT_TEMPLATE_JOIN_DELAY_MAX_SECONDS = 20;
 export const MIN_TEMPLATE_JOIN_DELAY_MAX_SECONDS = 0;
 export const MAX_TEMPLATE_JOIN_DELAY_MAX_SECONDS = 7200;
+
+export const TEMPLATE_JOIN_DELAY_PRESETS = [
+  { seconds: 20, label: "شلوغ" },
+  { seconds: 50, label: "پرتردد" },
+  { seconds: 100, label: "متوسط" },
+  { seconds: 200, label: "کم‌تردد" },
+  { seconds: 300, label: "خلوت" },
+  { seconds: 400, label: "خیلی خلوت" },
+] as const;
+
+export type TemplateJoinDelayPresetSeconds =
+  (typeof TEMPLATE_JOIN_DELAY_PRESETS)[number]["seconds"];
+
+export function isTemplateJoinDelayPreset(seconds: number): boolean {
+  return TEMPLATE_JOIN_DELAY_PRESETS.some((preset) => preset.seconds === seconds);
+}
+
+export function formatJoinDelayPresetLabel(seconds: number, label: string): string {
+  return `${label} · ${seconds}`;
+}
+export const MIN_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM = 0;
+export const MAX_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM = 99;
 /** Max dev-player joins per template during each scheduler work phase (before pause). */
 export const DEFAULT_TEMPLATE_MAX_JOINS_PER_TICK = 10;
 

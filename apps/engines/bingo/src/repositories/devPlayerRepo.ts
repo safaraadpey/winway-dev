@@ -5,6 +5,7 @@ import {
   DEFAULT_TEMPLATE_JOIN_DELAY_MAX_SECONDS,
   normalizeJoinDelayMaxSeconds,
 } from "../domain/dev-players/joinDelay.js";
+import { normalizeMaxDevPlayersPerRoom } from "../domain/dev-players/templateGates.js";
 import type {
   DevPlayerConfigSnapshot,
   DevPlayerJoinPresetSnapshot,
@@ -16,6 +17,7 @@ import type {
   ScheduleInsertRow,
   ScheduleOutcomeCounts,
   SchedulerBehaviorState,
+  TemplateJoinSettingsSnapshot,
   TemplateLimitSnapshot,
 } from "../domain/dev-players/types.js";
 
@@ -231,18 +233,18 @@ export class DevPlayerRepo {
     return (data ?? []).map((row) => mapRoomTemplateRow(row as Record<string, unknown>));
   }
 
-  async getTemplateJoinDelaySettings(): Promise<Map<string, number>> {
+  async getTemplateJoinSettings(): Promise<Map<string, TemplateJoinSettingsSnapshot>> {
     const { data, error } = await this.db
       .from("dev_player_template_join_settings")
-      .select("template_id, join_delay_max_seconds");
-    if (error) fail("getTemplateJoinDelaySettings", error.message);
+      .select("template_id, join_delay_max_seconds, max_dev_players_per_room");
+    if (error) fail("getTemplateJoinSettings", error.message);
 
-    const settings = new Map<string, number>();
+    const settings = new Map<string, TemplateJoinSettingsSnapshot>();
     for (const row of data ?? []) {
-      settings.set(
-        String(row.template_id),
-        normalizeJoinDelayMaxSeconds(row.join_delay_max_seconds)
-      );
+      settings.set(String(row.template_id), {
+        joinDelayMaxSeconds: normalizeJoinDelayMaxSeconds(row.join_delay_max_seconds),
+        maxDevPlayersPerRoom: normalizeMaxDevPlayersPerRoom(row.max_dev_players_per_room),
+      });
     }
     return settings;
   }
@@ -257,8 +259,18 @@ export class DevPlayerRepo {
     return (count ?? 0) > 0;
   }
 
-  getJoinDelayMaxSeconds(templateId: string, settings: Map<string, number>): number {
-    return settings.get(templateId) ?? DEFAULT_TEMPLATE_JOIN_DELAY_MAX_SECONDS;
+  getJoinDelayMaxSeconds(
+    templateId: string,
+    settings: Map<string, TemplateJoinSettingsSnapshot>
+  ): number {
+    return settings.get(templateId)?.joinDelayMaxSeconds ?? DEFAULT_TEMPLATE_JOIN_DELAY_MAX_SECONDS;
+  }
+
+  getMaxDevPlayersPerRoom(
+    templateId: string,
+    settings: Map<string, TemplateJoinSettingsSnapshot>
+  ): number | null {
+    return settings.get(templateId)?.maxDevPlayersPerRoom ?? null;
   }
 
   async getPresetTemplateLimits(presetId: string): Promise<TemplateLimitSnapshot[]> {

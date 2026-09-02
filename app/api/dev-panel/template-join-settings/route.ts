@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDevPanelContextOrThrow, logAdminAction } from "@/lib/supabaseServer";
 import {
   MAX_TEMPLATE_JOIN_DELAY_MAX_SECONDS,
+  MAX_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM,
   MIN_TEMPLATE_JOIN_DELAY_MAX_SECONDS,
+  MIN_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM,
 } from "@/src/types/dev-player-settings";
 
 export const runtime = "nodejs";
@@ -13,7 +15,21 @@ const LOG_PREFIX = "[DevPlayer]";
 type TemplateJoinSettingPayload = {
   template_id: string;
   join_delay_max_seconds: number;
+  max_dev_players_per_room: number | null;
 };
+
+function parseOptionalMaxDevPlayersPerRoom(value: unknown): number | null | undefined {
+  if (value === null || value === undefined || value === "") return null;
+  const num = Number(value);
+  if (
+    !Number.isInteger(num) ||
+    num < MIN_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM ||
+    num > MAX_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM
+  ) {
+    return undefined;
+  }
+  return num;
+}
 
 function normalizePayload(raw: unknown): TemplateJoinSettingPayload[] | null {
   if (!Array.isArray(raw)) return null;
@@ -35,14 +51,40 @@ function normalizePayload(raw: unknown): TemplateJoinSettingPayload[] | null {
       return null;
     }
 
+    const maxDevPlayersPerRoom = parseOptionalMaxDevPlayersPerRoom(
+      (item as TemplateJoinSettingPayload).max_dev_players_per_room
+    );
+    if (maxDevPlayersPerRoom === undefined) {
+      return null;
+    }
+
     seen.add(templateId);
     settings.push({
       template_id: templateId,
       join_delay_max_seconds: joinDelayMaxSeconds,
+      max_dev_players_per_room: maxDevPlayersPerRoom,
     });
   }
 
   return settings;
+}
+
+function mapJoinSettingRow(row: {
+  template_id: string;
+  join_delay_max_seconds: number | null;
+  max_dev_players_per_room?: number | null;
+  updated_at: string | null;
+}) {
+  const maxDev =
+    row.max_dev_players_per_room === null || row.max_dev_players_per_room === undefined
+      ? null
+      : Number(row.max_dev_players_per_room);
+  return {
+    templateId: String(row.template_id),
+    joinDelayMaxSeconds: Number(row.join_delay_max_seconds ?? 0),
+    maxDevPlayersPerRoom: Number.isInteger(maxDev) ? maxDev : null,
+    updatedAt: row.updated_at ?? null,
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -51,17 +93,13 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase
       .from("dev_player_template_join_settings")
-      .select("template_id, join_delay_max_seconds, updated_at");
+      .select("template_id, join_delay_max_seconds, max_dev_players_per_room, updated_at");
 
     if (error) throw error;
 
     return NextResponse.json({
       ok: true,
-      data: (data ?? []).map((row) => ({
-        templateId: String(row.template_id),
-        joinDelayMaxSeconds: Number(row.join_delay_max_seconds ?? 0),
-        updatedAt: row.updated_at ?? null,
-      })),
+      data: (data ?? []).map((row) => mapJoinSettingRow(row)),
     });
   } catch (err: any) {
     if (err.message === "UNAUTHORIZED") {
@@ -96,7 +134,7 @@ export async function PUT(request: NextRequest) {
         {
           ok: false,
           error: "validation_error",
-          message: `join_delay_max_seconds must be ${MIN_TEMPLATE_JOIN_DELAY_MAX_SECONDS}..${MAX_TEMPLATE_JOIN_DELAY_MAX_SECONDS}`,
+          message: `join_delay_max_seconds must be ${MIN_TEMPLATE_JOIN_DELAY_MAX_SECONDS}..${MAX_TEMPLATE_JOIN_DELAY_MAX_SECONDS}; max_dev_players_per_room must be empty or ${MIN_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM}..${MAX_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM}`,
         },
         { status: 400 }
       );
@@ -131,6 +169,7 @@ export async function PUT(request: NextRequest) {
       settings.map((item) => ({
         template_id: item.template_id,
         join_delay_max_seconds: item.join_delay_max_seconds,
+        max_dev_players_per_room: item.max_dev_players_per_room,
         updated_at: nowIso,
         updated_by: session.user.id,
       })),
@@ -155,22 +194,24 @@ export async function PUT(request: NextRequest) {
       request
     );
 
-    console.log(`${LOG_PREFIX} Template join settings saved`, { count: settings.length });
+    console.log(`${LOG_PREFIX} Template join settings saved`, {
+      count: settings.length,
+      caps: settings.map((item) => ({
+        templateId: item.template_id,
+        maxDevPlayersPerRoom: item.max_dev_players_per_room,
+      })),
+    });
 
     const { data: savedRows, error: reloadError } = await supabase
       .from("dev_player_template_join_settings")
-      .select("template_id, join_delay_max_seconds, updated_at")
+      .select("template_id, join_delay_max_seconds, max_dev_players_per_room, updated_at")
       .in("template_id", templateIds);
 
     if (reloadError) throw reloadError;
 
     return NextResponse.json({
       ok: true,
-      data: (savedRows ?? []).map((row) => ({
-        templateId: String(row.template_id),
-        joinDelayMaxSeconds: Number(row.join_delay_max_seconds ?? 0),
-        updatedAt: row.updated_at ?? null,
-      })),
+      data: (savedRows ?? []).map((row) => mapJoinSettingRow(row)),
     });
   } catch (err: any) {
     if (err.message === "UNAUTHORIZED") {

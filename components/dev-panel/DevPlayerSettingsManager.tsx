@@ -585,7 +585,16 @@ export default function DevPlayerSettingsManager() {
         </SectionCard>
 
         <SectionCard title="رفتار Join">
-          <DevPlayerProfileEngineToggles templates={templates} />
+          <DevPlayerProfileEngineToggles
+            templates={templates}
+            onJoinSettingsSaved={() => {
+              void loadDevPlayerSettings()
+                .then(applySettingsResult)
+                .catch((error) => {
+                  console.error("reload settings after join save:", error);
+                });
+            }}
+          />
         </SectionCard>
 
         <SectionCard title="تنظیم پروفایل" collapsible>

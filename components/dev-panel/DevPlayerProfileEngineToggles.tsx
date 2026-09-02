@@ -9,8 +9,11 @@ import { saveDevPlayerTemplateJoinSettings } from "@/services/dev-panel/dev-play
 import type { DevPlayerProfile } from "@/src/types/dev-player-profiles";
 import {
   DEFAULT_TEMPLATE_JOIN_DELAY_MAX_SECONDS,
-  MAX_TEMPLATE_JOIN_DELAY_MAX_SECONDS,
-  MIN_TEMPLATE_JOIN_DELAY_MAX_SECONDS,
+  MAX_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM,
+  MIN_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM,
+  TEMPLATE_JOIN_DELAY_PRESETS,
+  formatJoinDelayPresetLabel,
+  isTemplateJoinDelayPreset,
   type DevPlayerTemplateOption,
 } from "@/src/types/dev-player-settings";
 import toast from "react-hot-toast";
@@ -93,15 +96,18 @@ function CollapsibleGroup({
 
 type DevPlayerProfileEngineTogglesProps = {
   templates: DevPlayerTemplateOption[];
+  onJoinSettingsSaved?: () => void;
 };
 
 export default function DevPlayerProfileEngineToggles({
   templates,
+  onJoinSettingsSaved,
 }: DevPlayerProfileEngineTogglesProps) {
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState<DevPlayerProfile[]>([]);
   const [togglingProfileId, setTogglingProfileId] = useState<string | null>(null);
   const [delayDrafts, setDelayDrafts] = useState<Record<string, string>>({});
+  const [capDrafts, setCapDrafts] = useState<Record<string, string>>({});
   const [savingDelays, setSavingDelays] = useState(false);
 
   const fetchProfiles = useCallback(async () => {
@@ -154,6 +160,16 @@ export default function DevPlayerProfileEngineToggles({
       }
       return next;
     });
+    setCapDrafts((prev) => {
+      const next: Record<string, string> = {};
+      for (const template of relevantTemplates) {
+        const current = template.maxDevPlayersPerRoom;
+        next[template.id] =
+          prev[template.id] ??
+          (current === null || current === undefined ? "" : String(current));
+      }
+      return next;
+    });
   }, [relevantTemplates]);
 
   const handleEngineToggle = async (profile: DevPlayerProfile, enabled: boolean) => {
@@ -186,25 +202,47 @@ export default function DevPlayerProfileEngineToggles({
     for (const template of relevantTemplates) {
       const raw = delayDrafts[template.id]?.trim() ?? "";
       const value = Number(raw);
+      const storedDelay = Number(
+        template.joinDelayMaxSeconds ?? DEFAULT_TEMPLATE_JOIN_DELAY_MAX_SECONDS
+      );
       if (
         !Number.isInteger(value) ||
-        value < MIN_TEMPLATE_JOIN_DELAY_MAX_SECONDS ||
-        value > MAX_TEMPLATE_JOIN_DELAY_MAX_SECONDS
+        (!isTemplateJoinDelayPreset(value) && value !== storedDelay)
       ) {
-        toast.error(`حداکثر تأخیر ${template.name} باید بین ۰ تا ${MAX_TEMPLATE_JOIN_DELAY_MAX_SECONDS} باشد`);
+        toast.error(`ریتم ${template.name} را از فهرست بازه‌ها انتخاب کنید`);
         return;
+      }
+
+      const capRaw = capDrafts[template.id]?.trim() ?? "";
+      if (capRaw !== "") {
+        const capValue = Number(capRaw);
+        if (
+          !Number.isInteger(capValue) ||
+          capValue < MIN_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM ||
+          capValue > MAX_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM
+        ) {
+          toast.error(
+            `سقف Dev Player در روم ${template.name} باید خالی یا بین ${MIN_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM} تا ${MAX_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM} باشد`
+          );
+          return;
+        }
       }
     }
 
     setSavingDelays(true);
     try {
       await saveDevPlayerTemplateJoinSettings(
-        relevantTemplates.map((template) => ({
-          template_id: template.id,
-          join_delay_max_seconds: Number(delayDrafts[template.id]),
-        }))
+        relevantTemplates.map((template) => {
+          const capRaw = capDrafts[template.id]?.trim() ?? "";
+          return {
+            template_id: template.id,
+            join_delay_max_seconds: Number(delayDrafts[template.id]),
+            max_dev_players_per_room: capRaw === "" ? null : Number(capRaw),
+          };
+        })
       );
-      toast.success("تأخیر تصادفی join میزها ذخیره شد");
+      toast.success("ریتم و سقف روم ذخیره شد");
+      onJoinSettingsSaved?.();
     } catch (error: any) {
       console.error("saveDevPlayerTemplateJoinSettings error:", error);
       toast.error(error?.message || "خطا در ذخیره تأخیر join");
@@ -285,11 +323,22 @@ export default function DevPlayerProfileEngineToggles({
           </p>
         ) : (
           <>
+            <p className="text-[11px] text-gray-500">
+              سقف خالی یعنی بدون محدودیت. ریتم، حداکثر تأخیر تصادفی join برای همان قالب است.
+            </p>
             <div className="space-y-2">
-              {relevantTemplates.map((template) => (
+              {relevantTemplates.map((template) => {
+                const delayValue =
+                  delayDrafts[template.id] ??
+                  String(template.joinDelayMaxSeconds ?? DEFAULT_TEMPLATE_JOIN_DELAY_MAX_SECONDS);
+                const delaySeconds = Number(delayValue);
+                const showLegacyDelay =
+                  Number.isInteger(delaySeconds) && !isTemplateJoinDelayPreset(delaySeconds);
+
+                return (
                 <div
                   key={template.id}
-                  className="grid grid-cols-[1fr_88px] items-center gap-3 rounded-lg border border-gray-800 bg-[#151515] px-3 py-2.5"
+                  className="space-y-2 rounded-lg border border-gray-800 bg-[#151515] px-3 py-2.5"
                 >
                   <div className="min-w-0">
                     <div className="truncate text-sm text-white">{template.name}</div>
@@ -300,25 +349,55 @@ export default function DevPlayerProfileEngineToggles({
                       {template.currency}
                     </div>
                   </div>
-                  <label className="space-y-1">
-                    <span className="block text-[10px] text-gray-500">حداکثر (ثانیه)</span>
-                    <input
-                      type="number"
-                      min={MIN_TEMPLATE_JOIN_DELAY_MAX_SECONDS}
-                      max={MAX_TEMPLATE_JOIN_DELAY_MAX_SECONDS}
-                      value={delayDrafts[template.id] ?? String(DEFAULT_TEMPLATE_JOIN_DELAY_MAX_SECONDS)}
-                      onChange={(e) =>
-                        setDelayDrafts((prev) => ({
-                          ...prev,
-                          [template.id]: e.target.value,
-                        }))
-                      }
-                      className="numeric-text numeric-text--14 w-full rounded-lg border border-gray-700 bg-[#1f2933] px-2 py-1.5 text-white"
-                      dir="ltr"
-                    />
-                  </label>
+                  <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-2">
+                    <label className="space-y-1">
+                      <span className="block text-[10px] text-gray-500">سقف در روم</span>
+                      <input
+                        type="number"
+                        min={MIN_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM}
+                        max={MAX_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM}
+                        placeholder="—"
+                        value={capDrafts[template.id] ?? ""}
+                        onChange={(e) =>
+                          setCapDrafts((prev) => ({
+                            ...prev,
+                            [template.id]: e.target.value,
+                          }))
+                        }
+                        className="numeric-text numeric-text--14 w-full rounded-lg border border-gray-700 bg-[#1f2933] px-2 py-1.5 text-white"
+                        dir="ltr"
+                        aria-label={`سقف Dev Player در روم ${template.name}`}
+                      />
+                    </label>
+                    <label className="space-y-1">
+                      <span className="block text-[10px] text-gray-500">ریتم</span>
+                      <select
+                        value={delayValue}
+                        onChange={(e) =>
+                          setDelayDrafts((prev) => ({
+                            ...prev,
+                            [template.id]: e.target.value,
+                          }))
+                        }
+                        className="w-full rounded-lg border border-gray-700 bg-[#1f2933] px-2 py-1.5 text-sm text-white"
+                        aria-label={`ریتم ثبت نام ${template.name}`}
+                      >
+                        {showLegacyDelay ? (
+                          <option value={String(delaySeconds)}>
+                            فعلی · {delaySeconds}
+                          </option>
+                        ) : null}
+                        {TEMPLATE_JOIN_DELAY_PRESETS.map((preset) => (
+                          <option key={preset.seconds} value={String(preset.seconds)}>
+                            {formatJoinDelayPresetLabel(preset.seconds, preset.label)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             <button
