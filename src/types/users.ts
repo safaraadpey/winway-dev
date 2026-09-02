@@ -33,10 +33,18 @@ export interface ManagedUserSummary {
   superUsername: string | null;
 }
 
+export interface ManagedUserRoleTotals {
+  all: number;
+  player: number;
+  agent: number;
+  super: number;
+}
+
 export interface ManagedUsersResult {
   currentUserRole: ManagedUserRole;
   users: ManagedUserSummary[];
   totalCount: number;
+  roleTotals?: ManagedUserRoleTotals;
 }
 
 

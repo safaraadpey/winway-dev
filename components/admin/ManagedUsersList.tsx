@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { filterManagedUsers, getCachedManagedUsersBase, loadManagedUsers } from "@/services/users";
 import type {
   ManagedUserRoleFilter,
+  ManagedUserRoleTotals,
   ManagedUserSummary,
 } from "@/src/types/users";
 
@@ -26,6 +27,9 @@ export default function ManagedUsersList({ pageTitle }: ManagedUsersListProps) {
   const cached = getCachedManagedUsersBase();
   const [baseUsers, setBaseUsers] = useState<ManagedUserSummary[]>(
     () => cached?.usersAll ?? []
+  );
+  const [roleTotals, setRoleTotals] = useState<ManagedUserRoleTotals | null>(
+    () => cached?.roleTotals ?? null
   );
   const [loading, setLoading] = useState(() => !cached);
   const [roleFilter, setRoleFilter] = useState<ManagedUserRoleFilter>("all");
@@ -67,6 +71,7 @@ export default function ManagedUsersList({ pageTitle }: ManagedUsersListProps) {
         if (!isMounted) return;
         setCurrentRole(result.currentUserRole);
         setBaseUsers(result.users);
+        setRoleTotals(result.roleTotals ?? null);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -89,7 +94,15 @@ export default function ManagedUsersList({ pageTitle }: ManagedUsersListProps) {
     return filterManagedUsers(baseUsers, { roleFilter, search });
   }, [baseUsers, roleFilter, search]);
 
-  const totalCount = useMemo(() => users.length, [users]);
+  const totalCount = useMemo(() => {
+    if (search.trim()) {
+      return users.length;
+    }
+    if (roleTotals) {
+      return roleTotals[roleFilter];
+    }
+    return users.length;
+  }, [users.length, roleFilter, roleTotals, search]);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value);

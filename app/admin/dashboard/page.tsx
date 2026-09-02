@@ -6,6 +6,7 @@ import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import {
   getCachedDashboardData,
   loadDashboardData,
+  loadDashboardDaySummary,
   loadDashboardRangeSummary,
 } from "@/services/dashboard";
 import { hardExitFromCurrentPanel } from "@/lib/auth/hardExit";
@@ -13,7 +14,7 @@ import ShamsiDateInput from "@/components/common/ShamsiDateInput";
 import { supabase } from "@/lib/supabaseClient";
 import { getCachedAdminPermissions, getCurrentAdminPermissions } from "@/lib/admin-permissions";
 import AdminDashboardReportSkeleton from "@/components/admin/AdminDashboardReportSkeleton";
-import type { DashboardPeriod, DashboardData, DashboardPanelOperator } from "@/src/types/dashboard";
+import type { DashboardPeriod, DashboardData, DashboardPanelOperator, FinancialSummary } from "@/src/types/dashboard";
 import type { DashboardRangeSummary } from "@/services/dashboard";
 import type { AdminPermissions } from "@/src/types/admins";
 import InstallAppButton from "@/components/InstallAppButton";
@@ -21,11 +22,9 @@ import ReferralRegistrationLink from "@/components/admin/ReferralRegistrationLin
 import PendingWithdrawalAlertBadge from "@/components/admin/PendingWithdrawalAlertBadge";
 import { useReferralCodeDashboardSync } from "@/lib/referral/useReferralCodeDashboardSync";
 
-const PERIOD_LABELS: Record<DashboardPeriod, string> = {
+const PERIOD_LABELS: Partial<Record<DashboardPeriod, string>> = {
   day: "روز",
   week: "هفته",
-  month: "ماه",
-  overall: "کل",
 };
 
 function DashboardAmount({
@@ -183,7 +182,9 @@ export default function AdminDashboardPage() {
   const { setShowHeader, setShowBackButton, setOnBackClick } = useHeaderVisibility();
   const [data, setData] = useState<DashboardData | null>(() => getCachedDashboardData());
   const [reportLoading, setReportLoading] = useState(() => getCachedDashboardData() === null);
-  const [activePeriod, setActivePeriod] = useState<PeriodTab>("day");
+  const [activePeriod, setActivePeriod] = useState<PeriodTab>("week");
+  const [daySummary, setDaySummary] = useState<FinancialSummary | null>(null);
+  const [dayLoading, setDayLoading] = useState(false);
   const [rangeFrom, setRangeFrom] = useState("");
   const [rangeTo, setRangeTo] = useState("");
   const [rangeLoading, setRangeLoading] = useState(false);
@@ -257,7 +258,11 @@ export default function AdminDashboardPage() {
   }, []);
 
   const summary =
-    activePeriod === "range" ? rangeSummary : data?.summaries[activePeriod];
+    activePeriod === "range"
+      ? rangeSummary
+      : activePeriod === "day"
+      ? daySummary
+      : data?.summaries[activePeriod];
   const hasReferralCode = Boolean(data?.user?.referralCode);
   const userRole = data?.user?.role;
   const isAdmin = !data?.user || userRole === "admin";
@@ -281,13 +286,39 @@ export default function AdminDashboardPage() {
   const canAccessEntryBanner = isAdmin && (permissions?.entry_banner ?? true);
   const canAccessAdmins = isAdminZero && (permissions?.admins ?? true);
 
+  const handleLoadDaySummary = async (options?: { force?: boolean }) => {
+    if (dayLoading) return;
+    try {
+      setDayLoading(true);
+      const result = await loadDashboardDaySummary({
+        maxAgeMs: 30_000,
+        force: options?.force,
+      });
+      setDaySummary(result);
+    } catch (error) {
+      console.error("Error loading admin dashboard day summary:", error);
+      if (!options?.force) {
+        setDaySummary(null);
+      }
+    } finally {
+      setDayLoading(false);
+    }
+  };
+
+  const handlePeriodChange = (period: PeriodTab) => {
+    setActivePeriod(period);
+    if (period === "day") {
+      void handleLoadDaySummary();
+    }
+  };
+
   const handleLogout = () => {
     hardExitFromCurrentPanel();
   };
 
   const handleLoadRange = async () => {
     if (!rangeFrom || !rangeTo) return;
-    if (rangeFrom > rangeTo) return;
+    if (rangeFrom >= rangeTo) return;
     try {
       setRangeLoading(true);
       const result = await loadDashboardRangeSummary({
@@ -305,7 +336,7 @@ export default function AdminDashboardPage() {
 
   const renderReportContent = () => {
     if (activePeriod === "range") {
-      if (!rangeFrom || !rangeTo || rangeFrom > rangeTo) {
+      if (!rangeFrom || !rangeTo || rangeFrom >= rangeTo) {
         return <div className="text-center py-4 text-gray-400">بازه تاریخ معتبر انتخاب کنید</div>;
       }
       if (rangeLoading) {
@@ -313,6 +344,10 @@ export default function AdminDashboardPage() {
       }
       if (!rangeSummary) {
         return <div className="text-center py-4 text-gray-400">بازه را اعمال کنید</div>;
+      }
+    } else if (activePeriod === "day") {
+      if (dayLoading && !daySummary) {
+        return <AdminDashboardReportSkeleton />;
       }
     } else if (reportLoading || !summary) {
       return <AdminDashboardReportSkeleton />;
@@ -449,11 +484,11 @@ export default function AdminDashboardPage() {
 
         {canViewFinancialReport && (
           <div className="rounded-2xl bg-[#151515] border border-gray-800 mb-6">
-            <div className="grid grid-cols-4 text-center text-sm font-semibold rounded-2xl overflow-hidden">
-              {(["day", "week", "month"] as DashboardPeriod[]).map((period) => (
+            <div className="grid grid-cols-3 text-center text-sm font-semibold rounded-2xl overflow-hidden">
+              {(["day", "week"] as DashboardPeriod[]).map((period) => (
                 <button
                   key={period}
-                  onClick={() => setActivePeriod(period)}
+                  onClick={() => handlePeriodChange(period)}
                   className={`py-3 ${
                     activePeriod === period ? "bg-teal-500 text-black" : "text-gray-300"
                   }`}
@@ -462,7 +497,7 @@ export default function AdminDashboardPage() {
                 </button>
               ))}
               <button
-                onClick={() => setActivePeriod("range")}
+                onClick={() => handlePeriodChange("range")}
                 className={`py-3 ${
                   activePeriod === "range" ? "bg-teal-500 text-black" : "text-gray-300"
                 }`}
@@ -471,15 +506,34 @@ export default function AdminDashboardPage() {
               </button>
             </div>
             <div className="px-4 py-3 text-sm text-gray-100">
+              {activePeriod === "day" && (
+                <div className="mb-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => void handleLoadDaySummary({ force: true })}
+                    disabled={dayLoading}
+                    className="rounded px-1.5 py-0.5 text-[10px] font-medium text-teal-400 hover:text-teal-300 disabled:opacity-50"
+                    aria-label="به‌روزرسانی آمار روز"
+                  >
+                    {dayLoading ? "..." : "↻ به‌روزرسانی"}
+                  </button>
+                </div>
+              )}
               {activePeriod === "range" && (
                 <div className="mb-3 space-y-2">
                   <div className="grid grid-cols-2 gap-2">
-                    <ShamsiDateInput value={rangeFrom} onChange={setRangeFrom} />
-                    <ShamsiDateInput value={rangeTo} onChange={setRangeTo} />
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-gray-400">از</span>
+                      <ShamsiDateInput value={rangeFrom} onChange={setRangeFrom} />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-gray-400">تا</span>
+                      <ShamsiDateInput value={rangeTo} onChange={setRangeTo} />
+                    </label>
                   </div>
                   <button
                     onClick={handleLoadRange}
-                    disabled={!rangeFrom || !rangeTo || rangeFrom > rangeTo || rangeLoading}
+                    disabled={!rangeFrom || !rangeTo || rangeFrom >= rangeTo || rangeLoading}
                     className="w-full rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold disabled:opacity-50"
                   >
                     {rangeLoading ? "در حال محاسبه..." : "اعمال بازه"}

@@ -134,7 +134,7 @@ async function loadDashboardDataFromAdminSnapshot(options?: {
   force?: boolean;
 }): Promise<DashboardData> {
   const maxAgeMs = options?.maxAgeMs ?? 30_000;
-  const cacheKey = "admin-snapshot|v5";
+  const cacheKey = "admin-snapshot|v7";
 
   if (!options?.force && dashboardCache?.key === cacheKey) {
     const ageMs = Date.now() - dashboardCache.fetchedAtMs;
@@ -162,6 +162,39 @@ export function getCachedDashboardData(): DashboardData | null {
 
 export function clearDashboardCache() {
   dashboardCache = null;
+  dashboardDayCache = null;
+}
+
+type DashboardDayCache = {
+  fetchedAtMs: number;
+  summary: FinancialSummary;
+};
+
+let dashboardDayCache: DashboardDayCache | null = null;
+
+export async function loadDashboardDaySummary(options?: {
+  maxAgeMs?: number;
+  force?: boolean;
+}): Promise<FinancialSummary> {
+  const maxAgeMs = options?.maxAgeMs ?? 30_000;
+
+  if (!options?.force && dashboardDayCache) {
+    const ageMs = Date.now() - dashboardDayCache.fetchedAtMs;
+    if (ageMs >= 0 && ageMs <= maxAgeMs) {
+      return dashboardDayCache.summary;
+    }
+  }
+
+  const summary = await callAdminApi<FinancialSummary>("/api/admin/dashboard/snapshot-day", {
+    method: "GET",
+  });
+
+  dashboardDayCache = {
+    fetchedAtMs: Date.now(),
+    summary,
+  };
+
+  return summary;
 }
 
 async function fetchAdminCommissionSummary(): Promise<{
@@ -293,6 +326,31 @@ export async function loadDashboardRangeSummary(params: {
   from: string; // YYYY-MM-DD
   to: string; // YYYY-MM-DD
 }): Promise<DashboardRangeSummary> {
+  if (isAdminPanelRoute()) {
+    if (!params.from || !params.to || params.from >= params.to) {
+      throw new Error("بازه تاریخ نامعتبر است");
+    }
+
+    const data = await callAdminApi<DashboardRangeSummary>(
+      `/api/admin/dashboard/snapshot-range?fromDate=${encodeURIComponent(params.from)}&toDate=${encodeURIComponent(params.to)}`,
+      { method: "GET" }
+    );
+
+    return {
+      ticketsVolume: data.ticketsVolume ?? 0,
+      ticketsVolumeTotal: data.ticketsVolumeTotal ?? 0,
+      tournamentTicketsVolumeTotal: data.tournamentTicketsVolumeTotal ?? 0,
+      tournamentCommission: data.tournamentCommission ?? 0,
+      directPlayerCommission: data.directPlayerCommission ?? 0,
+      tournamentGuaranteePayout: data.tournamentGuaranteePayout ?? 0,
+      gatewayPurchases: data.gatewayPurchases ?? 0,
+      deposits: data.deposits ?? 0,
+      withdrawals: data.withdrawals ?? 0,
+      net: data.net ?? 0,
+      panelOperators: Array.isArray(data.panelOperators) ? data.panelOperators : [],
+    };
+  }
+
   const user = await loadDashboardUserInfo();
   if (!user) {
     return {

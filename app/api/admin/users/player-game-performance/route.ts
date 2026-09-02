@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminContextOrThrow } from "@/lib/supabaseServer";
-import type { createServiceClient } from "@/lib/supabaseServer";
+import { canViewManagedUserStats } from "@/lib/auth/canViewManagedUserStats";
 import {
   loadPlayerGamePerformanceByPeriod,
   loadPlayerGamePerformanceInRange,
@@ -9,61 +9,9 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type ServiceClient = ReturnType<typeof createServiceClient>;
-
-async function canViewPlayerStats(
-  supabase: ServiceClient,
-  actorId: string,
-  actorRole: string,
-  targetUserId: string
-): Promise<boolean> {
-  if (actorRole === "admin") return true;
-  if (actorRole !== "agent" && actorRole !== "super") return false;
-
-  const { data: target } = await supabase
-    .from("users")
-    .select("id, role, parent_id")
-    .eq("id", targetUserId)
-    .maybeSingle();
-
-  if (!target || target.role !== "player") return false;
-  if (target.parent_id === actorId) return true;
-
-  const { data: affiliation } = await supabase
-    .from("player_affiliation")
-    .select("agent_id, super_id")
-    .eq("user_id", targetUserId)
-    .maybeSingle();
-
-  if (actorRole === "agent") {
-    return affiliation?.agent_id === actorId;
-  }
-
-  if (affiliation?.super_id === actorId) return true;
-  if (affiliation?.agent_id) {
-    const { data: agentUser } = await supabase
-      .from("users")
-      .select("parent_id")
-      .eq("id", affiliation.agent_id)
-      .maybeSingle();
-    if (agentUser?.parent_id === actorId) return true;
-  }
-
-  if (target.parent_id) {
-    const { data: parentUser } = await supabase
-      .from("users")
-      .select("role, parent_id")
-      .eq("id", target.parent_id)
-      .maybeSingle();
-    if (parentUser?.role === "agent" && parentUser.parent_id === actorId) return true;
-  }
-
-  return false;
-}
-
 /**
  * GET /api/admin/users/player-game-performance?userId=...
- * GET /api/admin/users/player-game-performance?userId=...&from=YYYY-MM-DD&to=YYYY-MM-DD
+ * GET /api/admin/users/player-game-performance?userId=...&fromIso=...&toIso=...
  *
  * Snapshot of one player's winnings/purchases (leaderboard سوابق formula).
  * Source of truth: PostgreSQL.
@@ -86,12 +34,48 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const allowed = await canViewPlayerStats(supabase, session.user.id, session.role, userId);
+    const allowed = await canViewManagedUserStats(
+      supabase,
+      session.user.id,
+      session.role,
+      userId
+    );
     if (!allowed) {
       return NextResponse.json(
         { ok: false, error: "forbidden", message: "اجازه مشاهده آمار این کاربر را ندارید." },
         { status: 403 }
       );
+    }
+
+    const fromIsoParam = request.nextUrl.searchParams.get("fromIso");
+    const toIsoParam = request.nextUrl.searchParams.get("toIso");
+
+    if (fromIsoParam || toIsoParam) {
+      if (!fromIsoParam || !toIsoParam) {
+        return NextResponse.json(
+          { ok: false, error: "validation_error", message: "fromIso و toIso هر دو الزامی هستند." },
+          { status: 400 }
+        );
+      }
+      const fromIso = new Date(fromIsoParam);
+      const toIso = new Date(toIsoParam);
+      if (
+        !Number.isFinite(fromIso.getTime()) ||
+        !Number.isFinite(toIso.getTime()) ||
+        fromIso > toIso
+      ) {
+        return NextResponse.json(
+          { ok: false, error: "validation_error", message: "بازه زمانی نامعتبر است." },
+          { status: 400 }
+        );
+      }
+
+      const data = await loadPlayerGamePerformanceInRange({
+        playerId: userId,
+        fromIso: fromIso.toISOString(),
+        toIso: toIso.toISOString(),
+      });
+      return NextResponse.json({ ok: true, data }, { status: 200 });
     }
 
     const fromStr = request.nextUrl.searchParams.get("from");

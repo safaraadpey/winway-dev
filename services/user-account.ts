@@ -19,6 +19,7 @@ import {
   type CommissionDailyStatRow,
   type CommissionDailyTotals,
 } from "@/lib/dashboard/loadCommissionDailyStats";
+import { getOpenTehranAccountingWindow } from "@/lib/dashboard/tehranAccountingWindow";
 import {
   emptyCommissionTotals,
   loadOperatorCommissionSummaryRange,
@@ -61,7 +62,7 @@ type UserAccountDataCacheEntry = {
 // Note: this runs in the browser only; it resets on full refresh.
 const userAccountDataCache = new Map<string, UserAccountDataCacheEntry>();
 
-const USER_ACCOUNT_CACHE_VERSION = "v3-outbound-withdrawals";
+const USER_ACCOUNT_CACHE_VERSION = "v4-lazy-day-overall";
 
 function userAccountCacheKey(userId: string): string {
   return `${USER_ACCOUNT_CACHE_VERSION}:${userId}`;
@@ -92,6 +93,172 @@ export function clearUserAccountDataCache(userId?: string) {
     userAccountDataCache.delete(userAccountCacheKey(userId));
   } else {
     userAccountDataCache.clear();
+  }
+}
+
+function mapSnapshotActivityResponse(
+  period: UserAccountPeriod,
+  data: {
+    gamesPlayed?: number;
+    lineWins?: number;
+    fullWins?: number;
+    playerWinnings?: number;
+    playerPurchases?: number;
+    commission?: number;
+    commissionTotal?: number | null;
+    deposits?: number;
+    withdrawals?: number;
+    net?: number;
+  } | null | undefined
+): UserAccountActivity {
+  return {
+    period,
+    gamesPlayed: Number(data?.gamesPlayed || 0),
+    lineWins: Number(data?.lineWins || 0),
+    fullWins: Number(data?.fullWins || 0),
+    playerWinnings: Number(data?.playerWinnings || 0),
+    playerPurchases: Number(data?.playerPurchases || 0),
+    commission: Number(data?.commission || 0),
+    commissionTotal:
+      data?.commissionTotal === null || data?.commissionTotal === undefined
+        ? null
+        : Number(data.commissionTotal),
+    deposits: Number(data?.deposits || 0),
+    withdrawals: Number(data?.withdrawals || 0),
+    net: Number(data?.net || 0),
+  };
+}
+
+function mapSnapshotActivityMetrics(
+  data: {
+    gamesPlayed?: number;
+    lineWins?: number;
+    fullWins?: number;
+    playerWinnings?: number;
+    playerPurchases?: number;
+    commission?: number;
+    commissionTotal?: number | null;
+    deposits?: number;
+    withdrawals?: number;
+    net?: number;
+  } | null | undefined
+): UserAccountActivityMetrics {
+  const activity = mapSnapshotActivityResponse("week", data);
+  const { period: _period, ...metrics } = activity;
+  return metrics;
+}
+
+type SnapshotActivityPayload = {
+  fromSnapshotDate?: string;
+  throughSnapshotDate?: string | null;
+  gamesPlayed?: number;
+  lineWins?: number;
+  fullWins?: number;
+  playerWinnings?: number;
+  playerPurchases?: number;
+  commission?: number;
+  commissionTotal?: number | null;
+  deposits?: number;
+  withdrawals?: number;
+  net?: number;
+};
+
+type SnapshotAccountRole = Extract<UserAccountInfo["role"], "player" | "agent" | "super">;
+
+function isSnapshotAccountRole(role: UserAccountInfo["role"]): role is SnapshotAccountRole {
+  return role === "player" || role === "agent" || role === "super";
+}
+
+async function fetchLifetimeSnapshotActivity(
+  userId: string,
+  role: SnapshotAccountRole
+): Promise<UserAccountActivity> {
+  try {
+    const data = await callAdminApi<SnapshotActivityPayload>(
+      `/api/admin/users/lifetime-performance?userId=${encodeURIComponent(userId)}&role=${role}`,
+      { method: "GET" }
+    );
+
+    console.info("[UserAccount] lifetime snapshot loaded", {
+      userId,
+      role,
+      throughSnapshotDate: data?.throughSnapshotDate,
+      source: "performance_lifetime_stats",
+    });
+
+    return mapSnapshotActivityResponse("overall", data);
+  } catch (error) {
+    console.error("[UserAccount] lifetime snapshot fetch error:", error);
+    return emptyUserAccountActivity("overall");
+  }
+}
+
+async function fetchSnapshotWeekActivity(
+  userId: string,
+  role: SnapshotAccountRole
+): Promise<UserAccountActivity> {
+  try {
+    const data = await callAdminApi<SnapshotActivityPayload>(
+      `/api/admin/users/snapshot-period-activity?userId=${encodeURIComponent(userId)}&role=${role}&period=week`,
+      { method: "GET" }
+    );
+
+    console.info("[UserAccount] week snapshot loaded", {
+      userId,
+      role,
+      fromSnapshotDate: data?.fromSnapshotDate,
+      throughSnapshotDate: data?.throughSnapshotDate,
+      source: "performance_daily_stats",
+    });
+
+    return mapSnapshotActivityResponse("week", data);
+  } catch (error) {
+    console.error("[UserAccount] week snapshot fetch error:", error);
+    return emptyUserAccountActivity("week");
+  }
+}
+
+async function fetchRangeSnapshotActivity(
+  userId: string,
+  role: SnapshotAccountRole,
+  params: { from: string; to: string }
+): Promise<UserAccountActivityMetrics> {
+  const data = await callAdminApi<SnapshotActivityPayload>(
+    `/api/admin/users/snapshot-period-activity?userId=${encodeURIComponent(userId)}&role=${role}&period=range&fromDate=${encodeURIComponent(params.from)}&toDate=${encodeURIComponent(params.to)}`,
+    { method: "GET" }
+  );
+
+  console.info("[UserAccount] range snapshot loaded", {
+    userId,
+    role,
+    fromDate: params.from,
+    toDate: params.to,
+    fromSnapshotDate: data?.fromSnapshotDate,
+    throughSnapshotDate: data?.throughSnapshotDate,
+    source: "performance_daily_stats",
+  });
+
+  return mapSnapshotActivityMetrics(data);
+}
+
+async function fetchPlayerGamePerformanceWindow(
+  userId: string,
+  fromIso: string,
+  toIso: string
+): Promise<PlayerGamePerformance> {
+  try {
+    const data = await callAdminApi<PlayerGamePerformance>(
+      `/api/admin/users/player-game-performance?userId=${encodeURIComponent(userId)}&fromIso=${encodeURIComponent(fromIso)}&toIso=${encodeURIComponent(toIso)}`,
+      { method: "GET" }
+    );
+    return {
+      playerWinnings: Number(data?.playerWinnings || 0),
+      playerPurchases: Number(data?.playerPurchases || 0),
+      gamesPlayed: Number(data?.gamesPlayed || 0),
+    };
+  } catch (error) {
+    console.error("[UserAccount] player game performance window fetch error:", error);
+    return emptyPlayerGamePerformance();
   }
 }
 
@@ -482,18 +649,33 @@ type MonthlyActivitySource =
       ticketRows: TicketActivityRow[];
     };
 
+function emptyUserAccountActivity(period: UserAccountPeriod): UserAccountActivity {
+  return {
+    period,
+    gamesPlayed: 0,
+    lineWins: 0,
+    fullWins: 0,
+    commission: 0,
+    commissionTotal: null,
+    deposits: 0,
+    withdrawals: 0,
+    net: 0,
+  };
+}
+
 async function loadMonthlyActivitySource(
   userId: string,
   userRole: UserAccountInfo["role"]
 ): Promise<MonthlyActivitySource> {
-  const monthStart = getPeriodStart("month");
-  const monthStartIso = monthStart ? monthStart.toISOString() : null;
+  const dataStart =
+    userRole === "player" ? getPeriodStart("week") : getPeriodStart("month");
+  const dataStartIso = dataStart ? dataStart.toISOString() : null;
 
   const resultsPromise = supabase
     .from("results")
     .select("win_type, created_at")
     .eq("user_id", userId)
-    .gte("created_at", monthStartIso ?? "1970-01-01T00:00:00.000Z");
+    .gte("created_at", dataStartIso ?? "1970-01-01T00:00:00.000Z");
 
   const panelCashflowPromise = loadInboundCashflowRows(userId, userRole);
 
@@ -504,7 +686,7 @@ async function loadMonthlyActivitySource(
           .select("room_id, created_at")
           .eq("player_user_id", userId)
           .in("reservation_status", ["confirmed", "consumed"])
-          .gte("created_at", monthStartIso ?? "1970-01-01T00:00:00.000Z")
+          .gte("created_at", dataStartIso ?? "1970-01-01T00:00:00.000Z")
       : Promise.resolve({ data: [] as TicketActivityRow[], error: null });
 
   if (userRole === "admin") {
@@ -514,7 +696,7 @@ async function loadMonthlyActivitySource(
       .eq("user_id", userId)
       .eq("type", "fee_admin")
       .eq("source_kind", "ticket_commission")
-      .gte("created_at", monthStartIso ?? "1970-01-01T00:00:00.000Z");
+      .gte("created_at", dataStartIso ?? "1970-01-01T00:00:00.000Z");
 
     const [resultsRes, panelCashflowRows, commRes, ticketsRes] = await Promise.all([
       resultsPromise,
@@ -583,7 +765,7 @@ async function loadMonthlyActivitySource(
     .select("agent_amount, super_amount, admin_amount, commission_base, created_at")
     .eq("player_id", userId)
     .eq("status", "settled")
-    .gte("created_at", monthStartIso ?? "1970-01-01T00:00:00.000Z");
+    .gte("created_at", dataStartIso ?? "1970-01-01T00:00:00.000Z");
 
   const [resultsRes, panelCashflowRows, commRes, ticketsRes] = await Promise.all([
     resultsPromise,
@@ -721,7 +903,8 @@ function buildActivitiesFromMonthlySource(
   return {
     day: buildOne("day", dayStartMs),
     week: buildOne("week", weekStartMs),
-    month: buildOne("month", monthStartMs),
+    month:
+      userRole === "player" ? emptyUserAccountActivity("month") : buildOne("month", monthStartMs),
     overall: buildOne("overall", null),
   };
 }
@@ -1755,13 +1938,12 @@ function parseUtcDateRange(params: { from: string; to: string }): {
   };
 }
 
-export async function loadUserAccountRangeActivity(
+async function loadUserAccountWindowActivity(
   userId: string,
   userRole: UserAccountInfo["role"],
-  params: { from: string; to: string }
+  fromIso: string,
+  toIso: string
 ): Promise<UserAccountActivityMetrics> {
-  const { fromIso, toIso, fromDate, toDate } = parseUtcDateRange(params);
-
   const resultsPromise = supabase
     .from("results")
     .select("win_type")
@@ -1802,7 +1984,7 @@ export async function loadUserAccountRangeActivity(
       .gte("created_at", fromIso)
       .lte("created_at", toIso);
     if (error) {
-      console.error("[UserAccount] range commissions_log(player) error", error);
+      console.error("[UserAccount] window commissions_log(player) error", error);
     }
     const rows = data || [];
     commission = rows.reduce(
@@ -1837,17 +2019,17 @@ export async function loadUserAccountRangeActivity(
       .gte("created_at", fromIso)
       .lte("created_at", toIso);
     if (error) {
-      console.error("[UserAccount] range transactions(admin commission) error", error);
+      console.error("[UserAccount] window transactions(admin commission) error", error);
     }
     commission = (data || []).reduce((sum, row) => sum + Number(row.amount || 0), 0);
     commissionTotal = null;
   }
 
   if (resultsRes.error) {
-    console.error("[UserAccount] range results error", resultsRes.error);
+    console.error("[UserAccount] window results error", resultsRes.error);
   }
   if (ticketsRes.error) {
-    console.error("[UserAccount] range tickets error", ticketsRes.error);
+    console.error("[UserAccount] window tickets error", ticketsRes.error);
   }
 
   const { deposits, withdrawals, net } = sumPanelCashflowAll(panelCashflowRows);
@@ -1863,7 +2045,7 @@ export async function loadUserAccountRangeActivity(
       : 0;
   const playerPerf =
     userRole === "player"
-      ? await fetchPlayerGamePerformanceRange(userId, params.from, params.to)
+      ? await fetchPlayerGamePerformanceWindow(userId, fromIso, toIso)
       : emptyPlayerGamePerformance();
 
   return {
@@ -1878,6 +2060,68 @@ export async function loadUserAccountRangeActivity(
     playerWinnings: playerPerf.playerWinnings,
     playerPurchases: playerPerf.playerPurchases,
   };
+}
+
+async function loadTehranAccountingDayActivity(
+  userId: string,
+  userRole: UserAccountInfo["role"]
+): Promise<UserAccountActivity> {
+  const { fromIso, toIso } = getOpenTehranAccountingWindow();
+  console.info("[UserAccount] tehran accounting day window", {
+    userId,
+    userRole,
+    fromIso,
+    toIso,
+    source: "tehran_08:00",
+  });
+  const metrics = await loadUserAccountWindowActivity(userId, userRole, fromIso, toIso);
+  return {
+    period: "day",
+    ...metrics,
+  };
+}
+
+/** Live day activity (Tehran 08:00 → now). Lazy-loaded from UserAccountPage. */
+export async function loadUserAccountDayActivity(
+  userId: string,
+  userRole: UserAccountInfo["role"]
+): Promise<UserAccountActivity> {
+  if (isSnapshotAccountRole(userRole)) {
+    return loadTehranAccountingDayActivity(userId, userRole);
+  }
+  return calculateUserActivity(userId, "day", userRole);
+}
+
+/** Lifetime / overall snapshot. Lazy-loaded from UserAccountPage. */
+export async function loadUserAccountOverallActivity(
+  userId: string,
+  userRole: UserAccountInfo["role"]
+): Promise<UserAccountActivity> {
+  if (isSnapshotAccountRole(userRole)) {
+    return fetchLifetimeSnapshotActivity(userId, userRole);
+  }
+  return calculateUserActivity(userId, "overall", userRole);
+}
+
+export async function loadUserAccountRangeActivity(
+  userId: string,
+  userRole: UserAccountInfo["role"],
+  params: { from: string; to: string }
+): Promise<UserAccountActivityMetrics> {
+  if (isSnapshotAccountRole(userRole)) {
+    if (!params.from || !params.to || params.from >= params.to) {
+      throw new Error("بازه تاریخ نامعتبر است");
+    }
+    try {
+      return await fetchRangeSnapshotActivity(userId, userRole, params);
+    } catch (error) {
+      console.error("[UserAccount] range snapshot fetch error:", error);
+      throw error;
+    }
+  }
+
+  const { fromIso, toIso } = parseUtcDateRange(params);
+  return loadUserAccountWindowActivity(userId, userRole, fromIso, toIso);
 }
 
 /**
@@ -1901,34 +2145,38 @@ export async function loadUserAccountData(
       return null;
     }
 
-    // Fetch "month" sources once and aggregate day/week/month locally.
     let activities: Record<UserAccountPeriod, UserAccountActivity>;
-    try {
-      const monthly = await loadMonthlyActivitySource(userId, user.role);
-      activities = buildActivitiesFromMonthlySource(monthly, user.role);
-    } catch (err) {
-      console.error("loadUserAccountData: monthly aggregation failed, fallback to per-period", err);
+
+    if (isSnapshotAccountRole(user.role)) {
+      // Initial load: closed week snapshot only. Day + overall are lazy-loaded on tab click.
+      const week = await fetchSnapshotWeekActivity(userId, user.role);
       activities = {
-        day: await calculateUserActivity(userId, "day", user.role),
-        week: await calculateUserActivity(userId, "week", user.role),
-        month: await calculateUserActivity(userId, "month", user.role),
-        overall: await calculateUserActivity(userId, "overall", user.role),
+        day: emptyUserAccountActivity("day"),
+        week,
+        month: emptyUserAccountActivity("month"),
+        overall: emptyUserAccountActivity("overall"),
       };
-    }
-
-    const transactions = await loadUserTransactions(userId);
-
-    if (user.role === "player") {
-      const playerPerf = await fetchPlayerGamePerformanceByPeriod(userId);
-      for (const period of ["day", "week", "month", "overall"] as UserAccountPeriod[]) {
-        activities[period] = {
-          ...activities[period],
-          playerWinnings: playerPerf[period].playerWinnings,
-          playerPurchases: playerPerf[period].playerPurchases,
-          gamesPlayed: playerPerf[period].gamesPlayed,
+      console.info("[UserAccount] snapshot initial load (week only)", {
+        userId,
+        role: user.role,
+      });
+    } else {
+      // Fetch "month" sources once and aggregate day/week/month locally.
+      try {
+        const monthly = await loadMonthlyActivitySource(userId, user.role);
+        activities = buildActivitiesFromMonthlySource(monthly, user.role);
+      } catch (err) {
+        console.error("loadUserAccountData: monthly aggregation failed, fallback to per-period", err);
+        activities = {
+          day: await calculateUserActivity(userId, "day", user.role),
+          week: await calculateUserActivity(userId, "week", user.role),
+          month: await calculateUserActivity(userId, "month", user.role),
+          overall: await calculateUserActivity(userId, "overall", user.role),
         };
       }
     }
+
+    const transactions = await loadUserTransactions(userId);
 
     const result: UserAccountData = {
       user,

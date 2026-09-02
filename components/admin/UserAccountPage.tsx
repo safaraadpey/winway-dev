@@ -6,6 +6,8 @@ import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import {
   getCachedUserAccountData,
   loadUserAccountData,
+  loadUserAccountDayActivity,
+  loadUserAccountOverallActivity,
   loadUserAccountRangeActivity,
   primeUserAccountDataCache,
   saveUserCommission,
@@ -24,6 +26,7 @@ import type { TransactionAction } from "@/src/types/transactions";
 import type { AdminSubRole } from "@/lib/auth-helpers";
 import type {
   UserAccountData,
+  UserAccountActivity,
   UserAccountActivityMetrics,
   UserAccountInfo,
   UserAccountPeriod,
@@ -40,14 +43,49 @@ const PERIOD_LABELS: Record<UserAccountPeriod, string> = {
   overall: "کل",
 };
 
-function periodTabsForRole(role: UserAccountData["user"]["role"]): UserAccountPeriod[] {
-  if (role === "agent" || role === "super") {
-    return ["day", "week", "month", "overall"];
+function periodLabelForRole(
+  role: UserAccountData["user"]["role"],
+  period: UserAccountPeriod
+): string {
+  if ((role === "player" || role === "agent" || role === "super") && period === "overall") {
+    return "آمار کل";
   }
-  return ["day", "week", "month"];
+  return PERIOD_LABELS[period];
 }
 
+function periodTabsForRole(role: UserAccountData["user"]["role"]): UserAccountPeriod[] {
+  if (role === "agent" || role === "super") {
+    return ["day", "week", "overall"];
+  }
+  if (role === "player") {
+    return ["day", "week", "overall"];
+  }
+  return ["day", "week"];
+}
+
+const PERIOD_TAB_GRID_CLASS: Record<number, string> = {
+  3: "grid-cols-3",
+  4: "grid-cols-4",
+  5: "grid-cols-5",
+};
+
 type ActivityPeriodTab = UserAccountPeriod | "range";
+
+function isInvalidActivityRange(
+  from: string,
+  to: string,
+  role: UserAccountInfo["role"]
+): boolean {
+  if (!from || !to) return true;
+  if (role === "player" || role === "agent" || role === "super") {
+    return from >= to;
+  }
+  return from > to;
+}
+
+function usesTehranSnapshotRange(role: UserAccountInfo["role"]): boolean {
+  return role === "player" || role === "agent" || role === "super";
+}
 
 function AccountAmount({
   value,
@@ -95,16 +133,15 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
   const router = useRouter();
   const { setShowHeader, setShowBackButton, setOnBackClick } = useHeaderVisibility();
   const cached = getCachedUserAccountData(userId, { maxAgeMs: 30_000 });
-  const cachedNeedsOverallRefresh =
-    cached &&
-    cached.user.adminSubRole !== "dev_panel" &&
-    (cached.user.role === "agent" || cached.user.role === "super") &&
-    !cached.activities?.overall;
   const safeCached =
-    cached?.user.adminSubRole === "dev_panel" || cachedNeedsOverallRefresh ? null : cached;
+    cached?.user.adminSubRole === "dev_panel" ? null : cached;
   const [data, setData] = useState<UserAccountData | null>(() => safeCached);
   const [loading, setLoading] = useState(() => safeCached === null);
-  const [activePeriod, setActivePeriod] = useState<ActivityPeriodTab>("month");
+  const [activePeriod, setActivePeriod] = useState<ActivityPeriodTab>("week");
+  const [dayActivity, setDayActivity] = useState<UserAccountActivity | null>(null);
+  const [overallActivity, setOverallActivity] = useState<UserAccountActivity | null>(null);
+  const [dayLoading, setDayLoading] = useState(false);
+  const [overallLoading, setOverallLoading] = useState(false);
   const [rangeFrom, setRangeFrom] = useState("");
   const [rangeTo, setRangeTo] = useState("");
   const [rangeLoading, setRangeLoading] = useState(false);
@@ -264,6 +301,10 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
       nextCached?.user.adminSubRole === "dev_panel" ? null : nextCached;
     setData(nextSafeCached);
     setLoading(nextSafeCached === null);
+    setDayActivity(null);
+    setOverallActivity(null);
+    setRangeActivity(null);
+    setActivePeriod("week");
   }, [userId]);
 
   useEffect(() => {
@@ -305,6 +346,73 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
       primeUserAccountDataCache(userId, data);
     }
   }, [userId, data]);
+
+  useEffect(() => {
+    if (!data?.user) return;
+    const tabs = periodTabsForRole(data.user.role);
+    if (activePeriod !== "range" && !tabs.includes(activePeriod as UserAccountPeriod)) {
+      setActivePeriod(tabs.includes("week") ? "week" : tabs[0] ?? "week");
+    }
+  }, [data?.user?.role, activePeriod]);
+
+  const usesSnapshotLazyPeriods = usesTehranSnapshotRange(data?.user?.role ?? "admin");
+
+  const handleLoadDayActivity = async (options?: { force?: boolean }) => {
+    if (!data?.user || dayLoading) return;
+    try {
+      setDayLoading(true);
+      const result = await loadUserAccountDayActivity(userId, data.user.role);
+      setDayActivity(result);
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              activities: { ...prev.activities, day: result },
+            }
+          : null
+      );
+    } catch (error) {
+      console.error("[UserAccount] day activity error:", error);
+      if (!options?.force) {
+        setDayActivity(null);
+      }
+    } finally {
+      setDayLoading(false);
+    }
+  };
+
+  const handleLoadOverallActivity = async (options?: { force?: boolean }) => {
+    if (!data?.user || overallLoading) return;
+    try {
+      setOverallLoading(true);
+      const result = await loadUserAccountOverallActivity(userId, data.user.role);
+      setOverallActivity(result);
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              activities: { ...prev.activities, overall: result },
+            }
+          : null
+      );
+    } catch (error) {
+      console.error("[UserAccount] overall activity error:", error);
+      if (!options?.force) {
+        setOverallActivity(null);
+      }
+    } finally {
+      setOverallLoading(false);
+    }
+  };
+
+  const handlePeriodChange = (period: ActivityPeriodTab) => {
+    setActivePeriod(period);
+    if (period === "day" && usesSnapshotLazyPeriods && !dayActivity) {
+      void handleLoadDayActivity();
+    } else if (period === "overall" && usesSnapshotLazyPeriods && !overallActivity) {
+      void handleLoadOverallActivity();
+    }
+  };
 
   // Handler برای ذخیره درصد کانیات
   const handleSaveCommission = async () => {
@@ -777,7 +885,7 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
 
   const handleLoadRange = async () => {
     if (!data?.user) return;
-    if (!rangeFrom || !rangeTo || rangeFrom > rangeTo) return;
+    if (isInvalidActivityRange(rangeFrom, rangeTo, data.user.role)) return;
     try {
       setRangeLoading(true);
       const result = await loadUserAccountRangeActivity(userId, data.user.role, {
@@ -821,7 +929,11 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
   const activity =
     activePeriod === "range"
       ? rangeActivity
-      : activities[activePeriod] ?? activities.month;
+      : activePeriod === "day" && usesSnapshotLazyPeriods
+        ? dayActivity
+        : activePeriod === "overall" && usesSnapshotLazyPeriods
+          ? overallActivity
+          : activities[activePeriod] ?? activities.week;
   const canEditCommission =
     !!currentUserId &&
     (((currentUserRole === "super" || currentUserRole === "agent") &&
@@ -1173,22 +1285,22 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
         <div className="rounded-2xl bg-[#151515] border border-gray-800 mb-6">
           <div
             className={`grid ${
-              periodTabs.length === 4 ? "grid-cols-5" : "grid-cols-4"
+              PERIOD_TAB_GRID_CLASS[periodTabs.length + 1] ?? "grid-cols-4"
             } text-center text-sm font-semibold rounded-2xl overflow-hidden`}
           >
             {periodTabs.map((period) => (
               <button
                 key={period}
-                onClick={() => setActivePeriod(period)}
+                onClick={() => handlePeriodChange(period)}
                 className={`py-3 ${
                   activePeriod === period ? "bg-teal-500 text-black" : "text-gray-300"
                 }`}
               >
-                {PERIOD_LABELS[period]}
+                {periodLabelForRole(user.role, period)}
               </button>
             ))}
             <button
-              onClick={() => setActivePeriod("range")}
+              onClick={() => handlePeriodChange("range")}
               className={`py-3 ${
                 activePeriod === "range" ? "bg-teal-500 text-black" : "text-gray-300"
               }`}
@@ -1196,6 +1308,18 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
               بازه
             </button>
           </div>
+          {activePeriod === "day" && usesSnapshotLazyPeriods && (
+            <div className="px-4 pt-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => void handleLoadDayActivity({ force: true })}
+                disabled={dayLoading}
+                className="text-xs text-teal-400 disabled:opacity-50"
+              >
+                {dayLoading ? "..." : "↻ به‌روزرسانی"}
+              </button>
+            </div>
+          )}
           <div className="px-4 py-3 text-sm text-gray-100">
             {activePeriod === "range" && (
               <div className="mb-3 space-y-2">
@@ -1205,19 +1329,30 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
                 </div>
                 <button
                   onClick={handleLoadRange}
-                  disabled={!rangeFrom || !rangeTo || rangeFrom > rangeTo || rangeLoading}
+                  disabled={isInvalidActivityRange(rangeFrom, rangeTo, user.role) || rangeLoading}
                   className="w-full rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold disabled:opacity-50"
                 >
                   {rangeLoading ? "در حال محاسبه..." : "اعمال بازه"}
                 </button>
               </div>
             )}
-            {activePeriod === "range" && (!rangeFrom || !rangeTo || rangeFrom > rangeTo) ? (
-              <div className="text-center py-4 text-gray-400">بازه تاریخ معتبر انتخاب کنید</div>
+            {activePeriod === "range" && isInvalidActivityRange(rangeFrom, rangeTo, user.role) ? (
+              <div className="text-center py-4 text-gray-400">
+                {usesTehranSnapshotRange(user.role)
+                  ? "بازه معتبر انتخاب کنید (پایان بعد از شروع، مرز ۰۸:۰۰ تهران)"
+                  : "بازه تاریخ معتبر انتخاب کنید"}
+              </div>
             ) : activePeriod === "range" && !activity && !rangeLoading ? (
               <div className="text-center py-4 text-gray-400">بازه را اعمال کنید</div>
             ) : activePeriod === "range" && rangeLoading ? (
               <div className="text-center py-4 text-gray-400">در حال محاسبه...</div>
+            ) : activePeriod === "day" && usesSnapshotLazyPeriods && dayLoading && !dayActivity ? (
+              <div className="text-center py-4 text-gray-400">در حال بارگذاری...</div>
+            ) : activePeriod === "overall" &&
+              usesSnapshotLazyPeriods &&
+              overallLoading &&
+              !overallActivity ? (
+              <div className="text-center py-4 text-gray-400">در حال بارگذاری...</div>
             ) : !activity ? (
               <div className="text-center py-4 text-gray-400">در حال بارگذاری...</div>
             ) : (
@@ -1227,14 +1362,6 @@ export default function UserAccountPage({ userId }: UserAccountPageProps) {
                   <span>تعداد بازی</span>
                   <span className="text-right">
                     <AccountAmount value={activity.gamesPlayed ?? 0} />
-                  </span>
-                  <span>مجموع برد پلیر</span>
-                  <span className="text-right">
-                    <AccountAmount value={activity.playerWinnings ?? 0} />
-                  </span>
-                  <span>مجموع باخت پلیر</span>
-                  <span className="text-right">
-                    <AccountAmount value={activity.playerPurchases ?? 0} />
                   </span>
                   <span>عملکرد بازی</span>
                   <span

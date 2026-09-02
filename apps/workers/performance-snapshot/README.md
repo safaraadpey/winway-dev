@@ -6,8 +6,13 @@ Panels still read live queries in this phase; this worker only builds the snapsh
 
 ## Prerequisites
 
-1. Apply migration [`sql/migrations/20260902140000_performance_daily_snapshot.sql`](../../../sql/migrations/20260902140000_performance_daily_snapshot.sql) on the target database.
-2. `DATABASE_URL` must use a role with `EXECUTE` on `public.fn_performance_snapshot_run` (typically `postgres` or `service_role` direct connection).
+Apply migrations **in order** on the target database:
+
+1. [`sql/migrations/20260902140000_performance_daily_snapshot.sql`](../../../sql/migrations/20260902140000_performance_daily_snapshot.sql) — daily snapshot schema + `fn_performance_snapshot_run`
+2. [`sql/migrations/20260902150000_performance_lifetime_stats.sql`](../../../sql/migrations/20260902150000_performance_lifetime_stats.sql) — `performance_lifetime_stats` + lifetime rebuild inside snapshot run
+3. [`sql/migrations/20260902160000_performance_player_commission_snapshot.sql`](../../../sql/migrations/20260902160000_performance_player_commission_snapshot.sql) — player **کانیات / کانیات کل** columns + `fn_performance_apply_player_commission_daily`
+
+`DATABASE_URL` must use a role with `EXECUTE` on `public.fn_performance_snapshot_run` (typically `postgres` or `service_role` direct connection).
 
 ## Accounting window
 
@@ -19,7 +24,7 @@ Panels still read live queries in this phase; this worker only builds the snapsh
 
 Example: run at **08:05 on 2 Sep** → `snapshot_date = 1 Sep`, window **1 Sep 08:00 → 2 Sep 08:00**.
 
-Week start (future dashboards): **Saturday 08:00 Tehran** — aggregate from daily rows, not stored separately yet.
+Week dashboards (player **هفته** tab): **Saturday 08:00 Tehran → current day 08:00** — aggregate from daily rows at read time, not stored separately.
 
 ## Local
 
@@ -68,11 +73,20 @@ curl http://localhost:8081/health
 - `public.performance_daily_stats` — base metrics per `(snapshot_date, user_id, role)`
 - `public.performance_lifetime_stats` — overall base metrics per `(user_id, role)` through last closed accounting day
 
-**Overall** means through the last **08:00 Asia/Tehran** closed window (`through_snapshot_date`), not through the current moment. After each daily close, `fn_performance_rebuild_lifetime_stats()` rebuilds lifetime from `SUM(performance_daily_stats)` (full DELETE + INSERT, not incremental `+=`).
+**Overall** means through the last **08:00 Asia/Tehran** closed window (`through_snapshot_date`), not through the current moment.
 
-Derived dashboard fields (کانیات کل، عملکرد بازی، بیلان، …) are **not** stored; compute at read time from base columns.
+### What the worker runs (DB-side)
 
-Apply migration [`sql/migrations/20260902150000_performance_lifetime_stats.sql`](../../../sql/migrations/20260902150000_performance_lifetime_stats.sql) after the daily snapshot migration.
+The Node worker only calls `fn_performance_snapshot_run(date)`. Each successful run:
+
+1. Deletes and rebuilds that day's rows in `performance_daily_stats` (game, deposits, operator commission, …)
+2. Calls `fn_performance_apply_player_commission_daily` — for **player** rows, fills:
+   - `player_commission_amount` — SUM(`agent_amount` + `super_amount` + `admin_amount`) from `commissions_log` where `player_id` matches, `status = settled`, in the accounting window
+   - `player_commission_base` — SUM(`commission_base`) for the same filter  
+   (UI: **کانیات** / **کانیات کل** on player **آمار کل** and **هفته** tabs)
+3. Calls `fn_performance_rebuild_lifetime_stats()` — full DELETE + INSERT from `SUM(performance_daily_stats)` (not incremental `+=`)
+
+Other derived UI fields (**عملکرد بازی**, **بیلان**, operator کانیات کل, …) are still computed at read time from stored base columns.
 
 ## Idempotency
 
@@ -89,7 +103,9 @@ Apply migration [`sql/migrations/20260902150000_performance_lifetime_stats.sql`]
    - Player purchases: `tickets` + normal rooms
    - Player winnings: `results` with `paid_at` set
    - Agent commission: `commissions_log.agent_amount` where `agent_id` matches
-4. Re-run same date; `row_count` should match and no duplicate `(snapshot_date, user_id, role)` rows.
+   - Player generated commission: `player_commission_amount` / `player_commission_base` vs `commissions_log` where `player_id` matches and `status = settled`
+4. Confirm `performance_lifetime_stats` for a sample player matches `SUM(performance_daily_stats)` including `player_commission_*`.
+5. Re-run same date; `row_count` should match and no duplicate `(snapshot_date, user_id, role)` rows.
 
 ## Logs
 

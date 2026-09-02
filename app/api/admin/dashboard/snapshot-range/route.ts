@@ -4,64 +4,60 @@ import {
   assertAdminPanelAccess,
 } from "@/lib/auth/adminPanelAccessServer";
 import { resolveAdminDashboardRequestAuth } from "@/lib/auth/resolveAdminDashboardRequestAuth";
-import { loadPanelCommissionBreakdownInRange } from "@/lib/dashboard/loadPanelCommissionBreakdown";
-import {
-  getTehranClosedPeriodIsoBounds,
-  getTehranSnapshotDateRangeFromBounds,
-  toInclusiveEndIso,
-} from "@/lib/dashboard/tehranAccountingWindow";
+import { loadAdminRangeSnapshotSummary } from "@/lib/dashboard/loadAdminDashboardPeriodSummary";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/**
+ * GET /api/admin/dashboard/snapshot-range?fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD
+ *
+ * Closed snapshot aggregates for admin dashboard range tab.
+ * Uses 08:00 Asia/Tehran boundaries: [fromDate 08:00, toDate 08:00).
+ */
 export async function GET(request: NextRequest) {
   try {
     const { userId, supabase } = await resolveAdminDashboardRequestAuth(request);
     await assertAdminPanelAccess(userId);
 
-    const fromStr = request.nextUrl.searchParams.get("from");
-    const toStr = request.nextUrl.searchParams.get("to");
-    if (!fromStr || !toStr) {
+    const fromDate = String(request.nextUrl.searchParams.get("fromDate") || "").trim();
+    const toDate = String(request.nextUrl.searchParams.get("toDate") || "").trim();
+
+    if (!fromDate || !toDate) {
       return NextResponse.json(
-        { ok: false, error: "validation_error", message: "from and to are required" },
+        { ok: false, error: "validation_error", message: "fromDate و toDate الزامی است." },
         { status: 400 }
       );
     }
 
-    if (fromStr >= toStr) {
+    if (fromDate >= toDate) {
       return NextResponse.json(
         {
           ok: false,
           error: "validation_error",
-          message: "invalid date range (Tehran 08:00 boundaries)",
+          message: "بازه تاریخ نامعتبر است. پایان باید بعد از شروع باشد (مرز ۰۸:۰۰ تهران).",
         },
         { status: 400 }
       );
     }
 
-    const snapshotBounds = getTehranSnapshotDateRangeFromBounds(fromStr, toStr);
-    if (!snapshotBounds) {
+    const data = await loadAdminRangeSnapshotSummary({
+      supabase,
+      actorUserId: userId,
+      fromDate,
+      toDate,
+    });
+
+    if (!data) {
       return NextResponse.json(
-        { ok: false, error: "validation_error", message: "invalid date range" },
+        {
+          ok: false,
+          error: "validation_error",
+          message: "بازه تاریخ نامعتبر است. پایان باید بعد از شروع باشد (مرز ۰۸:۰۰ تهران).",
+        },
         { status: 400 }
       );
     }
-
-    const isoBounds = getTehranClosedPeriodIsoBounds(
-      snapshotBounds.fromSnapshotDate,
-      snapshotBounds.throughSnapshotDate
-    );
-    if (!isoBounds) {
-      return NextResponse.json(
-        { ok: false, error: "validation_error", message: "invalid date range" },
-        { status: 400 }
-      );
-    }
-
-    const fromIso = isoBounds.fromIso;
-    const toIso = toInclusiveEndIso(isoBounds.toExclusiveIso);
-
-    const data = await loadPanelCommissionBreakdownInRange(fromIso, toIso, supabase);
 
     return NextResponse.json({ ok: true, data }, { status: 200 });
   } catch (err) {
@@ -82,7 +78,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.error("[Dashboard] panel-operators unexpected error:", err);
+    console.error("[DashboardSnapshot] snapshot-range unexpected error:", err);
     return NextResponse.json(
       { ok: false, error: "unexpected_error", message: msg },
       { status: 500 }
