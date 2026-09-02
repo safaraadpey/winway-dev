@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useTheme } from "@/lib/contexts/ThemeContext";
@@ -9,7 +9,6 @@ import MenuItem from "@/components/theme/MenuItem";
 import FeatureGate from "@/components/features/FeatureGate";
 import { BACKGAMMON_FEATURE_KEY } from "@/lib/backgammon/constants";
 import styles from './lobby.module.css';
-import { supabase } from "@/lib/supabaseClient";
 import { useSession } from "@/lib/contexts/SessionContext";
 import { traceFetch } from "@/lib/debug/netTrace";
 import { isHardExiting } from "@/lib/auth/hardExit";
@@ -19,20 +18,13 @@ import type { AutoBuySnapshot } from "@/lib/autoBuy/types";
 import { formatAutoBuyFundDisplay } from "@/lib/autoBuy/formatFundDisplay";
 import { useAutoStartTour } from "@/lib/hooks/useAutoStartTour";
 import { GAME_BROWSER_TOUR_ID } from "@/lib/tour/configs/gameBrowserTour";
-
-interface RoomPriceGroup {
-  price: number;
-  currency: string;
-  roomName?: string | null;
-  waitingRooms: number;
-  playingRooms: number;
-  totalRooms: number;
-  players: number;
-  waitingPlayers: number;
-  playingPlayers: number;
-  templateId?: string | null;
-  entryRoomId?: string | null;
-}
+import {
+  getStaticLobbyShell,
+  lobbyRoomGroupKey,
+  readLobbyShellCache,
+  writeLobbyShellCache,
+  type LobbyRoomGroupShell,
+} from "@/lib/lobby/lobbyShell";
 
 /**
  * صفحه لابی - نمایش روم‌های بازی بر اساس قیمت تیکت
@@ -43,21 +35,35 @@ export default function LobbyPage() {
   const { themeDefinition } = useTheme();
   const sessionSnap = useSession();
   const { setShowBackButton, setOnBackClick } = useHeaderVisibility();
-  const [roomGroups, setRoomGroups] = useState<RoomPriceGroup[]>([]);
+  const [roomGroups, setRoomGroups] = useState<LobbyRoomGroupShell[]>(() =>
+    getStaticLobbyShell()
+  );
   const [autoBuyByTemplate, setAutoBuyByTemplate] = useState<
     Record<string, AutoBuySnapshot>
   >({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [hasSnapshot, setHasSnapshot] = useState(false);
+  const [hasLiveSnapshot, setHasLiveSnapshot] = useState(false);
+  const shellSourceRef = useRef<"static" | "cache">("static");
   useAutoStartTour(
     GAME_BROWSER_TOUR_ID,
-    !loading && !errorMessage && roomGroups.length > 0,
+    hasLiveSnapshot && !errorMessage && roomGroups.length > 0,
     { preferQueuedIntent: true }
   );
 
-  const hasToken = Boolean(sessionSnap.authReady && sessionSnap.accessToken);
-  const visibilityState = typeof document !== "undefined" ? document.visibilityState : "visible";
+  // Hydrate shell from localStorage before paint (SSR-safe initial state is static catalog).
+  useLayoutEffect(() => {
+    const cached = readLobbyShellCache();
+    if (cached && cached.length > 0) {
+      shellSourceRef.current = "cache";
+      setRoomGroups(cached);
+      console.info("[Lobby] Shell source: cache", { count: cached.length });
+    } else {
+      shellSourceRef.current = "static";
+      console.info("[Lobby] Shell source: static", {
+        count: getStaticLobbyShell().length,
+      });
+    }
+  }, []);
 
   // Smart polling refs (Phase 1.2)
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -72,7 +78,7 @@ export default function LobbyPage() {
     }
   };
 
-  const computeSnapshotHash = (groups: RoomPriceGroup[]): string => {
+  const computeSnapshotHash = (groups: LobbyRoomGroupShell[]): string => {
     const parts: string[] = [];
     // Keep it deterministic and cheap; include all fields that affect UI.
     for (const g of groups) {
@@ -131,8 +137,7 @@ export default function LobbyPage() {
         return;
       }
 
-      // If no token, do NOT fetch. Keep rescheduling to check again.
-      // Important: avoid infinite loading UI while waiting for auth/token.
+      // If no token, do NOT fetch. Keep rescheduling — UI stays on shell, no blocking spinner.
       if (!sessionSnap.authReady || !sessionSnap.accessToken) {
         traceFetch("LobbyPage:lobby-snapshot", {
           reason: "no-token",
@@ -140,7 +145,6 @@ export default function LobbyPage() {
           visibilityState: typeof document !== "undefined" ? document.visibilityState : "unknown",
           hasToken: false,
         });
-        setErrorMessage(null);
         schedule(500, "no-token");
         return;
       }
@@ -153,9 +157,10 @@ export default function LobbyPage() {
           visibilityState: typeof document !== "undefined" ? document.visibilityState : "unknown",
           hasToken: true,
         });
+        console.info("[Lobby] Fetching lobby-snapshot", { reason, delayMs });
 
         let json: {
-          roomGroups?: { groups?: RoomPriceGroup[] };
+          roomGroups?: { groups?: LobbyRoomGroupShell[] };
           onlineCount?: { onlinePlayers?: number };
         };
 
@@ -170,7 +175,7 @@ export default function LobbyPage() {
           });
 
           if (!res.ok) {
-            console.error("fetchRooms: lobby-snapshot failed", res.status);
+            console.error("[Lobby] lobby-snapshot failed", res.status);
             nextError = "خطا در دریافت اطلاعات لابی";
             stableCountRef.current = Math.min(stableCountRef.current + 1, 2);
             schedule(stableCountRef.current === 1 ? 30000 : 60000, "error");
@@ -180,10 +185,17 @@ export default function LobbyPage() {
           json = (await res.json()) as typeof json;
         }
 
-        const groups = Array.isArray(json?.roomGroups?.groups) ? (json.roomGroups!.groups as RoomPriceGroup[]) : [];
+        const groups = Array.isArray(json?.roomGroups?.groups)
+          ? (json.roomGroups!.groups as LobbyRoomGroupShell[])
+          : [];
         const sortedGroups = [...groups].sort((a, b) => a.price - b.price);
         setRoomGroups(sortedGroups);
-        setHasSnapshot(true);
+        setHasLiveSnapshot(true);
+        writeLobbyShellCache(sortedGroups);
+        console.info("[Lobby] Hydrated from snapshot", {
+          count: sortedGroups.length,
+          shellSource: shellSourceRef.current,
+        });
 
         void fetchAutoBuyLobbySnapshots()
           .then((sessions) => {
@@ -210,13 +222,12 @@ export default function LobbyPage() {
           schedule(10000, "changed");
         }
       } catch (error) {
-        console.error('Error in fetchRooms:', error);
+        console.error("[Lobby] Error in fetchRooms:", error);
         nextError = 'خطای غیرمنتظره در بارگذاری لابی';
         stableCountRef.current = Math.min(stableCountRef.current + 1, 2);
         schedule(stableCountRef.current === 1 ? 30000 : 60000, "exception");
       } finally {
         setErrorMessage(nextError);
-        setLoading(false);
       }
     }
 
@@ -249,7 +260,7 @@ export default function LobbyPage() {
   // Presence ping: update last_seen_at periodically while user is on lobby
   useEffect(() => {
     let stopped = false;
-    let interval: any = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
 
     async function ping() {
       try {
@@ -259,7 +270,7 @@ export default function LobbyPage() {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
         });
-      } catch (e) {
+      } catch {
         // silent - we don't want to spam UI
       }
     }
@@ -291,19 +302,8 @@ export default function LobbyPage() {
       return;
     }
 
-    console.error("Template ID is required");
+    console.error("[Lobby] Template ID is required for navigation", { price });
   };
-
-  if (loading || !hasSnapshot) {
-    return (
-      <div className={styles.lobbyContainer}>
-        <div className={styles.loadingContainer}>
-          <div className={styles.loadingSpinner}></div>
-          <p className={styles.loadingText}>در حال بارگذاری...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className={styles.lobbyContainer}>
@@ -318,7 +318,7 @@ export default function LobbyPage() {
         className={styles.roomsList}
         data-tour-id="game-browser-room-list"
       >
-        {roomGroups.length === 0 ? (
+        {hasLiveSnapshot && roomGroups.length === 0 ? (
           <div className={styles.emptyState}>
             <p className={styles.emptyText}>هیچ روم فعالی وجود ندارد</p>
           </div>
@@ -341,7 +341,7 @@ export default function LobbyPage() {
 
             return (
             <LobbyRoomCard
-              key={`${group.price}_${group.currency}`}
+              key={lobbyRoomGroupKey(group)}
               listIndex={index}
               price={group.price}
               currency={group.currency}
@@ -382,4 +382,3 @@ export default function LobbyPage() {
     </div>
   );
 }
-

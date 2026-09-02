@@ -105,3 +105,14 @@ BEGIN
   );
 END;
 $$;
+
+-- Drop legacy 7-arg overload (CREATE OR REPLACE adds a new signature, not replace).
+DROP FUNCTION IF EXISTS public.rpc_insert_draw_if_ready_owner_guard(
+  uuid,
+  integer,
+  timestamptz,
+  text,
+  integer,
+  timestamptz,
+  bigint
+);
