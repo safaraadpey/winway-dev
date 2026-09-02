@@ -430,11 +430,19 @@ export class GameRepo {
     roomId: string;
     number: number;
     nowIso: string;
+    nextDrawAtIso: string;
     ownerId: string;
     drawIntervalSec: number;
     actorDueAtIso?: string | null;
     leaseEpoch?: number | null;
+    maxUnprocessed?: number;
   }): Promise<OwnerInsertResult> {
+    if (!args.nowIso?.trim()) {
+      fail("insertDrawIfReadyForOwner", "nowIso (drawnAtIso) is required");
+    }
+    if (!args.nextDrawAtIso?.trim()) {
+      fail("insertDrawIfReadyForOwner", "nextDrawAtIso is required");
+    }
     const { data, error } = await this.db.rpc(
       "rpc_insert_draw_if_ready_owner_guard",
       {
@@ -445,6 +453,8 @@ export class GameRepo {
         p_draw_interval_sec: args.drawIntervalSec,
         p_actor_due_at: args.actorDueAtIso ?? null,
         p_lease_epoch: args.leaseEpoch ?? null,
+        p_next_draw_at: args.nextDrawAtIso,
+        p_max_unprocessed: args.maxUnprocessed ?? 2,
       }
     );
     if (error) fail("rpc_insert_draw_if_ready_owner_guard", error.message);
@@ -503,6 +513,17 @@ export class GameRepo {
     if (error) fail("getOldestUnprocessedDraw", error.message);
     const row = data as { number: number; created_at: string } | null;
     return row ?? null;
+  }
+
+  /** Count draws with processed_at IS NULL (persist backpressure gate). */
+  async countUnprocessedDraws(roomId: string): Promise<number> {
+    const { count, error } = await this.db
+      .from("draws")
+      .select("*", { count: "exact", head: true })
+      .eq("room_id", roomId)
+      .is("processed_at", null);
+    if (error) fail("countUnprocessedDraws", error.message);
+    return count ?? 0;
   }
 
   /** draw_jobs row id for a (room, draw_number), if the trigger created one. */

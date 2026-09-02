@@ -2,7 +2,7 @@
  * room-loop role bootstrap.
  *
  * Drives the room-actor game loop: a RoomLoopManager claims playing rooms and
- * runs a per-room actor that owns the live draw clock (insert → evaluate → finalize).
+ * runs a per-room actor that owns the live draw clock (RAM pick → persist recorder).
  *
  *   - legacy_db : idle (cron owns the loop).
  *   - hybrid    : manager runs; shadow only if ENABLE_SHADOW_PARITY=true.
@@ -26,35 +26,38 @@ export function startRoomLoop(ctx: WorkerContext): () => void {
 
   const repo = new GameRepo(supabase);
   let cardRegistry: GlobalCardRegistry | null = null;
+  let manager: RoomLoopManager | null = null;
+
   void getGlobalCardRegistry(repo, log)
     .then((reg) => {
       cardRegistry = reg;
+      log.info("room-loop card registry loaded");
+      manager = new RoomLoopManager({
+        supabase,
+        repo,
+        log,
+        config,
+        redis,
+        stateManager: ctx.roomState,
+        identity,
+        engineRegistry: coordination.getRegistry(),
+        getCardRegistry: () => cardRegistry,
+        actorCycle: executesBusinessLogic(config.runtime)
+          ? runOneDrawCycle
+          : undefined,
+        isDraining: () => coordination.isDraining(),
+      });
+
+      coordination.registerRoomLoopDrain(() => manager!.waitForDrain());
+      manager.start();
     })
     .catch((err) => {
-      log.warn("room-loop card registry preload failed", {
+      log.error("room-loop card registry preload failed — room-loop will not start", {
         error: err instanceof Error ? err.message : String(err),
       });
     });
 
-  const manager = new RoomLoopManager({
-    supabase,
-    repo,
-    log,
-    config,
-    redis,
-    stateManager: ctx.roomState,
-    identity,
-    engineRegistry: coordination.getRegistry(),
-    getCardRegistry: () => cardRegistry,
-    actorCycle: executesBusinessLogic(config.runtime) ? runOneDrawCycle : undefined,
-    isDraining: () => coordination.isDraining(),
-  });
-
-  coordination.registerRoomLoopDrain(() => manager.waitForDrain());
-
-  manager.start();
-
   return () => {
-    void manager.stop();
+    void manager?.stop();
   };
 }

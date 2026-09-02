@@ -27,6 +27,8 @@ export interface ProcessEngineDrawJobOptions {
   actorTiming?: boolean;
   /** Room-loop ownership fence for actor finalization. */
   leaseFence?: { ownerId: string; leaseEpoch: number } | null;
+  /** Recovery bootstrap — skip DB reconcile/checkpoint on evaluate. */
+  ramClockRecovery?: boolean;
 }
 
 export async function processEngineDrawJob(
@@ -75,6 +77,8 @@ export async function processEngineDrawJob(
         persist: false,
         deferSettlement: true,
         cardRegistry: opts.cardRegistry,
+        syncFromDb: opts.ramClockRecovery ? false : undefined,
+        skipCheckpoint: opts.ramClockRecovery === true,
       }
     );
     const breakdown = { ...evalResult.breakdown };

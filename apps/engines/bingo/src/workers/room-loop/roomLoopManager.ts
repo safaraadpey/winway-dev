@@ -14,6 +14,7 @@ import type { EngineIdentity } from "../../runtime/engineIdentity.js";
 import { isValidFence } from "../../coordination/leaseFence.js";
 import { GameRepo } from "../../repositories/index.js";
 import type { RoomStateManager } from "../../state/room-state.manager.js";
+import { bootstrapRoomForActor } from "../../domain/room-loop/bootstrapRoom.js";
 import { runShadowCycle } from "../../domain/room-loop/shadowCycle.js";
 import {
   RoomGameActor,
@@ -217,6 +218,26 @@ export class RoomLoopManager {
     const actor = new RoomGameActor(room, resolved.mode, deps, resolved.cycle);
     actor.noteLeaseRenewed();
     this.actors.set(roomId, actor);
+
+    if (resolved.mode === "actor") {
+      if (!this.opts.getCardRegistry()) {
+        this.opts.log.warn("room-loop claim skipped: registry not ready", {
+          roomId,
+        });
+        actor.stop();
+        this.actors.delete(roomId);
+        await releaseRoomLease(this.opts.repo, roomId, this.leaseConfig(fence));
+        return;
+      }
+      const bootOk = await bootstrapRoomForActor(actor, actor.persistQueue);
+      if (!bootOk) {
+        actor.stop();
+        this.actors.delete(roomId);
+        await releaseRoomLease(this.opts.repo, roomId, this.leaseConfig(fence));
+        return;
+      }
+    }
+
     void this.opts.engineRegistry
       ?.publishRoomRoute({
         roomId,

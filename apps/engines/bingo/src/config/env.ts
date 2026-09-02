@@ -79,6 +79,8 @@ export interface EngineConfig {
   roomLoopLeaseSec: number;
   /** Max rooms a single replica drives concurrently (0 = unlimited). */
   roomLoopMaxActiveRooms: number;
+  /** Max unprocessed draws (DB + persist queue) before clock backpressure. */
+  roomLoopMaxUnprocessedDraws: number;
   /** When false, no scheduled/tick workers start (manageWaitingRooms, draw loop, etc.). */
   schedulerEnabled: boolean;
   /** Pick-path DB snapshots (fetchPickDebugQueueState, pick_debug_snapshot logs). Off in production. */
@@ -228,6 +230,10 @@ export function loadConfig(): EngineConfig {
     roomLoopLeaseSec: Number(process.env.ROOM_LOOP_LEASE_SEC ?? "30"),
     roomLoopMaxActiveRooms: Number(
       process.env.ROOM_LOOP_MAX_ACTIVE_ROOMS ?? "50"
+    ),
+    /** Max unprocessed draws (DB + persist queue) before clock backpressure. */
+    roomLoopMaxUnprocessedDraws: Number(
+      process.env.ROOM_LOOP_MAX_UNPROCESSED ?? "2"
     ),
     schedulerEnabled: process.env.SCHEDULER_ENABLED === "true",
     drawPickDiagnostics: process.env.DRAW_PICK_DIAGNOSTICS === "true",

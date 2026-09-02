@@ -70,6 +70,8 @@ export interface EvaluateDrawOptions {
   syncFromDb?: boolean;
   /** Preloaded global card registry. */
   cardRegistry?: GlobalCardRegistry | null;
+  /** Skip checkpoint after evaluate (room-loop recovery hot path). */
+  skipCheckpoint?: boolean;
 }
 
 export async function applyMarksAndEvaluateWithState(
@@ -164,7 +166,7 @@ export async function applyMarksAndEvaluateWithState(
       log.info("room settled (full winner)", { roomId: state.roomId, drawNumber });
     }
   }
-  if (!settled && !evalOut.fullWinnerThisDraw) {
+  if (!settled && !evalOut.fullWinnerThisDraw && !opts.skipCheckpoint) {
     await stateManager.maybeCheckpoint(state);
   }
 

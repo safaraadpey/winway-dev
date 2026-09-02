@@ -22,6 +22,7 @@ import type { RoomLeaseFence } from "../../coordination/leaseFence.js";
 import { msUntilDue } from "../../domain/room-loop/scheduleNextDraw.js";
 import { renewRoomLease, shouldRenew } from "./roomLease.js";
 import type { RoomLoopMetrics } from "./roomLoopMetrics.js";
+import { RoomPersistQueue } from "./roomPersistQueue.js";
 
 export type RoomCycleResult =
   | { kind: "drew"; nextDueMs: number }
@@ -66,6 +67,9 @@ export class RoomGameActor {
   lastSeenDrawCount = 0;
   /** When true, recovery scans DB for unprocessed draws before inserting. */
   needsRecovery = true;
+  /** RAM clock authority for next due (may lead rooms.next_draw_at until persist writes). */
+  ramNextDrawAtIso: string | null;
+  readonly persistQueue: RoomPersistQueue;
 
   private readonly deps: RoomActorDeps;
   private readonly cycle: RoomActorCycle;
@@ -83,8 +87,32 @@ export class RoomGameActor {
     this.roomId = room.id;
     this.room = room;
     this.mode = mode;
+    this.ramNextDrawAtIso = room.next_draw_at;
     this.deps = deps;
     this.cycle = cycle;
+    this.persistQueue =
+      mode === "actor"
+        ? new RoomPersistQueue(this, (outcome) => this.onPersistOutcome(outcome))
+        : (null as unknown as RoomPersistQueue);
+  }
+
+  /** Sync RAM clock from the cached room row after bootstrap / DB refresh. */
+  syncRamNextDrawAtFromRoom(): void {
+    this.ramNextDrawAtIso = this.room.next_draw_at;
+  }
+
+  private onPersistOutcome(
+    outcome: import("../../domain/draw/processEngineDrawJob.js").EngineJobOutcome
+  ): void {
+    if (outcome === "fenced") {
+      this.metrics.noteLeaseLost();
+      this.exit("not-owner");
+    }
+  }
+
+  /** Called by persist recorder after full-winner settle completes. */
+  exitAfterPersist(reason: string): void {
+    this.exit(reason);
   }
 
   get repo(): GameRepo {
@@ -118,12 +146,15 @@ export class RoomGameActor {
   /** Begin the self-scheduling loop. */
   start(): void {
     if (this.stopped) return;
-    this.scheduleIn(msUntilDue(this.room.next_draw_at));
+    this.scheduleIn(msUntilDue(this.ramNextDrawAtIso));
   }
 
   /** Stop the loop (does not release the lease — manager owns that). */
   stop(): void {
     this.stopped = true;
+    if (this.mode === "actor") {
+      this.persistQueue.stop();
+    }
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
