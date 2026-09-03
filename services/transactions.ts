@@ -237,10 +237,12 @@ function resolveTransactionHistoryWindow(
   rangeTo?: string
 ): { dateFromIso: string; dateToIso: string } {
   if (dateFilter === "day") {
-    return getOpenTehranAccountingWindow();
+    const { fromIso, toIso } = getOpenTehranAccountingWindow();
+    return { dateFromIso: fromIso, dateToIso: toIso };
   }
   if (dateFilter === "week") {
-    return getOpenTehranWeekAccountingWindow();
+    const { fromIso, toIso } = getOpenTehranWeekAccountingWindow();
+    return { dateFromIso: fromIso, dateToIso: toIso };
   }
   if (!rangeFrom || !rangeTo || rangeFrom >= rangeTo) {
     throw new Error("بازه تاریخ نامعتبر است. پایان باید بعد از شروع باشد (مرز ۰۸:۰۰ تهران).");
@@ -249,7 +251,7 @@ function resolveTransactionHistoryWindow(
   if (!bounds) {
     throw new Error("بازه تاریخ نامعتبر است. پایان باید بعد از شروع باشد (مرز ۰۸:۰۰ تهران).");
   }
-  return bounds;
+  return { dateFromIso: bounds.fromIso, dateToIso: bounds.toIso };
 }
 
 /** PostgREST page size (project max-rows is typically 1000). */
@@ -596,7 +598,7 @@ export async function loadTransactionHistory(
       throw new Error("خطا در دریافت اطلاعات کاربر");
     }
 
-    const { fromIso: dateFromIso, toIso: dateToIso } = resolveTransactionHistoryWindow(
+    const { dateFromIso, dateToIso } = resolveTransactionHistoryWindow(
       dateFilter,
       rangeFrom,
       rangeTo
