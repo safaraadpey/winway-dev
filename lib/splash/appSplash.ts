@@ -20,6 +20,7 @@ export const APP_SPLASH_SHELL_ID = "winway-app-shell";
 export const APP_SPLASH_OVERLAY_ID = "winway-app-splash";
 
 export const APP_SPLASH_START_MARK = "__WINWAY_SPLASH_START__";
+export const APP_SPLASH_DISMISSED_MARK = "__WINWAY_SPLASH_DISMISSED__";
 
 /** Matches app shell `max-w-[390px]` in root layout. */
 export const APP_SPLASH_MAX_WIDTH_PX = 390;
@@ -67,8 +68,8 @@ html:not([data-splash-phase="done"]) #${APP_SPLASH_SHELL_ID} {
   opacity: 0;
   pointer-events: none;
 }
-html[data-splash-phase="done"] #${APP_SPLASH_OVERLAY_ID} {
-  display: none;
+#${APP_SPLASH_OVERLAY_ID}[data-dismissed="true"] {
+  display: none !important;
 }
 `.trim();
 }
@@ -76,11 +77,13 @@ html[data-splash-phase="done"] #${APP_SPLASH_OVERLAY_ID} {
 export function getAppSplashBootScript(): string {
   const key = APP_SPLASH_SESSION_KEY;
   const startMark = APP_SPLASH_START_MARK;
+  const dismissedMark = APP_SPLASH_DISMISSED_MARK;
   return `
 (function () {
   try {
     window.${startMark} = performance.now();
     if (sessionStorage.getItem("${key}") === "1") {
+      window.${dismissedMark} = true;
       document.documentElement.setAttribute("data-splash-phase", "done");
     }
   } catch (e) {}

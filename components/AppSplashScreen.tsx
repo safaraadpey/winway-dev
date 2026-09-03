@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   APP_SPLASH_FADE_MS,
   APP_SPLASH_IMAGE_PATH,
   APP_SPLASH_MAX_VISIBLE_MS,
   APP_SPLASH_OVERLAY_ID,
-  APP_SPLASH_SESSION_KEY,
   APP_SPLASH_START_MARK,
   APP_SPLASH_TARGET_VISIBLE_MS,
 } from "@/lib/splash/appSplash";
+import {
+  isSplashDismissedInSession,
+  persistSplashDismissed,
+} from "@/lib/splash/splashSession";
 
 type AppSplashScreenProps = {
   enabled: boolean;
@@ -50,44 +53,48 @@ function remainingMs(fromStart: number, budgetMs: number): number {
   return Math.max(0, budgetMs - (performance.now() - fromStart));
 }
 
-/** Ready when load + image done, and at least TARGET elapsed; capped by MAX. */
-async function waitForSplashDismissGate(fromStart: number): Promise<"ready" | "max"> {
+async function waitForSplashDismissGate(
+  fromStart: number
+): Promise<"ready" | "max"> {
   const minHold = delay(remainingMs(fromStart, APP_SPLASH_TARGET_VISIBLE_MS));
   const maxHold = delay(remainingMs(fromStart, APP_SPLASH_MAX_VISIBLE_MS));
 
   return Promise.race([
-    Promise.all([
-      waitForWindowLoad(),
-      waitForSplashImage(),
-      minHold,
-    ]).then(() => "ready" as const),
+    Promise.all([waitForWindowLoad(), waitForSplashImage(), minHold]).then(
+      () => "ready" as const
+    ),
     maxHold.then(() => "max" as const),
   ]);
 }
 
-function markSplashDone(): void {
-  document.documentElement.setAttribute("data-splash-phase", "done");
-  try {
-    sessionStorage.setItem(APP_SPLASH_SESSION_KEY, "1");
-  } catch {
-    // ignore private mode / blocked storage
-  }
+function readInitialSplashVisible(enabled: boolean): boolean {
+  if (!enabled) return false;
+  if (typeof window === "undefined") return false;
+  return !isSplashDismissedInSession();
 }
 
 export default function AppSplashScreen({ enabled }: AppSplashScreenProps) {
+  const [isSplashVisible, setIsSplashVisible] = useState(() =>
+    readInitialSplashVisible(enabled)
+  );
+  const [isFading, setIsFading] = useState(false);
+
   useEffect(() => {
-    if (!enabled) return;
-
-    const root = document.documentElement;
-    if (root.getAttribute("data-splash-phase") === "done") {
+    if (!enabled) {
+      setIsSplashVisible(false);
+      setIsFading(false);
       return;
     }
 
-    const overlay = document.getElementById(APP_SPLASH_OVERLAY_ID);
-    if (!overlay) {
-      markSplashDone();
+    if (isSplashDismissedInSession()) {
+      persistSplashDismissed();
+      setIsSplashVisible(false);
+      setIsFading(false);
       return;
     }
+
+    setIsSplashVisible(true);
+    setIsFading(false);
 
     let cancelled = false;
 
@@ -111,13 +118,13 @@ export default function AppSplashScreen({ enabled }: AppSplashScreenProps) {
         maxMs: APP_SPLASH_MAX_VISIBLE_MS,
       });
 
-      overlay.setAttribute("data-fading", "true");
-
+      setIsFading(true);
       await delay(APP_SPLASH_FADE_MS);
       if (cancelled) return;
 
-      markSplashDone();
-      overlay.remove();
+      persistSplashDismissed();
+      setIsSplashVisible(false);
+      setIsFading(false);
       console.info("[Splash] Dismissed");
     };
 
@@ -128,5 +135,15 @@ export default function AppSplashScreen({ enabled }: AppSplashScreenProps) {
     };
   }, [enabled]);
 
-  return null;
+  if (!enabled || !isSplashVisible) {
+    return null;
+  }
+
+  return (
+    <div
+      id={APP_SPLASH_OVERLAY_ID}
+      aria-hidden="true"
+      data-fading={isFading ? "true" : undefined}
+    />
+  );
 }

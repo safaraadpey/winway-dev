@@ -10,7 +10,6 @@ import { getLogoImagePath } from "@/lib/theme/logoImageFiles";
 import { DEFAULT_THEME } from "@/lib/theme/types";
 import {
   APP_SPLASH_IMAGE_PATH,
-  APP_SPLASH_OVERLAY_ID,
   APP_SPLASH_SHELL_ID,
   getAppSplashBootScript,
   getAppSplashCriticalCss,
@@ -121,9 +120,6 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-[#0E0E0F]">
-        {!isAdminHost ? (
-          <div id={APP_SPLASH_OVERLAY_ID} aria-hidden="true" />
-        ) : null}
         <TextScalingGuard />
         <PWARegistration />
         <AppSplashScreen enabled={!isAdminHost} />
