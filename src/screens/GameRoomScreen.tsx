@@ -15,7 +15,6 @@ import { ActiveTable } from "@/components/ActiveTablesPanel";
 import { supabase } from "@/lib/supabaseClient";
 import {
   joinOrCreateRoom,
-  loadRoomActiveCards,
   type RoomInfo,
   fetchGameRoomView,
   type GameRoomView,
@@ -117,9 +116,7 @@ function playerHasReservedCards(
   });
 }
 
-const LOBBY_POLL_MS = 3000;
-const TRANSITION_POLL_MS = 1000;
-const COUNTDOWN_ZERO_POLL_MS = 1000;
+const RECOVERY_SNAPSHOT_DEBOUNCE_MS = 800;
 
 function syncCountdownFromView(
   view: GameRoomView,
@@ -164,32 +161,13 @@ function syncCountdownFromView(
   }
 }
 
-/** Union of players from API + realtime; per-player count = max of both sources. */
-function mergeActiveCardStatuses(
-  ...lists: ActiveCardStatus[][]
-): ActiveCardStatus[] {
-  const map = new Map<string, ActiveCardStatus>();
-  for (const list of lists) {
-    for (const card of list) {
-      if (!card.id || card.count <= 0) continue;
-      const existing = map.get(card.id);
-      if (!existing || card.count > existing.count) {
-        map.set(card.id, { ...card });
-      }
-    }
-  }
-  return Array.from(map.values()).sort((a, b) =>
-    a.title.localeCompare(b.title, "fa")
-  );
-}
-
 function applyTicketEventToActiveCards(
   prev: ActiveCardStatus[],
-  payload: any
+  payload: { eventType?: string; new?: Record<string, unknown>; old?: Record<string, unknown> }
 ): ActiveCardStatus[] {
   const eventType = payload.eventType as "INSERT" | "UPDATE" | "DELETE";
-  const newRow = payload.new as any;
-  const oldRow = payload.old as any;
+  const newRow = payload.new as Record<string, unknown> | undefined;
+  const oldRow = payload.old as Record<string, unknown> | undefined;
 
   const playerId =
     (newRow?.player_user_id as string | undefined) ??
@@ -199,27 +177,23 @@ function applyTicketEventToActiveCards(
   if (!playerId) return prev;
 
   const activeStatuses = ["reserved", "confirmed", "consumed"];
+  const isActiveStatus = (status: unknown) =>
+    typeof status === "string" && activeStatuses.includes(status);
 
   let delta = 0;
 
   if (eventType === "INSERT") {
-    if (newRow && activeStatuses.includes(newRow.reservation_status)) {
+    if (newRow && isActiveStatus(newRow.reservation_status)) {
       delta = 1;
-    }
-  } else if (eventType === "DELETE") {
-    if (oldRow && activeStatuses.includes(oldRow.reservation_status)) {
-      delta = -1;
     }
   } else if (eventType === "UPDATE") {
-    const wasActive =
-      oldRow && activeStatuses.includes(oldRow.reservation_status);
-    const isActive =
-      newRow && activeStatuses.includes(newRow.reservation_status);
-
-    if (!wasActive && isActive) {
-      delta = 1;
-    } else if (wasActive && !isActive) {
-      delta = -1;
+    if (newRow && isActiveStatus(newRow.reservation_status)) {
+      delta = 0;
+    } else if (newRow && !isActiveStatus(newRow.reservation_status)) {
+      const existing = prev.find((c) => c.id === playerId);
+      if (existing && existing.count > 0) {
+        delta = -1;
+      }
     }
   }
 
@@ -232,12 +206,11 @@ function applyTicketEventToActiveCards(
 
   if (nextCount <= 0) {
     if (idx !== -1) current.splice(idx, 1);
-    return current;
+    return current.sort((a, b) => a.title.localeCompare(b.title, "fa"));
   }
 
   const title =
-    newRow?.display_name ||
-    oldRow?.display_name ||
+    (typeof newRow?.display_name === "string" ? newRow.display_name : null) ||
     (idx !== -1 ? current[idx].title : "Player");
 
   const item: ActiveCardStatus = {
@@ -252,7 +225,7 @@ function applyTicketEventToActiveCards(
     current[idx] = item;
   }
 
-  return current;
+  return current.sort((a, b) => a.title.localeCompare(b.title, "fa"));
 }
 
 /**
@@ -292,8 +265,12 @@ export default function GameRoomScreen({
   const countdownDeadlineRef = useRef<number | null>(null);
   const autoBuyLastRoomRef = useRef<string | null>(null);
   const roomInfoRef = useRef<RoomInfo>(roomInfo);
-  const fetchRoomDataRef = useRef<(isInitial: boolean) => Promise<void>>(async () => {});
-  const pollIntervalMsRef = useRef(LOBBY_POLL_MS);
+  const fetchRoomDataRef = useRef<(reason: "initial" | "recovery") => Promise<void>>(
+    async () => {}
+  );
+  const hasLiveSnapshotRef = useRef(false);
+  const recoveryDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownZeroRecoveryRef = useRef(false);
   const userIdRef = useRef<string | null>(null);
   const hasCardsRef = useRef(false);
   const [globalRegistrationLocked, setGlobalRegistrationLocked] = useState(false);
@@ -306,67 +283,23 @@ export default function GameRoomScreen({
 
   // State برای کارت‌های فعال
   const [activeCards, setActiveCards] = useState<ActiveCardStatus[]>([]);
-  const [realtimeActiveCards, setRealtimeActiveCards] = useState<ActiveCardStatus[]>([]);
+  const [activeCardsLoading, setActiveCardsLoading] = useState(true);
 
   // State برای میزهای فعال
   const [activeTables, setActiveTables] = useState<ActiveTable[]>([]);
   const [activeTablesLoading, setActiveTablesLoading] = useState(true);
-  const activeTablesCountRef = useRef(0);
-  const activeTablesSessionStartedAtRef = useRef(Date.now());
-  const activeTablesEmptyDelayRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null
-  );
 
-  const clearActiveTablesEmptyDelay = useCallback(() => {
-    if (activeTablesEmptyDelayRef.current) {
-      clearTimeout(activeTablesEmptyDelayRef.current);
-      activeTablesEmptyDelayRef.current = null;
-    }
-  }, []);
-
-  const resetActiveTablesLoadingState = useCallback(() => {
-    clearActiveTablesEmptyDelay();
-    activeTablesCountRef.current = 0;
-    activeTablesSessionStartedAtRef.current = Date.now();
+  const resetPanelLoadingState = useCallback(() => {
+    setActiveCards([]);
     setActiveTables([]);
+    setActiveCardsLoading(true);
     setActiveTablesLoading(true);
-  }, [clearActiveTablesEmptyDelay]);
-
-  const scheduleActiveTablesEmptyResolve = useCallback(() => {
-    clearActiveTablesEmptyDelay();
-    const elapsed = Date.now() - activeTablesSessionStartedAtRef.current;
-    const delay = Math.max(0, LOBBY_POLL_MS - elapsed);
-    activeTablesEmptyDelayRef.current = setTimeout(() => {
-      activeTablesEmptyDelayRef.current = null;
-      if (activeTablesCountRef.current === 0) {
-        setActiveTablesLoading(false);
-      }
-    }, delay);
-  }, [clearActiveTablesEmptyDelay]);
-
-  const applyActiveTablesSnapshot = useCallback(
-    (tables: ActiveTable[], isInitial: boolean) => {
-      activeTablesCountRef.current = tables.length;
-      setActiveTables(tables);
-      if (tables.length > 0) {
-        clearActiveTablesEmptyDelay();
-        setActiveTablesLoading(false);
-        return;
-      }
-      if (isInitial) {
-        scheduleActiveTablesEmptyResolve();
-      }
-    },
-    [clearActiveTablesEmptyDelay, scheduleActiveTablesEmptyResolve]
-  );
+  }, []);
 
   // State برای شناسه کاربر فعلی
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const resolvedUserId = sessionUserId || currentUserId;
-  const cardsToRenderForCancel = mergeActiveCardStatuses(
-    activeCards,
-    realtimeActiveCards
-  );
+  const cardsToRenderForCancel = activeCards;
   const hasReservedCardsForCurrentUser = playerHasReservedCards(
     resolvedUserId,
     cardsToRenderForCancel
@@ -409,7 +342,6 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
   const bounceSpectatorToTemplate = (nextTemplateId?: string | null) => {
     spectatorLeftRef.current = true;
     setActiveCards([]);
-    setRealtimeActiveCards([]);
     setCountdownDeadline(null);
     setCountdownSeconds(0);
 
@@ -507,7 +439,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           roomInfoRef.current.templateId
         )
       );
-      resetActiveTablesLoadingState();
+      resetPanelLoadingState();
       sessionKeyRef.current = nextSessionKey;
       return;
     }
@@ -521,25 +453,40 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
       });
       setRoomInfo(shell);
       setHasLiveSnapshot(false);
+      hasLiveSnapshotRef.current = false;
       setSnapshotError(null);
-      resetActiveTablesLoadingState();
+      resetPanelLoadingState();
       sessionKeyRef.current = nextSessionKey;
     }
-  }, [roomId, templateId, priceHint, roomNameHint, resetActiveTablesLoadingState]);
+  }, [roomId, templateId, priceHint, roomNameHint, resetPanelLoadingState]);
+
+  const scheduleRecoverySnapshot = useCallback((reason: string) => {
+    if (recoveryDebounceRef.current) {
+      clearTimeout(recoveryDebounceRef.current);
+    }
+    recoveryDebounceRef.current = setTimeout(() => {
+      recoveryDebounceRef.current = null;
+      console.info("[Room] Recovery snapshot", { reason });
+      void fetchRoomDataRef.current("recovery");
+    }, RECOVERY_SNAPSHOT_DEBOUNCE_MS);
+  }, []);
 
   useEffect(() => {
     return () => {
-      clearActiveTablesEmptyDelay();
+      if (recoveryDebounceRef.current) {
+        clearTimeout(recoveryDebounceRef.current);
+        recoveryDebounceRef.current = null;
+      }
     };
-  }, [clearActiveTablesEmptyDelay]);
+  }, []);
 
-  // بارگذاری اطلاعات روم یا تمپلیت
+  // بارگذاری اطلاعات روم یا تمپلیت — initial + recovery فقط (بدون poll دوره‌ای)
   useEffect(() => {
-    async function fetchRoomData(isInitial: boolean) {
+    async function fetchRoomData(reason: "initial" | "recovery") {
       if (isHardExiting()) return;
       let nextError: string | null = null;
       try {
-        if (isInitial) {
+        if (reason === "initial") {
           console.info("[Room] Fetching gameroom snapshot", { roomId, templateId });
         }
 
@@ -568,8 +515,6 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           return;
         }
 
-        // اگر با templateId وارد شده‌ایم و خودمان در روم waiting کارت داریم، به roomId برو.
-        // بیننده بدون کارت روی template می‌ماند تا با استارت بازی به live نرود.
         if (!roomId && templateId && view.mode !== "preview" && view.room.id) {
           if (playerHasReservedCards(userIdRef.current, view.active_cards)) {
             router.replace(`/player/gameroom?roomId=${view.room.id}`);
@@ -577,7 +522,6 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           }
         }
 
-        // نگاشت GameRoomView به RoomInfo (برای سازگاری UI فعلی)
         let mappedRoom: RoomInfo | null = null;
         setGlobalRegistrationLocked(Boolean(view.global_registration_locked));
         setGlobalRegistrationLockReason(
@@ -626,7 +570,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
             roomCode: "",
             roomType: view.room.room_type,
             title: view.room.title || undefined,
-            status: "waiting", // برای فعال بودن UI مطابق رفتار قبلی
+            status: "waiting",
             cardPrice: view.room.ticket_price,
             currency: view.room.currency || "IRR",
             countdownSec: undefined,
@@ -640,7 +584,6 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
             requiresPassword: view.room.requires_password,
           };
         } else {
-          // حالت‌های waiting / running / finished با روم واقعی
           mappedRoom = {
             id: (view.room.id as string) || "",
             roomCode: view.room.room_code || "",
@@ -653,7 +596,6 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
             startsAt: view.room.starts_at || undefined,
             endsAt: view.room.ends_at || undefined,
             minPlayers: view.room.min_players || undefined,
-            // استفاده از max_cards_per_player از roomTemplates به جای max_players
             maxPlayers: view.room.max_cards_per_player || undefined,
             currentPlayers: view.active_cards.length,
             templateId: view.room.template_id,
@@ -675,12 +617,14 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
 
         setRoomInfo(mappedRoom);
         setHasLiveSnapshot(true);
+        hasLiveSnapshotRef.current = true;
         setSnapshotError(null);
         persistGameRoomShellFromSnapshot(mappedRoom, { roomId, templateId });
         console.info("[Room] Hydrated from snapshot", {
           roomId,
           templateId,
           mode: view.mode,
+          reason,
         });
         setGameMode(showTemplatePreview ? "preview" : view.mode);
         if (!releasedTemplateIdRef.current && view.mode === "running") {
@@ -697,7 +641,8 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           players: table.players,
           cardCount: table.card_count,
         }));
-        applyActiveTablesSnapshot(tables, isInitial);
+        setActiveTables(tables);
+        setActiveTablesLoading(false);
 
         if (releasedTemplateIdRef.current && !releasedTid) {
           return;
@@ -705,14 +650,13 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
 
         const serverNow = new Date(view.server_now).getTime();
         const clientNow = Date.now();
-        const offset = serverNow - clientNow;
-        setServerOffset(offset);
+        setServerOffset(serverNow - clientNow);
 
         if (showTemplatePreview) {
           setCountdownDeadline(null);
           setCountdownSeconds(0);
           setActiveCards([]);
-          setRealtimeActiveCards([]);
+          setActiveCardsLoading(false);
           return;
         }
 
@@ -731,49 +675,33 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           })
         );
         setActiveCards(activeCardsList);
-        setRealtimeActiveCards((prev) =>
-          mergeActiveCardStatuses(activeCardsList, prev)
-        );
-      } catch (error: any) {
+        setActiveCardsLoading(false);
+      } catch (error: unknown) {
         console.error("[Room] Error loading room data:", error);
-        nextError = error.message || "خطا در بارگذاری اطلاعات روم";
+        nextError =
+          error instanceof Error
+            ? error.message
+            : "خطا در بارگذاری اطلاعات روم";
         toast.error(nextError);
       } finally {
         if (nextError) {
           setSnapshotError(nextError);
-          if (isInitial) {
+          if (reason === "initial") {
             setActiveTablesLoading(false);
+            setActiveCardsLoading(false);
           }
         }
       }
     }
 
     fetchRoomDataRef.current = fetchRoomData;
-
-    // بارگذاری اولیه در پس‌زمینه — UI از shell فوری رندر می‌شود
-    fetchRoomData(true);
-
-    let cancelled = false;
-    let timeoutId: ReturnType<typeof setTimeout>;
-
-    const tick = async () => {
-      if (cancelled || isHardExiting()) return;
-      await fetchRoomData(false);
-      if (cancelled || isHardExiting()) return;
-      timeoutId = setTimeout(tick, pollIntervalMsRef.current);
-    };
-
-    timeoutId = setTimeout(tick, pollIntervalMsRef.current);
-    return () => {
-      cancelled = true;
-      clearTimeout(timeoutId);
-      clearActiveTablesEmptyDelay();
-    };
-  }, [roomId, templateId, router, applyActiveTablesSnapshot, clearActiveTablesEmptyDelay]);
+    countdownZeroRecoveryRef.current = false;
+    void fetchRoomData("initial");
+  }, [roomId, templateId, router]);
 
   useEffect(() => {
     if (!resolvedUserId || roomId || !templateId) return;
-    void fetchRoomDataRef.current(false);
+    void fetchRoomDataRef.current("recovery");
   }, [resolvedUserId, roomId, templateId]);
 
   // Enter live when the room started, or when the user opened a live table to watch.
@@ -826,30 +754,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     };
   }, [roomId, supabase]);
 
-  // نزدیک شروع بازی: poll سریع‌تر تا status=playing زودتر دیده شود
-  useEffect(() => {
-    if (!roomId || gameMode === "preview") {
-      pollIntervalMsRef.current = LOBBY_POLL_MS;
-      return;
-    }
-
-    const pastStartsAt = Boolean(
-      roomInfo?.startsAt &&
-        Date.now() + serverOffset >= Date.parse(roomInfo.startsAt)
-    );
-    const urgent =
-      countdownSeconds <= 10 || (countdownSeconds === 0 && pastStartsAt);
-
-    pollIntervalMsRef.current = urgent ? TRANSITION_POLL_MS : LOBBY_POLL_MS;
-  }, [
-    roomId,
-    gameMode,
-    countdownSeconds,
-    roomInfo?.startsAt,
-    serverOffset,
-  ]);
-
-  // Realtime: وقتی هنوز در حالت template هستیم، به INSERT روی rooms (برای این templateId) گوش می‌دهیم
+  // نزدیک شروع بازی: realtime rooms/draws مسیر اصلی است؛ poll دوره‌ای حذف شده
   useEffect(() => {
     // اگر already در یک روم واقعی هستیم، نیازی به این subscription نیست
     if (roomId) return;
@@ -875,7 +780,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
 
       // بیننده را به روم جدید هل نده؛ خریدار بعد از RPC خودش به roomId می‌رود.
       // snapshot تمپلیت را تازه کن تا صف waiting دیده شود.
-      void fetchRoomDataRef.current(false);
+      scheduleRecoverySnapshot("template-room-insert");
     };
 
     const channel = supabase
@@ -895,7 +800,39 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [roomId, templateId, supabase]);
+  }, [roomId, templateId, supabase, scheduleRecoverySnapshot]);
+
+  // Realtime: playing tables — وقتی میز هم‌قیمت به playing می‌رود
+  useEffect(() => {
+    const tid = roomInfo?.templateId || templateId;
+    if (!tid) return;
+
+    const handler = (payload: { new?: Record<string, unknown> }) => {
+      const newRoom = payload.new;
+      if (!newRoom) return;
+      const nextStatus = String(newRoom.status ?? "");
+      if (nextStatus !== "playing" && nextStatus !== "live") return;
+      scheduleRecoverySnapshot("template-room-playing");
+    };
+
+    const channel = supabase
+      .channel(`template_${tid}_rooms_playing`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "rooms",
+          filter: `room_template_id=eq.${tid}`,
+        },
+        handler
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [roomInfo?.templateId, templateId, supabase, scheduleRecoverySnapshot]);
 
   // دریافت شناسه کاربر فعلی
   useEffect(() => {
@@ -956,155 +893,67 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     return () => clearInterval(id);
   }, [countdownDeadline, serverOffset]);
 
-  // countdown به ۰ رسید → فوراً status را از سرور بگیر (انتقال به LiveRoom یا extend)
+  // countdown به ۰ رسید → یک recovery snapshot (بدون poll تکراری)
   const prevCountdownRef = useRef<number | null>(null);
   useEffect(() => {
     if (
       prevCountdownRef.current != null &&
       prevCountdownRef.current > 0 &&
-      countdownSeconds === 0
+      countdownSeconds === 0 &&
+      !countdownZeroRecoveryRef.current
     ) {
-      void fetchRoomDataRef.current(false);
+      countdownZeroRecoveryRef.current = true;
+      scheduleRecoverySnapshot("countdown-zero");
     }
     prevCountdownRef.current = countdownSeconds;
-  }, [countdownSeconds]);
-
-  // روی 00:00 گیر نکند: تا extend/start از سرور بیاید poll سریع
-  useEffect(() => {
-    if (!roomId || gameMode !== "waiting" || countdownSeconds > 0) {
-      return;
-    }
-
-    void fetchRoomDataRef.current(false);
-    const id = setInterval(() => {
-      void fetchRoomDataRef.current(false);
-    }, COUNTDOWN_ZERO_POLL_MS);
-
-    return () => clearInterval(id);
-  }, [roomId, gameMode, countdownSeconds]);
+  }, [countdownSeconds, scheduleRecoverySnapshot]);
 
   useEffect(() => {
     if (!roomId) return;
-  
-    const handler = (payload: any) => {
+
+    const ticketFilter = `room_id=eq.${roomId}`;
+
+    const handler = (payload: {
+      eventType?: string;
+      new?: Record<string, unknown>;
+      old?: Record<string, unknown>;
+    }) => {
       if (releasedTemplateIdRef.current || spectatorLeftRef.current) return;
-      const newRoomId = (payload.new as any)?.room_id ?? null;
-      const oldRoomId = (payload.old as any)?.room_id ?? null;
-
-      const matchesRoom =
-        newRoomId === roomId || oldRoomId === roomId;
-
-      if (!matchesRoom) {
-        console.log("[RT][TICKETS][IGNORED]", {
-          eventType: payload.eventType,
-          oldRoomId,
-          newRoomId,
-        });
-        return;
-      }
+      if (!hasLiveSnapshotRef.current) return;
 
       console.log("[RT][TICKETS]", {
         eventType: payload.eventType,
-        new: payload.new,
-        old: payload.old,
+        roomId,
         at: new Date().toISOString(),
       });
 
-      setRealtimeActiveCards((prev) => {
-        // استفاده از Map برای تجمیع کارت‌ها بر اساس player_user_id
-        const cardsMap = new Map<string, ActiveCardStatus>();
-        
-        // تبدیل prev به Map
-        prev.forEach((card) => {
-          cardsMap.set(card.id, { ...card });
-        });
-
-        const eventType = payload.eventType as "INSERT" | "UPDATE" | "DELETE";
-        const newRow = payload.new as any;
-        const oldRow = payload.old as any;
-        const activeStatuses = ["reserved", "confirmed", "consumed"];
-
-        const playerId =
-          (newRow?.player_user_id as string | undefined) ??
-          (oldRow?.player_user_id as string | undefined) ??
-          null;
-
-        if (!playerId) return prev;
-
-        let delta = 0;
-
-        if (eventType === "INSERT") {
-          if (newRow && activeStatuses.includes(newRow.reservation_status)) {
-            delta = 1;
-          }
-        } else if (eventType === "DELETE") {
-          if (oldRow && activeStatuses.includes(oldRow.reservation_status)) {
-            delta = -1;
-          }
-        } else if (eventType === "UPDATE") {
-          const wasActive =
-            oldRow && activeStatuses.includes(oldRow.reservation_status);
-          const isActive =
-            newRow && activeStatuses.includes(newRow.reservation_status);
-
-          if (!wasActive && isActive) {
-            delta = 1;
-          } else if (wasActive && !isActive) {
-            delta = -1;
-          }
-        }
-
-        if (delta === 0) return prev;
-
-        // به‌روزرسانی Map
-        const existing = cardsMap.get(playerId);
-        const prevCount = existing?.count ?? 0;
-        const nextCount = prevCount + delta;
-
-        if (nextCount <= 0) {
-          // حذف از Map
-          cardsMap.delete(playerId);
-        } else {
-          // اضافه یا به‌روزرسانی در Map
-          const displayName =
-            newRow?.display_name ||
-            oldRow?.display_name ||
-            existing?.title ||
-            "Player";
-
-          cardsMap.set(playerId, {
-            id: playerId,
-            title: displayName,
-            count: nextCount,
-          });
-        }
-
-        // تبدیل Map به آرایه
-        const updated = Array.from(cardsMap.values());
-
-        return updated;
-      });
+      setActiveCards((prev) => applyTicketEventToActiveCards(prev, payload));
     };
-  
+
     const channel = supabase
       .channel(`room_${roomId}_tickets`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "tickets" },
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "tickets",
+          filter: ticketFilter,
+        },
         handler
       )
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "tickets" },
-        handler
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "tickets" },
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "tickets",
+          filter: ticketFilter,
+        },
         handler
       )
       .subscribe();
-  
+
     return () => {
       supabase.removeChannel(channel);
     };
@@ -1302,7 +1151,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
       if (isHardExiting()) return;
       if (document.visibilityState !== "visible") return;
 
-      void fetchRoomDataRef.current(false);
+      void fetchRoomDataRef.current("recovery");
       invalidateActiveGames?.();
 
       const info = roomInfoRef.current;
@@ -1647,7 +1496,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           cards={cardsToRender}
           secondsRemaining={countdownSeconds}
           minPlayers={roomInfo.minPlayers}
-          loading={activeTablesLoading}
+          loading={activeCardsLoading}
         />
 
         {!isTournamentRoom && (

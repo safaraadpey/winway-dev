@@ -279,36 +279,26 @@ async function loadPlayingTablesForTemplate(
   return result;
 }
 
-async function getRoomTemplateType(
+async function loadRoomTemplateFields(
   supabase: SupabaseAdmin,
   templateId: string | null
-): Promise<string | null> {
-  if (!templateId) return null;
+): Promise<{ room_type: string | null; requires_password: boolean }> {
+  if (!templateId) {
+    return { room_type: null, requires_password: false };
+  }
 
   const { data } = await supabase
     .from("room_templates")
-    .select("room_type")
+    .select("room_type, password")
     .eq("id", templateId)
     .maybeSingle();
 
-  return ((data as { room_type?: string | null })?.room_type as string | null) ?? null;
-}
-
-async function getTemplateRequiresPassword(
-  supabase: SupabaseAdmin,
-  templateId: string | null
-): Promise<boolean> {
-  if (!templateId) return false;
-
-  const { data } = await supabase
-    .from("room_templates")
-    .select("password")
-    .eq("id", templateId)
-    .maybeSingle();
-
-  return templateRequiresPassword(
-    (data as { password?: string | null })?.password
-  );
+  return {
+    room_type: ((data as { room_type?: string | null })?.room_type as string | null) ?? null,
+    requires_password: templateRequiresPassword(
+      (data as { password?: string | null })?.password
+    ),
+  };
 }
 
 async function buildViewFromRoomId(
@@ -343,20 +333,16 @@ async function buildViewFromRoomId(
 
   const status = (room.status as string | null) ?? null;
   const mode = mapRoomStatusToMode(status);
-  const roomType = await getRoomTemplateType(
-    supabase,
-    (room.room_template_id as string | null) ?? null
-  );
+  const templateId = (room.room_template_id as string | null) ?? null;
 
-  const activeCards = await loadActiveCardsForRoom(supabase, room.id as string);
-  const activeTables = await loadPlayingTablesForTemplate(
-    supabase,
-    (room.room_template_id as string | null) ?? null,
-    {
+  const [templateFields, activeCards, activeTables] = await Promise.all([
+    loadRoomTemplateFields(supabase, templateId),
+    loadActiveCardsForRoom(supabase, room.id as string),
+    loadPlayingTablesForTemplate(supabase, templateId, {
       cardPrice: Number(room.card_price || 0),
       currency: (room.currency as string) || "IRR",
-    }
-  );
+    }),
+  ]);
 
   const countdownSeconds =
     mode === "waiting"
@@ -370,17 +356,12 @@ async function buildViewFromRoomId(
     currentUserId,
   });
 
-  const requiresPassword = await getTemplateRequiresPassword(
-    supabase,
-    (room.room_template_id as string | null) ?? null
-  );
-
   return {
     mode,
     room: {
       id: room.id as string,
-      template_id: (room.room_template_id as string) ?? "",
-      room_type: roomType,
+      template_id: templateId ?? "",
+      room_type: templateFields.room_type,
       room_code: room.room_code as string | null,
       title: room.title as string | null,
       status,
@@ -391,7 +372,7 @@ async function buildViewFromRoomId(
       max_cards_per_player: (room.max_cards_per_player as number | null) ?? null,
       starts_at: (room.starts_at as string | null) ?? null,
       ends_at: (room.ends_at as string | null) ?? null,
-      requires_password: requiresPassword,
+      requires_password: templateFields.requires_password,
     },
     server_now: serverNow,
     countdown_seconds: countdownSeconds,
@@ -491,10 +472,12 @@ async function buildViewFromTemplateId(
     }
   }
 
-  const { data: template, error: templateError } = await supabase
-    .from("room_templates")
-    .select(
-      `
+  const [{ data: template, error: templateError }, activeTables] =
+    await Promise.all([
+      supabase
+        .from("room_templates")
+        .select(
+          `
         id,
         name,
         room_type,
@@ -506,18 +489,15 @@ async function buildViewFromTemplateId(
         status,
         password
       `
-    )
-    .eq("id", templateId)
-    .single();
+        )
+        .eq("id", templateId)
+        .single(),
+      loadPlayingTablesForTemplate(supabase, templateId),
+    ]);
 
   if (templateError || !template || template.status === "inactive") {
     return null;
   }
-
-  const activeTables = await loadPlayingTablesForTemplate(supabase, templateId, {
-    cardPrice: Number(template.price || 0),
-    currency: (template.currency as string) || "IRR",
-  });
 
   return {
     mode: "preview",
@@ -555,9 +535,11 @@ export async function buildGameRoomView(
   params: { roomId?: string | null; templateId?: string | null }
 ): Promise<GameRoomView | null> {
   const serverNow = new Date().toISOString();
-  const globalRegistrationLockState = await loadGlobalRegistrationLockState(supabase);
 
   if (params.roomId) {
+    const globalRegistrationLockState = await loadGlobalRegistrationLockState(
+      supabase
+    );
     return buildViewFromRoomId(
       supabase,
       params.roomId,
@@ -568,6 +550,9 @@ export async function buildGameRoomView(
   }
 
   if (params.templateId) {
+    const globalRegistrationLockState = await loadGlobalRegistrationLockState(
+      supabase
+    );
     return buildViewFromTemplateId(
       supabase,
       params.templateId,

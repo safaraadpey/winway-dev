@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import {
+  loadGameRoomSnapshotFromPg,
   loadPlayingTablesFromPg,
-  loadRoomLifecycleBatchFromPg,
-  loadRoomLifecycleFromPg,
-  resolveRoomLifecycleFields,
+  loadTemplatePreviewFromPg,
+  nudgeWaitingRoomSchedulerFireAndForget,
+  resolveWaitingRoomIdForTemplateFromPg,
+  type GameroomSnapshotPg,
 } from "@/lib/gameroomRoomPg";
-import { pgPool } from "@/lib/pg";
 import { createServiceClient, getUserFromRequest } from "@/lib/supabaseServer";
 
 export const runtime = "nodejs";
@@ -73,7 +74,10 @@ function mapRoomStatusToMode(status: string | null): GameMode {
   }
 }
 
-function computeCountdownSeconds(startsAt: string | null, serverNowIso: string): number {
+function computeCountdownSeconds(
+  startsAt: string | null,
+  serverNowIso: string
+): number {
   if (!startsAt) return 0;
 
   const starts = Date.parse(startsAt);
@@ -81,8 +85,7 @@ function computeCountdownSeconds(startsAt: string | null, serverNowIso: string):
 
   if (Number.isNaN(starts) || Number.isNaN(now)) return 0;
 
-  const diffMs = starts - now;
-  return Math.max(0, Math.floor(diffMs / 1000));
+  return Math.max(0, Math.floor((starts - now) / 1000));
 }
 
 function isWaitingCountdownElapsed(
@@ -97,60 +100,103 @@ function isWaitingCountdownElapsed(
   return Number.isFinite(startsMs) && Number.isFinite(nowMs) && startsMs <= nowMs;
 }
 
-/** Safety-net when pg_cron heartbeat is off and the bingo engine scheduler is not running. */
-async function nudgeWaitingRoomScheduler(roomId: string): Promise<void> {
-  if (!pgPool) return;
-  try {
-    await pgPool.query(`SELECT game_core.fn_manage_waiting_rooms(10, false)`);
-    console.info("[Scheduler] gameroom snapshot nudged waiting rooms", { roomId });
-  } catch (err) {
-    console.warn("[Scheduler] gameroom waiting nudge failed", {
-      roomId,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
+function templateRequiresPassword(
+  password: string | null | undefined
+): boolean {
+  return typeof password === "string" && password.trim().length > 0;
 }
 
-async function loadRoomRowAndLifecycle(
-  supabase: ReturnType<typeof createServiceClient>,
-  roomId: string
-) {
-  const [{ data: room, error: roomError }, pgLifecycle] = await Promise.all([
-    supabase
-      .from("rooms")
-      .select(
-        `
-        id,
-        room_template_id,
-        room_code,
-        title,
-        status,
-        card_price,
-        currency,
-        min_players,
-        max_players,
-        max_cards_per_player,
-        starts_at,
-        ends_at,
-        waiting_started_at,
-        updated_at
-      `
-      )
-      .eq("id", roomId)
-      .single(),
-    loadRoomLifecycleFromPg(roomId),
-  ]);
+function computeCanCancel({
+  roomStatus,
+  countdownSeconds,
+  activeCards,
+  currentUserId,
+}: {
+  roomStatus: string | null;
+  countdownSeconds: number;
+  activeCards: Array<{ user_id: string; card_count: number }>;
+  currentUserId: string;
+}): boolean {
+  if (!currentUserId) return false;
+  if (!roomStatus || roomStatus !== "waiting") return false;
+  if (countdownSeconds <= 0 || countdownSeconds > CANCEL_WINDOW_SECONDS) {
+    return false;
+  }
 
-  return { room, roomError, pgLifecycle };
+  const players = new Set<string>();
+  for (const card of activeCards) {
+    if (card.user_id) players.add(card.user_id);
+  }
+
+  if (players.size !== 1) return false;
+
+  const currentPlayerCards = activeCards.find(
+    (card) => card.user_id === currentUserId
+  );
+  if (!currentPlayerCards || currentPlayerCards.card_count <= 0) return false;
+
+  return true;
+}
+
+function buildViewFromPgSnapshot(
+  snapshot: GameroomSnapshotPg,
+  serverNow: string,
+  currentUserId: string,
+  lockOverride?: {
+    locked: boolean;
+    reason: string | null;
+  }
+): GameRoomView {
+  const { room } = snapshot;
+  const mode = mapRoomStatusToMode(room.status);
+  const countdownSeconds =
+    mode === "waiting"
+      ? computeCountdownSeconds(room.starts_at, serverNow)
+      : 0;
+
+  const locked = lockOverride ?? {
+    locked: snapshot.global_registration_locked,
+    reason: snapshot.global_registration_lock_reason,
+  };
+
+  return {
+    mode,
+    room: {
+      id: room.id,
+      template_id: room.template_id,
+      room_type: room.room_type,
+      room_code: room.room_code,
+      title: room.title,
+      status: room.status,
+      ticket_price: room.card_price,
+      currency: room.currency,
+      min_players: room.min_players,
+      max_players: room.max_players,
+      max_cards_per_player: room.max_cards_per_player,
+      starts_at: room.starts_at,
+      ends_at: room.ends_at,
+      requires_password: room.requires_password,
+    },
+    server_now: serverNow,
+    countdown_seconds: countdownSeconds,
+    active_cards: snapshot.active_cards,
+    active_tables: snapshot.active_tables,
+    can_cancel: computeCanCancel({
+      roomStatus: room.status,
+      countdownSeconds,
+      activeCards: snapshot.active_cards,
+      currentUserId,
+    }),
+    global_registration_locked: locked.locked,
+    global_registration_lock_reason: locked.reason,
+  };
 }
 
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const searchParams = url.searchParams;
-
-    const roomId = searchParams.get("roomId");
-    const templateId = searchParams.get("templateId");
+    const roomId = url.searchParams.get("roomId");
+    const templateId = url.searchParams.get("templateId");
 
     if (!roomId && !templateId) {
       return NextResponse.json(
@@ -162,33 +208,23 @@ export async function GET(request: Request) {
       );
     }
 
-    // احراز هویت پلیر از روی Authorization header (Bearer token)
     const user = await getUserFromRequest(request);
-
     if (!user) {
       return NextResponse.json(
-        {
-          error: "unauthorized",
-          message: "Authentication required.",
-        },
+        { error: "unauthorized", message: "Authentication required." },
         { status: 401 }
       );
     }
 
-    const supabase = createServiceClient();
     const serverNow = new Date().toISOString();
-    const globalRegistrationLockState = await loadGlobalRegistrationLockState(supabase);
 
     if (roomId) {
       const view = await buildViewFromRoomId(
-        supabase,
         roomId,
         serverNow,
-        user.id,
-        globalRegistrationLockState
+        user.id
       );
       if (!view) {
-        // Never substitute another waiting room — client holds tickets on roomId.
         return NextResponse.json(
           { error: "room_not_found", message: "Room not found." },
           { status: 404 }
@@ -197,9 +233,7 @@ export async function GET(request: Request) {
       return NextResponse.json(view);
     }
 
-    // templateId mode
     if (!templateId) {
-      // این حالت نباید برسد، ولی برای اطمینان:
       return NextResponse.json(
         {
           error: "missing_parameters",
@@ -210,11 +244,9 @@ export async function GET(request: Request) {
     }
 
     const view = await buildViewFromTemplateId(
-      supabase,
       templateId,
       serverNow,
-      user.id,
-      globalRegistrationLockState
+      user.id
     );
     if (!view) {
       return NextResponse.json(
@@ -227,8 +259,8 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json(view);
-  } catch (error: any) {
-    console.error("GET /api/player/gameroom error:", error);
+  } catch (error: unknown) {
+    console.error("[Room] GET /api/player/gameroom error:", error);
     return NextResponse.json(
       {
         error: "internal_error",
@@ -240,119 +272,92 @@ export async function GET(request: Request) {
 }
 
 async function buildViewFromRoomId(
-  supabase: ReturnType<typeof createServiceClient>,
   roomId: string,
   serverNow: string,
-  currentUserId: string,
-  globalRegistrationLockState: GlobalRegistrationLockState
+  currentUserId: string
 ): Promise<GameRoomView | null> {
-  let { room, roomError, pgLifecycle } = await loadRoomRowAndLifecycle(supabase, roomId);
-
-  if (roomError || !room) {
-    console.error("buildViewFromRoomId: rooms error", roomError);
-    return null;
+  const pgSnapshot = await loadGameRoomSnapshotFromPg(roomId);
+  if (pgSnapshot) {
+    if (
+      isWaitingCountdownElapsed(
+        pgSnapshot.room.status,
+        pgSnapshot.room.starts_at,
+        serverNow
+      )
+    ) {
+      nudgeWaitingRoomSchedulerFireAndForget(roomId);
+    }
+    return buildViewFromPgSnapshot(pgSnapshot, serverNow, currentUserId);
   }
 
-  let lifecycle = resolveRoomLifecycleFields(
+  return buildViewFromRoomIdSupabaseFallback(
     roomId,
-    room,
-    pgLifecycle,
-    "buildViewFromRoomId"
+    serverNow,
+    currentUserId
   );
-
-  if (isWaitingCountdownElapsed(lifecycle.status, lifecycle.starts_at, serverNow)) {
-    await nudgeWaitingRoomScheduler(roomId);
-    const refreshed = await loadRoomRowAndLifecycle(supabase, roomId);
-    if (!refreshed.roomError && refreshed.room) {
-      room = refreshed.room;
-      pgLifecycle = refreshed.pgLifecycle;
-      lifecycle = resolveRoomLifecycleFields(
-        roomId,
-        room,
-        pgLifecycle,
-        "buildViewFromRoomId:afterNudge"
-      );
-    }
-  }
-
-  const mode = mapRoomStatusToMode(lifecycle.status);
-  const roomType = await getRoomTemplateType(
-    supabase,
-    (room.room_template_id as string | null) ?? null
-  );
-
-  // کارت‌های فعال (بر اساس tickets)
-  const activeCards = await loadActiveCardsForRoom(supabase, room.id as string);
-
-  // میزهای playing همین تمپلیت (باکس «میزهای فعال»)
-  const activeTables = await loadPlayingTablesForTemplate(
-    supabase,
-    (room.room_template_id as string | null) ?? null,
-    {
-      cardPrice: Number(room.card_price || 0),
-      currency: room.currency || "IRR",
-    }
-  );
-
-  const countdownSeconds =
-    mode === "waiting"
-      ? computeCountdownSeconds(lifecycle.starts_at, serverNow)
-      : 0;
-
-  const canCancel = computeCanCancel({
-    roomStatus: lifecycle.status,
-    countdownSeconds,
-    activeCards,
-    currentUserId,
-  });
-
-  const requiresPassword = await getTemplateRequiresPassword(
-    supabase,
-    (room.room_template_id as string | null) ?? null
-  );
-
-  const view: GameRoomView = {
-    mode,
-    room: {
-      id: room.id,
-      template_id: room.room_template_id,
-      room_type: roomType,
-      room_code: room.room_code,
-      title: room.title,
-      status: lifecycle.status,
-      ticket_price: Number(room.card_price || 0),
-      currency: room.currency || "IRR",
-      min_players: room.min_players ?? null,
-      max_players: room.max_players ?? null,
-      max_cards_per_player: room.max_cards_per_player ?? null,
-      starts_at: lifecycle.starts_at,
-      ends_at: lifecycle.ends_at,
-      requires_password: requiresPassword,
-    },
-    server_now: serverNow,
-    countdown_seconds: countdownSeconds,
-    active_cards: activeCards,
-    active_tables: activeTables,
-    can_cancel: canCancel,
-    global_registration_locked: globalRegistrationLockState.locked,
-    global_registration_lock_reason: globalRegistrationLockState.reason,
-  };
-
-  return view;
 }
 
 async function buildViewFromTemplateId(
-  supabase: ReturnType<typeof createServiceClient>,
   templateId: string,
   serverNow: string,
-  currentUserId: string,
-  globalRegistrationLockState: GlobalRegistrationLockState
+  currentUserId: string
 ): Promise<GameRoomView | null> {
-  const waitingStatuses = ["waiting"];
+  const resolvedRoomId = await resolveWaitingRoomIdForTemplateFromPg(
+    templateId,
+    currentUserId,
+    serverNow
+  );
 
-  // ۱) فقط روم‌های waiting این template را بگیر
-  // (طبق نیاز محصول، ورود از template نباید مستقیم وارد playing/live شود)
-  const { data: waitingRooms, error: waitingRoomsError } = await supabase
+  if (resolvedRoomId) {
+    return buildViewFromRoomId(resolvedRoomId, serverNow, currentUserId);
+  }
+
+  const preview = await loadTemplatePreviewFromPg(templateId);
+  if (preview) {
+    return {
+      mode: "preview",
+      room: {
+        id: null,
+        template_id: preview.template.id,
+        room_type: preview.template.room_type,
+        room_code: null,
+        title: preview.template.name,
+        status: null,
+        ticket_price: preview.template.price,
+        currency: preview.template.currency,
+        min_players: preview.template.min_players,
+        max_players: preview.template.max_players,
+        max_cards_per_player: preview.template.max_cards_per_player,
+        starts_at: null,
+        ends_at: null,
+        requires_password: preview.template.requires_password,
+      },
+      server_now: serverNow,
+      countdown_seconds: 0,
+      active_cards: [],
+      active_tables: preview.active_tables,
+      can_cancel: false,
+      global_registration_locked: preview.global_registration_locked,
+      global_registration_lock_reason: preview.global_registration_lock_reason,
+    };
+  }
+
+  return buildViewFromTemplateIdSupabaseFallback(
+    templateId,
+    serverNow,
+    currentUserId
+  );
+}
+
+/** Supabase fallback when DATABASE_URL / pgPool is unavailable. */
+async function buildViewFromRoomIdSupabaseFallback(
+  roomId: string,
+  serverNow: string,
+  currentUserId: string
+): Promise<GameRoomView | null> {
+  const supabase = createServiceClient();
+
+  const { data: room, error: roomError } = await supabase
     .from("rooms")
     .select(
       `
@@ -368,88 +373,154 @@ async function buildViewFromTemplateId(
         max_cards_per_player,
         starts_at,
         ends_at,
-        waiting_started_at,
-        updated_at,
-        created_at
+        room_templates (
+          room_type,
+          password
+        )
       `
     )
-    .eq("room_template_id", templateId)
-    .in("status", waitingStatuses);
+    .eq("id", roomId)
+    .single();
 
-  if (waitingRoomsError) {
-    console.error("buildViewFromTemplateId: rooms waiting error", waitingRoomsError);
+  if (roomError || !room) {
+    console.error("[Room] buildViewFromRoomId fallback rooms error", roomError);
+    return null;
   }
 
-  const rawRoomRows = (waitingRooms || []) as Array<{
+  const templateId = (room.room_template_id as string | null) ?? null;
+
+  const [lockState, activeCards, activeTables] = await Promise.all([
+    loadGlobalRegistrationLockState(supabase),
+    loadActiveCardsForRoomFallback(supabase, roomId),
+    loadPlayingTablesForTemplateFallback(supabase, templateId, {
+      cardPrice: Number(room.card_price || 0),
+      currency: (room.currency as string) || "IRR",
+    }),
+  ]);
+
+  const templateJoin = room.room_templates as
+    | { room_type?: string | null; password?: string | null }
+    | { room_type?: string | null; password?: string | null }[]
+    | null;
+  const templateRow = Array.isArray(templateJoin)
+    ? templateJoin[0]
+    : templateJoin;
+
+  const status = (room.status as string | null) ?? null;
+  if (isWaitingCountdownElapsed(status, room.starts_at as string | null, serverNow)) {
+    nudgeWaitingRoomSchedulerFireAndForget(roomId);
+  }
+
+  const mode = mapRoomStatusToMode(status);
+  const countdownSeconds =
+    mode === "waiting"
+      ? computeCountdownSeconds(room.starts_at as string | null, serverNow)
+      : 0;
+
+  const tables = activeTables;
+
+  return {
+    mode,
+    room: {
+      id: room.id as string,
+      template_id: room.room_template_id as string,
+      room_type: templateRow?.room_type ?? null,
+      room_code: room.room_code as string | null,
+      title: room.title as string | null,
+      status,
+      ticket_price: Number(room.card_price || 0),
+      currency: (room.currency as string) || "IRR",
+      min_players: (room.min_players as number | null) ?? null,
+      max_players: (room.max_players as number | null) ?? null,
+      max_cards_per_player:
+        (room.max_cards_per_player as number | null) ?? null,
+      starts_at: (room.starts_at as string | null) ?? null,
+      ends_at: (room.ends_at as string | null) ?? null,
+      requires_password: templateRequiresPassword(templateRow?.password),
+    },
+    server_now: serverNow,
+    countdown_seconds: countdownSeconds,
+    active_cards: activeCards,
+    active_tables: tables,
+    can_cancel: computeCanCancel({
+      roomStatus: status,
+      countdownSeconds,
+      activeCards,
+      currentUserId,
+    }),
+    global_registration_locked: lockState.locked,
+    global_registration_lock_reason: lockState.reason,
+  };
+}
+
+async function buildViewFromTemplateIdSupabaseFallback(
+  templateId: string,
+  serverNow: string,
+  currentUserId: string
+): Promise<GameRoomView | null> {
+  const supabase = createServiceClient();
+  const waitingStatuses = ["waiting"];
+
+  const [{ data: waitingRooms }, lockState] = await Promise.all([
+    supabase
+      .from("rooms")
+      .select(
+        `
+        id,
+        status,
+        starts_at,
+        created_at
+      `
+      )
+      .eq("room_template_id", templateId)
+      .in("status", waitingStatuses),
+    loadGlobalRegistrationLockState(supabase),
+  ]);
+
+  const roomRows = (waitingRooms || []) as Array<{
     id: string;
     status: string | null;
     starts_at: string | null;
-    ends_at: string | null;
-    waiting_started_at: string | null;
-    updated_at: string | null;
     created_at: string | null;
   }>;
 
-  const pgLifecycleByRoomId = await loadRoomLifecycleBatchFromPg(
-    rawRoomRows.map((r) => r.id)
-  );
-
-  const roomRows = rawRoomRows.map((room) => {
-    const lifecycle = resolveRoomLifecycleFields(
-      room.id,
-      room,
-      pgLifecycleByRoomId?.get(room.id),
-      "buildViewFromTemplateId"
-    );
-    return {
-      ...room,
-      status: lifecycle.status,
-      starts_at: lifecycle.starts_at,
-      ends_at: lifecycle.ends_at,
-      waiting_started_at: lifecycle.waiting_started_at,
-      updated_at: lifecycle.updated_at,
-    };
-  });
-
   if (roomRows.length > 0) {
     const roomIds = roomRows.map((r) => r.id);
-
-    // ۲) اگر کاربر قبلاً در یکی از این روم‌ها کارت فعال دارد، همان روم انتخاب شود
-    const { data: myTickets, error: myTicketsError } = await supabase
+    const { data: myTickets } = await supabase
       .from("tickets")
       .select("room_id")
       .eq("player_user_id", currentUserId)
       .in("room_id", roomIds)
       .in("reservation_status", ["reserved", "confirmed", "consumed"]);
 
-    if (myTicketsError) {
-      console.error("buildViewFromTemplateId: myTickets error", myTicketsError);
-    }
-
-    const rankByStatus = (status: string | null): number => {
-      const normalized = (status || "").toLowerCase();
-      if (normalized === "playing" || normalized === "live" || normalized === "running") return 1;
-      if (normalized === "settling") return 2;
-      if (normalized === "waiting") return 3;
-      return 9;
-    };
-
-    const sortByPriority = (a: { status: string | null; starts_at: string | null; created_at: string | null }, b: { status: string | null; starts_at: string | null; created_at: string | null }) => {
-      const rankDiff = rankByStatus(a.status) - rankByStatus(b.status);
-      if (rankDiff !== 0) return rankDiff;
-
-      // جدیدتر اولویت دارد تا کاربر به آخرین روم فعال خودش برگردد.
+    const sortByPriority = (
+      a: {
+        status: string | null;
+        starts_at: string | null;
+        created_at: string | null;
+      },
+      b: {
+        status: string | null;
+        starts_at: string | null;
+        created_at: string | null;
+      }
+    ) => {
       const aStart = a.starts_at ? Date.parse(a.starts_at) : 0;
       const bStart = b.starts_at ? Date.parse(b.starts_at) : 0;
       if (aStart !== bStart) return bStart - aStart;
-
       const aCreated = a.created_at ? Date.parse(a.created_at) : 0;
       const bCreated = b.created_at ? Date.parse(b.created_at) : 0;
       return bCreated - aCreated;
     };
 
-    const myRoomIds = new Set(((myTickets || []) as Array<{ room_id: string | null }>).map((t) => t.room_id).filter((id): id is string => Boolean(id)));
-    const myActiveRooms = roomRows.filter((room) => myRoomIds.has(room.id)).sort(sortByPriority);
+    const myRoomIds = new Set(
+      ((myTickets || []) as Array<{ room_id: string | null }>)
+        .map((t) => t.room_id)
+        .filter((id): id is string => Boolean(id))
+    );
+    const myActiveRooms = roomRows
+      .filter((room) => myRoomIds.has(room.id))
+      .sort(sortByPriority);
     const spectatorJoinableRooms = roomRows
       .filter(
         (room) =>
@@ -458,19 +529,15 @@ async function buildViewFromTemplateId(
       .sort(sortByPriority);
 
     const selectedRoom = myActiveRooms[0] ?? spectatorJoinableRooms[0];
-
     if (selectedRoom?.id) {
-      return buildViewFromRoomId(
-        supabase,
+      return buildViewFromRoomIdSupabaseFallback(
         selectedRoom.id,
         serverNow,
-        currentUserId,
-        globalRegistrationLockState
+        currentUserId
       );
     }
   }
 
-  // ۳) اگر هیچ روم فعالی نبود، حالت preview از template برگردانده می‌شود.
   const { data: template, error: templateError } = await supabase
     .from("room_templates")
     .select(
@@ -490,324 +557,48 @@ async function buildViewFromTemplateId(
     .eq("id", templateId)
     .single();
 
-  if (templateError || !template) {
-    console.error("buildViewFromTemplateId: room_templates error", templateError);
+  if (templateError || !template || template.status === "inactive") {
     return null;
   }
 
-  if (template.status === "inactive") {
-    // تمپلیت غیرفعال نباید preview شود
-    return null;
-  }
-
-  const activeTables = await loadPlayingTablesForTemplate(
+  const activeTables = await loadPlayingTablesForTemplateFallback(
     supabase,
     templateId,
     {
       cardPrice: Number(template.price || 0),
-      currency: template.currency || "IRR",
+      currency: (template.currency as string) || "IRR",
     }
   );
 
-  const requiresPassword = templateRequiresPassword(
-    (template as { password?: string | null }).password
-  );
-
-  const view: GameRoomView = {
+  return {
     mode: "preview",
     room: {
       id: null,
-      template_id: template.id,
-      room_type: template.room_type || null,
+      template_id: template.id as string,
+      room_type: (template.room_type as string | null) ?? null,
       room_code: null,
-      title: template.name,
+      title: template.name as string | null,
       status: null,
       ticket_price: Number(template.price || 0),
-      currency: template.currency || "IRR",
-      min_players: template.min_players ?? null,
-      max_players: template.max_players ?? null,
-      max_cards_per_player: template.max_cards_per_player ?? null,
+      currency: (template.currency as string) || "IRR",
+      min_players: (template.min_players as number | null) ?? null,
+      max_players: (template.max_players as number | null) ?? null,
+      max_cards_per_player:
+        (template.max_cards_per_player as number | null) ?? null,
       starts_at: null,
       ends_at: null,
-      requires_password: requiresPassword,
+      requires_password: templateRequiresPassword(
+        (template as { password?: string | null }).password
+      ),
     },
     server_now: serverNow,
     countdown_seconds: 0,
     active_cards: [],
     active_tables: activeTables,
     can_cancel: false,
-    global_registration_locked: globalRegistrationLockState.locked,
-    global_registration_lock_reason: globalRegistrationLockState.reason,
+    global_registration_locked: lockState.locked,
+    global_registration_lock_reason: lockState.reason,
   };
-
-  return view;
-}
-
-async function getRoomTemplateType(
-  supabase: ReturnType<typeof createServiceClient>,
-  templateId: string | null
-): Promise<string | null> {
-  if (!templateId) return null;
-
-  const { data, error } = await supabase
-    .from("room_templates")
-    .select("room_type")
-    .eq("id", templateId)
-    .maybeSingle();
-
-  if (error || !data) return null;
-  return ((data as any).room_type as string | null) ?? null;
-}
-
-function templateRequiresPassword(password: string | null | undefined): boolean {
-  return typeof password === "string" && password.trim().length > 0;
-}
-
-async function getTemplateRequiresPassword(
-  supabase: ReturnType<typeof createServiceClient>,
-  templateId: string | null
-): Promise<boolean> {
-  if (!templateId) return false;
-
-  const { data, error } = await supabase
-    .from("room_templates")
-    .select("password")
-    .eq("id", templateId)
-    .maybeSingle();
-
-  if (error || !data) return false;
-  return templateRequiresPassword((data as { password?: string | null }).password);
-}
-
-function computeCanCancel({
-  roomStatus,
-  countdownSeconds,
-  activeCards,
-  currentUserId,
-}: {
-  roomStatus: string | null;
-  countdownSeconds: number;
-  activeCards: Array<{ user_id: string; card_count: number }>;
-  currentUserId: string;
-}): boolean {
-  if (!currentUserId) return false;
-  if (!roomStatus || roomStatus !== "waiting") return false;
-  if (countdownSeconds <= 0 || countdownSeconds > CANCEL_WINDOW_SECONDS) return false;
-
-  const players = new Set<string>();
-  for (const card of activeCards) {
-    if (card.user_id) {
-      players.add(card.user_id);
-    }
-  }
-
-  if (players.size !== 1) {
-    return false;
-  }
-
-  const currentPlayerCards = activeCards.find((card) => card.user_id === currentUserId);
-  if (!currentPlayerCards || currentPlayerCards.card_count <= 0) {
-    return false;
-  }
-
-  return true;
-}
-
-async function loadActiveCardsForRoom(
-  supabase: ReturnType<typeof createServiceClient>,
-  roomId: string
-): Promise<
-  Array<{
-    user_id: string;
-    display_name: string;
-    card_count: number;
-  }>
-> {
-  const { data: tickets, error } = await supabase
-    .from("tickets")
-    .select("id, player_user_id, reservation_status, created_at")
-    .eq("room_id", roomId)
-    .in("reservation_status", ["reserved", "confirmed", "consumed"]);
-
-  let pgCompareRows: Array<{ user_id: string; card_count: number }> | null =
-    null;
-  let pgCompareError: string | null = null;
-
-  if (!pgPool) {
-    pgCompareError = "DATABASE_URL not set";
-  } else {
-    try {
-      const pgResult = await pgPool.query<{
-        user_id: string;
-        card_count: number;
-      }>(
-        `
-        select
-          t.player_user_id::text as user_id,
-          count(*)::int as card_count
-        from public.tickets t
-        where t.room_id = $1::uuid
-          and t.reservation_status in ('reserved','confirmed','consumed')
-        group by t.player_user_id
-        order by t.player_user_id
-        `,
-        [roomId]
-      );
-      pgCompareRows = pgResult.rows;
-    } catch (pgErr) {
-      pgCompareError =
-        pgErr instanceof Error ? pgErr.message : "pg query failed";
-      console.error("loadActiveCardsForRoom: pg compare error", pgErr);
-    }
-  }
-
-  const { data: rpcDebug, error: rpcError } = await supabase.rpc(
-    "debug_ticket_counts",
-    { p_room_id: roomId }
-  );
-
-  const { data: ctx, error: ctxError } = await supabase.rpc(
-    "debug_runtime_context",
-    { p_room_id: roomId }
-  );
-
-  const { data: bypassRlsData, error: bypassRlsError } = await supabase.rpc(
-    "test_active_cards_bypass_rls",
-    { p_room_id: roomId }
-  );
-
-  console.info("[test_active_cards_bypass_rls]", {
-    roomId,
-    data: bypassRlsData,
-    error: bypassRlsError,
-  });
-
-  console.info(
-    "[debug_runtime_context]",
-    JSON.stringify({ roomId, ctx, ctxError: ctxError?.message ?? null })
-  );
-
-  console.info(
-    "[activeCardsRpcDebug]",
-    JSON.stringify({
-      roomId,
-      supabaseRows: tickets?.length ?? 0,
-      ticketsError: error?.message ?? null,
-      rpcDebug,
-      rpcError: rpcError?.message ?? null,
-    })
-  );
-
-  const usePg = pgCompareRows !== null;
-  const counts: Record<string, number> = {};
-
-  if (usePg) {
-    for (const row of pgCompareRows ?? []) {
-      if (!row.user_id) continue;
-      counts[row.user_id] = Number(row.card_count) || 0;
-    }
-  } else {
-    if (error) {
-      console.error("loadActiveCardsForRoom: tickets error", error);
-      return [];
-    }
-
-    if (!tickets || tickets.length === 0) {
-      return [];
-    }
-
-    for (const t of tickets as any[]) {
-      const userId = t.player_user_id as string | null;
-      if (!userId) continue;
-      counts[userId] = (counts[userId] || 0) + 1;
-    }
-  }
-
-  const supabaseCounts: Record<string, number> = {};
-  for (const t of tickets || []) {
-    const userId = (t as { player_user_id?: string | null }).player_user_id;
-    if (!userId) continue;
-    supabaseCounts[userId] = (supabaseCounts[userId] || 0) + 1;
-  }
-
-  console.info(
-    "[activeCardsCompare:pg-vs-supabase]",
-    JSON.stringify({
-      roomId,
-      dataSource: usePg ? "pg" : "supabase",
-      supabaseRows: tickets?.length ?? null,
-      supabasePlayers: Object.keys(supabaseCounts),
-      pgRows: pgCompareRows,
-      pgCompareError,
-      pgTotalCards: (pgCompareRows ?? []).reduce(
-        (sum, r) => sum + Number(r.card_count || 0),
-        0
-      ),
-      debugTs: new Date().toISOString(),
-    })
-  );
-
-  const userIds = Object.keys(counts);
-  if (userIds.length === 0) {
-    return [];
-  }
-
-  const [{ data: users, error: usersError }, { data: profiles, error: profilesError }] =
-    await Promise.all([
-      supabase.from("users").select("id, username").in("id", userIds),
-      supabase.from("user_profiles").select("user_id, nickname").in("user_id", userIds),
-    ]);
-
-  if (usersError) {
-    console.error("loadActiveCardsForRoom: users error", usersError);
-  }
-  if (profilesError) {
-    console.error("loadActiveCardsForRoom: user_profiles error", profilesError);
-  }
-
-  const usernameById = new Map<string, string>();
-  for (const u of (users || []) as Array<{ id: string; username: string | null }>) {
-    if (u.username) usernameById.set(u.id, u.username);
-  }
-
-  const nicknameById = new Map<string, string>();
-  for (const p of (profiles || []) as Array<{ user_id: string; nickname: string | null }>) {
-    if (p.nickname) nicknameById.set(p.user_id, p.nickname);
-  }
-
-  // همیشه از روی ticket counts خروجی بساز — هیچ player_user_id حذف نشود.
-  const result: Array<{
-    user_id: string;
-    display_name: string;
-    card_count: number;
-  }> = userIds.map((userId) => ({
-    user_id: userId,
-    display_name:
-      nicknameById.get(userId) || usernameById.get(userId) || userId,
-    card_count: counts[userId] || 0,
-  }));
-
-  result.sort((a, b) => a.display_name.localeCompare(b.display_name, "fa"));
-
-  console.info(
-    "[loadActiveCardsForRoom]",
-    JSON.stringify({
-      roomId,
-      dataSource: usePg ? "pg" : "supabase",
-      ticketRowCount: usePg
-        ? (pgCompareRows ?? []).reduce(
-            (sum, r) => sum + Number(r.card_count || 0),
-            0
-          )
-        : tickets?.length ?? 0,
-      tickets: usePg ? null : tickets,
-      counts,
-      userIds,
-      result,
-    })
-  );
-
-  return result;
 }
 
 type GlobalRegistrationLockState = {
@@ -825,21 +616,87 @@ async function loadGlobalRegistrationLockState(
     .maybeSingle();
 
   if (error) {
-    // Graceful fallback for environments where migration is not applied yet.
-    if ((error as any).code === "42P01") {
+    if ((error as { code?: string }).code === "42P01") {
       return { locked: false, reason: null };
     }
-    console.error("loadGlobalRegistrationLockState error:", error);
+    console.error("[Room] loadGlobalRegistrationLockState error:", error);
     return { locked: false, reason: null };
   }
 
   return {
-    locked: Boolean((data as any)?.global_registration_locked),
-    reason: (data as any)?.global_registration_lock_reason ?? null,
+    locked: Boolean(
+      (data as { global_registration_locked?: boolean })?.global_registration_locked
+    ),
+    reason:
+      (data as { global_registration_lock_reason?: string | null })
+        ?.global_registration_lock_reason ?? null,
   };
 }
 
-async function loadPlayingTablesForTemplate(
+async function loadActiveCardsForRoomFallback(
+  supabase: ReturnType<typeof createServiceClient>,
+  roomId: string
+): Promise<
+  Array<{ user_id: string; display_name: string; card_count: number }>
+> {
+  const { data: tickets, error } = await supabase
+    .from("tickets")
+    .select("player_user_id")
+    .eq("room_id", roomId)
+    .in("reservation_status", ["reserved", "confirmed", "consumed"]);
+
+  if (error || !tickets?.length) {
+    if (error) {
+      console.error("[Room] loadActiveCardsForRoom fallback error:", error);
+    }
+    return [];
+  }
+
+  const counts: Record<string, number> = {};
+  for (const t of tickets as Array<{ player_user_id: string | null }>) {
+    const userId = t.player_user_id;
+    if (!userId) continue;
+    counts[userId] = (counts[userId] || 0) + 1;
+  }
+
+  const userIds = Object.keys(counts);
+  if (userIds.length === 0) return [];
+
+  const [{ data: users }, { data: profiles }] = await Promise.all([
+    supabase.from("users").select("id, username").in("id", userIds),
+    supabase
+      .from("user_profiles")
+      .select("user_id, nickname")
+      .in("user_id", userIds),
+  ]);
+
+  const usernameById = new Map<string, string>();
+  for (const u of (users || []) as Array<{
+    id: string;
+    username: string | null;
+  }>) {
+    if (u.username) usernameById.set(u.id, u.username);
+  }
+
+  const nicknameById = new Map<string, string>();
+  for (const p of (profiles || []) as Array<{
+    user_id: string;
+    nickname: string | null;
+  }>) {
+    if (p.nickname) nicknameById.set(p.user_id, p.nickname);
+  }
+
+  return userIds
+    .map((userId) => ({
+      user_id: userId,
+      display_name:
+        nicknameById.get(userId) || usernameById.get(userId) || userId,
+      card_count: counts[userId] || 0,
+    }))
+    .sort((a, b) => a.display_name.localeCompare(b.display_name, "fa"));
+}
+
+async function loadPlayingTablesForTemplateFallback(
   supabase: ReturnType<typeof createServiceClient>,
   templateId: string | null,
   fallback?: { cardPrice: number; currency: string }
@@ -852,90 +709,49 @@ async function loadPlayingTablesForTemplate(
     prize: number;
   }>
 > {
-  type ActiveTableResult = {
-    room_id: string;
-    room_code: string;
-    players: number;
-    card_count: number;
-    prize: number;
-  };
-
-  if (!templateId && !fallback) {
-    return [];
-  }
-
   const pgParams = templateId
     ? { templateId }
-    : {
-        cardPrice: fallback!.cardPrice,
-        currency: fallback!.currency,
-      };
+    : fallback
+      ? { cardPrice: fallback.cardPrice, currency: fallback.currency }
+      : null;
 
-  const [pgTables, supabaseRoomsResult] = await Promise.all([
-    loadPlayingTablesFromPg(pgParams),
-    (() => {
-      let query = supabase
-        .from("rooms")
-        .select("id, room_code, card_price, currency, room_template_id")
-        .in("status", ["playing"]);
-
-      if (templateId) {
-        query = query.eq("room_template_id", templateId);
-      } else if (fallback) {
-        query = query
-          .eq("card_price", fallback.cardPrice)
-          .eq("currency", fallback.currency);
-      }
-
-      return query;
-    })(),
-  ]);
-
-  const { data: rooms, error } = supabaseRoomsResult;
-
-  if (error) {
-    console.error("loadPlayingTablesForTemplate: rooms error", error);
+  if (pgParams) {
+    const pgTables = await loadPlayingTablesFromPg(pgParams);
+    if (pgTables !== null) {
+      return pgTables.map((row) => ({
+        room_id: row.room_id,
+        room_code: row.room_code,
+        players: row.players,
+        card_count: row.card_count,
+        prize: row.card_price * row.card_count,
+      }));
+    }
   }
 
-  const supabaseRoomIds = ((rooms || []) as Array<{ id: string }>).map(
-    (r) => r.id
-  );
+  if (!templateId && !fallback) return [];
 
-  console.info(
-    "[activeTablesCompare:pg-vs-supabase]",
-    JSON.stringify({
-      templateId,
-      fallback: fallback ?? null,
-      dataSource: pgTables !== null ? "pg" : "supabase",
-      supabaseRoomCount: supabaseRoomIds.length,
-      supabaseRoomIds,
-      pgRoomCount: pgTables?.length ?? null,
-      pgRooms: pgTables?.map((t) => ({
-        room_id: t.room_id,
-        room_code: t.room_code,
-        players: t.players,
-        card_count: t.card_count,
-      })),
-      debugTs: new Date().toISOString(),
-    })
-  );
+  let query = supabase
+    .from("rooms")
+    .select("id, room_code, card_price, currency, room_template_id")
+    .in("status", ["playing"]);
 
-  if (pgTables !== null) {
-    return pgTables.map((row) => ({
-      room_id: row.room_id,
-      room_code: row.room_code,
-      players: row.players,
-      card_count: row.card_count,
-      prize: row.card_price * row.card_count,
-    }));
+  if (templateId) {
+    query = query.eq("room_template_id", templateId);
+  } else if (fallback) {
+    query = query
+      .eq("card_price", fallback.cardPrice)
+      .eq("currency", fallback.currency);
   }
 
-  if (!rooms || rooms.length === 0) {
+  const { data: rooms, error } = await query;
+  if (error || !rooms?.length) {
+    if (error) {
+      console.error("[Room] loadPlayingTables fallback rooms error:", error);
+    }
     return [];
   }
 
-  const roomIds = (rooms as any[]).map((r) => r.id as string);
-
+  const roomIds = (rooms as Array<{ id: string }>).map((r) => r.id);
   const { data: ticketsData, error: ticketsError } = await supabase
     .from("tickets")
     .select("room_id, player_user_id")
@@ -943,40 +759,32 @@ async function loadPlayingTablesForTemplate(
     .in("reservation_status", ["reserved", "confirmed", "consumed"]);
 
   if (ticketsError) {
-    console.error("loadPlayingTablesForTemplate: tickets error", ticketsError);
+    console.error("[Room] loadPlayingTables fallback tickets error:", ticketsError);
   }
 
   const stats: Record<string, { players: Set<string>; cards: number }> = {};
-
-  for (const t of (ticketsData || []) as any[]) {
-    const rId = t.room_id as string;
-    const pId = t.player_user_id as string | null;
-    if (!stats[rId]) {
-      stats[rId] = { players: new Set(), cards: 0 };
+  for (const t of (ticketsData || []) as Array<{
+    room_id: string;
+    player_user_id: string | null;
+  }>) {
+    if (!stats[t.room_id]) {
+      stats[t.room_id] = { players: new Set(), cards: 0 };
     }
-    if (pId) {
-      stats[rId].players.add(pId);
-    }
-    stats[rId].cards += 1;
+    if (t.player_user_id) stats[t.room_id].players.add(t.player_user_id);
+    stats[t.room_id].cards += 1;
   }
 
-  const result: ActiveTableResult[] = [];
-
-  for (const r of rooms as any[]) {
-    const s = stats[r.id as string] || { players: new Set(), cards: 0 };
-    const cardCount = s.cards;
-    const prize = Number(r.card_price || 0) * cardCount;
-
-    result.push({
-      room_id: r.id as string,
-      room_code: r.room_code as string,
-      players: s.players.size,
-      card_count: cardCount,
-      prize,
-    });
-  }
-
-  return result;
+  return (rooms as Array<{ id: string; room_code: string; card_price: unknown }>).map(
+    (r) => {
+      const s = stats[r.id] || { players: new Set(), cards: 0 };
+      const cardCount = s.cards;
+      return {
+        room_id: r.id,
+        room_code: r.room_code,
+        players: s.players.size,
+        card_count: cardCount,
+        prize: Number(r.card_price || 0) * cardCount,
+      };
+    }
+  );
 }
-
-
