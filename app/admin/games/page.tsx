@@ -16,9 +16,10 @@ type ReportPeriod = GamesReportPeriod;
 const PERIOD_LABELS: Record<ReportPeriod, string> = {
   day: "روز",
   week: "هفته",
-  month: "ماه",
   range: "بازه",
 };
+
+const PERIOD_TABS: ReportPeriod[] = ["day", "week", "range"];
 
 export default function AdminGamesReportPage() {
   const router = useRouter();
@@ -39,7 +40,7 @@ export default function AdminGamesReportPage() {
   const [globalLockSaving, setGlobalLockSaving] = useState(false);
   const pageSize = 20;
 
-  const canApplyRange = rangeFrom.length > 0 && rangeTo.length > 0 && rangeFrom <= rangeTo;
+  const canApplyRange = rangeFrom.length > 0 && rangeTo.length > 0 && rangeFrom < rangeTo;
   const totalPages = Math.max(Math.ceil(totalCount / pageSize), 1);
 
   useEffect(() => {
@@ -190,8 +191,8 @@ export default function AdminGamesReportPage() {
     <div className="min-h-screen bg-[#0E0E0F] p-4 text-white">
       <div className="max-w-2xl mx-auto">
         <div className="rounded-2xl bg-[#151515] border border-gray-800 mb-4 overflow-hidden">
-          <div className="grid grid-cols-4 text-center text-sm font-semibold">
-            {(["day", "week", "month", "range"] as ReportPeriod[]).map((period) => (
+          <div className="grid grid-cols-3 text-center text-sm font-semibold">
+            {PERIOD_TABS.map((period) => (
               <button
                 key={period}
                 onClick={() => setActivePeriod(period)}

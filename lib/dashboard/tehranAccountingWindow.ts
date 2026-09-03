@@ -133,6 +133,43 @@ export function getTehranSnapshotDateRangeFromBounds(
   return { fromSnapshotDate, throughSnapshotDate };
 }
 
+/** Start of the open Saturday 08:00 Tehran week window containing `now`. */
+export function getOpenTehranWeekAccountingWindowFrom(now = new Date()): Date {
+  const p = tehranParts(now);
+  const jsDay = new Date(Date.UTC(p.year, p.month - 1, p.day)).getUTCDay();
+  const daysSinceSaturday = (jsDay + 1) % 7;
+  const saturdayParts = addTehranCalendarDays(
+    { year: p.year, month: p.month, day: p.day },
+    -daysSinceSaturday
+  );
+
+  let start = new Date(
+    Date.UTC(saturdayParts.year, saturdayParts.month - 1, saturdayParts.day, 8, 0, 0, 0) -
+      TEHRAN_OFFSET_MS
+  );
+
+  if (now.getTime() < start.getTime()) {
+    const prevSaturday = addTehranCalendarDays(saturdayParts, -7);
+    start = new Date(
+      Date.UTC(prevSaturday.year, prevSaturday.month - 1, prevSaturday.day, 8, 0, 0, 0) -
+        TEHRAN_OFFSET_MS
+    );
+  }
+
+  return start;
+}
+
+/** Live open week window: last Saturday 08:00 Tehran → request time. */
+export function getOpenTehranWeekAccountingWindow(now = new Date()): {
+  fromIso: string;
+  toIso: string;
+} {
+  return {
+    fromIso: getOpenTehranWeekAccountingWindowFrom(now).toISOString(),
+    toIso: now.toISOString(),
+  };
+}
+
 /** Live open accounting window: last 08:00 Tehran → request time. */
 export function getOpenTehranAccountingWindow(now = new Date()): {
   fromIso: string;

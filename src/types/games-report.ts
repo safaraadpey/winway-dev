@@ -1,4 +1,4 @@
-export type GamesReportPeriod = "day" | "week" | "month" | "range";
+export type GamesReportPeriod = "day" | "week" | "range";
 
 export interface AdminGameReportItem {
   id: string;

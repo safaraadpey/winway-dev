@@ -3,6 +3,11 @@
 // Service layer for manual deposit/withdraw actions from admin/agent/super panels.
 
 import { supabase } from "@/lib/supabaseClient";
+import {
+  getOpenTehranAccountingWindow,
+  getOpenTehranWeekAccountingWindow,
+  getTehranInclusiveDateRangeIso,
+} from "@/lib/dashboard/tehranAccountingWindow";
 import type {
   BulkAdjustRequest,
   BulkMoneyResponse,
@@ -193,6 +198,8 @@ function makeShortIdFromUuid(id: string): string {
 
 export interface LoadTransactionHistoryParams {
   dateFilter?: DateFilter;
+  rangeFrom?: string;
+  rangeTo?: string;
   search?: string;
   maxAgeMs?: number;
   force?: boolean;
@@ -211,15 +218,43 @@ export function clearTransactionHistoryCache() {
   transactionHistoryCache = null;
 }
 
-function makeHistoryCacheKey(params: { dateFilter: DateFilter; search: string; userId: string }): string {
-  // normalize search to avoid missing cache hits for trivial whitespace differences
+function makeHistoryCacheKey(params: {
+  dateFilter: DateFilter;
+  search: string;
+  userId: string;
+  rangeFrom?: string;
+  rangeTo?: string;
+}): string {
   const q = (params.search || "").trim().toLowerCase();
-  return `${params.userId}|${params.dateFilter}|${q}`;
+  const range =
+    params.dateFilter === "range" ? `${params.rangeFrom || ""}|${params.rangeTo || ""}` : "";
+  return `${params.userId}|${params.dateFilter}|${range}|${q}`;
+}
+
+function resolveTransactionHistoryWindow(
+  dateFilter: DateFilter,
+  rangeFrom?: string,
+  rangeTo?: string
+): { dateFromIso: string; dateToIso: string } {
+  if (dateFilter === "day") {
+    return getOpenTehranAccountingWindow();
+  }
+  if (dateFilter === "week") {
+    return getOpenTehranWeekAccountingWindow();
+  }
+  if (!rangeFrom || !rangeTo || rangeFrom >= rangeTo) {
+    throw new Error("بازه تاریخ نامعتبر است. پایان باید بعد از شروع باشد (مرز ۰۸:۰۰ تهران).");
+  }
+  const bounds = getTehranInclusiveDateRangeIso(rangeFrom, rangeTo);
+  if (!bounds) {
+    throw new Error("بازه تاریخ نامعتبر است. پایان باید بعد از شروع باشد (مرز ۰۸:۰۰ تهران).");
+  }
+  return bounds;
 }
 
 /** PostgREST page size (project max-rows is typically 1000). */
 const HISTORY_PAGE_SIZE = 1000;
-/** Safety cap so a busy month cannot unbounded-load the browser. */
+/** Safety cap so a busy period cannot unbounded-load the browser. */
 const HISTORY_MAX_ROWS = 10_000;
 const IN_FILTER_CHUNK = 200;
 
@@ -378,9 +413,10 @@ async function loadOnlineDepositHistoryItems(params: {
   scopeAll: boolean;
   targetUserIds: string[];
   dateFromIso: string;
+  dateToIso: string;
   search: string;
 }): Promise<TransactionHistoryItem[]> {
-  const { scopeAll, targetUserIds, dateFromIso, search } = params;
+  const { scopeAll, targetUserIds, dateFromIso, dateToIso, search } = params;
 
   if (!scopeAll && targetUserIds.length === 0) {
     return [];
@@ -394,6 +430,7 @@ async function loadOnlineDepositHistoryItems(params: {
         .eq("source_kind", "deposit_domain")
         .eq("type", "deposit")
         .gte("created_at", dateFromIso)
+        .lte("created_at", dateToIso)
         .order("created_at", { ascending: false })
         .range(from, to);
       if (!scopeAll) {
@@ -449,9 +486,10 @@ async function loadCryptoWithdrawalHistoryItems(params: {
   scopeAll: boolean;
   targetUserIds: string[];
   dateFromIso: string;
+  dateToIso: string;
   search: string;
 }): Promise<TransactionHistoryItem[]> {
-  const { scopeAll, targetUserIds, dateFromIso, search } = params;
+  const { scopeAll, targetUserIds, dateFromIso, dateToIso, search } = params;
 
   if (!scopeAll && targetUserIds.length === 0) {
     return [];
@@ -464,6 +502,7 @@ async function loadCryptoWithdrawalHistoryItems(params: {
         .select("id, player_id, amount, created_at")
         .eq("kind", "crypto")
         .gte("created_at", dateFromIso)
+        .lte("created_at", dateToIso)
         .order("created_at", { ascending: false })
         .range(from, to);
       if (!scopeAll) {
@@ -519,7 +558,8 @@ async function loadCryptoWithdrawalHistoryItems(params: {
 export async function loadTransactionHistory(
   params: LoadTransactionHistoryParams = {}
 ): Promise<TransactionHistoryResult> {
-  const { dateFilter = "month", search = "", maxAgeMs = 30_000, force = false } = params;
+  const { dateFilter = "week", rangeFrom, rangeTo, search = "", maxAgeMs = 30_000, force = false } =
+    params;
 
   try {
     // گرفتن کاربر فعلی
@@ -532,7 +572,13 @@ export async function loadTransactionHistory(
       throw new Error("خطا در احراز هویت");
     }
 
-    const cacheKey = makeHistoryCacheKey({ userId: authUser.id, dateFilter, search });
+    const cacheKey = makeHistoryCacheKey({
+      userId: authUser.id,
+      dateFilter,
+      search,
+      rangeFrom,
+      rangeTo,
+    });
     if (!force && transactionHistoryCache?.key === cacheKey) {
       const ageMs = Date.now() - transactionHistoryCache.fetchedAtMs;
       if (ageMs >= 0 && ageMs <= maxAgeMs) {
@@ -550,19 +596,23 @@ export async function loadTransactionHistory(
       throw new Error("خطا در دریافت اطلاعات کاربر");
     }
 
-    // محاسبه محدوده تاریخ
-    const now = new Date();
-    let dateFrom: Date;
-    if (dateFilter === "day") {
-      dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    } else if (dateFilter === "week") {
-      // Last 7 days (inclusive) — matches financial-reports and avoids empty results
-      // at the start of a calendar week / timezone boundary (local midnight → UTC).
-      dateFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    } else {
-      // month
-      dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
-    }
+    const { fromIso: dateFromIso, toIso: dateToIso } = resolveTransactionHistoryWindow(
+      dateFilter,
+      rangeFrom,
+      rangeTo
+    );
+
+    console.info("[Wallet] transaction history window", {
+      dateFilter,
+      dateFromIso,
+      dateToIso,
+      source:
+        dateFilter === "day"
+          ? "tehran_08:00"
+          : dateFilter === "week"
+            ? "tehran_saturday_08:00"
+            : "tehran_range",
+    });
 
     const scopeAll = currentUser.role === "admin";
 
@@ -677,8 +727,6 @@ export async function loadTransactionHistory(
       return empty;
     }
 
-    const dateFromIso = dateFrom.toISOString();
-
     const panelSelect =
       "id, user_id, amount, type, created_at, description, source_kind, source_ref, meta";
 
@@ -694,6 +742,7 @@ export async function loadTransactionHistory(
             .select(panelSelect)
             .in("source_kind", [...PANEL_HISTORY_SOURCE_KINDS])
             .gte("created_at", dateFromIso)
+            .lte("created_at", dateToIso)
             .order("created_at", { ascending: false })
             .range(from, to),
         "loadTransactionHistory panel"
@@ -714,6 +763,7 @@ export async function loadTransactionHistory(
               .select(panelSelect)
               .in("source_kind", [...PANEL_HISTORY_SOURCE_KINDS])
               .gte("created_at", dateFromIso)
+              .lte("created_at", dateToIso)
               .order("created_at", { ascending: false })
               .in("user_id", targetUserIds)
               .range(from, to),
@@ -726,6 +776,7 @@ export async function loadTransactionHistory(
               .select(panelSelect)
               .in("source_kind", [...PANEL_HISTORY_SOURCE_KINDS])
               .gte("created_at", dateFromIso)
+              .lte("created_at", dateToIso)
               .order("created_at", { ascending: false })
               .in("source_ref", targetUserIds)
               .range(from, to),
@@ -1071,12 +1122,14 @@ export async function loadTransactionHistory(
         scopeAll,
         targetUserIds,
         dateFromIso,
+        dateToIso,
         search,
       }),
       loadCryptoWithdrawalHistoryItems({
         scopeAll,
         targetUserIds,
         dateFromIso,
+        dateToIso,
         search,
       }),
     ]);
@@ -1093,6 +1146,7 @@ export async function loadTransactionHistory(
     console.info("[Wallet] transaction history loaded", {
       dateFilter,
       dateFrom: dateFromIso,
+      dateTo: dateToIso,
       panelCount: historyItems.length,
       gatewayAndCryptoDepositCount: onlineDepositItems.length,
       cryptoWithdrawalCount: cryptoWithdrawalItems.length,

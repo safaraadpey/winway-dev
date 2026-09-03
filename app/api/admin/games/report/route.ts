@@ -1,26 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminContextOrThrow } from "@/lib/supabaseServer";
+import {
+  getOpenTehranAccountingWindow,
+  getOpenTehranWeekAccountingWindow,
+  getTehranInclusiveDateRangeIso,
+} from "@/lib/dashboard/tehranAccountingWindow";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function getPeriodRange(period: string): { from: Date; to: Date } {
-  const now = new Date();
-
+function resolveReportWindow(
+  period: string,
+  fromDate: string | null,
+  toDate: string | null
+): { fromIso: string; toIso: string } | { error: string } {
   if (period === "day") {
-    const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    return { from, to: now };
+    const { fromIso, toIso } = getOpenTehranAccountingWindow();
+    return { fromIso, toIso };
   }
 
   if (period === "week") {
-    const dayOfWeek = now.getDay();
-    const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Monday
-    const from = new Date(now.getFullYear(), now.getMonth(), diff);
-    return { from, to: now };
+    const { fromIso, toIso } = getOpenTehranWeekAccountingWindow();
+    return { fromIso, toIso };
   }
 
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  return { from, to: now };
+  if (period === "range") {
+    if (!fromDate || !toDate) {
+      return { error: "برای بازه، تاریخ از/تا الزامی است." };
+    }
+    if (fromDate >= toDate) {
+      return { error: "بازه تاریخ نامعتبر است. پایان باید بعد از شروع باشد (مرز ۰۸:۰۰ تهران)." };
+    }
+    const bounds = getTehranInclusiveDateRangeIso(fromDate, toDate);
+    if (!bounds) {
+      return { error: "بازه تاریخ نامعتبر است. پایان باید بعد از شروع باشد (مرز ۰۸:۰۰ تهران)." };
+    }
+    return bounds;
+  }
+
+  return { error: "period نامعتبر است." };
 }
 
 export async function GET(request: NextRequest) {
@@ -41,47 +59,37 @@ export async function GET(request: NextRequest) {
     const pageSize = Math.min(Math.max(pageSizeRaw, 1), 100);
     const offset = (page - 1) * pageSize;
 
-    let from: Date;
-    let to: Date;
+    const windowResult = resolveReportWindow(
+      period,
+      searchParams.get("from"),
+      searchParams.get("to")
+    );
 
-    if (period === "range") {
-      const fromStr = searchParams.get("from");
-      const toStr = searchParams.get("to");
-      if (!fromStr || !toStr) {
-        return NextResponse.json(
-          { ok: false, error: "validation_error", message: "برای بازه، تاریخ از/تا الزامی است." },
-          { status: 400 }
-        );
-      }
-
-      from = new Date(`${fromStr}T00:00:00.000`);
-      to = new Date(`${toStr}T23:59:59.999`);
-      if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from > to) {
-        return NextResponse.json(
-          { ok: false, error: "validation_error", message: "بازه تاریخ نامعتبر است." },
-          { status: 400 }
-        );
-      }
-    } else if (period === "day" || period === "week" || period === "month") {
-      const range = getPeriodRange(period);
-      from = range.from;
-      to = range.to;
-    } else {
+    if ("error" in windowResult) {
       return NextResponse.json(
-        { ok: false, error: "validation_error", message: "period نامعتبر است." },
+        { ok: false, error: "validation_error", message: windowResult.error },
         { status: 400 }
       );
     }
 
+    const { fromIso, toIso } = windowResult;
+
+    console.log("[GamesReport] admin report window", {
+      period,
+      fromIso,
+      toIso,
+      source: period === "day" ? "tehran_08:00" : period === "week" ? "tehran_saturday_08:00" : "tehran_range",
+    });
+
     const { data, error } = await supabase.rpc("fn_admin_games_report", {
-      p_from: from.toISOString(),
-      p_to: to.toISOString(),
+      p_from: fromIso,
+      p_to: toIso,
       p_limit: pageSize,
       p_offset: offset,
     });
 
     if (error) {
-      console.error("[GET /api/admin/games/report] rpc error:", error);
+      console.error("[GamesReport] rpc error:", error);
       return NextResponse.json(
         { ok: false, error: "database_error", message: error.message || "خطا در دریافت گزارش بازی‌ها" },
         { status: 500 }
@@ -173,8 +181,8 @@ export async function GET(request: NextRequest) {
         .from("results")
         .select("room_id, user_id, win_type, reward_amount")
         .in("room_id", roomIds)
-        .gte("created_at", from.toISOString())
-        .lte("created_at", to.toISOString());
+        .gte("created_at", fromIso)
+        .lte("created_at", toIso);
 
       if (!winnersError && winnersRows && winnersRows.length > 0) {
         const winnerUserIds = Array.from(
@@ -303,11 +311,10 @@ export async function GET(request: NextRequest) {
         { status: 403 }
       );
     }
-    console.error("[GET /api/admin/games/report] unexpected error:", err);
+    console.error("[GamesReport] unexpected error:", err);
     return NextResponse.json(
       { ok: false, error: "unexpected_error", message: err?.message || "خطای غیرمنتظره" },
       { status: 500 }
     );
   }
 }
-

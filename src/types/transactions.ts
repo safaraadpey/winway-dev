@@ -60,7 +60,7 @@ export interface BulkAdjustRequest {
 }
 
 // Types for transaction history
-export type DateFilter = "day" | "week" | "month";
+export type DateFilter = "day" | "week" | "range";
 
 export type TransactionHistoryActorRole = "admin" | "agent" | "super" | "player";
 

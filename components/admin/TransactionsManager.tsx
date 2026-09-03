@@ -35,6 +35,13 @@ import {
   getTransactionHistoryIndicator,
   TRANSACTION_HISTORY_LEGEND,
 } from "@/lib/transactions/historyIndicator";
+import ShamsiDateInput from "@/components/common/ShamsiDateInput";
+
+const HISTORY_PERIOD_TABS: { key: DateFilter; label: string }[] = [
+  { key: "day", label: "روز" },
+  { key: "week", label: "هفته" },
+  { key: "range", label: "بازه" },
+];
 
 const ALL_ROLE_TABS: { key: ManagedUserRoleFilter; label: string }[] = [
   { key: "player", label: "پلیر" },
@@ -145,13 +152,19 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
     TransactionHistoryItem[]
   >([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyDateFilter, setHistoryDateFilter] = useState<DateFilter>("month");
+  const [historyDateFilter, setHistoryDateFilter] = useState<DateFilter>("week");
+  const [historyRangeFrom, setHistoryRangeFrom] = useState("");
+  const [historyRangeTo, setHistoryRangeTo] = useState("");
+  const [historyRangeApplied, setHistoryRangeApplied] = useState(false);
   const [historySearch, setHistorySearch] = useState("");
   const [historySearchDebounced, setHistorySearchDebounced] = useState("");
   const [historyTypeFilters, setHistoryTypeFilters] = useState<Set<string>>(
     () => new Set()
   );
-  const [currentUserRole, setCurrentUserRole] = useState<string>("player");
+  const cachedUsersBase = getCachedManagedUsersBase();
+  const [currentUserRole, setCurrentUserRole] = useState<string>(
+    () => cachedUsersBase?.currentUserRole ?? "player"
+  );
   const [withdrawalRequests, setWithdrawalRequests] = useState<
     WithdrawalRequestItem[]
   >([]);
@@ -172,10 +185,11 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
   const canAccessCryptoWithdrawals = currentUserRole === "admin";
   const canAccessWithdrawalsTab =
     canAccessRialWithdrawals || canAccessCryptoWithdrawals;
+  /** Avoid tab bar layout shift before managed-users role resolves on first paint. */
+  const showWithdrawalsTab = canAccessWithdrawalsTab || loading;
   const showWithdrawalKindTabs =
     canAccessRialWithdrawals && canAccessCryptoWithdrawals;
 
-  const cachedUsersBase = getCachedManagedUsersBase();
   const [baseUsers, setBaseUsers] = useState<ManagedUserSummary[]>(
     () => cachedUsersBase?.usersAll ?? []
   );
@@ -290,9 +304,13 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
     return () => clearTimeout(t);
   }, [historySearch]);
 
+  const canApplyHistoryRange =
+    historyRangeFrom.length > 0 && historyRangeTo.length > 0 && historyRangeFrom < historyRangeTo;
+
   // بارگذاری تاریخچه تراکنش‌ها
   useEffect(() => {
     if (tab !== "history") return;
+    if (historyDateFilter === "range" && (!historyRangeApplied || !canApplyHistoryRange)) return;
 
     let isMounted = true;
 
@@ -301,6 +319,8 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
         setHistoryLoading(true);
         const result = await loadTransactionHistory({
           dateFilter: historyDateFilter,
+          rangeFrom: historyDateFilter === "range" ? historyRangeFrom : undefined,
+          rangeTo: historyDateFilter === "range" ? historyRangeTo : undefined,
           search: historySearchDebounced,
           maxAgeMs: 30_000,
         });
@@ -321,7 +341,30 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
     return () => {
       isMounted = false;
     };
-  }, [tab, historyDateFilter, historySearchDebounced]);
+  }, [
+    tab,
+    historyDateFilter,
+    historySearchDebounced,
+    historyRangeApplied,
+    historyRangeFrom,
+    historyRangeTo,
+    canApplyHistoryRange,
+  ]);
+
+  const handleHistoryPeriodChange = (period: DateFilter) => {
+    setHistoryDateFilter(period);
+    if (period === "range") {
+      setHistoryRangeApplied(false);
+      setHistoryTransactions([]);
+    } else {
+      setHistoryRangeApplied(false);
+    }
+  };
+
+  const handleApplyHistoryRange = () => {
+    if (!canApplyHistoryRange) return;
+    setHistoryRangeApplied(true);
+  };
 
   useEffect(() => {
     if (loading) return;
@@ -596,7 +639,7 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
               >
                 پیشخوان
               </button>
-              {canAccessWithdrawalsTab ? (
+              {showWithdrawalsTab ? (
                 <button
                   className={`flex-1 py-3 ${
                     tab === "withdrawals"
@@ -634,37 +677,36 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
 
                 {/* Date filters */}
                 <div className="flex mb-3 rounded-2xl bg-[#111827] overflow-hidden text-sm font-semibold">
-                  <button
-                    className={`flex-1 py-2 ${
-                      historyDateFilter === "month"
-                        ? "bg-teal-500 text-black"
-                        : "text-gray-300"
-                    }`}
-                    onClick={() => setHistoryDateFilter("month")}
-                  >
-                    ماه
-                  </button>
-                  <button
-                    className={`flex-1 py-2 ${
-                      historyDateFilter === "week"
-                        ? "bg-teal-500 text-black"
-                        : "text-gray-300"
-                    }`}
-                    onClick={() => setHistoryDateFilter("week")}
-                  >
-                    هفته
-                  </button>
-                  <button
-                    className={`flex-1 py-2 ${
-                      historyDateFilter === "day"
-                        ? "bg-teal-500 text-black"
-                        : "text-gray-300"
-                    }`}
-                    onClick={() => setHistoryDateFilter("day")}
-                  >
-                    روز
-                  </button>
+                  {HISTORY_PERIOD_TABS.map(({ key, label }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={`flex-1 py-2 ${
+                        historyDateFilter === key ? "bg-teal-500 text-black" : "text-gray-300"
+                      }`}
+                      onClick={() => handleHistoryPeriodChange(key)}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
+
+                {historyDateFilter === "range" && (
+                  <div className="mb-3 space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <ShamsiDateInput value={historyRangeFrom} onChange={setHistoryRangeFrom} />
+                      <ShamsiDateInput value={historyRangeTo} onChange={setHistoryRangeTo} />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleApplyHistoryRange}
+                      disabled={!canApplyHistoryRange || historyLoading}
+                      className="w-full rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                    >
+                      {historyLoading ? "در حال محاسبه..." : "اعمال بازه"}
+                    </button>
+                  </div>
+                )}
 
                 {/* Type filters */}
                 <div
@@ -702,7 +744,11 @@ export default function TransactionsManager({ pageTitle }: TransactionsManagerPr
 
               {/* Transaction list - قابل اسکرول */}
               <div className="flex-1 overflow-y-auto px-4 space-y-2">
-                {historyLoading ? (
+                {historyDateFilter === "range" && !historyRangeApplied ? (
+                  <div className="py-8 text-center text-gray-400 text-sm">
+                    بازه را اعمال کنید
+                  </div>
+                ) : historyLoading ? (
                   <div className="py-8 text-center text-gray-400 text-sm">
                     در حال بارگذاری...
                   </div>
