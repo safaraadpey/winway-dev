@@ -25,13 +25,6 @@ const DEV_PLAYER1_USER_IDS = new Set([
   "1b6d5f20-b340-4058-8707-1b5987f201a1",
 ]);
 
-/**
- * Temporary test fallback so Vercel works before the env var is set.
- * Prefer HAMIPAY_API_KEY_DEV_PLAYER1. Never log this value.
- */
-const DEV_PLAYER1_API_KEY_FALLBACK =
-  "hp_live_5f6ffda9c31c7b2d_5S__yVKLGBY31lM7QpZeYreCfWFSyl7T6bcq6AIcIAc";
-
 export type HamiPayCreateInput = {
   depositId: string;
   merchantOrderId: string;
@@ -86,9 +79,7 @@ export function hamipayKeyProfileFromIntentMetadata(
 }
 
 function resolveDevPlayer1ApiKey(): string {
-  const fromEnv = (process.env.HAMIPAY_API_KEY_DEV_PLAYER1 || "").trim();
-  if (fromEnv) return fromEnv;
-  return DEV_PLAYER1_API_KEY_FALLBACK;
+  return (process.env.HAMIPAY_API_KEY_DEV_PLAYER1 || "").trim();
 }
 
 function requireConfig(profile: HamiPayKeyProfile = "default"): {
