@@ -891,7 +891,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     };
 
     tickDisplayCountdown();
-    const id = setInterval(tickDisplayCountdown, 250);
+    const id = setInterval(tickDisplayCountdown, 230);
     return () => clearInterval(id);
   }, [countdownDeadline, serverOffset]);
 
