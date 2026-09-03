@@ -5,6 +5,7 @@ import PlayerLayoutClient from "./PlayerLayoutClient";
 import EntryBannerModal from "@/components/EntryBannerModal";
 import KycResultModal from "@/components/KycResultModal";
 import TicTacToeHost from "@/components/tic-tac-toe/TicTacToeHost";
+import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 
 /**
  * Layout for player section.
@@ -15,9 +16,15 @@ export default function PlayerLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const { fullPageScroll } = useHeaderVisibility();
+
   return (
     <div
-      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-cover bg-center bg-no-repeat player-layout-root"
+      className={
+        fullPageScroll
+          ? "flex w-full flex-shrink-0 flex-col overflow-visible bg-cover bg-center bg-no-repeat player-layout-root"
+          : "flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-cover bg-center bg-no-repeat player-layout-root"
+      }
       style={{
         backgroundColor: "var(--player-layout-bg, #0E0E0F)",
         backgroundImage:

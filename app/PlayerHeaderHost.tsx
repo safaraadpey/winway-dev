@@ -14,8 +14,13 @@ export default function PlayerHeaderHost() {
   const pathname = usePathname();
   const isPlayerRoute = pathname?.startsWith("/player") ?? false;
 
-  const { showHeader, showBackButton, onBackClick, balanceRefreshDisabled } =
-    useHeaderVisibility();
+  const {
+    showHeader,
+    showBackButton,
+    onBackClick,
+    balanceRefreshDisabled,
+    fullPageScroll,
+  } = useHeaderVisibility();
   const {
     dingBalance,
     tomanBalance,
@@ -37,7 +42,13 @@ export default function PlayerHeaderHost() {
   const availableTomanBalance = Math.max(0, tomanBalance || 0);
 
   return (
-    <div className="sticky top-0 z-50 flex-shrink-0">
+    <div
+      className={
+        fullPageScroll
+          ? "z-50 flex-shrink-0"
+          : "sticky top-0 z-50 flex-shrink-0"
+      }
+    >
       <MergedPlayerHeader
         dingBalance={dingBalance || 0}
         tomanBalance={availableTomanBalance}

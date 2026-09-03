@@ -12,6 +12,9 @@ interface HeaderVisibilityContextType {
   /** غیرفعال کردن refresh دستی ding/toman در هدر (مثلاً حین بازی زنده) */
   balanceRefreshDisabled: boolean;
   setBalanceRefreshDisabled: (disabled: boolean) => void;
+  /** لایو روم: هدر و صفحه با هم اسکرول شوند، نه فقط کارت‌ها */
+  fullPageScroll: boolean;
+  setFullPageScroll: (enabled: boolean) => void;
   onBackClick?: (() => void) | null;
   setOnBackClick: (callback: (() => void) | null) => void;
 }
@@ -24,6 +27,7 @@ export function HeaderVisibilityProvider({ children }: { children: ReactNode }) 
   const [showStatusBar, setShowStatusBar] = useState<boolean>(true);
   const [balanceRefreshDisabled, setBalanceRefreshDisabled] =
     useState<boolean>(false);
+  const [fullPageScroll, setFullPageScroll] = useState<boolean>(false);
   const [onBackClick, setOnBackClick] = useState<(() => void) | null>(null);
 
   return (
@@ -36,6 +40,8 @@ export function HeaderVisibilityProvider({ children }: { children: ReactNode }) 
       setShowStatusBar,
       balanceRefreshDisabled,
       setBalanceRefreshDisabled,
+      fullPageScroll,
+      setFullPageScroll,
       onBackClick,
       setOnBackClick
     }}>

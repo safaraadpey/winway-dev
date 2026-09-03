@@ -156,7 +156,8 @@ export default function LiveRoomScreen({
   const isGuestSpectate = Boolean(guestSpectate);
   const router = useRouter();
   const session = useSession();
-  const { setShowStatusBar, setBalanceRefreshDisabled } = useHeaderVisibility();
+  const { setShowStatusBar, setBalanceRefreshDisabled, setFullPageScroll } =
+    useHeaderVisibility();
   const { creditDingOnReveal, scheduleWalletBalanceSync, refreshAllBalances } =
     useBalancesContext();
   const { invalidate: invalidateActiveGames } = useActiveGamesContext();
@@ -736,6 +737,12 @@ export default function LiveRoomScreen({
     return () => setShowStatusBar(true);
   }, [setShowStatusBar]);
 
+  // اسکرول تمام‌صفحه: هدر و بقیه صفحه با هم حرکت کنند، نه فقط کارت‌ها
+  useEffect(() => {
+    setFullPageScroll(true);
+    return () => setFullPageScroll(false);
+  }, [setFullPageScroll]);
+
   useEffect(() => {
     onResolvedTournamentId?.(data?.tournament?.id ?? null);
   }, [data?.tournament?.id, onResolvedTournamentId]);
@@ -1253,9 +1260,8 @@ export default function LiveRoomScreen({
 
   return (
     <div className={styles.root}>
-      <div className="mx-auto flex h-full min-h-0 w-full max-w-3xl flex-col">
-        {/* RoomHeader Section - Fixed, doesn't scroll */}
-        <div className="flex-shrink-0 px-4 pt-2 pb-1">
+      <div className="mx-auto flex w-full max-w-3xl flex-col">
+        <div className="px-4 pt-2 pb-1">
           <div
             className={`${styles.gameStatusPanel} bg-cover bg-center bg-no-repeat`}
             style={{
@@ -1292,11 +1298,7 @@ export default function LiveRoomScreen({
           )}
         </div>
 
-        {/* Cards List Section - Scrollable */}
-        <div
-          className="flex-1 min-h-0 overflow-y-auto px-4 pt-3 pb-[9px] space-y-2 pr-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-          style={{ paddingBottom: "300px" }}
-        >
+        <div className="space-y-2 px-4 pb-[calc(24px+env(safe-area-inset-bottom,0px))] pt-3">
           {orderedCards.map((card) => (
             <div key={card.ticket_id} className="bg-transparent rounded-3xl">
               <BingoCardDemo

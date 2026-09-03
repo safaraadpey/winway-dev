@@ -5,7 +5,10 @@ import { usePathname } from "next/navigation";
 import { BalancesProvider } from "@/lib/contexts/BalancesContext";
 import { SessionProvider } from "@/lib/contexts/SessionContext";
 import { PlayerProfileProvider } from "@/lib/contexts/PlayerProfileContext";
-import { HeaderVisibilityProvider } from "@/lib/contexts/HeaderVisibilityContext";
+import {
+  HeaderVisibilityProvider,
+  useHeaderVisibility,
+} from "@/lib/contexts/HeaderVisibilityContext";
 import { ThemeProvider } from "@/lib/contexts/ThemeContext";
 import PlayerHeaderHost from "@/app/PlayerHeaderHost";
 import GameEndResultsListener from "@/components/GameEndResultsListener";
@@ -46,10 +49,10 @@ export default function GlobalUserStateClient({
             <BalancesProvider>
               <ThemeProvider>
                 <HeaderVisibilityProvider>
-                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                  <AppChromeColumn>
                     <PlayerHeaderHost />
                     {skipPlayerGameStack ? children : withPlayerGameStack}
-                  </div>
+                  </AppChromeColumn>
                 </HeaderVisibilityProvider>
               </ThemeProvider>
             </BalancesProvider>
@@ -57,6 +60,22 @@ export default function GlobalUserStateClient({
         </PlayerProfileProvider>
       </SessionProvider>
     </InstallPromptProvider>
+  );
+}
+
+function AppChromeColumn({ children }: { children: React.ReactNode }) {
+  const { fullPageScroll } = useHeaderVisibility();
+
+  return (
+    <div
+      className={
+        fullPageScroll
+          ? "flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          : "flex min-h-0 flex-1 flex-col overflow-hidden"
+      }
+    >
+      {children}
+    </div>
   );
 }
 

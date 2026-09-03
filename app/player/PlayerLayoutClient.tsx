@@ -10,6 +10,7 @@ import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import { useSession } from "@/lib/contexts/SessionContext";
 import { unlockAndPreloadOnUserGesture } from "@/lib/number-audio";
 import MyActiveGames from "@/components/MyActiveGames";
+import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 
 /**
  * Client Component wrapper for player layout shell (active games, presence).
@@ -21,6 +22,7 @@ export default function PlayerLayoutClient({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const { fullPageScroll } = useHeaderVisibility();
   const session = useSession();
   const {
     triggerTomanCelebrate,
@@ -88,11 +90,29 @@ export default function PlayerLayoutClient({
   }, [session.authReady, session.accessToken, session.tokenVersion]);
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden pb-[env(safe-area-inset-bottom,0px)]">
-      <div className="flex-shrink-0 sticky top-0 z-40">
+    <div
+      className={
+        fullPageScroll
+          ? "flex w-full flex-shrink-0 flex-col overflow-visible pb-[env(safe-area-inset-bottom,0px)]"
+          : "flex h-full min-h-0 flex-1 flex-col overflow-hidden pb-[env(safe-area-inset-bottom,0px)]"
+      }
+    >
+      <div
+        className={
+          fullPageScroll
+            ? "flex-shrink-0"
+            : "flex-shrink-0 sticky top-0 z-40"
+        }
+      >
         <MyActiveGames />
       </div>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div
+        className={
+          fullPageScroll
+            ? "flex flex-col"
+            : "flex min-h-0 flex-1 flex-col overflow-hidden"
+        }
+      >
         {children}
       </div>
     </div>

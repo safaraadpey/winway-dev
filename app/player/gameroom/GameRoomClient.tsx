@@ -140,8 +140,11 @@ export default function GameRoomClient() {
     roomId,
   ]);
 
-  // غیرفعال کردن اسکرول عمودی برای این صفحه
+  // قفل اسکرول بدنه فقط برای صفحه خرید/انتظار؛ لایو روم اسکرول تمام‌صفحه دارد
   useEffect(() => {
+    const isLive = Boolean(roomId && liveRoomId === roomId);
+    if (isLive) return;
+
     const originalOverflow = document.body.style.overflow;
     const originalOverflowY = document.body.style.overflowY;
 
@@ -152,7 +155,7 @@ export default function GameRoomClient() {
       document.body.style.overflow = originalOverflow;
       document.body.style.overflowY = originalOverflowY;
     };
-  }, []);
+  }, [roomId, liveRoomId]);
 
   useEffect(() => {
     if (!roomId || !enterLiveFromChip) return;
