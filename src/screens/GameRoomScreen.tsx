@@ -378,7 +378,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
 
     const nextUrl = `/player/gameroom?templateId=${encodeURIComponent(tid)}`;
     console.log("[Room] Spectator stay on template", { roomId, templateId: tid });
-    window.location.replace(nextUrl);
+    router.replace(nextUrl, { scroll: false });
   };
 
   const tryEnterLive = (opts?: {

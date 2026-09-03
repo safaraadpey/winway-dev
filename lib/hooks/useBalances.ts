@@ -426,8 +426,23 @@ export function useBalances(): Balances {
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (!isMountedRef.current || isHardExiting()) return;
 
-      if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+      if (event === "INITIAL_SESSION") {
+        const shell = readBalanceShell();
+        if (
+          shell &&
+          hasHydratedRef.current &&
+          isBalanceShellFresh(shell, BALANCE_SHELL_TTL_MS)
+        ) {
+          console.log("[Wallet] INITIAL_SESSION skip — balance shell still fresh");
+          return;
+        }
+        void fetchBalances();
+        return;
+      }
+
+      if (event === "SIGNED_IN") {
         void fetchBalances({ force: true });
+        return;
       }
 
       if (event === "SIGNED_OUT") {

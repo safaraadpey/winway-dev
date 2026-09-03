@@ -189,8 +189,20 @@ export function PlayerProfileProvider({ children }: { children: ReactNode }) {
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (!isMountedRef.current || isHardExiting()) return;
 
-      if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+      if (event === "INITIAL_SESSION") {
+        if (readPlayerProfileShell() && hasHydratedRef.current) {
+          console.log(
+            "[PlayerProfile] INITIAL_SESSION skip — profile shell hydrated"
+          );
+          return;
+        }
         void refreshProfile();
+        return;
+      }
+
+      if (event === "SIGNED_IN") {
+        void refreshProfile({ force: true });
+        return;
       }
 
       if (event === "SIGNED_OUT") {
