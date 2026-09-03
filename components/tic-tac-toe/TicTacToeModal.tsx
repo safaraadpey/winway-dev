@@ -600,7 +600,7 @@ export default function TicTacToeModal({
             scheduleProgressionHand(result.progressionEvent);
           }
           if (result.paidDing > 0) {
-            void refreshAllBalances?.();
+            void refreshAllBalances?.({ force: true });
           }
         } catch (err) {
           if (claimGeneration !== claimGenerationRef.current) return;

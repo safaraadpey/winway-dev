@@ -114,7 +114,8 @@ function clearAuthAndAppStorage(): void {
       if (
         key.startsWith("sb-") ||
         key.includes("-auth-token") ||
-        key.startsWith("winway_")
+        key.startsWith("winway_") ||
+        key.startsWith("winway.header.")
       ) {
         keysToRemove.push(key);
       }

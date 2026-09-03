@@ -1164,7 +1164,7 @@ export default function LiveRoomScreen({
 
     console.log("[LiveRoom] room finished with status:", status);
     scheduleWalletBalanceSync?.(`room-finished:${roomId}`);
-    void refreshAllBalances?.();
+    void refreshAllBalances?.({ force: true });
     invalidateActiveGames?.();
   }, [
     data?.room.status,

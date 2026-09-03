@@ -6,16 +6,14 @@ import {
   type WalletPrizeCelebrateDetail,
 } from "@/lib/walletPrizeCelebrate";
 import { usePathname } from "next/navigation";
-import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
 import { useSession } from "@/lib/contexts/SessionContext";
 import { unlockAndPreloadOnUserGesture } from "@/lib/number-audio";
-import MergedPlayerHeader from "@/components/MergedPlayerHeader";
 import MyActiveGames from "@/components/MyActiveGames";
 
 /**
- * Client Component wrapper برای منطق کلاینت در Player Layout
- * این کامپوننت useBalances و subscription را مدیریت می‌کند
+ * Client Component wrapper for player layout shell (active games, presence).
+ * Header is rendered at root via PlayerHeaderHost.
  */
 export default function PlayerLayoutClient({
   children,
@@ -24,43 +22,15 @@ export default function PlayerLayoutClient({
 }) {
   const pathname = usePathname();
   const session = useSession();
-  const { showHeader, showBackButton, onBackClick, balanceRefreshDisabled } =
-    useHeaderVisibility();
   const {
-    dingBalance,
-    tomanBalance,
-    lockedTomanBalance,
-    loading,
-    isAnimating,
-    isTomanAnimating,
     triggerTomanCelebrate,
-    refreshAllBalances,
     scheduleWalletBalanceSync,
   } = useBalancesContext();
 
-  // نکته: در بک‌اند، هنگام hold برای join، هم balance کم می‌شود و هم locked_amount زیاد.
-  // بنابراین `wallets.balance` خودش موجودی قابل استفاده است و نباید دوباره locked_amount از آن کم شود.
-  const availableTomanBalance = Math.max(0, tomanBalance || 0);
-
-  // Unlock shared WebAudio (number + ding) on first user gesture in player shell.
   useEffect(() => {
     return unlockAndPreloadOnUserGesture(window);
   }, []);
 
-  // دیباگ: لاگ وضعیت subscription و balance
-  useEffect(() => {
-    console.log('[PlayerLayoutClient] Mounted - Client Component is active');
-    console.log('[PlayerLayoutClient] Balance state:', {
-      dingBalance,
-      tomanBalance,
-      lockedTomanBalance,
-      availableTomanBalance,
-      loading,
-      isAnimating,
-    });
-  }, []);
-
-  // Dev-only lifecycle log for route transitions inside /player
   useEffect(() => {
     if (process.env.NODE_ENV === "production") return;
     console.log("[ActiveGames][Lifecycle] route-change", { pathname });
@@ -81,7 +51,6 @@ export default function PlayerLayoutClient({
     };
   }, [triggerTomanCelebrate, scheduleWalletBalanceSync]);
 
-  // Presence ping for Warm crypto watch (online window ≈ 2 minutes).
   useEffect(() => {
     let stopped = false;
     let interval: ReturnType<typeof setInterval> | null = null;
@@ -118,33 +87,9 @@ export default function PlayerLayoutClient({
     };
   }, [session.authReady, session.accessToken, session.tokenVersion]);
 
-  useEffect(() => {
-    console.log('[PlayerLayoutClient] Balance updated:', {
-      dingBalance,
-      tomanBalance,
-      lockedTomanBalance,
-      availableTomanBalance,
-      isAnimating,
-      timestamp: new Date().toISOString(),
-    });
-  }, [dingBalance, tomanBalance, lockedTomanBalance, availableTomanBalance, isAnimating]);
-
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden pb-[env(safe-area-inset-bottom,0px)]">
-      <div className="flex-shrink-0 sticky top-0 z-50">
-        {showHeader && (
-          <MergedPlayerHeader
-            dingBalance={dingBalance || 0}
-            tomanBalance={availableTomanBalance}
-            loading={loading}
-            isAnimating={isAnimating}
-            isTomanAnimating={isTomanAnimating}
-            showBackButton={showBackButton}
-            onBackClick={onBackClick || undefined}
-            onRefreshBalances={refreshAllBalances}
-            refreshDisabled={loading || balanceRefreshDisabled}
-          />
-        )}
+      <div className="flex-shrink-0 sticky top-0 z-40">
         <MyActiveGames />
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -153,4 +98,3 @@ export default function PlayerLayoutClient({
     </div>
   );
 }
-

@@ -1,47 +1,59 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from "react";
 import { usePathname } from "next/navigation";
-import { supabase } from '../supabaseClient';
-import { getMyDingBalance } from '../features/ding/ding';
+import { supabase } from "../supabaseClient";
+import { getMyDingBalance } from "../features/ding/ding";
 import { isDingEnabled } from "@/lib/audio-settings";
 import { playDingTone } from "@/lib/number-audio";
 import { HARD_EXIT_EVENT, isHardExiting } from "@/lib/auth/hardExit";
 import { isAgentPanelLocation, isAgentPanelPath } from "@/lib/auth/isAgentPanelPath";
+import {
+  BALANCE_SHELL_TTL_MS,
+  clearBalanceShell,
+  isBalanceShellFresh,
+  readBalanceShell,
+  writeBalanceShell,
+} from "@/lib/header/balanceShell";
+
+export type RefreshBalancesOptions = {
+  force?: boolean;
+};
 
 export interface Balances {
   dingBalance: number;
   tomanBalance: number;
   lockedTomanBalance: number;
+  /** True only before first successful hydrate (backward compat for header) */
   loading: boolean;
+  hasHydrated: boolean;
+  isRefreshing: boolean;
   error: string | null;
   isAnimating: boolean;
   isTomanAnimating: boolean;
   triggerTomanCelebrate: () => void;
   triggerDingCelebrate: () => void;
-  /**
-   * Refresh wallet balances (toman + locked) immediately from DB.
-   * Useful right after purchase/cancel actions to avoid waiting for realtime delay.
-   */
   refreshWalletBalances?: () => Promise<void>;
-  /**
-   * Refresh both toman + ding balances immediately from server.
-   */
-  refreshAllBalances?: () => Promise<void>;
-  /**
-   * Credit ding locally when a draw number is revealed in LiveRoom.
-   * delta = matched card count × ding_per_number (computed in LiveRoom).
-   */
+  refreshAllBalances?: (options?: RefreshBalancesOptions) => Promise<void>;
   creditDingOnReveal?: (revealKey: string, delta: number) => void;
-  /**
-   * Poll wallet balance after room settlement (prize payout / hold release).
-   */
   scheduleWalletBalanceSync?: (reason?: string) => void;
+}
+
+function readInitialBalanceState() {
+  const shell = readBalanceShell();
+  return {
+    shell,
+    dingBalance: shell?.dingBalance ?? 0,
+    tomanBalance: shell?.tomanBalance ?? 0,
+    lockedTomanBalance: shell?.lockedTomanBalance ?? 0,
+    hasHydrated: Boolean(shell),
+    fetchedAt: shell?.fetchedAt ?? 0,
+  };
 }
 
 /**
  * Hook برای دریافت موجودی Ding و تومان کاربر فعلی
- * از Supabase و مدیریت realtime updates
+ * کش TTL + refresh کنترل‌شده؛ بدون blank کردن UI بعد از hydrate
  */
 export function useBalances(): Balances {
   const pathname = usePathname();
@@ -51,71 +63,61 @@ export function useBalances(): Balances {
     isAgentPanelPath(pathname) || isAgentPanelLocation();
   const wasAgentPanelRef = useRef(skipDingBalanceRef.current);
 
-  const [dingBalance, setDingBalance] = useState<number>(0);
-  const [tomanBalance, setTomanBalance] = useState<number>(0);
-  const [lockedTomanBalance, setLockedTomanBalance] = useState<number>(0);
-  const [loading, setLoading] = useState<boolean>(true);
+  const initialRef = useRef(readInitialBalanceState());
+
+  const [dingBalance, setDingBalance] = useState<number>(
+    initialRef.current.dingBalance
+  );
+  const [tomanBalance, setTomanBalance] = useState<number>(
+    initialRef.current.tomanBalance
+  );
+  const [lockedTomanBalance, setLockedTomanBalance] = useState<number>(
+    initialRef.current.lockedTomanBalance
+  );
+  const [hasHydrated, setHasHydrated] = useState<boolean>(
+    initialRef.current.hasHydrated
+  );
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
   const [isTomanAnimating, setIsTomanAnimating] = useState<boolean>(false);
   const tomanAnimationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Refs برای مدیریت mount و hydration
   const isMountedRef = useRef<boolean>(false);
-  const hasHydratedRef = useRef<boolean>(false);
-  const walletChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const hasHydratedRef = useRef<boolean>(initialRef.current.hasHydrated);
+  const lastFetchedAtRef = useRef<number>(initialRef.current.fetchedAt);
+  const walletChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(
+    null
+  );
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const balanceUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const currentBalanceRef = useRef<number>(0);
+  const currentBalanceRef = useRef<number>(initialRef.current.dingBalance);
+  const fetchInFlightRef = useRef(false);
 
-  // ---- Ding reveal credits (local, synced to server on hydrate / game end) ----
   const creditedRevealKeysRef = useRef<Set<string>>(new Set());
   const activeWalletSyncKeyRef = useRef<string | null>(null);
   const walletSyncTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const currentTomanBalanceRef = useRef<number>(0);
+  const currentTomanBalanceRef = useRef<number>(initialRef.current.tomanBalance);
+  const lockedTomanBalanceRef = useRef<number>(initialRef.current.lockedTomanBalance);
 
-  const refreshWalletBalances = async (): Promise<void> => {
-    try {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+  const persistBalanceShell = useCallback(
+    (ding: number, toman: number, locked: number) => {
+      const fetchedAt = Date.now();
+      lastFetchedAtRef.current = fetchedAt;
+      writeBalanceShell({
+        dingBalance: ding,
+        tomanBalance: toman,
+        lockedTomanBalance: locked,
+        fetchedAt,
+      });
+    },
+    []
+  );
 
-      if (userError || !user) return;
-
-      const { data: walletData, error: walletError } = await supabase
-        .from("wallets")
-        .select("balance, locked_amount")
-        .eq("user_id", user.id)
-        .single();
-
-      if (walletError) return;
-      if (!isMountedRef.current) return;
-
-      const balance = Number((walletData as any)?.balance ?? 0) || 0;
-      const locked = Number((walletData as any)?.locked_amount ?? 0) || 0;
-      setTomanBalance(balance);
-      setLockedTomanBalance(locked);
-      currentTomanBalanceRef.current = balance;
-    } catch (err) {
-      console.warn("[useBalances] refreshWalletBalances failed", err);
-    }
-  };
-
-  const refreshAllBalances = async (): Promise<void> => {
-    try {
-      await refreshWalletBalances();
-      if (skipDingBalanceRef.current) return;
-      const { balance: serverBalance } = await fetchDingBalanceFromApi();
-      if (!isMountedRef.current) return;
-      setDingBalance(serverBalance);
-      currentBalanceRef.current = serverBalance;
-    } catch (err) {
-      console.warn("[useBalances] refreshAllBalances failed", err);
-    }
-  };
-
-  async function fetchDingBalanceFromApi(): Promise<{ balance: number; updated_at: string | null }> {
+  async function fetchDingBalanceFromApi(): Promise<{
+    balance: number;
+    updated_at: string | null;
+  }> {
     if (skipDingBalanceRef.current || isAgentPanelLocation()) {
       return { balance: 0, updated_at: null };
     }
@@ -135,33 +137,233 @@ export function useBalances(): Balances {
       throw new Error(`ding-balance fetch failed (${res.status})`);
     }
 
-    const json = (await res.json()) as { balance: number; updated_at: string | null };
+    const json = (await res.json()) as {
+      balance: number;
+      updated_at: string | null;
+    };
     return {
       balance: Number(json?.balance ?? 0) || 0,
       updated_at: json?.updated_at ?? null,
     };
   }
 
-  // مدیریت mount/unmount
+  const applyBalances = useCallback(
+    (ding: number, toman: number, locked: number) => {
+      setDingBalance(ding);
+      setTomanBalance(toman);
+      setLockedTomanBalance(locked);
+      currentBalanceRef.current = ding;
+      currentTomanBalanceRef.current = toman;
+      lockedTomanBalanceRef.current = locked;
+      persistBalanceShell(ding, toman, locked);
+      hasHydratedRef.current = true;
+      setHasHydrated(true);
+    },
+    [persistBalanceShell]
+  );
+
+  const refreshWalletBalances = useCallback(async (): Promise<void> => {
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) return;
+
+      const { data: walletData, error: walletError } = await supabase
+        .from("wallets")
+        .select("balance, locked_amount")
+        .eq("user_id", user.id)
+        .single();
+
+      if (walletError) return;
+      if (!isMountedRef.current) return;
+
+      const balance = Number((walletData as { balance?: number })?.balance ?? 0) || 0;
+      const locked =
+        Number((walletData as { locked_amount?: number })?.locked_amount ?? 0) ||
+        0;
+
+      setTomanBalance(balance);
+      setLockedTomanBalance(locked);
+      currentTomanBalanceRef.current = balance;
+      lockedTomanBalanceRef.current = locked;
+      persistBalanceShell(currentBalanceRef.current, balance, locked);
+      hasHydratedRef.current = true;
+      setHasHydrated(true);
+    } catch (err) {
+      console.warn("[Wallet] refreshWalletBalances failed", err);
+    }
+  }, [persistBalanceShell]);
+
+  const fetchBalances = useCallback(
+    async (options?: RefreshBalancesOptions) => {
+      if (isHardExiting()) return;
+      if (fetchInFlightRef.current) return;
+
+      const force = options?.force === true;
+      const shell = readBalanceShell();
+      if (
+        !force &&
+        hasHydratedRef.current &&
+        isBalanceShellFresh(
+          shell ?? {
+            dingBalance: 0,
+            tomanBalance: 0,
+            lockedTomanBalance: 0,
+            fetchedAt: lastFetchedAtRef.current,
+          },
+          BALANCE_SHELL_TTL_MS
+        )
+      ) {
+        console.log("[Wallet] TTL skip — cache still fresh");
+        return;
+      }
+
+      fetchInFlightRef.current = true;
+      if (force) setIsRefreshing(true);
+      if (!hasHydratedRef.current) setError(null);
+
+      try {
+        console.log("[Wallet] fetchBalances", { force, silent: !force && hasHydratedRef.current });
+
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError || !user) {
+          console.warn("[Wallet] No user found:", userError);
+          if (isMountedRef.current) {
+            setError("کاربر پیدا نشد");
+            if (!hasHydratedRef.current) {
+              applyBalances(0, 0, 0);
+            }
+          }
+          return;
+        }
+
+        const { data: walletData, error: walletError } = await supabase
+          .from("wallets")
+          .select("balance, locked_amount")
+          .eq("user_id", user.id)
+          .single();
+
+        let balance = 0;
+        let locked = 0;
+
+        if (walletError) {
+          if (walletError.code !== "PGRST116") {
+            console.error("[Wallet] Error fetching wallet:", walletError);
+          }
+        } else {
+          balance =
+            Number((walletData as { balance?: number })?.balance ?? 0) || 0;
+          locked =
+            Number((walletData as { locked_amount?: number })?.locked_amount ?? 0) ||
+            0;
+        }
+
+        let ding = currentBalanceRef.current;
+
+        if (skipDingBalanceRef.current) {
+          if (!loggedDingSkipRef.current) {
+            loggedDingSkipRef.current = true;
+            console.info("[AgentPanel] Ding balance fetch skipped");
+          }
+        } else {
+          loggedDingSkipRef.current = false;
+          try {
+            ding =
+              (await fetchDingBalanceFromApi()).balance ??
+              (await getMyDingBalance());
+          } catch (dingErr) {
+            console.warn("[Wallet] Ding fetch skipped (non-fatal):", dingErr);
+          }
+        }
+
+        if (isMountedRef.current) {
+          applyBalances(ding, balance, locked);
+        }
+
+        if (walletChannelRef.current) {
+          supabase.removeChannel(walletChannelRef.current);
+          walletChannelRef.current = null;
+        }
+
+        walletChannelRef.current = supabase
+          .channel(`wallet_balance_changes_${user.id}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "UPDATE",
+              schema: "public",
+              table: "wallets",
+              filter: `user_id=eq.${user.id}`,
+            },
+            (payload) => {
+              if (!isMountedRef.current) return;
+              const newBalance =
+                Number((payload.new as { balance?: number })?.balance ?? 0) || 0;
+              const newLocked =
+                Number((payload.new as { locked_amount?: number })?.locked_amount ?? 0) ||
+                0;
+              setTomanBalance(newBalance);
+              setLockedTomanBalance(newLocked);
+              currentTomanBalanceRef.current = newBalance;
+              lockedTomanBalanceRef.current = newLocked;
+              persistBalanceShell(
+                currentBalanceRef.current,
+                newBalance,
+                newLocked
+              );
+            }
+          )
+          .subscribe();
+      } catch (err) {
+        console.error("[Wallet] Error in fetchBalances:", err);
+        if (isMountedRef.current && !hasHydratedRef.current) {
+          setError("خطا در دریافت موجودی");
+          applyBalances(0, 0, 0);
+        }
+      } finally {
+        fetchInFlightRef.current = false;
+        if (isMountedRef.current) setIsRefreshing(false);
+      }
+    },
+    [applyBalances, persistBalanceShell]
+  );
+
+  const refreshAllBalances = useCallback(
+    async (options?: RefreshBalancesOptions): Promise<void> => {
+      await fetchBalances(options);
+    },
+    [fetchBalances]
+  );
+
   useEffect(() => {
     isMountedRef.current = true;
-    console.log('[useBalances] Component mounted, isMountedRef.current = true');
+
+    if (initialRef.current.hasHydrated) {
+      console.log("[Wallet] hydrate from shell");
+      void fetchBalances();
+    } else {
+      void fetchBalances();
+    }
 
     return () => {
       isMountedRef.current = false;
-      console.log('[useBalances] Component unmounted, isMountedRef.current = false');
-      // Cleanup animation timeout
       if (animationTimeoutRef.current) {
         clearTimeout(animationTimeoutRef.current);
         animationTimeoutRef.current = null;
       }
-      // Cleanup balance update timeout
       if (balanceUpdateTimeoutRef.current) {
         clearTimeout(balanceUpdateTimeoutRef.current);
         balanceUpdateTimeoutRef.current = null;
       }
     };
-  }, []);
+  }, [fetchBalances]);
 
   useEffect(() => {
     const skip = isAgentPanelPath(pathname) || isAgentPanelLocation();
@@ -176,159 +378,28 @@ export function useBalances(): Balances {
         if (!isMountedRef.current || skipDingBalanceRef.current) return;
         setDingBalance(balance);
         currentBalanceRef.current = balance;
+        persistBalanceShell(
+          balance,
+          currentTomanBalanceRef.current,
+          lockedTomanBalanceRef.current
+        );
       })
       .catch(() => {});
-  }, [pathname]);
+  }, [pathname, persistBalanceShell]);
 
   useEffect(() => {
-    async function fetchBalances() {
-      if (isHardExiting()) return;
-      try {
-        console.log('[useBalances] fetchBalances started');
-        setLoading(true);
-        setError(null);
-
-        // دریافت user فعلی
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        
-        if (userError || !user) {
-          console.warn('[useBalances] No user found:', userError);
-          if (isMountedRef.current) {
-            setError('کاربر پیدا نشد');
-            setDingBalance(0);
-            setTomanBalance(0);
-            setLoading(false);
-          }
-          return;
-        }
-
-        console.log('[useBalances] User found:', user.id);
-
-        // NOTE: Admin/Super/Agent ممکن است به ding-balance endpoint دسترسی نداشته باشند.
-        // بنابراین failure در Ding نباید مانع دریافت موجودی تومان (wallets) شود.
-
-        // مرحله 1: دریافت موجودی تومان از wallets (IRR)
-        const { data: walletData, error: walletError } = await supabase
-          .from('wallets')
-          .select('balance, locked_amount')
-          .eq('user_id', user.id)
-          .single();
-
-        if (walletError) {
-          if (walletError.code === 'PGRST116') {
-            // ردیف وجود ندارد، موجودی صفر است
-            if (isMountedRef.current) {
-              setTomanBalance(0);
-              setLockedTomanBalance(0);
-            }
-          } else {
-            console.error('Error fetching wallet:', walletError);
-            if (isMountedRef.current) {
-              setTomanBalance(0);
-              setLockedTomanBalance(0);
-            }
-          }
-        } else {
-          if (isMountedRef.current) {
-            const balance = Number((walletData as any)?.balance ?? 0) || 0;
-            const locked = Number((walletData as any)?.locked_amount ?? 0) || 0;
-            setTomanBalance(balance);
-            setLockedTomanBalance(locked);
-            currentTomanBalanceRef.current = balance;
-          }
-        }
-
-        // مرحله 2: دریافت موجودی Ding اولیه (hydration) - best effort
-        // پنل ایجنت دینگ نشان نمی‌دهد؛ از درخواست /api/me/ding-balance صرف‌نظر می‌کنیم.
-        if (skipDingBalanceRef.current) {
-          if (isMountedRef.current) {
-            hasHydratedRef.current = true;
-            if (!loggedDingSkipRef.current) {
-              loggedDingSkipRef.current = true;
-              console.info("[AgentPanel] Ding balance fetch skipped");
-            }
-          }
-        } else {
-          loggedDingSkipRef.current = false;
-          try {
-            const ding =
-              (await fetchDingBalanceFromApi()).balance ?? (await getMyDingBalance());
-            console.log('[useBalances] Initial ding balance fetched:', ding);
-
-            if (isMountedRef.current) {
-              setDingBalance(ding);
-              currentBalanceRef.current = ding;
-              hasHydratedRef.current = true;
-              console.log(
-                '[useBalances] ✅ Hydration complete, hasHydratedRef.current = true, balance:',
-                ding
-              );
-            }
-          } catch (dingErr) {
-            console.warn('[useBalances] Ding hydration skipped (non-fatal):', dingErr);
-            if (isMountedRef.current) {
-              // keep dingBalance as-is (default 0), but do not fail overall balances
-              hasHydratedRef.current = true;
-            }
-          }
-        }
-
-        // مرحله 3: realtime برای ding_balances حذف شده است؛
-        // هیدراسیون و پایان بازی از API؛ در LiveRoom با creditDingOnReveal محلی sync می‌شود.
-
-        // Subscribe به تغییرات wallet balance
-        if (walletChannelRef.current) {
-          supabase.removeChannel(walletChannelRef.current);
-          walletChannelRef.current = null;
-        }
-
-        walletChannelRef.current = supabase
-          .channel(`wallet_balance_changes_${user.id}`)
-          .on(
-            'postgres_changes',
-            {
-              event: 'UPDATE',
-              schema: 'public',
-              table: 'wallets',
-              filter: `user_id=eq.${user.id}`,
-            },
-            (payload) => {
-              if (isMountedRef.current) {
-                const newBalance = Number((payload.new as any)?.balance ?? 0) || 0;
-                const locked = Number((payload.new as any)?.locked_amount ?? 0) || 0;
-                setTomanBalance(newBalance);
-                setLockedTomanBalance(locked);
-                currentTomanBalanceRef.current = newBalance;
-              }
-            }
-          )
-          .subscribe();
-
-        if (isMountedRef.current) {
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error('Error in fetchBalances:', err);
-        if (isMountedRef.current) {
-          setError('خطا در دریافت موجودی');
-          setDingBalance(0);
-          setTomanBalance(0);
-          setLoading(false);
-        }
-      }
-    }
-
-    // Initial fetch (might be unauthenticated on login page; auth listener below will refetch on sign-in)
-    fetchBalances();
-
     const onHardExit = () => {
+      clearBalanceShell();
       setDingBalance(0);
       setTomanBalance(0);
       setLockedTomanBalance(0);
-      setLoading(false);
+      setHasHydrated(false);
+      setIsRefreshing(false);
       setError(null);
       hasHydratedRef.current = false;
+      lastFetchedAtRef.current = 0;
       currentBalanceRef.current = 0;
+      currentTomanBalanceRef.current = 0;
       if (walletChannelRef.current) {
         supabase.removeChannel(walletChannelRef.current);
         walletChannelRef.current = null;
@@ -352,38 +423,20 @@ export function useBalances(): Balances {
     };
     window.addEventListener(HARD_EXIT_EVENT, onHardExit);
 
-    // Critical: refetch balances when auth state becomes available (first login / first navigation)
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (!isMountedRef.current || isHardExiting()) return;
 
-      if (
-        event === "INITIAL_SESSION" ||
-        event === "SIGNED_IN" ||
-        event === "TOKEN_REFRESHED" ||
-        event === "USER_UPDATED"
-      ) {
-        void fetchBalances();
+      if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+        void fetchBalances({ force: true });
       }
 
       if (event === "SIGNED_OUT") {
-        setDingBalance(0);
-        setTomanBalance(0);
-        setLockedTomanBalance(0);
-        setLoading(false);
-        setError(null);
-        hasHydratedRef.current = false;
-        currentBalanceRef.current = 0;
-
-        if (walletChannelRef.current) {
-          supabase.removeChannel(walletChannelRef.current);
-          walletChannelRef.current = null;
-        }
+        onHardExit();
       }
     });
 
     return () => {
       window.removeEventListener(HARD_EXIT_EVENT, onHardExit);
-      console.log('[useBalances] Cleanup: unsubscribing and removing channels');
       if (walletChannelRef.current) {
         supabase.removeChannel(walletChannelRef.current);
         walletChannelRef.current = null;
@@ -393,12 +446,10 @@ export function useBalances(): Balances {
         clearTimeout(walletSyncTimerRef.current);
         walletSyncTimerRef.current = null;
       }
-      // Cleanup animation timeout
       if (animationTimeoutRef.current) {
         clearTimeout(animationTimeoutRef.current);
         animationTimeoutRef.current = null;
       }
-      // Cleanup balance update timeout
       if (balanceUpdateTimeoutRef.current) {
         clearTimeout(balanceUpdateTimeoutRef.current);
         balanceUpdateTimeoutRef.current = null;
@@ -408,7 +459,7 @@ export function useBalances(): Balances {
         tomanAnimationTimeoutRef.current = null;
       }
     };
-  }, []);
+  }, [fetchBalances]);
 
   const triggerTomanCelebrate = () => {
     if (!isMountedRef.current) return;
@@ -448,7 +499,12 @@ export function useBalances(): Balances {
     currentBalanceRef.current = prevBalance + delta;
     const nextBalance = currentBalanceRef.current;
 
-    console.log("[dingReveal] credit", { revealKey, delta, prevBalance, nextBalance });
+    console.log("[dingReveal] credit", {
+      revealKey,
+      delta,
+      prevBalance,
+      nextBalance,
+    });
 
     const COIN_ANIMATION_DELAY = 400;
     if (balanceUpdateTimeoutRef.current) {
@@ -458,6 +514,13 @@ export function useBalances(): Balances {
       if (!isMountedRef.current) return;
       const latestBalance = currentBalanceRef.current;
       setDingBalance(latestBalance);
+      persistBalanceShell(
+        latestBalance,
+        currentTomanBalanceRef.current,
+        lockedTomanBalanceRef.current
+      );
+      hasHydratedRef.current = true;
+      setHasHydrated(true);
 
       if (isDingEnabled()) {
         void playDingTone();
@@ -518,7 +581,9 @@ export function useBalances(): Balances {
     dingBalance,
     tomanBalance,
     lockedTomanBalance,
-    loading,
+    loading: !hasHydrated,
+    hasHydrated,
+    isRefreshing,
     error,
     isAnimating,
     isTomanAnimating,
