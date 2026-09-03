@@ -1,5 +1,7 @@
 import { supabaseServer } from "@/lib/supabaseServer";
-export { isAdminZeroUser } from "@/lib/admin/isAdminZeroUser";
+import { isAdminZeroUser } from "@/lib/admin/isAdminZeroUser";
+
+export { isAdminZeroUser };
 
 export type AdminZeroUser = {
   id: string;
