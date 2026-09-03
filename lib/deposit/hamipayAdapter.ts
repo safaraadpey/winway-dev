@@ -13,12 +13,32 @@ import { createHash } from "crypto";
 import type { VerificationEvidence } from "@/lib/deposit/types";
 import { parseEnvFlag } from "@/lib/deposit/env";
 
+/** Which HamiPay merchant key to use. Stored on intent metadata for verify/recon. */
+export type HamiPayKeyProfile = "default" | "dev_player1";
+
+/**
+ * Temporary test: only these usernames use HAMIPAY_API_KEY_DEV_PLAYER1.
+ * `dev_playe1` is accepted as an alias for the typed name.
+ */
+const DEV_PLAYER1_USERNAMES = new Set(["dev_player1", "dev_playe1"]);
+const DEV_PLAYER1_USER_IDS = new Set([
+  "1b6d5f20-b340-4058-8707-1b5987f201a1",
+]);
+
+/**
+ * Temporary test fallback so Vercel works before the env var is set.
+ * Prefer HAMIPAY_API_KEY_DEV_PLAYER1. Never log this value.
+ */
+const DEV_PLAYER1_API_KEY_FALLBACK =
+  "hp_live_5f6ffda9c31c7b2d_5S__yVKLGBY31lM7QpZeYreCfWFSyl7T6bcq6AIcIAc";
+
 export type HamiPayCreateInput = {
   depositId: string;
   merchantOrderId: string;
   amountProviderUnits: number;
   currency: string;
   returnUrl: string;
+  keyProfile?: HamiPayKeyProfile;
   customer: {
     userId: string;
     displayName?: string | null;
@@ -31,6 +51,7 @@ export type HamiPayCreateInput = {
 export type HamiPayCreateResult = {
   providerPaymentId: string;
   paymentUrl: string;
+  keyProfile: HamiPayKeyProfile;
   rawRedacted: Record<string, unknown>;
 };
 
@@ -45,8 +66,52 @@ export type HamiPayStatusResult = {
 
 const DEFAULT_DESCRIPTION = "شارژ کیف پول DingMoney";
 
-function requireConfig(): { apiKey: string; baseUrl: string } {
-  const apiKey = process.env.HAMIPAY_API_KEY || "";
+export function resolveHamiPayKeyProfile(opts: {
+  username?: string | null;
+  userId?: string | null;
+}): HamiPayKeyProfile {
+  const username = (opts.username || "").trim().toLowerCase();
+  if (DEV_PLAYER1_USERNAMES.has(username)) return "dev_player1";
+  const userId = (opts.userId || "").trim().toLowerCase();
+  if (userId && DEV_PLAYER1_USER_IDS.has(userId)) return "dev_player1";
+  return "default";
+}
+
+export function hamipayKeyProfileFromIntentMetadata(
+  metadata: Record<string, unknown> | null | undefined
+): HamiPayKeyProfile {
+  const raw = metadata?.hamipay_key_profile;
+  if (raw === "dev_player1") return "dev_player1";
+  return "default";
+}
+
+function resolveDevPlayer1ApiKey(): string {
+  const fromEnv = (process.env.HAMIPAY_API_KEY_DEV_PLAYER1 || "").trim();
+  if (fromEnv) return fromEnv;
+  return DEV_PLAYER1_API_KEY_FALLBACK;
+}
+
+function requireConfig(profile: HamiPayKeyProfile = "default"): {
+  apiKey: string;
+  baseUrl: string;
+  keyProfile: HamiPayKeyProfile;
+} {
+  const defaultKey = (process.env.HAMIPAY_API_KEY || "").trim();
+  let apiKey = defaultKey;
+  let keyProfile: HamiPayKeyProfile = "default";
+
+  if (profile === "dev_player1") {
+    const override = resolveDevPlayer1ApiKey();
+    if (override) {
+      apiKey = override;
+      keyProfile = "dev_player1";
+    } else {
+      console.warn(
+        "[DepositAdapter:hamipay] dev_player1 key missing; using default key"
+      );
+    }
+  }
+
   const baseUrl = (process.env.HAMIPAY_API_BASE_URL || "").replace(/\/$/, "");
   if (!apiKey || !baseUrl) {
     throw new Error("hamipay_config_missing");
@@ -54,7 +119,7 @@ function requireConfig(): { apiKey: string; baseUrl: string } {
   if (apiKey.startsWith("NEXT_PUBLIC_")) {
     throw new Error("hamipay_api_key_must_not_be_public");
   }
-  return { apiKey, baseUrl };
+  return { apiKey, baseUrl, keyProfile };
 }
 
 function isMockMode(): boolean {
@@ -175,6 +240,13 @@ function resolveCustomerPhone(customer: HamiPayCreateInput["customer"]): string 
 export async function hamipayCreatePayment(
   input: HamiPayCreateInput
 ): Promise<HamiPayCreateResult> {
+  const requestedProfile =
+    input.keyProfile ||
+    resolveHamiPayKeyProfile({
+      username: input.customer.username,
+      userId: input.customer.userId,
+    });
+
   if (isMockMode()) {
     const providerPaymentId = `mock_pay_${input.depositId.replace(/-/g, "").slice(0, 16)}`;
     const origin =
@@ -186,15 +258,17 @@ export async function hamipayCreatePayment(
     console.log("[DepositAdapter:hamipay] mock create", {
       depositId: input.depositId,
       providerPaymentId,
+      keyProfile: requestedProfile,
     });
     return {
       providerPaymentId,
       paymentUrl,
+      keyProfile: requestedProfile,
       rawRedacted: { mock: true, providerPaymentId },
     };
   }
 
-  const { apiKey, baseUrl } = requireConfig();
+  const { apiKey, baseUrl, keyProfile } = requireConfig(requestedProfile);
   // If base already ends with /api/v1 (Vercel config), default path is /payments
   // — not /v1/payments (that produced .../api/v1/v1/payments → wrong).
   const path =
@@ -226,6 +300,7 @@ export async function hamipayCreatePayment(
     url,
     headerNames,
     hasApiKey: Boolean(apiKey),
+    keyProfile,
     hasIdempotencyKey: Boolean(input.depositId),
     idempotencyKeyEqualsDepositId: input.depositId === input.merchantOrderId,
     bodyFieldNames: Object.keys(body),
@@ -332,22 +407,26 @@ export async function hamipayCreatePayment(
   console.log("[DepositAdapter:hamipay] create ok", {
     depositId: input.depositId,
     providerPaymentId,
+    keyProfile,
     hasPaymentUrl: true,
   });
 
-  return { providerPaymentId, paymentUrl, rawRedacted: redacted };
+  return { providerPaymentId, paymentUrl, keyProfile, rawRedacted: redacted };
 }
 
 export async function hamipayGetPaymentStatus(opts: {
   providerPaymentId: string;
   merchantOrderId: string;
+  keyProfile?: HamiPayKeyProfile;
 }): Promise<HamiPayStatusResult> {
+  const requestedProfile = opts.keyProfile || "default";
   if (isMockMode()) {
     const forced = (process.env.HAMIPAY_MOCK_STATUS || "paid").toLowerCase();
     const status = mapStatus(forced);
     const amount = Number(process.env.HAMIPAY_MOCK_AMOUNT || 0);
     console.log("[DepositAdapter:hamipay] mock status", {
       providerPaymentId: opts.providerPaymentId,
+      keyProfile: requestedProfile,
       status,
     });
     return {
@@ -360,7 +439,7 @@ export async function hamipayGetPaymentStatus(opts: {
     };
   }
 
-  const { apiKey, baseUrl } = requireConfig();
+  const { apiKey, baseUrl, keyProfile } = requireConfig(requestedProfile);
   const pathTemplate =
     process.env.HAMIPAY_STATUS_PATH ||
     (baseUrl.endsWith("/v1") || baseUrl.endsWith("/api/v1")
@@ -374,6 +453,7 @@ export async function hamipayGetPaymentStatus(opts: {
 
   console.log("[DepositAdapter:hamipay] status started", {
     providerPaymentId: opts.providerPaymentId,
+    keyProfile,
     url,
     headerNames: ["X-Api-Key", "Accept"],
     hasApiKey: Boolean(apiKey),

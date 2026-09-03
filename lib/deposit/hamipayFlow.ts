@@ -9,7 +9,9 @@ import {
   buildHamiPayEvidence,
   hamipayCreatePayment,
   hamipayGetPaymentStatus,
+  hamipayKeyProfileFromIntentMetadata,
   providerAmountToToman,
+  resolveHamiPayKeyProfile,
   tomanToProviderAmount,
 } from "@/lib/deposit/hamipayAdapter";
 import {
@@ -121,11 +123,28 @@ export async function createHamiPayDepositIntent(
   const environment = resolveDepositEnvironment();
   const expires = new Date(Date.now() + 60 * 60 * 1000);
 
+  let username = input.username?.trim() || null;
+  if (!username) {
+    const userRows = await q<{ username: string | null }>(
+      db,
+      `SELECT username FROM public.users WHERE id = $1 LIMIT 1`,
+      [input.userId]
+    );
+    username = userRows[0]?.username?.trim() || null;
+  }
+
+  const keyProfile = resolveHamiPayKeyProfile({
+    username,
+    userId: input.userId,
+  });
+
   console.log("[DepositIntent] HamiPay create started", {
     userId: input.userId,
     amountToman: input.amountToman,
     hasCustomerName: Boolean(input.customerName),
     hasCustomerPhone: Boolean(input.customerPhone),
+    username,
+    keyProfile,
     environment,
   });
 
@@ -142,6 +161,7 @@ export async function createHamiPayDepositIntent(
       JSON.stringify({
         source: "buy_rial",
         environment,
+        hamipay_key_profile: keyProfile,
       }),
     ]
   );
@@ -160,7 +180,11 @@ export async function createHamiPayDepositIntent(
       depositId,
       environment,
       merchantOrderId,
-      JSON.stringify({ merchant_order_id: merchantOrderId, environment }),
+      JSON.stringify({
+        merchant_order_id: merchantOrderId,
+        environment,
+        hamipay_key_profile: keyProfile,
+      }),
     ]
   );
 
@@ -179,11 +203,12 @@ export async function createHamiPayDepositIntent(
       amountProviderUnits,
       currency: "IRR",
       returnUrl: resolvePaymentReturnUrl(depositId),
+      keyProfile,
       customer: {
         userId: input.userId,
         displayName: input.customerName,
         phone: input.customerPhone,
-        username: input.username,
+        username: username,
         email: input.email,
       },
     });
@@ -201,6 +226,7 @@ export async function createHamiPayDepositIntent(
         createdPay.paymentUrl,
         JSON.stringify({
           hamipay_create: createdPay.rawRedacted,
+          hamipay_key_profile: createdPay.keyProfile,
         }),
       ]
     );
@@ -210,6 +236,7 @@ export async function createHamiPayDepositIntent(
     console.log("[DepositIntent] HamiPay pending", {
       depositId,
       providerPaymentId: createdPay.providerPaymentId,
+      keyProfile: createdPay.keyProfile,
       source: "postgresql",
     });
 
@@ -375,12 +402,18 @@ export async function verifyAndCreditHamiPayDeposit(
   }
 
   const merchantOrderId = intent.merchant_order_id || intent.id;
+  const keyProfile = hamipayKeyProfileFromIntentMetadata(intent.metadata);
+  console.log("[DepositVerify] HamiPay status started", {
+    depositId: intent.id,
+    keyProfile,
+  });
 
   let providerStatus;
   try {
     providerStatus = await hamipayGetPaymentStatus({
       providerPaymentId: intent.provider_intent_ref,
       merchantOrderId,
+      keyProfile,
     });
   } catch (err) {
     console.error("[DepositVerify] provider status error", err);
