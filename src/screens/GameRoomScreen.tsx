@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/contexts/SessionContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
@@ -310,6 +310,55 @@ export default function GameRoomScreen({
 
   // State برای میزهای فعال
   const [activeTables, setActiveTables] = useState<ActiveTable[]>([]);
+  const [activeTablesLoading, setActiveTablesLoading] = useState(true);
+  const activeTablesCountRef = useRef(0);
+  const activeTablesSessionStartedAtRef = useRef(Date.now());
+  const activeTablesEmptyDelayRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+
+  const clearActiveTablesEmptyDelay = useCallback(() => {
+    if (activeTablesEmptyDelayRef.current) {
+      clearTimeout(activeTablesEmptyDelayRef.current);
+      activeTablesEmptyDelayRef.current = null;
+    }
+  }, []);
+
+  const resetActiveTablesLoadingState = useCallback(() => {
+    clearActiveTablesEmptyDelay();
+    activeTablesCountRef.current = 0;
+    activeTablesSessionStartedAtRef.current = Date.now();
+    setActiveTables([]);
+    setActiveTablesLoading(true);
+  }, [clearActiveTablesEmptyDelay]);
+
+  const scheduleActiveTablesEmptyResolve = useCallback(() => {
+    clearActiveTablesEmptyDelay();
+    const elapsed = Date.now() - activeTablesSessionStartedAtRef.current;
+    const delay = Math.max(0, LOBBY_POLL_MS - elapsed);
+    activeTablesEmptyDelayRef.current = setTimeout(() => {
+      activeTablesEmptyDelayRef.current = null;
+      if (activeTablesCountRef.current === 0) {
+        setActiveTablesLoading(false);
+      }
+    }, delay);
+  }, [clearActiveTablesEmptyDelay]);
+
+  const applyActiveTablesSnapshot = useCallback(
+    (tables: ActiveTable[], isInitial: boolean) => {
+      activeTablesCountRef.current = tables.length;
+      setActiveTables(tables);
+      if (tables.length > 0) {
+        clearActiveTablesEmptyDelay();
+        setActiveTablesLoading(false);
+        return;
+      }
+      if (isInitial) {
+        scheduleActiveTablesEmptyResolve();
+      }
+    },
+    [clearActiveTablesEmptyDelay, scheduleActiveTablesEmptyResolve]
+  );
 
   // State برای شناسه کاربر فعلی
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -458,6 +507,7 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           roomInfoRef.current.templateId
         )
       );
+      resetActiveTablesLoadingState();
       sessionKeyRef.current = nextSessionKey;
       return;
     }
@@ -472,9 +522,16 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
       setRoomInfo(shell);
       setHasLiveSnapshot(false);
       setSnapshotError(null);
+      resetActiveTablesLoadingState();
       sessionKeyRef.current = nextSessionKey;
     }
-  }, [roomId, templateId, priceHint, roomNameHint]);
+  }, [roomId, templateId, priceHint, roomNameHint, resetActiveTablesLoadingState]);
+
+  useEffect(() => {
+    return () => {
+      clearActiveTablesEmptyDelay();
+    };
+  }, [clearActiveTablesEmptyDelay]);
 
   // بارگذاری اطلاعات روم یا تمپلیت
   useEffect(() => {
@@ -632,14 +689,6 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
             templateId: view.room.template_id,
           });
         }
-        if (releasedTemplateIdRef.current && !releasedTid) {
-          return;
-        }
-
-        const serverNow = new Date(view.server_now).getTime();
-        const clientNow = Date.now();
-        const offset = serverNow - clientNow;
-        setServerOffset(offset);
 
         const tables: ActiveTable[] = view.active_tables.map((table) => ({
           id: table.room_id,
@@ -648,7 +697,16 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           players: table.players,
           cardCount: table.card_count,
         }));
-        setActiveTables(tables);
+        applyActiveTablesSnapshot(tables, isInitial);
+
+        if (releasedTemplateIdRef.current && !releasedTid) {
+          return;
+        }
+
+        const serverNow = new Date(view.server_now).getTime();
+        const clientNow = Date.now();
+        const offset = serverNow - clientNow;
+        setServerOffset(offset);
 
         if (showTemplatePreview) {
           setCountdownDeadline(null);
@@ -683,6 +741,9 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
       } finally {
         if (nextError) {
           setSnapshotError(nextError);
+          if (isInitial) {
+            setActiveTablesLoading(false);
+          }
         }
       }
     }
@@ -706,8 +767,9 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     return () => {
       cancelled = true;
       clearTimeout(timeoutId);
+      clearActiveTablesEmptyDelay();
     };
-  }, [roomId, templateId, router]);
+  }, [roomId, templateId, router, applyActiveTablesSnapshot, clearActiveTablesEmptyDelay]);
 
   useEffect(() => {
     if (!resolvedUserId || roomId || !templateId) return;
@@ -897,7 +959,11 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
   // countdown به ۰ رسید → فوراً status را از سرور بگیر (انتقال به LiveRoom یا extend)
   const prevCountdownRef = useRef<number | null>(null);
   useEffect(() => {
-    if (prevCountdownRef.current !== 0 && countdownSeconds === 0) {
+    if (
+      prevCountdownRef.current != null &&
+      prevCountdownRef.current > 0 &&
+      countdownSeconds === 0
+    ) {
       void fetchRoomDataRef.current(false);
     }
     prevCountdownRef.current = countdownSeconds;
@@ -1581,10 +1647,15 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
           cards={cardsToRender}
           secondsRemaining={countdownSeconds}
           minPlayers={roomInfo.minPlayers}
+          loading={activeTablesLoading}
         />
 
         {!isTournamentRoom && (
-          <ActiveTablesSection tables={activeTables} onTableClick={handleTableClick} />
+          <ActiveTablesSection
+            tables={activeTables}
+            loading={activeTablesLoading}
+            onTableClick={handleTableClick}
+          />
         )}
       </div>
     </div>

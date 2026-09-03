@@ -16,6 +16,7 @@ interface ActiveCardsStatusProps {
   minPlayers?: number;
   waitingListMessage?: string;
   useLongCountdown?: boolean;
+  loading?: boolean;
 }
 
 export default function ActiveCardsStatus({
@@ -24,6 +25,7 @@ export default function ActiveCardsStatus({
   minPlayers,
   waitingListMessage = "شما اولین نفر لیست انتظار خواهید بود",
   useLongCountdown = false,
+  loading = false,
 }: ActiveCardsStatusProps) {
   const totalCount = cards.reduce((sum, card) => sum + card.count, 0);
   const formatTime = (seconds: number): string => {
@@ -89,9 +91,11 @@ export default function ActiveCardsStatus({
 
       <div className="flex-1 space-y-2 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {cards.length === 0 ? (
-          <div className={panelStyles.activeCardsEmpty}>
-            هیچ کارت فعالی وجود ندارد
-          </div>
+          loading ? null : (
+            <div className={panelStyles.activeCardsEmpty}>
+              هیچ کارت فعالی وجود ندارد
+            </div>
+          )
         ) : (
           cards.map((card) => (
             <ActiveCardRow key={card.id} title={card.title} count={card.count} />
@@ -99,7 +103,7 @@ export default function ActiveCardsStatus({
         )}
       </div>
 
-      {cards.length === 0 && (
+      {cards.length === 0 && !loading && (
         <div className={panelStyles.activeCardsWaitingBanner}>
           <span className={panelStyles.activeCardsWaitingText}>
             {waitingListMessage}

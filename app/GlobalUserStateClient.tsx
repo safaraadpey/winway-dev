@@ -46,8 +46,10 @@ export default function GlobalUserStateClient({
             <BalancesProvider>
               <ThemeProvider>
                 <HeaderVisibilityProvider>
-                  <PlayerHeaderHost />
-                  {skipPlayerGameStack ? children : withPlayerGameStack}
+                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                    <PlayerHeaderHost />
+                    {skipPlayerGameStack ? children : withPlayerGameStack}
+                  </div>
                 </HeaderVisibilityProvider>
               </ThemeProvider>
             </BalancesProvider>

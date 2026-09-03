@@ -1253,7 +1253,7 @@ export default function LiveRoomScreen({
 
   return (
     <div className={styles.root}>
-      <div className="max-w-3xl mx-auto h-full flex flex-col">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-3xl flex-col">
         {/* RoomHeader Section - Fixed, doesn't scroll */}
         <div className="flex-shrink-0 px-4 pt-2 pb-1">
           <div

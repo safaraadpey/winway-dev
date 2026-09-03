@@ -10,6 +10,7 @@ interface ActiveTablesSectionProps {
   titleClassName?: string;
   emptyMessage?: string;
   tables?: ActiveTable[];
+  loading?: boolean;
   onTableClick?: (tableId: string) => void;
   hideWinnerNames?: boolean;
   className?: string;
@@ -20,6 +21,7 @@ export default function ActiveTablesSection({
   titleClassName,
   emptyMessage = "هیچ میز فعالی وجود ندارد",
   tables = [],
+  loading = false,
   onTableClick,
   hideWinnerNames = false,
   className,
@@ -64,7 +66,7 @@ export default function ActiveTablesSection({
               }
             />
           ))
-        ) : (
+        ) : loading ? null : (
           <div className={panelStyles.activeTablesEmpty}>{emptyMessage}</div>
         )}
       </div>

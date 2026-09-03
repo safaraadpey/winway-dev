@@ -125,7 +125,7 @@ export default function RootLayout({
         <AppSplashScreen enabled={!isAdminHost} />
         <div
           id={APP_SPLASH_SHELL_ID}
-          className="relative mx-auto flex min-h-dvh w-full max-w-[390px] flex-col overflow-x-hidden bg-[#0E0E0F]"
+          className="relative mx-auto flex h-dvh min-h-0 w-full max-w-[390px] flex-col overflow-hidden bg-[#0E0E0F]"
         >
           <div className="app-content-safe">
             <GlobalUserStateClient>{children}</GlobalUserStateClient>
