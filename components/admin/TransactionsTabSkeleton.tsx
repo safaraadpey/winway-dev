@@ -1,6 +1,6 @@
 export default function TransactionsTabSkeleton() {
   return (
-    <div className="h-screen bg-[#0E0E0F] text-white flex flex-col overflow-hidden">
+    <div className="h-full min-h-0 bg-[#0E0E0F] text-white flex flex-col overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="max-w-md mx-auto w-full h-full flex flex-col overflow-hidden">
           <div className="flex-shrink-0 p-4 pb-0">
