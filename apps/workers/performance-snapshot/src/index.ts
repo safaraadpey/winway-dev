@@ -14,8 +14,17 @@ function requireEnv(name: string): string {
 
 function parsePositiveInt(raw: string | undefined, fallback: number): number {
   const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0) return fallback;
+  if (!Number.isFinite(n) || n <= 0) return fallback;
   return Math.floor(n);
+}
+
+/** Railway injects PORT; fall back to worker-specific env, then default. */
+function resolveHttpPort(workerPortEnv: string | undefined, defaultPort: number): number {
+  if (process.env.PORT) {
+    const port = parseInt(process.env.PORT, 10);
+    if (Number.isFinite(port) && port > 0) return port;
+  }
+  return parsePositiveInt(workerPortEnv, defaultPort);
 }
 
 function parseBool(raw: string | undefined, fallback: boolean): boolean {
@@ -29,18 +38,14 @@ async function main(): Promise<void> {
   const runOnStart = parseBool(process.env.SNAPSHOT_RUN_ON_START, false);
   const snapshotDateOverride = process.env.SNAPSHOT_DATE?.trim() || null;
 
-  // Railway injects PORT; prefer it over SNAPSHOT_HTTP_PORT for health checks.
-  const httpPort = parsePositiveInt(
-    process.env.PORT || process.env.SNAPSHOT_HTTP_PORT,
-    8081
-  );
+  const httpPort = resolveHttpPort(process.env.SNAPSHOT_HTTP_PORT, 8081);
   http
     .createServer((_req, res) => {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, service: "performance-snapshot" }));
     })
     .listen(httpPort, "0.0.0.0", () => {
-      console.log("[PerformanceSnapshot] health listening", { port: httpPort });
+      console.log("[PerformanceSnapshot] health listening", { port: httpPort, host: "0.0.0.0" });
     });
 
   const databaseUrl = requireEnv("DATABASE_URL");

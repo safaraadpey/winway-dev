@@ -10,6 +10,15 @@ function requireEnv(name: string): string {
   return value;
 }
 
+/** Railway injects PORT; fall back to worker-specific env, then default. */
+function resolveHttpPort(workerPortEnv: string | undefined, defaultPort: number): number {
+  if (process.env.PORT) {
+    const port = parseInt(process.env.PORT, 10);
+    if (Number.isFinite(port) && port > 0) return port;
+  }
+  return parsePositiveInt(workerPortEnv, defaultPort);
+}
+
 async function main(): Promise<void> {
   requireEnv("DATABASE_URL");
   const pool = new Pool({
@@ -17,7 +26,7 @@ async function main(): Promise<void> {
     ssl: { rejectUnauthorized: false },
   });
 
-  const httpPort = parsePositiveInt(process.env.LEO_ENGINE_HTTP_PORT, 8081);
+  const httpPort = resolveHttpPort(process.env.LEO_ENGINE_HTTP_PORT, 8081);
   const schedulerMs = parsePositiveInt(process.env.LEO_SCHEDULER_INTERVAL_MS, 60_000);
 
   http
@@ -25,8 +34,8 @@ async function main(): Promise<void> {
       res.writeHead(200, { "Content-Type": "text/plain" });
       res.end("leo-engine ok");
     })
-    .listen(httpPort, () => {
-      console.log("[Leo] health listening on", httpPort);
+    .listen(httpPort, "0.0.0.0", () => {
+      console.log("[Leo] health listening on", { port: httpPort, host: "0.0.0.0" });
     });
 
   const runScheduler = async () => {

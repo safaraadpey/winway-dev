@@ -18,6 +18,15 @@ function parsePositiveInt(raw: string | undefined, fallback: number): number {
   return Math.floor(n);
 }
 
+/** Railway injects PORT; fall back to worker-specific env, then default. */
+function resolveHttpPort(workerPortEnv: string | undefined, defaultPort: number): number {
+  if (process.env.PORT) {
+    const port = parseInt(process.env.PORT, 10);
+    if (Number.isFinite(port) && port > 0) return port;
+  }
+  return parsePositiveInt(workerPortEnv, defaultPort);
+}
+
 function parseBool(raw: string | undefined, fallback: boolean): boolean {
   if (raw === undefined) return fallback;
   return raw === "1" || raw.toLowerCase() === "true" || raw.toLowerCase() === "yes";
@@ -45,14 +54,14 @@ async function main(): Promise<void> {
   const cronMinute = parsePositiveInt(process.env.BACKUP_CRON_MINUTE, 0);
   const runOnStart = parseBool(process.env.BACKUP_RUN_ON_START, false);
 
-  const httpPort = parsePositiveInt(process.env.BACKUP_HTTP_PORT, 8080);
+  const httpPort = resolveHttpPort(process.env.BACKUP_HTTP_PORT, 8080);
   http
     .createServer((_req, res) => {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, service: "business-backup" }));
     })
-    .listen(httpPort, () => {
-      console.log("[Backup] health listening", { port: httpPort });
+    .listen(httpPort, "0.0.0.0", () => {
+      console.log("[Backup] health listening", { port: httpPort, host: "0.0.0.0" });
     });
 
   await startDailyScheduler(

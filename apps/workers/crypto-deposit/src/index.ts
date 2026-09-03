@@ -20,6 +20,15 @@ function parsePositiveInt(raw: string | undefined, fallback: number): number {
   return Math.floor(n);
 }
 
+/** Railway injects PORT; fall back to worker-specific env, then default. */
+function resolveHttpPort(workerPortEnv: string | undefined, defaultPort: number): number {
+  if (process.env.PORT) {
+    const port = parseInt(process.env.PORT, 10);
+    if (Number.isFinite(port) && port > 0) return port;
+  }
+  return parsePositiveInt(workerPortEnv, defaultPort);
+}
+
 /** Crash-recovery lock TTL: slightly above interval, never blocks the next tick after finally-del. */
 function crashLockTtlSec(intervalMs: number, envRaw: string | undefined): number {
   const fallback = Math.max(30, Math.ceil((intervalMs / 1000) * 3));
@@ -51,7 +60,7 @@ async function main(): Promise<void> {
     ssl: { rejectUnauthorized: false },
   });
 
-  const httpPort = parsePositiveInt(process.env.CRYPTO_DEPOSIT_HTTP_PORT, 8080);
+  const httpPort = resolveHttpPort(process.env.CRYPTO_DEPOSIT_HTTP_PORT, 8080);
 
   // Prefer new env names; fall back to legacy CRYPTO_ACTIVE_SCAN_INTERVAL_MS.
   const hotConfirmIntervalMs = parsePositiveInt(
@@ -105,8 +114,8 @@ async function main(): Promise<void> {
   });
 
   await new Promise<void>((resolve) => {
-    server.listen(httpPort, () => {
-      console.log("[Payment] crypto-deposit-worker listening", { httpPort });
+    server.listen(httpPort, "0.0.0.0", () => {
+      console.log("[Payment] crypto-deposit-worker listening", { httpPort, host: "0.0.0.0" });
       resolve();
     });
   });
