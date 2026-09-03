@@ -91,6 +91,7 @@ async function loadDashboardUserInfo(
     id: user.id,
     shortId: makeShortIdFromUuid(user.id),
     displayName,
+    username: dbUser?.username ?? null,
     role,
     referralCode: dbUser?.referral_code ?? null,
     parentId: (dbUser as { parent_id?: string | null } | null)?.parent_id ?? null,

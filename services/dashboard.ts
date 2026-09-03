@@ -138,7 +138,7 @@ async function loadDashboardDataFromAdminSnapshot(options?: {
   force?: boolean;
 }): Promise<DashboardData> {
   const maxAgeMs = options?.maxAgeMs ?? 30_000;
-  const cacheKey = "admin-snapshot|v7";
+  const cacheKey = "admin-snapshot|v8";
 
   if (!options?.force && dashboardCache?.key === cacheKey) {
     const ageMs = Date.now() - dashboardCache.fetchedAtMs;
@@ -650,6 +650,7 @@ export async function loadDashboardUserInfo(): Promise<DashboardUserInfo | null>
     id: user.id,
     shortId: makeShortIdFromUuid(user.id),
     displayName,
+    username: dbUser?.username ?? null,
     role,
     referralCode: dbUser?.referral_code ?? null,
     parentId: (dbUser as any)?.parent_id ?? null,

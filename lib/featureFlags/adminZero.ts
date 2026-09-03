@@ -1,4 +1,5 @@
 import { supabaseServer } from "@/lib/supabaseServer";
+export { isAdminZeroUser } from "@/lib/admin/isAdminZeroUser";
 
 export type AdminZeroUser = {
   id: string;
@@ -6,18 +7,6 @@ export type AdminZeroUser = {
   role: string;
   admin_sub_role: string | null;
 };
-
-export function isAdminZeroUser(user: {
-  role?: string | null;
-  username?: string | null;
-  admin_sub_role?: string | null;
-} | null | undefined): boolean {
-  return (
-    user?.role === "admin" &&
-    user?.username === "adminzero" &&
-    user?.admin_sub_role === null
-  );
-}
 
 export async function verifyAdminZeroAccess(userId: string): Promise<boolean> {
   try {

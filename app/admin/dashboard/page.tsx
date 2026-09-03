@@ -11,8 +11,8 @@ import {
 } from "@/services/dashboard";
 import { hardExitFromCurrentPanel } from "@/lib/auth/hardExit";
 import ShamsiDateInput from "@/components/common/ShamsiDateInput";
-import { supabase } from "@/lib/supabaseClient";
 import { getCachedAdminPermissions, getCurrentAdminPermissions } from "@/lib/admin-permissions";
+import { isAdminZeroUser } from "@/lib/admin/isAdminZeroUser";
 import AdminDashboardReportSkeleton from "@/components/admin/AdminDashboardReportSkeleton";
 import type { DashboardPeriod, DashboardData, DashboardPanelOperator, FinancialSummary } from "@/src/types/dashboard";
 import type { DashboardRangeSummary } from "@/services/dashboard";
@@ -192,7 +192,9 @@ export default function AdminDashboardPage() {
   const [permissions, setPermissions] = useState<AdminPermissions | null>(() =>
     getCachedAdminPermissions()
   );
-  const [adminZeroId, setAdminZeroId] = useState<string | null>(null);
+  const [permissionsLoading, setPermissionsLoading] = useState(
+    () => getCachedAdminPermissions() === null
+  );
 
   useEffect(() => {
     setShowHeader(true);
@@ -207,22 +209,17 @@ export default function AdminDashboardPage() {
 
     async function loadShellMeta() {
       try {
-        const [adminZeroRes, perms] = await Promise.all([
-          supabase
-            .from("users")
-            .select("id")
-            .eq("username", "adminzero")
-            .eq("role", "admin")
-            .maybeSingle(),
-          getCurrentAdminPermissions({ maxAgeMs: 60_000 }),
-        ]);
+        const perms = await getCurrentAdminPermissions({ maxAgeMs: 60_000 });
 
         if (cancelled) return;
 
-        setAdminZeroId(adminZeroRes.data?.id ?? null);
         setPermissions(perms);
       } catch (error) {
         console.error("Error loading admin dashboard shell metadata:", error);
+      } finally {
+        if (!cancelled) {
+          setPermissionsLoading(false);
+        }
       }
     }
 
@@ -268,7 +265,7 @@ export default function AdminDashboardPage() {
   const isAdmin = !data?.user || userRole === "admin";
   const adminSubRole = data?.user?.adminSubRole || null;
   const normalizedSubRole = adminSubRole ? adminSubRole.toLowerCase() : null;
-  const isAdminZero = isAdmin && !!adminZeroId && data?.user?.id === adminZeroId;
+  const isAdminZero = isAdmin && isAdminZeroUser(data?.user);
   const canManageReferralCode = isAdminZero;
   const reportAccessResolved = Boolean(data?.user);
   const canViewFinancialReport = reportAccessResolved
@@ -279,12 +276,17 @@ export default function AdminDashboardPage() {
         normalizedSubRole === "support")
     : true;
 
-  const canAccessRooms = isAdmin && (permissions?.rooms ?? true);
+  const canAccessRooms =
+    isAdmin && (permissionsLoading || permissions?.rooms !== false);
   const canAccessTournaments = isAdmin;
-  const canAccessUsers = isAdmin && (permissions?.users ?? true);
-  const canAccessTransactions = isAdmin && (permissions?.transactions ?? true);
-  const canAccessEntryBanner = isAdmin && (permissions?.entry_banner ?? true);
-  const canAccessAdmins = isAdminZero && (permissions?.admins ?? true);
+  const canAccessUsers =
+    isAdmin && (permissionsLoading || permissions?.users !== false);
+  const canAccessTransactions =
+    isAdmin && (permissionsLoading || permissions?.transactions !== false);
+  const canAccessEntryBanner =
+    isAdmin && (permissionsLoading || permissions?.entry_banner !== false);
+  const canAccessAdmins =
+    isAdminZero && (permissionsLoading || permissions?.admins !== false);
 
   const handleLoadDaySummary = async (options?: { force?: boolean }) => {
     if (dayLoading) return;

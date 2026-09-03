@@ -9,6 +9,8 @@ export interface DashboardUserInfo {
   /** ID کوتاه ۱۰ رقمی برای نمایش در UI (از روی UUID محاسبه می‌شود) */
   shortId: string;
   displayName: string;
+  /** username از جدول users — برای تشخیص adminzero بدون query اضافه */
+  username?: string | null;
   role: "admin" | "agent" | "super" | "player";
   referralCode: string | null;
   parentId?: string | null;
