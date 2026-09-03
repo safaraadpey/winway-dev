@@ -878,18 +878,20 @@ const [isMusicEnabled, setIsMusicEnabled] = useState(() => {
     return;
   }, [roomId, templateId, isMusicEnabled]);
 
-  // شمارش معکوس محلی با استفاده از deadline و server offset
+  // شمارش معکوس محلی با استفاده از deadline و server offset.
+  // Cadence زیر 1s تا jitter مرورگر/PWA عدد نمایشی را رد نکند؛ state فقط با تغییر ثانیه آپدیت می‌شود.
   useEffect(() => {
     if (!countdownDeadline) return;
 
-    const id = setInterval(() => {
-      const clientNow = Date.now();
-      const serverNow = clientNow + serverOffset;
+    const tickDisplayCountdown = () => {
+      const serverNow = Date.now() + serverOffset;
       const remainingMs = countdownDeadline - serverNow;
       const remaining = Math.max(0, Math.floor(remainingMs / 1000));
-      setCountdownSeconds(remaining);
-    }, 1000);
+      setCountdownSeconds((prev) => (prev === remaining ? prev : remaining));
+    };
 
+    tickDisplayCountdown();
+    const id = setInterval(tickDisplayCountdown, 250);
     return () => clearInterval(id);
   }, [countdownDeadline, serverOffset]);
 
