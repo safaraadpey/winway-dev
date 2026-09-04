@@ -707,7 +707,6 @@ export interface LiveRoomSnapshot {
     draw_interval_sec?: number;
     ding_settle_mode?: "per_draw" | "room_level";
   };
-  pending_room_ding?: number;
   tournament?: {
     id: string;
     title: string | null;
@@ -811,7 +810,24 @@ export type RoomResultsResponse = {
   isTournament: boolean;
   tournamentId: string | null;
   cardPrice: number;
+  dingSettleMode: "per_draw" | "room_level";
+  dingSettled: boolean;
+  playerDingAmount: number;
+  dingBalanceAfterSettlement: number;
 };
+
+function isRoomResultsReady(res: RoomResultsResponse): boolean {
+  if (!res.dingSettled) return false;
+
+  const winners = [...res.lineWinners, ...res.fullWinners];
+  if (res.isTournament) {
+    return winners.length > 0;
+  }
+  if (winners.length === 0) {
+    return true;
+  }
+  return winners.every((w) => w.prizeAmount > 0);
+}
 
 export type FetchRoomResultsOptions = {
   maxAttempts?: number;
@@ -820,7 +836,8 @@ export type FetchRoomResultsOptions = {
 
 /**
  * Poll room-results for end-game dialog.
- * Cash rooms: wait until reward_amount is written on all winners.
+ * Waits until ding is settled on ledger (room_level: ding_settled_at; per_draw: room finished).
+ * Cash rooms: also wait until reward_amount is written on all winners.
  * Tournament tables: prize stays 0 — return as soon as winners exist.
  */
 export async function fetchRoomResultsWhenPrizesReady(
@@ -835,10 +852,8 @@ export async function fetchRoomResultsWhenPrizesReady(
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const res = await fetchRoomResults(roomId);
     lastRes = res;
-    const winners = [...res.lineWinners, ...res.fullWinners];
-    const skipPrizeWait = res.isTournament;
 
-    if (winners.length > 0 && (skipPrizeWait || winners.every((w) => w.prizeAmount > 0))) {
+    if (isRoomResultsReady(res)) {
       return res;
     }
 

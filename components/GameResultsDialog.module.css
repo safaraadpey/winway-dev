@@ -67,6 +67,37 @@
   font-weight: 800;
 }
 
+.playerDingSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+  margin-top: 0.25rem;
+}
+
+.playerDingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-radius: 0.75rem;
+  padding: 0.35rem 0.75rem;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(101, 79, 150, 0.85);
+}
+
+.playerDingLabel {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(254, 238, 180, 0.92);
+}
+
+.playerDingValue {
+  composes: numeric-text numeric-text--16 from global;
+  font-weight: 800;
+  color: #fcd34d;
+}
+
 .proofRow {
   position: relative;
   width: 100%;

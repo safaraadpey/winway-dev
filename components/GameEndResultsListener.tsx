@@ -75,7 +75,7 @@ export default function GameEndResultsListener() {
   const resultsFetchInFlightRef = useRef(false);
 
   const currentUserId = session.userId;
-  const { scheduleWalletBalanceSync } = useBalancesContext();
+  const { scheduleWalletBalanceSync, refreshAllBalances } = useBalancesContext();
 
   const shouldSuppressBecauseLiveRoomAlreadyHandlesIt = useMemo(() => {
     // GameRoom (and LiveRoomScreen inside it) already shows results dialog on finish.
@@ -487,6 +487,7 @@ export default function GameEndResultsListener() {
         setResults(r);
         setDialogOpen(true);
         scheduleWalletBalanceSync?.(`room-settled:${next.roomId}`);
+        void refreshAllBalances?.({ force: true });
       })
       .catch(() => {
         if (!isMountedRef.current || suppressRef.current) return;
@@ -499,6 +500,10 @@ export default function GameEndResultsListener() {
           isTournament: false,
           tournamentId: null,
           cardPrice: Number(activeRoomsRef.current.get(next.roomId)?.cardPrice ?? 0),
+          dingSettleMode: "per_draw",
+          dingSettled: false,
+          playerDingAmount: 0,
+          dingBalanceAfterSettlement: 0,
         });
         setDialogOpen(true);
       })
@@ -511,6 +516,7 @@ export default function GameEndResultsListener() {
     queue,
     shouldSuppressBecauseLiveRoomAlreadyHandlesIt,
     scheduleWalletBalanceSync,
+    refreshAllBalances,
     pathname,
   ]);
 
@@ -557,6 +563,9 @@ export default function GameEndResultsListener() {
         proofSeed={results?.seed ?? null}
         proofCommitHash={results?.commitHash ?? null}
         drawVerification={results?.drawVerification ?? null}
+        showPlayerDingStats
+        dingSettled={results?.dingSettled ?? false}
+        playerDingAmount={results?.playerDingAmount ?? 0}
       />
     </>
   );

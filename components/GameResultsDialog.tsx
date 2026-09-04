@@ -264,6 +264,10 @@ interface GameResultsDialogProps {
   drawVerification?: DrawVerificationSpec | null;
   primaryActionLabel?: string;
   onPrimaryAction?: () => void;
+  /** Ledger-only ding earned this room after settlement (omit for guest/watch). */
+  showPlayerDingStats?: boolean;
+  dingSettled?: boolean;
+  playerDingAmount?: number;
 }
 
 export default function GameResultsDialog({
@@ -280,6 +284,9 @@ export default function GameResultsDialog({
   drawVerification,
   primaryActionLabel,
   onPrimaryAction,
+  showPlayerDingStats = false,
+  dingSettled = false,
+  playerDingAmount = 0,
 }: GameResultsDialogProps) {
   const themeId = useThemeId();
   const ingameLogoSrc = getLogoImagePath(themeId, "ingameLogo");
@@ -327,6 +334,9 @@ export default function GameResultsDialog({
   }, [myLineWin, myFullWin]);
 
   const celebrate = isWinner && !isTournament && totalPrizeAmount > 0;
+
+  const showPlayerDing =
+    showPlayerDingStats && !!currentUserId && dingSettled;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -582,6 +592,20 @@ export default function GameResultsDialog({
                     </button>
                   </div>
                 )}
+              </div>
+            )}
+
+            {showPlayerDing && (
+              <div className={styles.playerDingSection} dir="rtl">
+                <div className={styles.playerDingRow}>
+                  <span className={styles.playerDingLabel}>دینگ این بازی</span>
+                  <span
+                    dir="ltr"
+                    className={`numeric-text numeric-text--16 ${styles.playerDingValue}`}
+                  >
+                    {playerDingAmount.toLocaleString("en-US")}
+                  </span>
+                </div>
               </div>
             )}
           </div>

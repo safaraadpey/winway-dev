@@ -36,7 +36,7 @@ export interface Balances {
   refreshWalletBalances?: () => Promise<void>;
   refreshAllBalances?: (options?: RefreshBalancesOptions) => Promise<void>;
   creditDingOnReveal?: (revealKey: string, delta: number) => void;
-  /** room_level: display settled + Engine pending from live-room snapshot. */
+  /** @deprecated room_level mid-game pending overlay disabled; no-op kept for callers. */
   syncRoomPendingDing?: (pending: number) => void;
   scheduleWalletBalanceSync?: (reason?: string) => void;
 }
@@ -289,7 +289,7 @@ export function useBalances(): Balances {
 
         if (isMountedRef.current) {
           settledDingRef.current = ding;
-          ding = ding + pendingRoomDingRef.current;
+          pendingRoomDingRef.current = 0;
           applyBalances(ding, balance, locked);
         }
 
@@ -511,18 +511,9 @@ export function useBalances(): Balances {
     }, 800);
   };
 
-  const syncRoomPendingDing = (pending: number) => {
-    pendingRoomDingRef.current = Math.max(0, pending);
-    const displayed = settledDingRef.current + pendingRoomDingRef.current;
-    currentBalanceRef.current = displayed;
-    setDingBalance(displayed);
-    persistBalanceShell(
-      displayed,
-      currentTomanBalanceRef.current,
-      lockedTomanBalanceRef.current
-    );
-    hasHydratedRef.current = true;
-    setHasHydrated(true);
+  const syncRoomPendingDing = (_pending: number) => {
+    // room_level mid-game ding overlay disabled — header shows settled ding_balances only.
+    pendingRoomDingRef.current = 0;
   };
 
   const creditDingOnReveal = (revealKey: string, delta: number) => {

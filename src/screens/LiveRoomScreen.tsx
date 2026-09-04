@@ -158,7 +158,7 @@ export default function LiveRoomScreen({
   const session = useSession();
   const { setShowStatusBar, setBalanceRefreshDisabled, setFullPageScroll } =
     useHeaderVisibility();
-  const { creditDingOnReveal, syncRoomPendingDing, scheduleWalletBalanceSync, refreshAllBalances } =
+  const { creditDingOnReveal, scheduleWalletBalanceSync, refreshAllBalances } =
     useBalancesContext();
   const { invalidate: invalidateActiveGames } = useActiveGamesContext();
 
@@ -312,6 +312,7 @@ export default function LiveRoomScreen({
 
       if (fetched.ok) {
         setResults(fetched.res);
+        void refreshAllBalances?.({ force: true });
       } else {
         console.error("[LiveRoom] winners fetch error:", fetched.err);
       }
@@ -323,7 +324,7 @@ export default function LiveRoomScreen({
     } finally {
       openingResultsRef.current = false;
     }
-  }, [roomId, scheduleWalletBalanceSync, fetchResultsWhenReady]);
+  }, [roomId, scheduleWalletBalanceSync, fetchResultsWhenReady, refreshAllBalances]);
 
   const syncWinnersFromApi = useCallback(
     async (snapshot: LiveRoomSnapshot | null | undefined) => {
@@ -386,23 +387,6 @@ export default function LiveRoomScreen({
     },
     []
   );
-
-  const applySnapshotPendingDing = useCallback(
-    (snapshot: LiveRoomSnapshot | null | undefined) => {
-      if (!snapshot) return;
-      const mode = snapshot.room?.ding_settle_mode ?? "per_draw";
-      if (mode !== "room_level") {
-        syncRoomPendingDing?.(0);
-        return;
-      }
-      syncRoomPendingDing?.(Math.max(0, Number(snapshot.pending_room_ding ?? 0)));
-    },
-    [syncRoomPendingDing]
-  );
-
-  useEffect(() => {
-    applySnapshotPendingDing(data);
-  }, [data, applySnapshotPendingDing]);
 
   const creditDingForRevealedNumber = useCallback(
     (number: number, snapshot: LiveRoomSnapshot | null | undefined) => {
@@ -1367,6 +1351,9 @@ export default function LiveRoomScreen({
         fullWinners={results?.fullWinners ?? []}
         isTournament={results?.isTournament ?? false}
         cardPrice={results?.cardPrice ?? cardPrice}
+        showPlayerDingStats={!isGuestSpectate}
+        dingSettled={results?.dingSettled ?? false}
+        playerDingAmount={results?.playerDingAmount ?? 0}
       />
     </div>
   );

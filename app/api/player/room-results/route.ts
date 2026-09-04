@@ -27,6 +27,10 @@ type RoomResultsResponse = {
   isTournament: boolean;
   tournamentId: string | null;
   cardPrice: number;
+  dingSettleMode: "per_draw" | "room_level";
+  dingSettled: boolean;
+  playerDingAmount: number;
+  dingBalanceAfterSettlement: number;
 };
 
 type ResultRow = {
@@ -144,6 +148,9 @@ export async function GET(request: NextRequest) {
       room_template_id: string | null;
       room_type: string | null;
       card_price: string | number | null;
+      ding_settle_mode: string | null;
+      ding_settled_at: string | null;
+      status: string | null;
     }>(
       `
       SELECT
@@ -154,7 +161,10 @@ export async function GET(request: NextRequest) {
         r.room_seed_hash,
         r.room_template_id,
         rt.room_type::text AS room_type,
-        r.card_price
+        r.card_price,
+        r.ding_settle_mode::text AS ding_settle_mode,
+        r.ding_settled_at::text AS ding_settled_at,
+        r.status::text AS status
       FROM public.rooms r
       LEFT JOIN public.room_templates rt ON rt.id = r.room_template_id
       WHERE r.id = $1::uuid
@@ -168,6 +178,36 @@ export async function GET(request: NextRequest) {
     const commitHash = roomRow?.room_seed_hash ?? null;
     const isTournament = roomRow?.room_type === "tournament";
     const cardPrice = Number(roomRow?.card_price || 0);
+    const dingSettleMode =
+      roomRow?.ding_settle_mode === "room_level" ? "room_level" : "per_draw";
+    const roomStatus = (roomRow?.status ?? "").toLowerCase();
+    const dingSettled =
+      dingSettleMode === "room_level"
+        ? roomRow?.ding_settled_at != null
+        : roomStatus === "finished" ||
+          roomStatus === "settling" ||
+          roomStatus === "cancelled";
+
+    const { rows: playerDingRows } = await pgPool.query<{ total: string | number }>(
+      `
+      SELECT COALESCE(SUM(amount), 0) AS total
+      FROM public.ding_transactions
+      WHERE room_id = $1::uuid
+        AND user_id = $2::uuid
+      `,
+      [roomId, user.id]
+    );
+    const playerDingAmount = Number(playerDingRows[0]?.total ?? 0) || 0;
+
+    const { rows: balanceRows } = await pgPool.query<{ balance: string | number }>(
+      `
+      SELECT COALESCE(balance, 0) AS balance
+      FROM public.ding_balances
+      WHERE user_id = $1::uuid
+      `,
+      [user.id]
+    );
+    const dingBalanceAfterSettlement = Number(balanceRows[0]?.balance ?? 0) || 0;
 
     const { rows: drawRows } = await pgPool.query<{ number: number }>(
       `
@@ -212,6 +252,10 @@ export async function GET(request: NextRequest) {
       draws: drawnNumbers.length,
       isTournament,
       cardPrice,
+      dingSettleMode,
+      dingSettled,
+      playerDingAmount,
+      dingBalanceAfterSettlement,
     });
 
     const payload: RoomResultsResponse = {
@@ -223,6 +267,10 @@ export async function GET(request: NextRequest) {
       isTournament,
       tournamentId,
       cardPrice,
+      dingSettleMode,
+      dingSettled,
+      playerDingAmount,
+      dingBalanceAfterSettlement,
     };
 
     return NextResponse.json(payload);

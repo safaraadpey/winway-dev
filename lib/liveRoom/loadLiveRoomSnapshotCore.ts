@@ -11,7 +11,6 @@ import {
 } from "@/lib/liveRoomSnapshotPg";
 import { loadCardPoolMetaForRoomFromPg } from "@/lib/cardPool/cardPoolSnapshotPg";
 import { createServiceClient } from "@/lib/supabaseServer";
-import { computePendingDingForUser, resolveDingPerCard } from "@/lib/ding/roomPendingDing";
 
 export type LiveRoomSnapshotPayload = {
   room: {
@@ -33,8 +32,6 @@ export type LiveRoomSnapshotPayload = {
     draw_interval_sec: number;
     ding_settle_mode?: "per_draw" | "room_level";
   };
-  /** Settled ding_balances + Engine-computed pending for room_level rooms. */
-  pending_room_ding?: number;
   tournament?: {
     id: string;
     title: string | null;
@@ -409,37 +406,6 @@ export async function loadLiveRoomSnapshotForRoom(
       ? "room_level"
       : "per_draw";
 
-  let pendingRoomDing = 0;
-  if (
-    !drawsOnly &&
-    dingSettleMode === "room_level" &&
-    currentUserId &&
-    (room.status === "playing" || room.status === "settling" || room.status === "live")
-  ) {
-    const ticketIds = tickets.map((t) => t.id);
-    let marks: { ticket_id: string; value: number }[] = [];
-    if (ticketIds.length > 0) {
-      const { data: markRows } = await supabase
-        .from("marks")
-        .select("ticket_id, value")
-        .in("ticket_id", ticketIds);
-      marks = (markRows ?? []) as { ticket_id: string; value: number }[];
-    }
-    const dingPerCard = resolveDingPerCard(resolvedDingPerNumber, template?.ding_per_number);
-    pendingRoomDing = computePendingDingForUser({
-      userId: currentUserId,
-      dingPerCard,
-      tickets: tickets.map((t) => ({
-        id: t.id,
-        player_user_id: t.player_user_id ?? "",
-        reservation_status: (t as { reservation_status?: string }).reservation_status ?? "reserved",
-        cancelled_at: (t as { cancelled_at?: string | null }).cancelled_at ?? null,
-      })),
-      marks,
-      processedDrawNumbers: draws.map((d) => d.number),
-    });
-  }
-
   return {
     room: {
       id: room.id,
@@ -460,7 +426,6 @@ export async function loadLiveRoomSnapshotForRoom(
       draw_interval_sec: drawIntervalSec,
       ding_settle_mode: dingSettleMode,
     },
-    pending_room_ding: pendingRoomDing > 0 ? pendingRoomDing : undefined,
     tournament,
     server_now: new Date().toISOString(),
     draws: mapDrawRows(draws),
