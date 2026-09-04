@@ -3,6 +3,11 @@ import type { SupabaseAdmin } from "../../db/supabase-admin.js";
 import { settleRoomIfNeeded } from "../../finance/settleRoom.js";
 import type { Logger } from "../../metrics/logger.js";
 import {
+  elapsedFinalizeMs,
+  logDrawFinalize,
+  nowFinalizeMs,
+} from "../../metrics/drawFinalizeObservability.js";
+import {
   buildDrawPerformanceReport,
   recordDrawSample,
   timedStep,
@@ -45,9 +50,20 @@ export async function processEngineDrawJob(
   const { pickContext } = opts;
 
   try {
+    const owner = opts.ramClockRecovery ? "recovery" : "draw-processor";
+
     if (!opts.skipExistingCheck) {
       const existingDraw = await repo.getDraw(job.room_id, job.draw_number);
       if (existingDraw?.processed_at) {
+        logDrawFinalize(log, {
+          owner,
+          roomId: job.room_id,
+          drawNumber: job.draw_number,
+          jobId: job.id,
+          outcome: "duplicate",
+          queueWaitMs,
+          alreadyProcessed: true,
+        });
         await repo.completeDrawJobs([job.id]);
         return "done";
       }
@@ -112,6 +128,19 @@ export async function processEngineDrawJob(
       ? new Date().toISOString()
       : null;
 
+    logDrawFinalize(log, {
+      owner,
+      roomId: job.room_id,
+      drawNumber: job.draw_number,
+      jobId: job.id,
+      outcome: "attempt",
+      queueWaitMs,
+      markCount: persistence.marks.length,
+      resultCount: persistence.results.length,
+      dingCreditCount: dingPayload.credits.length,
+    });
+
+    const finalizeStarted = nowFinalizeMs();
     const finalizeStep = await timedStep(async () => {
       const credited = await repo.finalizeEngineDrawJob({
         jobId: job.id,
@@ -136,6 +165,7 @@ export async function processEngineDrawJob(
         log.warn("[Room] finalize fenced — stale lease epoch or owner", {
           roomId: job.room_id,
           drawNumber: job.draw_number,
+          jobId: job.id,
           ownerId: opts.leaseFence?.ownerId,
           leaseEpoch: opts.leaseFence?.leaseEpoch,
         });
@@ -146,15 +176,45 @@ export async function processEngineDrawJob(
         log.info("ding aggregated (engine)", {
           roomId: job.room_id,
           drawNumber: job.draw_number,
+          jobId: job.id,
           users: credited,
         });
       }
+      return credited;
     });
+    const finalizeRpcMs = elapsedFinalizeMs(finalizeStarted);
     breakdown.rpc_finalize_engine_draw_job = finalizeStep.timing;
 
     if (finalizeStep.result === -1) {
+      logDrawFinalize(log, {
+        owner,
+        roomId: job.room_id,
+        drawNumber: job.draw_number,
+        jobId: job.id,
+        outcome: "fenced",
+        queueWaitMs,
+        finalizeRpcMs,
+        markCount: persistence.marks.length,
+        resultCount: persistence.results.length,
+        dingCreditCount: dingPayload.credits.length,
+      });
       return "fenced";
     }
+
+    logDrawFinalize(log, {
+      owner,
+      roomId: job.room_id,
+      drawNumber: job.draw_number,
+      jobId: job.id,
+      outcome: "done",
+      queueWaitMs,
+      finalizeRpcMs,
+      markCount: persistence.marks.length,
+      resultCount: persistence.results.length,
+      dingCreditCount: dingPayload.credits.length,
+      dingUsersCredited:
+        typeof finalizeStep.result === "number" ? finalizeStep.result : 0,
+    });
 
     let settled = evalResult.settled;
     const hasUnsettledFull =
@@ -240,6 +300,13 @@ async function handleFailure(
     drawNumber: job.draw_number,
     attempts: nextAttempts,
     error: err instanceof Error ? err.message : String(err),
+  });
+  logDrawFinalize(log, {
+    owner: opts.ramClockRecovery ? "recovery" : "draw-processor",
+    roomId: job.room_id,
+    drawNumber: job.draw_number,
+    jobId: job.id,
+    outcome: "error",
   });
   return deadLetter ? "dead-letter" : "requeue";
 }

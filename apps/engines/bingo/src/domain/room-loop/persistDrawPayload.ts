@@ -3,6 +3,11 @@
  * Must not re-pick, re-evaluate, or restamp draw cadence times.
  */
 import { settleRoomIfNeeded } from "../../finance/settleRoom.js";
+import {
+  elapsedFinalizeMs,
+  logDrawFinalize,
+  nowFinalizeMs,
+} from "../../metrics/drawFinalizeObservability.js";
 import type { EngineJobOutcome } from "../draw/processEngineDrawJob.js";
 import type { RoomGameActor } from "../../workers/room-loop/roomGameActor.js";
 import {
@@ -25,11 +30,21 @@ export async function persistClockDrawPayload(
   let jobId = -1;
 
   if (existing?.processed_at) {
+    logDrawFinalize(log, {
+      owner: "ram-clock-persist",
+      roomId,
+      drawNumber: payload.number,
+      jobId: -1,
+      outcome: "duplicate",
+      alreadyProcessed: true,
+    });
     state.recordDrawProcessed(payload.number);
     return "done";
   }
 
+  let insertRpcMs: number | undefined;
   if (!existing) {
+    const insertStarted = nowFinalizeMs();
     const insertResult = await repo.insertDrawIfReadyForOwner({
       roomId,
       number: payload.number,
@@ -41,6 +56,7 @@ export async function persistClockDrawPayload(
       leaseEpoch: actor.leaseFence.leaseEpoch,
       maxUnprocessed: actor.config.roomLoopMaxUnprocessedDraws,
     });
+    insertRpcMs = elapsedFinalizeMs(insertStarted);
 
     switch (insertResult.outcome) {
       case "not_owner":
@@ -52,6 +68,12 @@ export async function persistClockDrawPayload(
         return "requeue";
       case "duplicate":
         jobId = (await repo.getDrawJobId(roomId, payload.number)) ?? -1;
+        log.warn("[DrawFinalize] insert unique_violation — another writer already inserted", {
+          owner: "ram-clock-persist",
+          roomId,
+          drawNumber: payload.number,
+          jobId,
+        });
         break;
       case "inserted":
         actor.metrics.noteDrawInserted();
@@ -71,7 +93,25 @@ export async function persistClockDrawPayload(
   const persistStartedMs = Date.now();
   const handlerStartedAt = new Date(persistStartedMs).toISOString();
   const actorFinalizeStartedAt = handlerStartedAt;
+  const queueWaitMs = Math.max(0, persistStartedMs - Date.parse(payload.drawnAtIso));
+  const markCount = payload.persistence.marks.length;
+  const resultCount = payload.persistence.results.length;
+  const dingCreditCount = payload.ding.credits.length;
 
+  logDrawFinalize(log, {
+    owner: "ram-clock-persist",
+    roomId,
+    drawNumber: payload.number,
+    jobId,
+    outcome: "attempt",
+    queueWaitMs,
+    insertRpcMs,
+    markCount,
+    resultCount,
+    dingCreditCount,
+  });
+
+  const finalizeStarted = nowFinalizeMs();
   const credited = await repo.finalizeEngineDrawJob({
     jobId,
     roomId,
@@ -81,7 +121,7 @@ export async function persistClockDrawPayload(
     setFirstLineDrawNumber: payload.persistence.setFirstLineDrawNumber,
     dingPerCard: payload.ding.dingPerCard,
     dingCredits: payload.ding.credits,
-    queueWaitMs: Math.max(0, persistStartedMs - Date.parse(payload.drawnAtIso)),
+    queueWaitMs,
     processingMs: 0,
     drainStartedAt: payload.drawnAtIso,
     firstPickedAt: payload.drawnAtIso,
@@ -91,20 +131,51 @@ export async function persistClockDrawPayload(
     ownerId: actor.leaseFence.ownerId,
     leaseEpoch: actor.leaseFence.leaseEpoch,
   });
+  const finalizeRpcMs = elapsedFinalizeMs(finalizeStarted);
 
   if (credited === -1) {
+    logDrawFinalize(log, {
+      owner: "ram-clock-persist",
+      roomId,
+      drawNumber: payload.number,
+      jobId,
+      outcome: "fenced",
+      queueWaitMs,
+      insertRpcMs,
+      finalizeRpcMs,
+      markCount,
+      resultCount,
+      dingCreditCount,
+    });
     log.warn("[Room] persist finalize fenced — stale lease", {
       roomId,
       drawNumber: payload.number,
+      jobId,
     });
     stateManager.evict(roomId);
     return "fenced";
   }
 
+  logDrawFinalize(log, {
+    owner: "ram-clock-persist",
+    roomId,
+    drawNumber: payload.number,
+    jobId,
+    outcome: "done",
+    queueWaitMs,
+    insertRpcMs,
+    finalizeRpcMs,
+    markCount,
+    resultCount,
+    dingCreditCount,
+    dingUsersCredited: credited,
+  });
+
   if (credited > 0) {
     log.info("ding aggregated (persist recorder)", {
       roomId,
       drawNumber: payload.number,
+      jobId,
       users: credited,
     });
   }
