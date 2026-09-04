@@ -31,6 +31,7 @@ import { startRoomScheduler } from "./workers/room-scheduler/index.js";
 import { startTournamentOrchestrator } from "./workers/tournament-orchestrator/index.js";
 import { startDevPlayerProcessor } from "./workers/dev-player/processor.js";
 import { startDevPlayerScheduler } from "./workers/dev-player/scheduler.js";
+import { startDingProcessor } from "./workers/ding-processor/index.js";
 
 /** Roles driven by periodic ticks — gated by SCHEDULER_ENABLED. */
 const SCHEDULED_ROLES = new Set<EngineRole>([
@@ -40,6 +41,7 @@ const SCHEDULED_ROLES = new Set<EngineRole>([
   "tournament-orchestrator",
   "dev-player-scheduler",
   "dev-player-processor",
+  "ding-processor",
 ]);
 
 function startScheduledWorkers(
@@ -78,6 +80,9 @@ function startScheduledWorkers(
   }
   if (config.roles.has("dev-player-processor")) {
     stops.push(startDevPlayerProcessor(workerCtx));
+  }
+  if (config.roles.has("ding-processor")) {
+    stops.push(startDingProcessor(workerCtx));
   }
 }
 
@@ -123,6 +128,7 @@ async function main(): Promise<void> {
     apiEnabled: config.apiEnabled,
     coordinationStrict: config.coordinationStrict,
     engineReplicaCount: config.engineReplicaCount,
+    dingAsyncEnabled: config.dingAsyncEnabled,
   });
   const pingRedis = redis ? () => redis!.ping() : undefined;
   const readiness = async () => {

@@ -789,6 +789,7 @@ export class GameRepo {
     actorFinalizeStartedAt?: string | null;
     ownerId?: string | null;
     leaseEpoch?: number | null;
+    deferDing?: boolean;
   }): Promise<number> {
     const { data, error } = await this.db.rpc("rpc_finalize_engine_draw_job", {
       p_job_id: args.jobId,
@@ -808,9 +809,73 @@ export class GameRepo {
       p_actor_finalize_started_at: args.actorFinalizeStartedAt ?? null,
       p_owner_id: args.ownerId ?? null,
       p_lease_epoch: args.leaseEpoch ?? null,
+      p_defer_ding: args.deferDing === true,
     });
     if (error) fail("rpc_finalize_engine_draw_job", error.message);
     return typeof data === "number" ? data : Number(data ?? 0);
+  }
+
+  async pickDingApplyJobs(limit: number): Promise<
+    {
+      id: number;
+      draw_id: string;
+      room_id: string;
+      draw_number: number;
+      ding_per_card: number;
+      credits: { user_id: string; amount: number; matched_cards?: number }[];
+      status: string;
+      attempts: number;
+      created_at: string;
+      updated_at: string;
+    }[]
+  > {
+    const { data, error } = await this.db.rpc("rpc_pick_ding_apply_jobs", {
+      p_limit: limit,
+    });
+    if (error) fail("rpc_pick_ding_apply_jobs", error.message);
+    return (data ?? []) as {
+      id: number;
+      draw_id: string;
+      room_id: string;
+      draw_number: number;
+      ding_per_card: number;
+      credits: { user_id: string; amount: number; matched_cards?: number }[];
+      status: string;
+      attempts: number;
+      created_at: string;
+      updated_at: string;
+    }[];
+  }
+
+  async completeDingApplyJob(args: {
+    jobId: number;
+    success: boolean;
+    error?: string;
+    maxAttempts?: number;
+  }): Promise<void> {
+    const { error } = await this.db.rpc("rpc_complete_ding_apply_job", {
+      p_job_id: args.jobId,
+      p_success: args.success,
+      p_error: args.error ?? null,
+      p_max_attempts: args.maxAttempts ?? 10,
+    });
+    if (error) fail("rpc_complete_ding_apply_job", error.message);
+  }
+
+  async reapStaleDingApplyJobs(
+    staleSec: number
+  ): Promise<{ requeued: number; completed: number }> {
+    const { data, error } = await this.db.rpc("rpc_reap_stale_ding_apply_jobs", {
+      p_stale_sec: staleSec,
+    });
+    if (error) fail("rpc_reap_stale_ding_apply_jobs", error.message);
+    const row = (Array.isArray(data) ? data[0] : data) as
+      | { requeued: number; completed: number }
+      | undefined;
+    return {
+      requeued: Number(row?.requeued ?? 0),
+      completed: Number(row?.completed ?? 0),
+    };
   }
 
   /** Live draw_jobs + rooms snapshot for pick-path diagnostics. */

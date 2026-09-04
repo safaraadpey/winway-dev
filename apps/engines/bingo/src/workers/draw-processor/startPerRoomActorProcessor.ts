@@ -48,6 +48,7 @@ export function startPerRoomActorProcessor(ctx: WorkerContext): () => void {
     repo,
     stateManager: ctx.roomState,
     maxAttempts: config.drawProcessorMaxAttempts,
+    deferDing: config.dingAsyncEnabled,
     getCardRegistry: () => cardRegistry,
     redis,
     drawRoomLockTtlSec: config.drawRoomLockTtlSec,

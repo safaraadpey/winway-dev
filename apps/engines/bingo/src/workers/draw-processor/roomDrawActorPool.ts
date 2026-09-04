@@ -15,6 +15,7 @@ export interface RoomDrawActorPoolOptions {
   repo: GameRepo;
   stateManager: RoomStateManager;
   maxAttempts: number;
+  deferDing?: boolean;
   getCardRegistry: () => GlobalCardRegistry | null;
   redis: GameRedis | null;
   drawRoomLockTtlSec: number;
@@ -51,6 +52,7 @@ export class RoomDrawActorPool {
         repo: this.opts.repo,
         stateManager: this.opts.stateManager,
         maxAttempts: this.opts.maxAttempts,
+        deferDing: this.opts.deferDing,
         getCardRegistry: this.opts.getCardRegistry,
         redis: this.opts.redis,
         drawRoomLockTtlSec: this.opts.drawRoomLockTtlSec,

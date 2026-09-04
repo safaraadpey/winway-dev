@@ -291,6 +291,7 @@ function startLegacyDrainProcessor(ctx: WorkerContext): () => void {
       drainMonitor,
       pickDebug: opts.pickDebug,
       pickDiagnostics: config.drawPickDiagnostics,
+      deferDing: config.dingAsyncEnabled,
     };
 
     const runBatch = executesBusinessLogic(config.runtime)

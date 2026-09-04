@@ -25,6 +25,7 @@ export interface RoomDrawActorDeps {
   repo: GameRepo;
   stateManager: RoomStateManager;
   maxAttempts: number;
+  deferDing?: boolean;
   getCardRegistry: () => GlobalCardRegistry | null;
   redis: GameRedis | null;
   drawRoomLockTtlSec: number;
@@ -123,6 +124,7 @@ export class RoomDrawActor {
           maxAttempts: this.deps.maxAttempts,
           cardRegistry: this.deps.getCardRegistry(),
           pickContext: work.pickContext,
+          deferDing: this.deps.deferDing === true,
         }
       );
     } finally {

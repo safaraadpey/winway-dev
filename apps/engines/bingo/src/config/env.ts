@@ -6,7 +6,8 @@ export type EngineRole =
   | "room-loop"
   | "tournament-orchestrator"
   | "dev-player-scheduler"
-  | "dev-player-processor";
+  | "dev-player-processor"
+  | "ding-processor";
 
 export interface EngineConfig {
   supabaseUrl: string;
@@ -103,6 +104,16 @@ export interface EngineConfig {
   engineDrainTimeoutMs: number;
   /** How often renewable locks extend TTL (fraction of TTL, via renew helper). */
   lockRenewIntervalMs: number;
+  /** Phase 2B: defer Ding from finalize to ding_apply_jobs worker (default false). */
+  dingAsyncEnabled: boolean;
+  dingProcessorIntervalMs: number;
+  dingProcessorBatchSize: number;
+  dingProcessorMaxAttempts: number;
+  dingProcessorLockTtlSec: number;
+  /** Requeue ding_apply_jobs in `processing` older than this (seconds). */
+  dingJobStaleSec: number;
+  /** How often to run stale ding job reaper (milliseconds). */
+  dingJobReapIntervalMs: number;
 }
 
 function parseRoles(raw: string | undefined): Set<EngineRole> {
@@ -113,6 +124,7 @@ function parseRoles(raw: string | undefined): Set<EngineRole> {
     "tournament-orchestrator",
     "dev-player-scheduler",
     "dev-player-processor",
+    "ding-processor",
   ];
   const set = new Set<EngineRole>();
   for (const part of (raw ?? "").split(",")) {
@@ -248,5 +260,22 @@ export function loadConfig(): EngineConfig {
     tournamentLockTtlSec: Number(process.env.TOURNAMENT_LOCK_TTL_SEC ?? "30"),
     engineDrainTimeoutMs: Number(process.env.ENGINE_DRAIN_TIMEOUT_MS ?? "25000"),
     lockRenewIntervalMs: Number(process.env.LOCK_RENEW_INTERVAL_MS ?? "10000"),
+    dingAsyncEnabled: process.env.DING_ASYNC_ENABLED === "true",
+    dingProcessorIntervalMs: Number(
+      process.env.DING_PROCESSOR_INTERVAL_MS ?? "500"
+    ),
+    dingProcessorBatchSize: Number(
+      process.env.DING_PROCESSOR_BATCH_SIZE ?? "50"
+    ),
+    dingProcessorMaxAttempts: Number(
+      process.env.DING_PROCESSOR_MAX_ATTEMPTS ?? "10"
+    ),
+    dingProcessorLockTtlSec: Number(
+      process.env.DING_PROCESSOR_LOCK_TTL_SEC ?? "30"
+    ),
+    dingJobStaleSec: Number(process.env.DING_JOB_STALE_SEC ?? "120"),
+    dingJobReapIntervalMs: Number(
+      process.env.DING_JOB_REAP_INTERVAL_MS ?? "30000"
+    ),
   };
 }

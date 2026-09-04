@@ -130,6 +130,7 @@ export async function persistClockDrawPayload(
     actorFinalizeStartedAt,
     ownerId: actor.leaseFence.ownerId,
     leaseEpoch: actor.leaseFence.leaseEpoch,
+    deferDing: actor.config.dingAsyncEnabled,
   });
   const finalizeRpcMs = elapsedFinalizeMs(finalizeStarted);
 
@@ -243,6 +244,7 @@ export async function recoverUnprocessedDrawFromDb(
       actorTiming: true,
       leaseFence: actor.leaseFence,
       ramClockRecovery: true,
+      deferDing: actor.config.dingAsyncEnabled,
     }
   );
 }

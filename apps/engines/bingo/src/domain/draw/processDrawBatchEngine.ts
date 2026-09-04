@@ -34,6 +34,7 @@ export interface ProcessDrawBatchEngineOptions {
   drainMonitor?: DrainMonitorContext;
   pickDebug?: PickDebugContext;
   pickDiagnostics?: boolean;
+  deferDing?: boolean;
 }
 
 export async function processDrawBatchEngine(
@@ -121,6 +122,7 @@ export async function processDrawBatchEngine(
           pickMsPerJob: Math.round(pickPerJobMs * 100) / 100,
           drainStartedAt,
         },
+        deferDing: opts.deferDing === true,
       }),
     roomLock
   );

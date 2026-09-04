@@ -32,6 +32,8 @@ export interface ProcessEngineDrawJobOptions {
   leaseFence?: { ownerId: string; leaseEpoch: number } | null;
   /** Recovery bootstrap — skip DB reconcile/checkpoint on evaluate. */
   ramClockRecovery?: boolean;
+  /** Phase 2B: enqueue ding_apply_jobs instead of inline Ding. */
+  deferDing?: boolean;
 }
 
 export async function processEngineDrawJob(
@@ -156,6 +158,7 @@ export async function processEngineDrawJob(
         actorFinalizeStartedAt,
         ownerId: opts.leaseFence?.ownerId ?? null,
         leaseEpoch: opts.leaseFence?.leaseEpoch ?? null,
+        deferDing: opts.deferDing === true,
       });
       if (credited === -1) {
         log.warn("[Room] finalize fenced — stale lease epoch or owner", {

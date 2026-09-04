@@ -1,0 +1,13 @@
+-- Phase 2B mandatory proofs (T1–T4). Run manually against dev/staging only.
+-- Requires migration 20260904140000_ding_apply_async.sql applied.
+--
+-- T1: Duplicate apply does not increase tournament totals
+-- T2: processed_at cannot commit without ding_apply_jobs when p_defer_ding=true
+-- T3: Duplicate worker delivery does not double-credit wallet or tournament
+-- T4: Stale processing job recovery marks done when ding_aggregated_at set
+
+-- Example T4 verification (after simulating crash post-apply):
+-- UPDATE ding_apply_jobs SET status='processing', updated_at=now()-interval '5 minutes'
+--   WHERE room_id = :room_id AND draw_number = :draw_number;
+-- SELECT * FROM rpc_reap_stale_ding_apply_jobs(60);
+-- Expect: completed=1, job status=done, balances unchanged on second reap.

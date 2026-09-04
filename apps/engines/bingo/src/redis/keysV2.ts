@@ -12,4 +12,6 @@ export const redisKeysV2 = {
     `${REDIS_PREFIX_V2}:lock:worker:dev-player-scheduler`,
   lockWorkerDevPlayerProcessor: () =>
     `${REDIS_PREFIX_V2}:lock:worker:dev-player-processor`,
+  lockWorkerDingProcessor: () =>
+    `${REDIS_PREFIX_V2}:lock:worker:ding-processor`,
 } as const;
