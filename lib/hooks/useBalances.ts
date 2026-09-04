@@ -15,6 +15,11 @@ import {
   readBalanceShell,
   writeBalanceShell,
 } from "@/lib/header/balanceShell";
+import {
+  canApplyLiveDingRevealCredit,
+  resolveDingSettleMode,
+  type DingSettleMode,
+} from "@/lib/liveRoom/liveDingUi";
 
 export type RefreshBalancesOptions = {
   force?: boolean;
@@ -35,9 +40,15 @@ export interface Balances {
   triggerDingCelebrate: () => void;
   refreshWalletBalances?: () => Promise<void>;
   refreshAllBalances?: (options?: RefreshBalancesOptions) => Promise<void>;
-  creditDingOnReveal?: (revealKey: string, delta: number) => void;
-  /** @deprecated room_level mid-game pending overlay disabled; no-op kept for callers. */
-  syncRoomPendingDing?: (pending: number) => void;
+  creditDingOnReveal?: (
+    revealKey: string,
+    delta: number,
+    dingSettleMode?: DingSettleMode
+  ) => void;
+  /** Live room: room_level disables mid-game optimistic Ding; per_draw unchanged. */
+  setLiveDingSettleMode?: (mode: DingSettleMode) => void;
+  /** Apply authoritative ding_balances after room_level settlement commit. */
+  applySettledDingBalance?: (balance: number) => void;
   scheduleWalletBalanceSync?: (reason?: string) => void;
 }
 
@@ -95,8 +106,8 @@ export function useBalances(): Balances {
   const balanceUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const currentBalanceRef = useRef<number>(initialRef.current.dingBalance);
   const settledDingRef = useRef<number>(initialRef.current.dingBalance);
-  const pendingRoomDingRef = useRef<number>(0);
   const fetchInFlightRef = useRef(false);
+  const liveDingSettleModeRef = useRef<DingSettleMode>("per_draw");
 
   const creditedRevealKeysRef = useRef<Set<string>>(new Set());
   const activeWalletSyncKeyRef = useRef<string | null>(null);
@@ -289,7 +300,6 @@ export function useBalances(): Balances {
 
         if (isMountedRef.current) {
           settledDingRef.current = ding;
-          pendingRoomDingRef.current = 0;
           applyBalances(ding, balance, locked);
         }
 
@@ -511,12 +521,55 @@ export function useBalances(): Balances {
     }, 800);
   };
 
-  const syncRoomPendingDing = (_pending: number) => {
-    // room_level mid-game ding overlay disabled — header shows settled ding_balances only.
-    pendingRoomDingRef.current = 0;
-  };
+  const clearLiveDingRevealSideEffects = useCallback(() => {
+    if (balanceUpdateTimeoutRef.current) {
+      clearTimeout(balanceUpdateTimeoutRef.current);
+      balanceUpdateTimeoutRef.current = null;
+    }
+    if (animationTimeoutRef.current) {
+      clearTimeout(animationTimeoutRef.current);
+      animationTimeoutRef.current = null;
+    }
+    setIsAnimating(false);
+  }, []);
 
-  const creditDingOnReveal = (revealKey: string, delta: number) => {
+  const setLiveDingSettleMode = useCallback(
+    (mode: DingSettleMode) => {
+      liveDingSettleModeRef.current = mode;
+      if (mode === "room_level") {
+        clearLiveDingRevealSideEffects();
+      }
+    },
+    [clearLiveDingRevealSideEffects]
+  );
+
+  const applySettledDingBalance = useCallback(
+    (balance: number) => {
+      if (!isMountedRef.current) return;
+      const safeBalance = Number(balance) || 0;
+      settledDingRef.current = safeBalance;
+      currentBalanceRef.current = safeBalance;
+      setDingBalance(safeBalance);
+      persistBalanceShell(
+        safeBalance,
+        currentTomanBalanceRef.current,
+        lockedTomanBalanceRef.current
+      );
+      hasHydratedRef.current = true;
+      setHasHydrated(true);
+    },
+    [persistBalanceShell]
+  );
+
+  const creditDingOnReveal = (
+    revealKey: string,
+    delta: number,
+    dingSettleMode?: DingSettleMode
+  ) => {
+    const mode = dingSettleMode ?? liveDingSettleModeRef.current;
+    if (!canApplyLiveDingRevealCredit(resolveDingSettleMode(mode))) {
+      return;
+    }
     if (!revealKey || delta <= 0) return;
     if (creditedRevealKeysRef.current.has(revealKey)) return;
     creditedRevealKeysRef.current.add(revealKey);
@@ -618,7 +671,8 @@ export function useBalances(): Balances {
     refreshWalletBalances,
     refreshAllBalances,
     creditDingOnReveal,
-    syncRoomPendingDing,
+    setLiveDingSettleMode,
+    applySettledDingBalance,
     scheduleWalletBalanceSync,
   };
 }

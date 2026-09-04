@@ -6,7 +6,7 @@ import { useBalances, type Balances } from "@/lib/hooks/useBalances";
 const BalancesContext = createContext<Balances | null>(null);
 
 export function BalancesProvider({ children }: { children: ReactNode }) {
-  // Single source of truth for user balances + ding_balances realtime subscription
+  // Single source of truth for user balances; room_level live Ding is ledger-only until settlement.
   const balances = useBalances();
   return (
     <BalancesContext.Provider value={balances}>

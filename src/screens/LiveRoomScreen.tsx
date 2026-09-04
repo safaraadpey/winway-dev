@@ -27,6 +27,10 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import { useBalancesContext } from "@/lib/contexts/BalancesContext";
+import {
+  buildPerDrawRevealCredit,
+  resolveDingSettleMode,
+} from "@/lib/liveRoom/liveDingUi";
 import { playNumber } from "@/lib/number-audio";
 import { playLiveRoomMusic, stopLiveRoomMusic } from "@/lib/audio/music";
 import { isMusicEnabled } from "@/lib/audio-settings";
@@ -43,7 +47,11 @@ import {
   buildLiveRoomShell,
   persistLiveRoomShellCache,
 } from "@/lib/liveRoom/liveRoomShell";
+import { useFeatures } from "@/lib/featureFlags/useFeatures";
+import { GAME_ROOM_CARD_OVERLAY_FEATURE_KEY } from "@/lib/liveRoom/featureKeys";
 import styles from "./LiveRoomScreen.module.css";
+
+const CARD_INFO_TOGGLE_MOVE_PX = 10;
 
 type CardWinner = {
   ticketId: string;
@@ -158,8 +166,13 @@ export default function LiveRoomScreen({
   const session = useSession();
   const { setShowStatusBar, setBalanceRefreshDisabled, setFullPageScroll } =
     useHeaderVisibility();
-  const { creditDingOnReveal, scheduleWalletBalanceSync, refreshAllBalances } =
-    useBalancesContext();
+  const {
+    creditDingOnReveal,
+    setLiveDingSettleMode,
+    applySettledDingBalance,
+    scheduleWalletBalanceSync,
+    refreshAllBalances,
+  } = useBalancesContext();
   const { invalidate: invalidateActiveGames } = useActiveGamesContext();
 
   const fetchSnapshot = useCallback(
@@ -312,6 +325,12 @@ export default function LiveRoomScreen({
 
       if (fetched.ok) {
         setResults(fetched.res);
+        if (
+          fetched.res.dingSettleMode === "room_level" &&
+          fetched.res.dingSettled
+        ) {
+          applySettledDingBalance?.(fetched.res.dingBalanceAfterSettlement);
+        }
         void refreshAllBalances?.({ force: true });
       } else {
         console.error("[LiveRoom] winners fetch error:", fetched.err);
@@ -324,7 +343,13 @@ export default function LiveRoomScreen({
     } finally {
       openingResultsRef.current = false;
     }
-  }, [roomId, scheduleWalletBalanceSync, fetchResultsWhenReady, refreshAllBalances]);
+  }, [
+    roomId,
+    scheduleWalletBalanceSync,
+    fetchResultsWhenReady,
+    refreshAllBalances,
+    applySettledDingBalance,
+  ]);
 
   const syncWinnersFromApi = useCallback(
     async (snapshot: LiveRoomSnapshot | null | undefined) => {
@@ -361,12 +386,20 @@ export default function LiveRoomScreen({
 
   // شمارش معکوس بصری تا اولین draw در DrawStrip (۵→…→۰، سپس ماندن روی ۰)
   const [firstDrawCountdownSec, setFirstDrawCountdownSec] = useState<number | null>(null);
+  const { hasFeature, loading: featuresLoading, error: featuresError } = useFeatures();
+  const overlayVariant =
+    !featuresLoading &&
+    !featuresError &&
+    hasFeature(GAME_ROOM_CARD_OVERLAY_FEATURE_KEY);
+  const [cardsInfoVisible, setCardsInfoVisible] = useState(false);
+  const cardPointerStartYRef = useRef<number | null>(null);
 
   // برای استفاده داخل callback های realtime (جلوگیری از stale closure)
   const dataRef = useRef<LiveRoomSnapshot>(data);
   useEffect(() => {
     dataRef.current = data;
-  }, [data]);
+    setLiveDingSettleMode?.(resolveDingSettleMode(data?.room?.ding_settle_mode));
+  }, [data, setLiveDingSettleMode]);
 
   useLayoutEffect(() => {
     const { snapshot } = buildLiveRoomShell(roomId);
@@ -375,35 +408,17 @@ export default function LiveRoomScreen({
     setError(null);
   }, [roomId]);
 
-  const countMatchedMyCards = useCallback(
-    (number: number, snapshot: LiveRoomSnapshot | null | undefined): number => {
-      if (!snapshot?.cards?.length) return 0;
-      return snapshot.cards.reduce((count, c) => {
-        if (!c.is_my_card) return count;
-        const hasNumber =
-          c.card?.some((row) => row.some((v) => v === number)) ?? false;
-        return hasNumber ? count + 1 : count;
-      }, 0);
-    },
-    []
-  );
-
-  const creditDingForRevealedNumber = useCallback(
+  const creditDingForPerDrawReveal = useCallback(
     (number: number, snapshot: LiveRoomSnapshot | null | undefined) => {
-      if (!roomId || number == null) return;
-      if (snapshot?.room?.ding_settle_mode === "room_level") return;
-
-      const matchedCards = countMatchedMyCards(number, snapshot);
-      if (matchedCards <= 0) return;
-
-      const dingPerNumber = Math.max(
-        0,
-        Number(snapshot?.room?.ding_per_number ?? 1) || 1
+      const credit = buildPerDrawRevealCredit(snapshot, number);
+      if (!credit) return;
+      creditDingOnReveal?.(
+        credit.revealKey,
+        credit.delta,
+        resolveDingSettleMode(snapshot?.room?.ding_settle_mode)
       );
-      const delta = matchedCards * dingPerNumber;
-      creditDingOnReveal?.(`${roomId}:${number}`, delta);
     },
-    [roomId, countMatchedMyCards, creditDingOnReveal]
+    [creditDingOnReveal]
   );
 
   const authoritativeCalledNumbers = useMemo(
@@ -419,7 +434,7 @@ export default function LiveRoomScreen({
   const handleNewDraw = useCallback(
     (number: number) => {
       void playNumber(number);
-      creditDingForRevealedNumber(number, dataRef.current);
+      creditDingForPerDrawReveal(number, dataRef.current);
       if (winnersSyncDebounceRef.current) {
         clearTimeout(winnersSyncDebounceRef.current);
       }
@@ -427,7 +442,7 @@ export default function LiveRoomScreen({
         void syncWinnersFromApiRef.current(dataRef.current);
       }, 800);
     },
-    [creditDingForRevealedNumber]
+    [creditDingForPerDrawReveal]
   );
 
   const scheduleNextDrawReveal = useCallback(() => {
@@ -1302,7 +1317,37 @@ export default function LiveRoomScreen({
 
         <div className="space-y-2 px-4 pb-[calc(24px+env(safe-area-inset-bottom,0px))] pt-3">
           {orderedCards.map((card) => (
-            <div key={card.ticket_id} className="bg-transparent rounded-3xl">
+            <div
+              key={card.ticket_id}
+              className="bg-transparent rounded-3xl"
+              onPointerDown={
+                overlayVariant
+                  ? (event) => {
+                      cardPointerStartYRef.current = event.clientY;
+                    }
+                  : undefined
+              }
+              onPointerUp={
+                overlayVariant
+                  ? (event) => {
+                      const startY = cardPointerStartYRef.current;
+                      cardPointerStartYRef.current = null;
+                      if (startY == null) return;
+                      if (Math.abs(event.clientY - startY) >= CARD_INFO_TOGGLE_MOVE_PX) {
+                        return;
+                      }
+                      setCardsInfoVisible((visible) => !visible);
+                    }
+                  : undefined
+              }
+              onPointerCancel={
+                overlayVariant
+                  ? () => {
+                      cardPointerStartYRef.current = null;
+                    }
+                  : undefined
+              }
+            >
               <BingoCardDemo
                 ticketId={card.ticket_id}
                 calledNumbers={displayedCalledNumbers}
@@ -1314,6 +1359,8 @@ export default function LiveRoomScreen({
                 lineWinners={data.tournament?.id ? [] : lineWinners}
                 fullWinners={fullWinners}
                 cardData={card.card}
+                infoPresentation={overlayVariant ? "row1-overlay" : "header"}
+                infoOverlayVisible={overlayVariant && cardsInfoVisible}
               />
             </div>
           ))}
@@ -1354,6 +1401,7 @@ export default function LiveRoomScreen({
         showPlayerDingStats={!isGuestSpectate}
         dingSettled={results?.dingSettled ?? false}
         playerDingAmount={results?.playerDingAmount ?? 0}
+        dingBalanceAfterSettlement={results?.dingBalanceAfterSettlement ?? 0}
       />
     </div>
   );

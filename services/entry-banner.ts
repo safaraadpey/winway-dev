@@ -21,6 +21,65 @@ function normalizeTargetAudience(value: unknown): BannerTargetAudience[] {
   );
 }
 
+/** Admin date inputs are YYYY-MM-DD; persist as a full local (Iran) calendar day. */
+const IRAN_OFFSET = "+03:30";
+
+function calendarDateOnly(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const day = value.includes("T") ? value.split("T")[0] : value;
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
+}
+
+function toScheduleTimestamp(
+  value: string | null | undefined,
+  bound: "start" | "end"
+): string | null {
+  if (!value) return null;
+  const day = calendarDateOnly(value);
+  if (!day) return value;
+  return bound === "start"
+    ? `${day}T00:00:00.000${IRAN_OFFSET}`
+    : `${day}T23:59:59.999${IRAN_OFFSET}`;
+}
+
+function isUtcMidnight(date: Date): boolean {
+  return (
+    date.getUTCHours() === 0 &&
+    date.getUTCMinutes() === 0 &&
+    date.getUTCSeconds() === 0 &&
+    date.getUTCMilliseconds() === 0
+  );
+}
+
+/** Date-only rows were stored at 00:00 UTC; treat that as the whole local calendar day. */
+function bannerScheduleBound(raw: string, bound: "start" | "end"): Date {
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime()) || !isUtcMidnight(date)) return date;
+  const local = new Date(date);
+  if (bound === "start") {
+    local.setHours(0, 0, 0, 0);
+  } else {
+    local.setHours(23, 59, 59, 999);
+  }
+  return local;
+}
+
+function isBannerInScheduleWindow(
+  startRaw: string | null | undefined,
+  endRaw: string | null | undefined,
+  now: Date
+): boolean {
+  if (startRaw) {
+    const startDate = bannerScheduleBound(startRaw, "start");
+    if (now < startDate) return false;
+  }
+  if (endRaw) {
+    const endDate = bannerScheduleBound(endRaw, "end");
+    if (now > endDate) return false;
+  }
+  return true;
+}
+
 function mapEntryBanner(banner: any): EntryBanner {
   return {
     id: banner.id,
@@ -208,8 +267,8 @@ export async function createEntryBanner(
       image_size: imageSize,
       image_width: imageWidth,
       image_height: imageHeight,
-      start_date: formData.startDate || null,
-      end_date: formData.endDate || null,
+      start_date: toScheduleTimestamp(formData.startDate, "start"),
+      end_date: toScheduleTimestamp(formData.endDate, "end"),
       target_audience: formData.targetAudience,
       require_confirmation: formData.requireConfirmation,
       confirmation_text: formData.requireConfirmation ? formData.confirmationText : null,
@@ -276,8 +335,8 @@ export async function updateEntryBanner(
       title: formData.title,
       content_type: formData.contentType,
       text_content: formData.contentType === "text" ? formData.textContent : null,
-      start_date: formData.startDate || null,
-      end_date: formData.endDate || null,
+      start_date: toScheduleTimestamp(formData.startDate, "start"),
+      end_date: toScheduleTimestamp(formData.endDate, "end"),
       target_audience: formData.targetAudience,
       require_confirmation: formData.requireConfirmation,
       confirmation_text: formData.requireConfirmation ? formData.confirmationText : null,
@@ -327,7 +386,9 @@ export async function updateEntryBanner(
 }
 
 let activeBannersCache: EntryBanner[] | null = null;
+let activeBannersCacheUserId: string | null = null;
 let activeBannersInflight: Promise<EntryBanner[]> | null = null;
+let activeBannersInflightUserId: string | null = null;
 
 /**
  * بارگذاری بنرهای فعال برای کاربر فعلی
@@ -374,15 +435,20 @@ export async function loadActiveBannersForUser(): Promise<EntryBanner[]> {
         ? userRoleRaw
         : null;
 
-    const banners: EntryBanner[] = (bannersData || [])
+    const nowDate = new Date();
+    const inWindow = (bannersData || []).filter((banner: any) =>
+      isBannerInScheduleWindow(banner.start_date, banner.end_date, nowDate)
+    );
+    if ((bannersData?.length ?? 0) > 0 && inWindow.length === 0) {
+      console.log("[EntryBanner] All active banners outside schedule window", {
+        activeCount: bannersData.length,
+        now: nowDate.toISOString(),
+        source: "postgres",
+      });
+    }
+
+    const banners: EntryBanner[] = inWindow
       .filter((banner: any) => {
-        const startDate = banner.start_date ? new Date(banner.start_date) : null;
-        const endDate = banner.end_date ? new Date(banner.end_date) : null;
-        const nowDate = new Date();
-
-        if (startDate && nowDate < startDate) return false;
-        if (endDate && nowDate > endDate) return false;
-
         const targetAudience = normalizeTargetAudience(banner.target_audience);
         if (targetAudience.length === 0) return true;
         if (!userRole) return false;
@@ -401,27 +467,34 @@ export function peekCachedActiveBanners(): EntryBanner[] | null {
   return activeBannersCache;
 }
 
-/** Deduped in-flight fetch so layout mount can start loading before the modal effect. */
-export function prefetchActiveBannersForUser(): Promise<EntryBanner[]> {
-  if (activeBannersCache) {
-    return Promise.resolve(activeBannersCache);
+/** Deduped in-flight fetch. Must run after session exists or it caches an empty miss. */
+export async function prefetchActiveBannersForUser(): Promise<EntryBanner[]> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const userId = session?.user?.id ?? null;
+  if (!userId) {
+    return [];
   }
-  if (!activeBannersInflight) {
-    activeBannersInflight = loadActiveBannersForUser()
-      .then(async (banners) => {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        // Do not cache a miss from a race before session exists.
-        if (session?.user) {
-          activeBannersCache = banners;
-        }
-        return banners;
-      })
-      .finally(() => {
-        activeBannersInflight = null;
-      });
+
+  if (activeBannersCache !== null && activeBannersCacheUserId === userId) {
+    return activeBannersCache;
   }
+  if (activeBannersInflight && activeBannersInflightUserId === userId) {
+    return activeBannersInflight;
+  }
+
+  activeBannersInflightUserId = userId;
+  activeBannersInflight = loadActiveBannersForUser()
+    .then((banners) => {
+      activeBannersCache = banners;
+      activeBannersCacheUserId = userId;
+      return banners;
+    })
+    .finally(() => {
+      activeBannersInflight = null;
+      activeBannersInflightUserId = null;
+    });
   return activeBannersInflight;
 }
 

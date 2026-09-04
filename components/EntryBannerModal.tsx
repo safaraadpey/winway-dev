@@ -82,10 +82,6 @@ export default function EntryBannerModal({ visibleOnPaths }: EntryBannerModalPro
     );
 
   useEffect(() => {
-    void prefetchActiveBannersForUser();
-  }, []);
-
-  useEffect(() => {
     if (!authReady) return;
 
     let isMounted = true;

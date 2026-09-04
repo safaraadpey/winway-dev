@@ -37,6 +37,10 @@ interface BingoCardDemoProps {
   ticketId?: string;
   lineWinners?: LineWinner[];
   fullWinners?: FullWinner[];
+  /** Game Room presentation. Default keeps the classic header (Variant A). */
+  infoPresentation?: "header" | "row1-overlay";
+  /** When infoPresentation is row1-overlay, show the fit-content overlay on row 1. */
+  infoOverlayVisible?: boolean;
 }
 
 /**
@@ -64,6 +68,8 @@ export default function BingoCardDemo({
   ticketId,
   lineWinners = [],
   fullWinners = [],
+  infoPresentation = "header",
+  infoOverlayVisible = false,
 }: BingoCardDemoProps) {
   const defaultCard: BingoCardData = [
     [2, 19, 22, 36, null, null, null, 73, null],
@@ -357,6 +363,8 @@ export default function BingoCardDemo({
   // انتخاب کلاس‌های CSS بر اساس size
   const cellSizeClass = size === 'large' ? styles.cellLarge : styles.cellSmall;
   const labelSizeClass = size === 'large' ? styles.headerLabelLarge : styles.headerLabelSmall;
+  const overlaySizeClass = size === 'large' ? styles.row1OverlayLarge : styles.row1OverlaySmall;
+  const useRow1Overlay = infoPresentation === "row1-overlay";
 
   const isWinnerRevealed = (
     winners: Array<{ ticketId: string; drawNumber: number }> | undefined
@@ -401,17 +409,19 @@ export default function BingoCardDemo({
             aria-hidden="true"
             style={{ backgroundImage: `url(${logoWatermark.src})` }}
           />
-          {/* Header: نام کاربر و شماره کارت */}
-          <div className={styles.header}>
-            <div className={`${styles.headerLabel} ${labelSizeClass}`}>
-              {playerName && <span>{playerName}</span>}
+          {!useRow1Overlay && (
+            <div className={styles.header}>
+              <div className={`${styles.headerLabel} ${labelSizeClass}`}>
+                {playerName && <span>{playerName}</span>}
+              </div>
+              <div className={`${styles.headerLabel} ${labelSizeClass}`}>
+                {cardNumber && <span>{cardNumber}</span>}
+              </div>
             </div>
-            <div className={`${styles.headerLabel} ${labelSizeClass}`}>
-              {cardNumber && <span>{cardNumber}</span>}
-            </div>
-          </div>
+          )}
 
           {/* کارت Bingo */}
+          <div className={styles.cardGridHost}>
           <div
             className={`${styles.cardGrid} ${
               isWinner && isMyCard ? styles.cardGridWinner : ''
@@ -558,6 +568,27 @@ export default function BingoCardDemo({
               </motion.div>
             )}
           </AnimatePresence>
+          </div>
+          {useRow1Overlay && (
+            <div
+              className={`${styles.row1Overlay} ${overlaySizeClass} ${
+                infoOverlayVisible ? styles.row1OverlayVisible : ""
+              }`}
+              aria-hidden={!infoOverlayVisible}
+            >
+              {playerName ? (
+                <span className={styles.row1OverlayName}>{playerName}</span>
+              ) : null}
+              {cardNumber != null ? (
+                <span
+                  className={`${styles.row1OverlayBadge} numeric-text numeric-text--11`}
+                  dir="ltr"
+                >
+                  {cardNumber}
+                </span>
+              ) : null}
+            </div>
+          )}
           </div>
         </div>
       </div>

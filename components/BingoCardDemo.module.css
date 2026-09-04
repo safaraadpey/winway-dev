@@ -91,6 +91,70 @@
   line-height: calc(1rem * var(--card-scale));
 }
 
+/* Compact overlay sits on row 1; does not affect card flow height. */
+.row1Overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 0 6px;
+  border-radius: 6px;
+  background-color: #3d3568;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-1px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  overflow: hidden;
+}
+
+.row1OverlayVisible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.row1OverlayLarge {
+  height: calc(var(--base-cell-height) * var(--card-scale));
+}
+
+.row1OverlaySmall {
+  height: calc(0.7407 * var(--base-cell-height) * var(--card-scale));
+}
+
+.row1OverlayName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.row1OverlayBadge {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background-color: #5c52a3;
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.cardGridHost {
+  position: relative;
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+  overflow: visible;
+}
+
 .cardGrid {
   position: relative;
   display: grid;

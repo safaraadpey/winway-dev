@@ -268,6 +268,7 @@ interface GameResultsDialogProps {
   showPlayerDingStats?: boolean;
   dingSettled?: boolean;
   playerDingAmount?: number;
+  dingBalanceAfterSettlement?: number;
 }
 
 export default function GameResultsDialog({
@@ -287,6 +288,7 @@ export default function GameResultsDialog({
   showPlayerDingStats = false,
   dingSettled = false,
   playerDingAmount = 0,
+  dingBalanceAfterSettlement = 0,
 }: GameResultsDialogProps) {
   const themeId = useThemeId();
   const ingameLogoSrc = getLogoImagePath(themeId, "ingameLogo");
@@ -604,6 +606,15 @@ export default function GameResultsDialog({
                     className={`numeric-text numeric-text--16 ${styles.playerDingValue}`}
                   >
                     {playerDingAmount.toLocaleString("en-US")}
+                  </span>
+                </div>
+                <div className={styles.playerDingRow}>
+                  <span className={styles.playerDingLabel}>موجودی دینگ</span>
+                  <span
+                    dir="ltr"
+                    className={`numeric-text numeric-text--16 ${styles.playerDingValue}`}
+                  >
+                    {dingBalanceAfterSettlement.toLocaleString("en-US")}
                   </span>
                 </div>
               </div>
