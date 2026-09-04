@@ -67,6 +67,9 @@ export async function runOneDrawCycle(
   }
 
   const state = await stateManager.ensureLoaded(roomId);
+  if (state.isFullHouseFrozen()) {
+    return { kind: "exhausted" };
+  }
   const drawn = [...state.getDrawnNumbers()];
   const next = pickNextNumber(seed, drawn);
   if (next === null) {
@@ -105,7 +108,9 @@ export async function runOneDrawCycle(
   actor.persistQueue.enqueue(payload);
 
   if (evalResult.fullWinnerThisDraw) {
-    return { kind: "idle", retryMs: 100 };
+    state.freezeAfterFullHouse();
+    log.info("[Room] full-house clock freeze", { roomId, drawNumber: next });
+    return { kind: "exhausted" };
   }
 
   return {

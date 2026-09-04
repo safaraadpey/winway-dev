@@ -225,4 +225,11 @@ describe("RoomRuntimeState", () => {
     assert.deepEqual([...state.existingLineTickets], ["t1"]);
     assert.equal(state.room.first_line_draw_number, 55);
   });
+
+  it("freezes the clock after full house so no further picks", () => {
+    const state = makeState();
+    assert.equal(state.isFullHouseFrozen(), false);
+    state.freezeAfterFullHouse();
+    assert.equal(state.isFullHouseFrozen(), true);
+  });
 });

@@ -159,7 +159,47 @@ describe("replayGame", () => {
     assert.equal(diff.dingDiff, 0);
     assert.equal(diff.winnerMismatch, false);
     assert.equal(diff.prizeMismatch, false);
+    assert.equal(diff.rosterMismatch, false);
+    assert.equal(diff.drawCountMismatch, false);
+    assert.equal(diff.postManifestTicketCount, 0);
     assert.equal(replay.prizePreview.lineShare + replay.prizePreview.fullShare > 0, true);
+  });
+
+  it("diffs MISMATCH when an extra ticket did not change winners or Ding", () => {
+    const replay = replayGame({ manifest: makeManifest(), cardNumbers: CARD_CELLS });
+    const diff = diffReplayAgainstPersisted(replay, {
+      drawSequence: replay.drawSequence,
+      marks: replay.marks,
+      lineWinners: replay.lineWinners,
+      fullWinners: replay.fullWinners,
+      dingByUser: replay.dingByUser,
+      lineRewardAmounts: replay.lineWinners.map(() => replay.prizePreview.lineShare),
+      fullRewardAmounts: replay.fullWinners.map(() => replay.prizePreview.fullShare),
+      manifestTicketIds: ["t1"],
+      participatingTicketIds: ["t1", "t-extra"],
+      postManifestTicketCount: 0,
+    });
+    assert.equal(diff.outcome, "MISMATCH");
+    assert.equal(diff.rosterMismatch, true);
+    assert.equal(diff.dingDiff, 0);
+  });
+
+  it("diffs MISMATCH when replay is longer by one ghost draw with zero extra marks", () => {
+    const replay = replayGame({ manifest: makeManifest(), cardNumbers: CARD_CELLS });
+    const diff = diffReplayAgainstPersisted(replay, {
+      drawSequence: replay.drawSequence.slice(0, -1),
+      marks: replay.marks.filter((m) => m.value !== replay.drawSequence.at(-1)),
+      lineWinners: replay.lineWinners,
+      fullWinners: [],
+      dingByUser: replay.dingByUser,
+      lineRewardAmounts: replay.lineWinners.map(() => replay.prizePreview.lineShare),
+      fullRewardAmounts: [],
+      manifestTicketIds: ["t1"],
+      participatingTicketIds: ["t1"],
+      postManifestTicketCount: 0,
+    });
+    assert.equal(diff.outcome, "MISMATCH");
+    assert.equal(diff.drawCountMismatch, true);
   });
 
   it("diffs MISMATCH when stored draws diverge", () => {

@@ -150,14 +150,13 @@ export class GameRepo {
   }
 
   async setRoomPlaying(roomId: string, nextDrawAtIso: string, nowIso: string): Promise<boolean> {
-    const { data, error } = await this.db
-      .from("rooms")
-      .update({ status: "playing", next_draw_at: nextDrawAtIso, updated_at: nowIso })
-      .eq("id", roomId)
-      .eq("status", "waiting")
-      .select("id");
+    const { data, error } = await this.db.rpc("rpc_promote_waiting_room_to_playing", {
+      p_room: roomId,
+      p_next_draw_at: nextDrawAtIso,
+      p_now: nowIso,
+    });
     if (error) fail("setRoomPlaying", error.message);
-    return (data?.length ?? 0) > 0;
+    return data === true;
   }
 
   async extendRoomCountdown(roomId: string, startsAtIso: string, nowIso: string): Promise<boolean> {
@@ -1167,10 +1166,11 @@ export class GameRepo {
     rng_version: string;
     payload: unknown;
     payload_sha256: string;
+    created_at: string;
   } | null> {
     const { data, error } = await this.db
       .from("game_manifests")
-      .select("room_id,manifest_version,rng_algorithm,rng_version,payload,payload_sha256")
+      .select("room_id,manifest_version,rng_algorithm,rng_version,payload,payload_sha256,created_at")
       .eq("room_id", roomId)
       .maybeSingle();
     if (error) fail("getGameManifestRow", error.message);
@@ -1181,7 +1181,29 @@ export class GameRepo {
       rng_version: string;
       payload: unknown;
       payload_sha256: string;
+      created_at: string;
     } | null) ?? null;
+  }
+
+  async getTicketRosterAudit(roomId: string): Promise<
+    {
+      id: string;
+      created_at: string;
+      cancelled_at: string | null;
+      reservation_status: string;
+    }[]
+  > {
+    const { data, error } = await this.db
+      .from("tickets")
+      .select("id,created_at,cancelled_at,reservation_status")
+      .eq("room_id", roomId);
+    if (error) fail("getTicketRosterAudit", error.message);
+    return (data ?? []) as {
+      id: string;
+      created_at: string;
+      cancelled_at: string | null;
+      reservation_status: string;
+    }[];
   }
 
   async getProcessedDrawSequence(roomId: string): Promise<number[]> {
@@ -1301,6 +1323,9 @@ export class GameRepo {
     ding_diff: number;
     winner_mismatch: boolean;
     prize_mismatch: boolean;
+    roster_mismatch?: boolean;
+    draw_count_mismatch?: boolean;
+    post_manifest_ticket_count?: number;
     stopped_reason: string | null;
     error_code: string | null;
     replay_duration_ms: number | null;

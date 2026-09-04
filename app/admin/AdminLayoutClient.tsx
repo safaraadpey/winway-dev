@@ -13,7 +13,7 @@ function AdminLayoutContent({
 }: {
   children: React.ReactNode;
 }) {
-  const { showHeader, showBackButton, onBackClick } = useHeaderVisibility();
+  const { showHeader, showBackButton, onBackClick, onRefreshClick } = useHeaderVisibility();
   const { tomanBalance, loading } = useBalancesContext();
 
   return (
@@ -28,6 +28,7 @@ function AdminLayoutContent({
             showBackButton={showBackButton}
             onBackClick={onBackClick || undefined}
             showRefreshButton
+            onRefreshClick={onRefreshClick ?? undefined}
           />
         </div>
       )}

@@ -75,13 +75,26 @@ export function diffReplayAgainstPersisted(
     amountsMismatch(persisted.lineRewardAmounts, replay.prizePreview.lineShare) ||
     amountsMismatch(persisted.fullRewardAmounts, replay.prizePreview.fullShare);
 
+  const drawCountMismatch =
+    replay.drawSequence.length !== persisted.drawSequence.length;
+
+  const rosterMismatch =
+    persisted.manifestTicketIds != null &&
+    persisted.participatingTicketIds != null &&
+    setDiffCount(persisted.manifestTicketIds, persisted.participatingTicketIds) > 0;
+
+  const postManifestTicketCount = persisted.postManifestTicketCount ?? 0;
+
   const mismatch =
     drawDiffCount > 0 ||
     markDiffCount > 0 ||
     resultDiffCount > 0 ||
     winnerMismatch ||
     dingDiff > 0 ||
-    prizeMismatch;
+    prizeMismatch ||
+    rosterMismatch ||
+    drawCountMismatch ||
+    postManifestTicketCount > 0;
 
   return {
     outcome: mismatch ? "MISMATCH" : "MATCH",
@@ -91,5 +104,8 @@ export function diffReplayAgainstPersisted(
     dingDiff,
     winnerMismatch,
     prizeMismatch,
+    rosterMismatch,
+    drawCountMismatch,
+    postManifestTicketCount,
   };
 }

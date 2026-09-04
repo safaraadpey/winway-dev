@@ -2,6 +2,7 @@ export {
   accumulateDrawDingCredits,
   buildRoomFinalizationDingPayload,
   isRoomLevelDing,
+  rebuildRoomDingPendingFromProcessedMarks,
   replayRoomDingFromMarks,
   roomDingSettlementKey,
   toRpcDingCredits,

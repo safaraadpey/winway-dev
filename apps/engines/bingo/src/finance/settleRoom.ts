@@ -4,7 +4,10 @@ import {
   finishRoomAndSettle,
 } from "./index.js";
 import type { RoomFinalizationDingPayload } from "../domain/ding/roomDingState.js";
-import { isRoomLevelDing } from "../domain/ding/roomDingState.js";
+import {
+  isRoomLevelDing,
+  rebuildRoomDingPendingFromProcessedMarks,
+} from "../domain/ding/roomDingState.js";
 import type { GameRepo } from "../repositories/index.js";
 import type { RoomRuntimeState } from "../state/room-state.js";
 
@@ -24,14 +27,14 @@ async function resolveDingPayload(
   roomId: string,
   opts: SettleRoomOptions
 ): Promise<RoomFinalizationDingPayload | null> {
-  if (opts.dingPayload) return opts.dingPayload;
   const state = opts.state;
   if (state?.usesRoomLevelDing()) {
+    rebuildRoomDingPendingFromProcessedMarks(state);
     return state.buildRoomDingFinalizationPayload();
   }
+  if (opts.dingPayload) return opts.dingPayload;
   const room = await repo.getRoom(roomId);
   if (!room || !isRoomLevelDing(room.ding_settle_mode)) return null;
-  if (state) return state.buildRoomDingFinalizationPayload();
   throw new Error(
     `[Settlement] room ${roomId} is room_level but no Engine Ding state was provided`
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHeaderVisibility } from "@/lib/contexts/HeaderVisibilityContext";
 import {
@@ -179,7 +179,8 @@ function PanelOperatorsBreakdown({ operators }: { operators: DashboardPanelOpera
 export default function AdminDashboardPage() {
   type PeriodTab = DashboardPeriod | "range";
   const router = useRouter();
-  const { setShowHeader, setShowBackButton, setOnBackClick } = useHeaderVisibility();
+  const { setShowHeader, setShowBackButton, setOnBackClick, setOnRefreshClick } =
+    useHeaderVisibility();
   const [data, setData] = useState<DashboardData | null>(() => getCachedDashboardData());
   const [reportLoading, setReportLoading] = useState(() => getCachedDashboardData() === null);
   const [activePeriod, setActivePeriod] = useState<PeriodTab>("week");
@@ -196,11 +197,33 @@ export default function AdminDashboardPage() {
     () => getCachedAdminPermissions() === null
   );
 
+  const refreshDashboardSnapshot = useCallback(async () => {
+    try {
+      setReportLoading(true);
+      const result = await loadDashboardData({ maxAgeMs: 30_000, force: true });
+      setData(result);
+    } catch (error) {
+      console.error("Error refreshing admin dashboard reports:", error);
+    } finally {
+      setReportLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     setShowHeader(true);
     setShowBackButton(false);
     setOnBackClick(null);
-  }, [setShowHeader, setShowBackButton, setOnBackClick]);
+    setOnRefreshClick((_prev) => refreshDashboardSnapshot);
+    return () => {
+      setOnRefreshClick(null);
+    };
+  }, [
+    setShowHeader,
+    setShowBackButton,
+    setOnBackClick,
+    setOnRefreshClick,
+    refreshDashboardSnapshot,
+  ]);
 
   useReferralCodeDashboardSync(setData);
 
@@ -235,7 +258,7 @@ export default function AdminDashboardPage() {
 
     async function loadReports() {
       try {
-        const result = await loadDashboardData({ maxAgeMs: 30_000, force: true });
+        const result = await loadDashboardData({ maxAgeMs: 30_000 });
         if (cancelled) return;
         setData(result);
       } catch (error) {
@@ -442,7 +465,7 @@ export default function AdminDashboardPage() {
               </div>
               <div className="flex flex-col">
                 {reportLoading && !data?.user?.displayName ? (
-                  <div className="h-5 w-28 rounded bg-gray-800 animate-pulse mb-1" />
+                  <div className="h-5 w-28 rounded bg-gray-800 mb-1" />
                 ) : (
                   <span className="text-white text-lg font-semibold">
                     {data?.user?.displayName || "ادمین"}

@@ -113,5 +113,16 @@ export function replayRoomDingFromMarks(args: {
     }
   }
 
-  return pending;
+    return pending;
+  }
+
+/** Replace RAM pending with Ding derived only from processed draws + marks. */
+export function rebuildRoomDingPendingFromProcessedMarks(state: RoomRuntimeState): void {
+  if (!state.usesRoomLevelDing()) return;
+  const pending = replayRoomDingFromMarks({
+    state,
+    processedDrawNumbers: state.getProcessedDrawNumbers(),
+    marksByDraw: state.marksByProcessedDraw(),
+  });
+  state.replaceRoomDingPending(pending);
 }

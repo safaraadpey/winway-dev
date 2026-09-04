@@ -17,6 +17,10 @@ interface HeaderVisibilityContextType {
   setFullPageScroll: (enabled: boolean) => void;
   onBackClick?: (() => void) | null;
   setOnBackClick: (callback: (() => void) | null) => void;
+  onRefreshClick?: (() => void | Promise<void>) | null;
+  setOnRefreshClick: React.Dispatch<
+    React.SetStateAction<(() => void | Promise<void>) | null>
+  >;
 }
 
 const HeaderVisibilityContext = createContext<HeaderVisibilityContextType | undefined>(undefined);
@@ -29,6 +33,9 @@ export function HeaderVisibilityProvider({ children }: { children: ReactNode }) 
     useState<boolean>(false);
   const [fullPageScroll, setFullPageScroll] = useState<boolean>(false);
   const [onBackClick, setOnBackClick] = useState<(() => void) | null>(null);
+  const [onRefreshClick, setOnRefreshClick] = useState<
+    (() => void | Promise<void>) | null
+  >(null);
 
   return (
     <HeaderVisibilityContext.Provider value={{ 
@@ -43,7 +50,9 @@ export function HeaderVisibilityProvider({ children }: { children: ReactNode }) 
       fullPageScroll,
       setFullPageScroll,
       onBackClick,
-      setOnBackClick
+      setOnBackClick,
+      onRefreshClick,
+      setOnRefreshClick
     }}>
       {children}
     </HeaderVisibilityContext.Provider>

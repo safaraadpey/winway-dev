@@ -16,6 +16,7 @@ import { ActiveGamesOrchestratorProvider } from "@/lib/activeGames/ActiveGamesOr
 import { ActiveGamesProvider } from "@/lib/contexts/ActiveGamesContext";
 import { InstallPromptProvider } from "@/lib/contexts/InstallPromptContext";
 import { TourProvider } from "@/lib/contexts/TourContext";
+import { isAdminPanelLocation, isAdminPanelPath } from "@/lib/auth/isAdminPanelPath";
 import { isAgentPanelLocation, isAgentPanelPath } from "@/lib/auth/isAgentPanelPath";
 
 export default function GlobalUserStateClient({
@@ -25,11 +26,14 @@ export default function GlobalUserStateClient({
 }) {
   const pathname = usePathname();
   const skipPlayerGameStack =
-    isAgentPanelPath(pathname) || isAgentPanelLocation();
+    isAdminPanelPath(pathname) ||
+    isAdminPanelLocation() ||
+    isAgentPanelPath(pathname) ||
+    isAgentPanelLocation();
 
   useEffect(() => {
     if (!skipPlayerGameStack) return;
-    console.info("[AgentPanel] Player game stack disabled", { pathname });
+    console.info("[AppShell] Player game stack disabled", { pathname });
   }, [pathname, skipPlayerGameStack]);
 
   const withPlayerGameStack = (

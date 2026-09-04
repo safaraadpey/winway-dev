@@ -57,6 +57,8 @@ export class RoomRuntimeState {
 
   /** Accumulated pending Ding for room_level settlement (no ledger writes until finish). */
   readonly roomDingPending = new Map<string, number>();
+  /** Clock fence: no further picks after the first full-house evaluation. */
+  private fullHouseFrozen = false;
 
   drawsProcessed = 0;
   /** Highest draw_number processed in this engine session (ordering guard). */
@@ -109,6 +111,36 @@ export class RoomRuntimeState {
 
   buildRoomDingFinalizationPayload(): RoomFinalizationDingPayload {
     return buildRoomFinalizationDingPayload(this.roomId, this.roomDingPending);
+  }
+
+  freezeAfterFullHouse(): void {
+    this.fullHouseFrozen = true;
+  }
+
+  isFullHouseFrozen(): boolean {
+    return this.fullHouseFrozen;
+  }
+
+  getUnprocessedDrawNumbers(): readonly number[] {
+    return [...this.unprocessedDrawNumbers];
+  }
+
+  getProcessedDrawNumbers(): number[] {
+    return this.drawnNumbers.filter((n) => !this.unprocessedDrawNumbers.has(n));
+  }
+
+  marksByProcessedDraw(): Map<number, { ticket_id: string; value: number }[]> {
+    const marksByDraw = new Map<number, { ticket_id: string; value: number }[]>();
+    for (const drawNumber of this.getProcessedDrawNumbers()) {
+      const rows: { ticket_id: string; value: number }[] = [];
+      for (const ticket of this.tickets) {
+        if (this.markedByTicket.get(ticket.id)?.has(drawNumber)) {
+          rows.push({ ticket_id: ticket.id, value: drawNumber });
+        }
+      }
+      marksByDraw.set(drawNumber, rows);
+    }
+    return marksByDraw;
   }
 
   countDingMatchedByUser(

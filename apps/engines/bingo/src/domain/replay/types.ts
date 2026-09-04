@@ -97,6 +97,9 @@ export interface PersistedGameplaySnapshot {
   dingByUser: GameReplayDing[];
   lineRewardAmounts: number[];
   fullRewardAmounts: number[];
+  manifestTicketIds?: string[];
+  participatingTicketIds?: string[];
+  postManifestTicketCount?: number;
 }
 
 export interface ReplayDiff {
@@ -107,6 +110,9 @@ export interface ReplayDiff {
   dingDiff: number;
   winnerMismatch: boolean;
   prizeMismatch: boolean;
+  rosterMismatch: boolean;
+  drawCountMismatch: boolean;
+  postManifestTicketCount: number;
   errorCode?: string;
 }
 

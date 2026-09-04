@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   accumulateDrawDingCredits,
   buildRoomFinalizationDingPayload,
+  rebuildRoomDingPendingFromProcessedMarks,
   replayRoomDingFromMarks,
   roomDingSettlementKey,
 } from "./roomDingState.js";
@@ -95,6 +96,29 @@ describe("roomDingState", () => {
     });
     assert.equal(pending.get("u1"), 2);
     assert.equal(pending.has("u2"), false);
+  });
+
+  it("rebuilds Ding from processed marks and ignores unprocessed ghost draws", () => {
+    const state = makeState([
+      {
+        id: "t1",
+        room_id: "room-1",
+        player_user_id: "u1",
+        pool_card_id: "c1",
+        price: 100,
+        reservation_status: "reserved",
+        cancelled_at: null,
+      },
+    ]);
+    state.recordDrawInserted(7);
+    state.recordDrawProcessed(7);
+    state.markedByTicket.set("t1", new Set([7, 9]));
+    state.recordDrawInserted(9);
+    state.accumulateRoomDing([{ user_id: "u1", amount: 99 }]);
+
+    rebuildRoomDingPendingFromProcessedMarks(state);
+    assert.equal(state.getPendingDingForUser("u1"), 2);
+    assert.equal(state.getProcessedDrawNumbers().includes(9), false);
   });
 
   it("RoomRuntimeState accumulates only for room_level", () => {

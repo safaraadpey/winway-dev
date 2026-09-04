@@ -120,9 +120,10 @@ export async function processEngineDrawJob(
             matched_cards: number;
           }[],
         };
-    state?.accumulateRoomDing(dingPayload.credits);
-
     const skipPerDrawDing = state?.usesRoomLevelDing() === true;
+    if (!skipPerDrawDing) {
+      state?.accumulateRoomDing(dingPayload.credits);
+    }
 
     const processingMs = Date.now() - processingStartMs;
     const actorFinalizeStartedAt = opts.actorTiming

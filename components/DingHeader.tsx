@@ -24,6 +24,8 @@ interface DingHeaderProps {
   balanceMuted?: boolean;
   /** دکمه بارگذاری مجدد صفحه — فقط برای پنل Admin */
   showRefreshButton?: boolean;
+  /** Callback برای refresh بدون full reload؛ در صورت نبود، fallback به reload */
+  onRefreshClick?: () => void | Promise<void>;
 }
 
 /**
@@ -40,6 +42,7 @@ export default function DingHeader({
   isAnimating: propIsAnimating,
   balanceMuted = false,
   showRefreshButton = false,
+  onRefreshClick,
 }: DingHeaderProps) {
   const router = useRouter();
   const [isReloading, setIsReloading] = React.useState(false);
@@ -59,8 +62,20 @@ export default function DingHeader({
     }
   };
 
-  const handleRefreshClick = () => {
+  const handleRefreshClick = async () => {
     if (isReloading) return;
+
+    if (onRefreshClick) {
+      setIsReloading(true);
+      try {
+        console.info("[Admin] Dashboard refresh requested");
+        await onRefreshClick();
+      } finally {
+        setIsReloading(false);
+      }
+      return;
+    }
+
     setIsReloading(true);
     console.info("[Admin] Full page reload requested");
     window.location.reload();
@@ -95,7 +110,7 @@ export default function DingHeader({
           <button
             type="button"
             className={styles.refreshButton}
-            onClick={handleRefreshClick}
+            onClick={() => void handleRefreshClick()}
             disabled={isReloading}
             aria-busy={isReloading}
             aria-label="بارگذاری مجدد صفحه"

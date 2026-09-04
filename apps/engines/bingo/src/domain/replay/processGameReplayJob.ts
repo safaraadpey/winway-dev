@@ -46,6 +46,20 @@ export async function processGameReplayJob(
       for (const value of values) persistedMarks.push({ ticketId, value });
     }
 
+    const ticketRoster = await repo.getTicketRosterAudit(roomId);
+    const participatingTicketIds = ticketRoster
+      .filter(
+        (t) =>
+          t.cancelled_at == null &&
+          (t.reservation_status === "reserved" ||
+            t.reservation_status === "confirmed" ||
+            t.reservation_status === "consumed")
+      )
+      .map((t) => t.id);
+    const postManifestTicketCount = ticketRoster.filter(
+      (t) => Date.parse(t.created_at) > Date.parse(row.created_at)
+    ).length;
+
     const persisted: PersistedGameplaySnapshot = {
       drawSequence: await repo.getProcessedDrawSequence(roomId),
       marks: persistedMarks,
@@ -70,6 +84,9 @@ export async function processGameReplayJob(
       fullRewardAmounts: results
         .filter((r) => r.win_type === "full")
         .map((r) => Number(r.reward_amount ?? 0)),
+      manifestTicketIds: manifest.tickets.map((t) => t.ticketId),
+      participatingTicketIds,
+      postManifestTicketCount,
     };
 
     const diff = diffReplayAgainstPersisted(replay, persisted);
@@ -87,6 +104,9 @@ export async function processGameReplayJob(
       dingDiff: diff.dingDiff,
       winnerMismatch: diff.winnerMismatch,
       prizeMismatch: diff.prizeMismatch,
+      rosterMismatch: diff.rosterMismatch,
+      drawCountMismatch: diff.drawCountMismatch,
+      postManifestTicketCount: diff.postManifestTicketCount,
       stoppedReason: replay.stoppedReason,
       durationMs,
     });
@@ -155,6 +175,9 @@ async function writeAudit(
     dingDiff?: number;
     winnerMismatch?: boolean;
     prizeMismatch?: boolean;
+    rosterMismatch?: boolean;
+    drawCountMismatch?: boolean;
+    postManifestTicketCount?: number;
     stoppedReason?: string;
     errorCode?: string;
     durationMs: number;
@@ -171,6 +194,9 @@ async function writeAudit(
     dingDiff: args.dingDiff ?? 0,
     winnerMismatch: args.winnerMismatch ?? false,
     prizeMismatch: args.prizeMismatch ?? false,
+    rosterMismatch: args.rosterMismatch ?? false,
+    drawCountMismatch: args.drawCountMismatch ?? false,
+    postManifestTicketCount: args.postManifestTicketCount ?? 0,
     outcome: args.outcome,
     replayDurationMs: args.durationMs,
     errorCode: args.errorCode ?? null,
@@ -190,6 +216,9 @@ async function writeAudit(
       ding_diff: args.dingDiff ?? 0,
       winner_mismatch: args.winnerMismatch ?? false,
       prize_mismatch: args.prizeMismatch ?? false,
+      roster_mismatch: args.rosterMismatch ?? false,
+      draw_count_mismatch: args.drawCountMismatch ?? false,
+      post_manifest_ticket_count: args.postManifestTicketCount ?? 0,
       stopped_reason: args.stoppedReason ?? null,
       error_code: args.errorCode ?? null,
       replay_duration_ms: args.durationMs,

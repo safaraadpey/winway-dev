@@ -7,8 +7,8 @@ export default function AdminDashboardReportSkeleton() {
     >
       {Array.from({ length: 11 }).map((_, index) => (
         <div key={index} className="contents">
-          <div className="h-4 w-24 rounded bg-gray-800 animate-pulse" />
-          <div className="h-4 w-16 rounded bg-gray-700 animate-pulse justify-self-end" />
+          <div className="h-4 w-24 rounded bg-gray-800" />
+          <div className="h-4 w-16 rounded bg-gray-700 justify-self-end" />
         </div>
       ))}
     </div>
