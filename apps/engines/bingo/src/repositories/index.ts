@@ -1159,4 +1159,157 @@ export class GameRepo {
     if (error) fail("listUnsettledRoomLevelRooms", error.message);
     return (data ?? []).map((r) => (r as { id: string }).id);
   }
+
+  async getGameManifestRow(roomId: string): Promise<{
+    room_id: string;
+    manifest_version: number;
+    rng_algorithm: string;
+    rng_version: string;
+    payload: unknown;
+    payload_sha256: string;
+  } | null> {
+    const { data, error } = await this.db
+      .from("game_manifests")
+      .select("room_id,manifest_version,rng_algorithm,rng_version,payload,payload_sha256")
+      .eq("room_id", roomId)
+      .maybeSingle();
+    if (error) fail("getGameManifestRow", error.message);
+    return (data as {
+      room_id: string;
+      manifest_version: number;
+      rng_algorithm: string;
+      rng_version: string;
+      payload: unknown;
+      payload_sha256: string;
+    } | null) ?? null;
+  }
+
+  async getProcessedDrawSequence(roomId: string): Promise<number[]> {
+    const { data, error } = await this.db
+      .from("draws")
+      .select("number,processed_at,created_at,id")
+      .eq("room_id", roomId)
+      .not("processed_at", "is", null)
+      .order("processed_at", { ascending: true })
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
+    if (error) fail("getProcessedDrawSequence", error.message);
+    return ((data ?? []) as { number: number }[]).map((d) => d.number);
+  }
+
+  async getCardNumbersForPoolCardIds(
+    poolCardIds: string[]
+  ): Promise<{ pool_card_id: string; value: number; row_no: number; col_no: number }[]> {
+    const out: { pool_card_id: string; value: number; row_no: number; col_no: number }[] = [];
+    const unique = [...new Set(poolCardIds.map(String))];
+    const page = 200;
+    for (let i = 0; i < unique.length; i += page) {
+      const chunk = unique.slice(i, i + page);
+      const { data, error } = await this.db
+        .from("card_numbers")
+        .select("pool_card_id,value,row_no,col_no")
+        .in("pool_card_id", chunk);
+      if (error) fail("getCardNumbersForPoolCardIds", error.message);
+      for (const row of data ?? []) {
+        out.push({
+          pool_card_id: String((row as { pool_card_id: string | number }).pool_card_id),
+          value: Number((row as { value: number }).value),
+          row_no: Number((row as { row_no: number }).row_no),
+          col_no: Number((row as { col_no: number }).col_no),
+        });
+      }
+    }
+    return out;
+  }
+
+  async getDingTotalsByUser(roomId: string): Promise<{ userId: string; amount: number }[]> {
+    const { data, error } = await this.db
+      .from("ding_transactions")
+      .select("user_id,amount")
+      .eq("room_id", roomId);
+    if (error) fail("getDingTotalsByUser", error.message);
+    const totals = new Map<string, number>();
+    for (const row of (data ?? []) as { user_id: string; amount: number | string }[]) {
+      totals.set(row.user_id, (totals.get(row.user_id) ?? 0) + Number(row.amount));
+    }
+    return [...totals.entries()].map(([userId, amount]) => ({ userId, amount }));
+  }
+
+  async enqueueMissingGameReplayJobs(limit: number): Promise<number> {
+    const { data, error } = await this.db.rpc("rpc_enqueue_missing_game_replay_jobs", {
+      p_limit: limit,
+    });
+    if (error) fail("rpc_enqueue_missing_game_replay_jobs", error.message);
+    return Number(data ?? 0);
+  }
+
+  async reapStaleGameReplayJobs(staleSec: number): Promise<number> {
+    const { data, error } = await this.db.rpc("rpc_reap_stale_game_replay_jobs", {
+      p_stale_sec: staleSec,
+    });
+    if (error) fail("rpc_reap_stale_game_replay_jobs", error.message);
+    return Number(data ?? 0);
+  }
+
+  async pickGameReplayJobs(limit: number): Promise<
+    { id: number; room_id: string; status: string; attempts: number; created_at: string }[]
+  > {
+    const { data, error } = await this.db.rpc("rpc_pick_game_replay_jobs", {
+      p_limit: limit,
+    });
+    if (error) fail("rpc_pick_game_replay_jobs", error.message);
+    return (data ?? []) as {
+      id: number;
+      room_id: string;
+      status: string;
+      attempts: number;
+      created_at: string;
+    }[];
+  }
+
+  async completeGameReplayJob(
+    jobId: number,
+    outcome: "MATCH" | "MISMATCH" | "ERROR",
+    errorText?: string | null
+  ): Promise<void> {
+    const { error } = await this.db.rpc("rpc_complete_game_replay_job", {
+      p_job_id: jobId,
+      p_outcome: outcome,
+      p_error: errorText ?? null,
+    });
+    if (error) fail("rpc_complete_game_replay_job", error.message);
+  }
+
+  async failGameReplayJob(jobId: number, errorText: string, maxAttempts = 8): Promise<void> {
+    const { error } = await this.db.rpc("rpc_fail_game_replay_job", {
+      p_job_id: jobId,
+      p_error: errorText,
+      p_max_attempts: maxAttempts,
+    });
+    if (error) fail("rpc_fail_game_replay_job", error.message);
+  }
+
+  async insertGameReplayAudit(row: {
+    room_id: string;
+    job_id: number | null;
+    manifest_version: number | null;
+    rng_version: string | null;
+    outcome: "MATCH" | "MISMATCH" | "ERROR";
+    draw_diff_count: number;
+    mark_diff_count: number;
+    result_diff_count: number;
+    ding_diff: number;
+    winner_mismatch: boolean;
+    prize_mismatch: boolean;
+    stopped_reason: string | null;
+    error_code: string | null;
+    replay_duration_ms: number | null;
+    details?: Record<string, unknown>;
+  }): Promise<void> {
+    const { error } = await this.db.from("game_replay_audits").insert({
+      ...row,
+      details: row.details ?? {},
+    });
+    if (error) fail("insertGameReplayAudit", error.message);
+  }
 }

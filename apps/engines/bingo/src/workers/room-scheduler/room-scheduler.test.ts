@@ -28,6 +28,10 @@ describe("room-scheduler actor-only contract", () => {
     assert.equal(schedulerSource.includes("manageWaitingRooms"), true);
   });
 
+  it("runs durable shadow replay reconcile on the scheduler tick", () => {
+    assert.equal(schedulerSource.includes("runShadowReplayTick"), true);
+  });
+
   it("room domain no longer exports live draw scheduler path", () => {
     assert.equal(roomDomainSource.includes("manageRoomLiveActions"), false);
     assert.equal(roomDomainSource.includes("manageWaitingRooms"), true);

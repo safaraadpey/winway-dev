@@ -400,7 +400,9 @@ export default function BingoCardDemo({
       )}
 
       <div
-        className={`${styles.outer} ${hasWinnerBorder ? styles.outerLineWinner : ""}`}
+        className={`${styles.outer} ${
+          useRow1Overlay && !isMyCard ? styles.outerOthersOverlay : ""
+        } ${hasWinnerBorder ? styles.outerLineWinner : ""}`}
       >
         {/* Wrapper با بکگراند اصلی کارت */}
         <div className={styles.wrapper}>

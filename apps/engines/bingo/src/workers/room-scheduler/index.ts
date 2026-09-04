@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { runShadowReplayTick } from "../../domain/replay/processGameReplayJob.js";
 import { manageWaitingRooms } from "../../domain/room/index.js";
 import { repairUnsettledFinishedRooms } from "../../domain/room/janitorRepair.js";
 import { recoverDueAutoBuySessions } from "../../finance/autoBuyRecover.js";
@@ -83,6 +84,7 @@ export function startRoomScheduler(ctx: WorkerContext): () => void {
         await manageWaitingRooms(repo, log, 50, ctx.roomState);
         await maybeRunJanitor();
         await recoverDueAutoBuySessions(supabase, log);
+        await runShadowReplayTick(repo, log);
       } else {
         await callDbScheduler(ctx);
       }
