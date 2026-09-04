@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { updateSupabaseSession } from "@/lib/supabase/middleware";
+import { isSelfAuthenticatedApiPath } from "@/lib/supabase/middlewareAuthPolicy";
+import { sampledLog } from "@/lib/observability/sampledLog";
 import {
   getWatchGuestCookieName,
   isGuestBlockedPlayerPath,
@@ -20,6 +22,12 @@ function buildRedirectUrl(req: NextRequest, targetHost: string): URL {
   return url;
 }
 
+function nextWithPathname(req: NextRequest, pathname: string): NextResponse {
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-pathname", pathname);
+  return NextResponse.next({ request: { headers: requestHeaders } });
+}
+
 export async function middleware(req: NextRequest) {
   const host = getHost(req);
   const pathname = req.nextUrl.pathname;
@@ -33,6 +41,17 @@ export async function middleware(req: NextRequest) {
     (pathname.startsWith("/admin") || pathname.startsWith("/dev-panel"))
   ) {
     return NextResponse.redirect(buildRedirectUrl(req, adminHost));
+  }
+
+  // Self-authenticated Bearer APIs — skip Edge getUser(); route handler verifies token.
+  if (isSelfAuthenticatedApiPath(pathname)) {
+    sampledLog(
+      "middleware:skip",
+      "[Middleware] skip getUser",
+      { mode: "skip", pathPrefix: pathname.split("/").slice(0, 3).join("/") },
+      100
+    );
+    return nextWithPathname(req, pathname);
   }
 
   const { response, user } = await updateSupabaseSession(req, { pathname });
@@ -56,6 +75,6 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|webmanifest|woff2|woff|ttf|otf|css|json|txt|xml|map|ico)$).*)",
   ],
 };

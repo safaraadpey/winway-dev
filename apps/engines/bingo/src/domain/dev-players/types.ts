@@ -100,9 +100,17 @@ export interface RoomTemplateSnapshot {
   maxPlayers: number | null;
 }
 
+export interface TemplateRhythmWindow {
+  start: string;
+  end: string;
+  joinDelayMaxSeconds: number;
+  maxDevPlayersPerRoom: number | null;
+}
+
 export interface TemplateJoinSettingsSnapshot {
   joinDelayMaxSeconds: number;
   maxDevPlayersPerRoom: number | null;
+  rhythmWindows: TemplateRhythmWindow[];
 }
 
 export interface TemplateRuntimeSnapshot {

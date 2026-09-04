@@ -16,6 +16,7 @@ import { supabase } from "@/lib/supabaseClient";
 import type { ActiveGames, ActiveRoom } from "@/lib/hooks/useActiveGames";
 import { activeGamesMetrics, type ActiveGamesFetchSource } from "@/lib/metrics/activeGamesMetrics";
 import { traceFetch } from "@/lib/debug/netTrace";
+import { sampledLog } from "@/lib/observability/sampledLog";
 import { noteSnapshotFetched } from "@/lib/activeGames/snapshotGate";
 import {
   ACTIVE_GAMES_EMPTY_BACKOFF_MS,
@@ -625,6 +626,12 @@ function createOrchestrator(): ActiveGamesOrchestrator {
         backoffMs: store.backoffMs,
         emptyBackoffMs: store.emptyBackoffMs,
       });
+      sampledLog(
+        "active-rooms:poll",
+        "[ActiveRooms] poll",
+        { source, skipEtag },
+        20
+      );
       const res = await fetch("/api/player/my-active-rooms", {
         headers,
         cache: "no-store",

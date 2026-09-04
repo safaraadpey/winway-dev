@@ -56,6 +56,12 @@ export type SaveDevPlayerTemplateJoinSettingPayload = {
   template_id: string;
   join_delay_max_seconds: number;
   max_dev_players_per_room: number | null;
+  rhythm_windows: Array<{
+    start: string;
+    end: string;
+    join_delay_max_seconds: number;
+    max_dev_players_per_room: number | null;
+  }>;
 };
 
 export async function saveDevPlayerTemplateJoinSettings(
@@ -65,6 +71,12 @@ export async function saveDevPlayerTemplateJoinSettings(
     templateId: string;
     joinDelayMaxSeconds: number;
     maxDevPlayersPerRoom: number | null;
+    rhythmWindows: Array<{
+      start: string;
+      end: string;
+      joinDelayMaxSeconds: number;
+      maxDevPlayersPerRoom: number | null;
+    }>;
     updatedAt: string | null;
   }>
 > {
@@ -73,6 +85,12 @@ export async function saveDevPlayerTemplateJoinSettings(
       templateId: string;
       joinDelayMaxSeconds: number;
       maxDevPlayersPerRoom: number | null;
+      rhythmWindows: Array<{
+        start: string;
+        end: string;
+        joinDelayMaxSeconds: number;
+        maxDevPlayersPerRoom: number | null;
+      }>;
       updatedAt: string | null;
     }>
   >("/api/dev-panel/template-join-settings", {

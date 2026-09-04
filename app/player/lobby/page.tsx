@@ -257,35 +257,6 @@ export default function LobbyPage() {
     };
   }, [pathname, sessionSnap.authReady, sessionSnap.accessToken, sessionSnap.tokenVersion]);
 
-  // Presence ping: update last_seen_at periodically while user is on lobby
-  useEffect(() => {
-    let stopped = false;
-    let interval: ReturnType<typeof setInterval> | null = null;
-
-    async function ping() {
-      try {
-        const token = sessionSnap.accessToken || null;
-        if (!token) return;
-        await fetch("/api/me/ping-presence", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-        });
-      } catch {
-        // silent - we don't want to spam UI
-      }
-    }
-
-    void ping();
-    interval = setInterval(() => {
-      if (!stopped) void ping();
-    }, 60000);
-
-    return () => {
-      stopped = true;
-      if (interval) clearInterval(interval);
-    };
-  }, [sessionSnap.accessToken]);
-
   const buildGameRoomHref = (params: {
     templateId?: string | null;
     entryRoomId?: string | null;

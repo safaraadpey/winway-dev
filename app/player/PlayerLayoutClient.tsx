@@ -61,6 +61,7 @@ export default function PlayerLayoutClient({
       try {
         const token = session.accessToken;
         if (!token || document.visibilityState === "hidden") return;
+        console.info("[Presence] heartbeat");
         await fetch("/api/me/ping-presence", {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },

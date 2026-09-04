@@ -79,6 +79,14 @@ export interface DevPlayerActiveRow {
   updatedAt: string | null;
 }
 
+export interface TemplateRhythmWindow {
+  start: string;
+  end: string;
+  joinDelayMaxSeconds: number;
+  /** Null = unlimited Dev Players in the join-target waiting room. */
+  maxDevPlayersPerRoom: number | null;
+}
+
 export interface DevPlayerTemplateOption {
   id: string;
   name: string;
@@ -94,6 +102,8 @@ export interface DevPlayerTemplateOption {
   joinDelayMaxSeconds: number;
   /** Null = unlimited Dev Players in the join-target waiting room. */
   maxDevPlayersPerRoom: number | null;
+  /** Time-of-day overrides; first matching [start, end) in scheduler timezone wins. */
+  rhythmWindows: TemplateRhythmWindow[];
 }
 
 export const DEFAULT_TEMPLATE_JOIN_INTERVAL_SECONDS = 300;

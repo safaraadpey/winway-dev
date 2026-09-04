@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { mapRhythmWindowsFromRow, normalizeRhythmWindows } from "@/lib/dev-panel/devPlayerRhythmWindows";
 import { getDevPanelContextOrThrow, logAdminAction } from "@/lib/supabaseServer";
 import {
   MAX_TEMPLATE_JOIN_DELAY_MAX_SECONDS,
   MAX_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM,
   MIN_TEMPLATE_JOIN_DELAY_MAX_SECONDS,
   MIN_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM,
+  type TemplateRhythmWindow,
 } from "@/src/types/dev-player-settings";
 
 export const runtime = "nodejs";
@@ -16,6 +18,7 @@ type TemplateJoinSettingPayload = {
   template_id: string;
   join_delay_max_seconds: number;
   max_dev_players_per_room: number | null;
+  rhythm_windows: TemplateRhythmWindow[];
 };
 
 function parseOptionalMaxDevPlayersPerRoom(value: unknown): number | null | undefined {
@@ -39,10 +42,11 @@ function normalizePayload(raw: unknown): TemplateJoinSettingPayload[] | null {
 
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
-    const templateId = String((item as TemplateJoinSettingPayload).template_id ?? "").trim();
+    const row = item as Record<string, unknown>;
+    const templateId = String(row.template_id ?? "").trim();
     if (!templateId || seen.has(templateId)) continue;
 
-    const joinDelayMaxSeconds = Number((item as TemplateJoinSettingPayload).join_delay_max_seconds);
+    const joinDelayMaxSeconds = Number(row.join_delay_max_seconds);
     if (
       !Number.isInteger(joinDelayMaxSeconds) ||
       joinDelayMaxSeconds < MIN_TEMPLATE_JOIN_DELAY_MAX_SECONDS ||
@@ -51,10 +55,13 @@ function normalizePayload(raw: unknown): TemplateJoinSettingPayload[] | null {
       return null;
     }
 
-    const maxDevPlayersPerRoom = parseOptionalMaxDevPlayersPerRoom(
-      (item as TemplateJoinSettingPayload).max_dev_players_per_room
-    );
+    const maxDevPlayersPerRoom = parseOptionalMaxDevPlayersPerRoom(row.max_dev_players_per_room);
     if (maxDevPlayersPerRoom === undefined) {
+      return null;
+    }
+
+    const rhythmWindows = normalizeRhythmWindows(row.rhythm_windows);
+    if (rhythmWindows === null) {
       return null;
     }
 
@@ -63,6 +70,7 @@ function normalizePayload(raw: unknown): TemplateJoinSettingPayload[] | null {
       template_id: templateId,
       join_delay_max_seconds: joinDelayMaxSeconds,
       max_dev_players_per_room: maxDevPlayersPerRoom,
+      rhythm_windows: rhythmWindows,
     });
   }
 
@@ -73,6 +81,7 @@ function mapJoinSettingRow(row: {
   template_id: string;
   join_delay_max_seconds: number | null;
   max_dev_players_per_room?: number | null;
+  rhythm_windows?: unknown;
   updated_at: string | null;
 }) {
   const maxDev =
@@ -83,6 +92,7 @@ function mapJoinSettingRow(row: {
     templateId: String(row.template_id),
     joinDelayMaxSeconds: Number(row.join_delay_max_seconds ?? 0),
     maxDevPlayersPerRoom: Number.isInteger(maxDev) ? maxDev : null,
+    rhythmWindows: mapRhythmWindowsFromRow(row.rhythm_windows),
     updatedAt: row.updated_at ?? null,
   };
 }
@@ -93,7 +103,7 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase
       .from("dev_player_template_join_settings")
-      .select("template_id, join_delay_max_seconds, max_dev_players_per_room, updated_at");
+      .select("template_id, join_delay_max_seconds, max_dev_players_per_room, rhythm_windows, updated_at");
 
     if (error) throw error;
 
@@ -134,7 +144,7 @@ export async function PUT(request: NextRequest) {
         {
           ok: false,
           error: "validation_error",
-          message: `join_delay_max_seconds must be ${MIN_TEMPLATE_JOIN_DELAY_MAX_SECONDS}..${MAX_TEMPLATE_JOIN_DELAY_MAX_SECONDS}; max_dev_players_per_room must be empty or ${MIN_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM}..${MAX_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM}`,
+          message: `join_delay_max_seconds must be ${MIN_TEMPLATE_JOIN_DELAY_MAX_SECONDS}..${MAX_TEMPLATE_JOIN_DELAY_MAX_SECONDS}; max_dev_players_per_room must be empty or ${MIN_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM}..${MAX_TEMPLATE_MAX_DEV_PLAYERS_PER_ROOM}; rhythm_windows must be non-overlapping HH:mm ranges`,
         },
         { status: 400 }
       );
@@ -170,6 +180,7 @@ export async function PUT(request: NextRequest) {
         template_id: item.template_id,
         join_delay_max_seconds: item.join_delay_max_seconds,
         max_dev_players_per_room: item.max_dev_players_per_room,
+        rhythm_windows: item.rhythm_windows,
         updated_at: nowIso,
         updated_by: session.user.id,
       })),
@@ -199,12 +210,13 @@ export async function PUT(request: NextRequest) {
       caps: settings.map((item) => ({
         templateId: item.template_id,
         maxDevPlayersPerRoom: item.max_dev_players_per_room,
+        rhythmWindowCount: item.rhythm_windows.length,
       })),
     });
 
     const { data: savedRows, error: reloadError } = await supabase
       .from("dev_player_template_join_settings")
-      .select("template_id, join_delay_max_seconds, max_dev_players_per_room, updated_at")
+      .select("template_id, join_delay_max_seconds, max_dev_players_per_room, rhythm_windows, updated_at")
       .in("template_id", templateIds);
 
     if (reloadError) throw reloadError;

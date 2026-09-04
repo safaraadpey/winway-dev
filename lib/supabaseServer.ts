@@ -8,6 +8,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
+import { sampledLog } from "@/lib/observability/sampledLog";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -157,6 +158,13 @@ export async function getUserFromRequest(
   }
 
   const token = rawHeader.replace("Bearer ", "");
+
+  sampledLog(
+    "auth:api-getUser",
+    "[Auth] getUserFromRequest",
+    { mode: "api" },
+    100
+  );
 
   try {
     const { createClient } = await import("@supabase/supabase-js");

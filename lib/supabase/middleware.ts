@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { sampledLog } from "@/lib/observability/sampledLog";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
 
 type UpdateSupabaseSessionOptions = {
@@ -49,6 +50,17 @@ export async function updateSupabaseSession(
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  sampledLog(
+    "middleware:getUser",
+    "[Middleware] getUser",
+    {
+      mode: "getUser",
+      pathPrefix: options?.pathname?.split("/").slice(0, 2).join("/") ?? "unknown",
+      hasUser: Boolean(user),
+    },
+    100
+  );
 
   return { response, user };
 }

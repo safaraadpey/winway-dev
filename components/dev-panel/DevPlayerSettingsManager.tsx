@@ -587,6 +587,7 @@ export default function DevPlayerSettingsManager() {
         <SectionCard title="رفتار Join">
           <DevPlayerProfileEngineToggles
             templates={templates}
+            timezone={draft.timezone.trim() || "Asia/Tehran"}
             onJoinSettingsSaved={() => {
               void loadDevPlayerSettings()
                 .then(applySettingsResult)

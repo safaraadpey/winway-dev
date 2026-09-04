@@ -5,6 +5,7 @@ import {
   DEFAULT_TEMPLATE_JOIN_DELAY_MAX_SECONDS,
   normalizeJoinDelayMaxSeconds,
 } from "../domain/dev-players/joinDelay.js";
+import { normalizeRhythmWindows } from "../domain/dev-players/resolveJoinSettings.js";
 import { normalizeMaxDevPlayersPerRoom } from "../domain/dev-players/templateGates.js";
 import type {
   DevPlayerConfigSnapshot,
@@ -236,7 +237,7 @@ export class DevPlayerRepo {
   async getTemplateJoinSettings(): Promise<Map<string, TemplateJoinSettingsSnapshot>> {
     const { data, error } = await this.db
       .from("dev_player_template_join_settings")
-      .select("template_id, join_delay_max_seconds, max_dev_players_per_room");
+      .select("template_id, join_delay_max_seconds, max_dev_players_per_room, rhythm_windows");
     if (error) fail("getTemplateJoinSettings", error.message);
 
     const settings = new Map<string, TemplateJoinSettingsSnapshot>();
@@ -244,6 +245,7 @@ export class DevPlayerRepo {
       settings.set(String(row.template_id), {
         joinDelayMaxSeconds: normalizeJoinDelayMaxSeconds(row.join_delay_max_seconds),
         maxDevPlayersPerRoom: normalizeMaxDevPlayersPerRoom(row.max_dev_players_per_room),
+        rhythmWindows: normalizeRhythmWindows(row.rhythm_windows),
       });
     }
     return settings;

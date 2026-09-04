@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDevPanelContextOrThrow, logAdminAction } from "@/lib/supabaseServer";
+import { mapRhythmWindowsFromRow } from "@/lib/dev-panel/devPlayerRhythmWindows";
 import { DEFAULT_TEMPLATE_JOIN_DELAY_MAX_SECONDS } from "@/src/types/dev-player-settings";
 
 export const runtime = "nodejs";
@@ -266,12 +267,13 @@ async function loadSettingsBundle(supabase: any) {
 
   const { data: joinDelayRows, error: joinDelayError } = await supabase
     .from("dev_player_template_join_settings")
-    .select("template_id, join_delay_max_seconds, max_dev_players_per_room");
+    .select("template_id, join_delay_max_seconds, max_dev_players_per_room, rhythm_windows");
 
   if (joinDelayError) throw joinDelayError;
 
   const joinDelayByTemplateId = new Map<string, number>();
   const maxDevPlayersByTemplateId = new Map<string, number | null>();
+  const rhythmWindowsByTemplateId = new Map<string, ReturnType<typeof mapRhythmWindowsFromRow>>();
   for (const row of joinDelayRows || []) {
     joinDelayByTemplateId.set(String(row.template_id), Number(row.join_delay_max_seconds ?? 0));
     maxDevPlayersByTemplateId.set(
@@ -280,6 +282,7 @@ async function loadSettingsBundle(supabase: any) {
         ? null
         : Number(row.max_dev_players_per_room)
     );
+    rhythmWindowsByTemplateId.set(String(row.template_id), mapRhythmWindowsFromRow(row.rhythm_windows));
   }
 
   const { data: presetRows, error: presetsError } = await supabase
@@ -360,6 +363,7 @@ async function loadSettingsBundle(supabase: any) {
       minNormalPlayersPerRoom: limit?.min_normal_players_per_room ?? null,
       joinDelayMaxSeconds: joinDelayByTemplateId.get(String(row.id)) ?? DEFAULT_TEMPLATE_JOIN_DELAY_MAX_SECONDS,
       maxDevPlayersPerRoom: maxDevPlayersByTemplateId.get(String(row.id)) ?? null,
+      rhythmWindows: rhythmWindowsByTemplateId.get(String(row.id)) ?? [],
     };
   });
 

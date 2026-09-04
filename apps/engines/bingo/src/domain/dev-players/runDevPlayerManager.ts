@@ -2,6 +2,7 @@ import type { DevPlayerRepo } from "../../repositories/devPlayerRepo.js";
 import type { Logger } from "../../metrics/logger.js";
 import { isPlayerEligibleForTemplate } from "./playerProfileEligibility.js";
 import { scheduledAtWithJoinDelay } from "./joinDelay.js";
+import { resolveTemplateJoinSettings } from "./resolveJoinSettings.js";
 import { pickDevPlayerForJoin } from "./selectDevPlayer.js";
 import { isTemplateJoinable, passesDevPlayerMaxPerRoomGate } from "./templateGates.js";
 import { rollTicketCount } from "./ticketRoll.js";
@@ -205,8 +206,12 @@ export async function runDevPlayerManager(
       devPlayers: 0,
       normalPlayers: 0,
     };
-    const maxDevPlayersPerRoom = repo.getMaxDevPlayersPerRoom(template.id, joinSettings);
-    if (!passesDevPlayerMaxPerRoomGate(joinTarget.devPlayers, maxDevPlayersPerRoom)) {
+    const resolved = resolveTemplateJoinSettings(
+      joinSettings.get(template.id),
+      now,
+      settings.timezone
+    );
+    if (!passesDevPlayerMaxPerRoomGate(joinTarget.devPlayers, resolved.maxDevPlayersPerRoom)) {
       skipped.devPlayerCapReached += 1;
       continue;
     }
@@ -216,13 +221,11 @@ export async function runDevPlayerManager(
       continue;
     }
 
-    const joinDelayMaxSeconds = repo.getJoinDelayMaxSeconds(template.id, joinSettings);
-
     const row = await tryScheduleOne({
       repo,
       templateId: template.id,
       template,
-      joinDelayMaxSeconds,
+      joinDelayMaxSeconds: resolved.joinDelayMaxSeconds,
       players,
       walletBalances,
       settings,
@@ -234,6 +237,15 @@ export async function runDevPlayerManager(
     if (row) {
       inserts.push(row);
       insertBudget -= 1;
+      log.info("dev-player-manager join settings resolved", {
+        templateId: template.id,
+        source: resolved.source,
+        windowStart: resolved.windowStart ?? null,
+        windowEnd: resolved.windowEnd ?? null,
+        joinDelayMaxSeconds: resolved.joinDelayMaxSeconds,
+        maxDevPlayersPerRoom: resolved.maxDevPlayersPerRoom,
+        timezone: settings.timezone,
+      });
     }
   }
 
