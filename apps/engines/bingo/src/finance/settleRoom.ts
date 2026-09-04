@@ -1,9 +1,40 @@
 import type { SupabaseAdmin } from "../db/supabase-admin.js";
+import {
+  finishDingPayloadFromEngine,
+  finishRoomAndSettle,
+} from "./index.js";
+import type { RoomFinalizationDingPayload } from "../domain/ding/roomDingState.js";
+import { isRoomLevelDing } from "../domain/ding/roomDingState.js";
 import type { GameRepo } from "../repositories/index.js";
-import { finishRoomAndSettle } from "./index.js";
+import type { RoomRuntimeState } from "../state/room-state.js";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export interface SettleRoomOptions {
+  /** In-memory room state — required for room_level Ding payload. */
+  state?: RoomRuntimeState | null;
+  /** Pre-built payload (janitor / recovery). */
+  dingPayload?: RoomFinalizationDingPayload | null;
+}
+
+async function resolveDingPayload(
+  repo: GameRepo,
+  roomId: string,
+  opts: SettleRoomOptions
+): Promise<RoomFinalizationDingPayload | null> {
+  if (opts.dingPayload) return opts.dingPayload;
+  const state = opts.state;
+  if (state?.usesRoomLevelDing()) {
+    return state.buildRoomDingFinalizationPayload();
+  }
+  const room = await repo.getRoom(roomId);
+  if (!room || !isRoomLevelDing(room.ding_settle_mode)) return null;
+  if (state) return state.buildRoomDingFinalizationPayload();
+  throw new Error(
+    `[Settlement] room ${roomId} is room_level but no Engine Ding state was provided`
+  );
 }
 
 /**
@@ -14,20 +45,28 @@ export async function settleRoomIfNeeded(
   supabase: SupabaseAdmin,
   repo: GameRepo,
   roomId: string,
-  trigger: { fullWinnerThisDraw?: boolean } = {}
+  trigger: { fullWinnerThisDraw?: boolean } = {},
+  opts: SettleRoomOptions = {}
 ): Promise<boolean> {
   const needs =
     trigger.fullWinnerThisDraw === true ||
     (await repo.roomNeedsSettlement(roomId));
   if (!needs) return false;
 
+  const room = await repo.getRoom(roomId);
+  const roomLevel = isRoomLevelDing(room?.ding_settle_mode);
+  const dingPayload = roomLevel ? await resolveDingPayload(repo, roomId, opts) : null;
+
   const now = new Date().toISOString();
   await repo.setRoomSettling(roomId, now);
+
+  const rpcDing =
+    dingPayload != null ? finishDingPayloadFromEngine(dingPayload) : undefined;
 
   let lastErr: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      await finishRoomAndSettle(supabase, roomId);
+      await finishRoomAndSettle(supabase, roomId, null, rpcDing);
       return true;
     } catch (err) {
       lastErr = err;
@@ -35,4 +74,26 @@ export async function settleRoomIfNeeded(
     }
   }
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
+/**
+ * Finish an exhausted room with room_level Ding even when there is no full winner.
+ * Prize pool may be empty; Ding + consume + finished still commit atomically.
+ */
+export async function finishRoomLevelExhausted(
+  supabase: SupabaseAdmin,
+  repo: GameRepo,
+  roomId: string,
+  state: RoomRuntimeState
+): Promise<boolean> {
+  if (!state.usesRoomLevelDing()) {
+    throw new Error(`finishRoomLevelExhausted called for non-room_level room ${roomId}`);
+  }
+  return settleRoomIfNeeded(
+    supabase,
+    repo,
+    roomId,
+    { fullWinnerThisDraw: true },
+    { state }
+  );
 }

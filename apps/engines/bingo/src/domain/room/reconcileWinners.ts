@@ -5,7 +5,11 @@
  */
 
 import type { SupabaseAdmin } from "../../db/supabase-admin.js";
-import { settleRoomIfNeeded } from "../../finance/settleRoom.js";
+import {
+  finishRoomLevelExhausted,
+  settleRoomIfNeeded,
+} from "../../finance/settleRoom.js";
+import { isRoomLevelDing } from "../ding/roomDingState.js";
 import type { Logger } from "../../metrics/logger.js";
 import { GameRepo } from "../../repositories/index.js";
 import type { RoomStateManager } from "../../state/room-state.manager.js";
@@ -61,15 +65,47 @@ export async function finishExhaustedRoom(
 
   await evaluateRoomWinnersInDb(supabase, roomId, lastDraw);
 
+  const state = stateManager ? await stateManager.ensureLoaded(roomId) : null;
+  const roomLevel = isRoomLevelDing(room.ding_settle_mode);
+
   const hasFull = await repo.hasUnpaidFullWinner(roomId);
   if (hasFull) {
-    const settled = await settleRoomIfNeeded(supabase, repo, roomId, {
-      fullWinnerThisDraw: true,
-    });
+    const settled = await settleRoomIfNeeded(
+      supabase,
+      repo,
+      roomId,
+      { fullWinnerThisDraw: true },
+      { state }
+    );
     if (settled) {
       stateManager?.evict(roomId);
       log.info("exhausted room settled after reconcile", { roomId, lastDraw });
       return "settled";
+    }
+  }
+
+  if (roomLevel && state) {
+    try {
+      const settled = await finishRoomLevelExhausted(
+        supabase,
+        repo,
+        roomId,
+        state
+      );
+      if (settled) {
+        stateManager?.evict(roomId);
+        log.info("exhausted room_level room finished atomically (no full winner)", {
+          roomId,
+          lastDraw,
+        });
+        return "finished";
+      }
+    } catch (err) {
+      log.error("exhausted room_level atomic finish failed", {
+        roomId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return "deferred";
     }
   }
 

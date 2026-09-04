@@ -40,8 +40,10 @@ export function startRoomScheduler(ctx: WorkerContext): () => void {
     try {
       await repairUnsettledFinishedRooms(
         supabase,
+        repo,
         log,
-        config.roomJanitorBatchLimit
+        config.roomJanitorBatchLimit,
+        ctx.roomState
       );
     } catch (err) {
       log.error("room-janitor tick error", { error: errMessage(err) });

@@ -141,7 +141,7 @@ export class GameRepo {
     const { data, error } = await this.db
       .from("rooms")
       .select(
-        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,waiting_started_at,min_players,max_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,meta,engine_owner_id,engine_lease_until,engine_lease_epoch"
+        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,waiting_started_at,min_players,max_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,ding_settle_mode,ding_settled_at,ding_settlement_key,meta,engine_owner_id,engine_lease_until,engine_lease_epoch"
       )
       .eq("id", roomId)
       .maybeSingle();
@@ -1115,5 +1115,48 @@ export class GameRepo {
       })
       .eq("drain_started_at", drainStartedAt);
     if (error) fail("patchDrainCycleTiming", error.message);
+  }
+
+  /** Sync cutover flag so SQL room create stamps room_level when enabled. */
+  async syncDingRoomSettleRuntimeFlag(enabled: boolean): Promise<void> {
+    const { error } = await this.db.from("app_runtime_flags").upsert({
+      id: true,
+      ding_room_settle_enabled: enabled,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) fail("syncDingRoomSettleRuntimeFlag", error.message);
+  }
+
+  /** True while per_draw jobs or active per_draw rooms remain (ding-processor drain gate). */
+  async needsPerDrawDingProcessor(): Promise<boolean> {
+    const [queueRes, roomRes] = await Promise.all([
+      this.db
+        .from("ding_apply_jobs")
+        .select("id")
+        .in("status", ["queued", "processing"])
+        .limit(1),
+      this.db
+        .from("rooms")
+        .select("id")
+        .in("status", ["playing", "settling"])
+        .eq("ding_settle_mode", "per_draw")
+        .limit(1),
+    ]);
+    if (queueRes.error) fail("needsPerDrawDingProcessor:queue", queueRes.error.message);
+    if (roomRes.error) fail("needsPerDrawDingProcessor:rooms", roomRes.error.message);
+    return (queueRes.data?.length ?? 0) > 0 || (roomRes.data?.length ?? 0) > 0;
+  }
+
+  /** room_level rooms stuck in settling without Engine finish — Engine janitor input. */
+  async listUnsettledRoomLevelRooms(limit: number): Promise<string[]> {
+    const { data, error } = await this.db
+      .from("rooms")
+      .select("id")
+      .eq("ding_settle_mode", "room_level")
+      .eq("status", "settling")
+      .is("ding_settled_at", null)
+      .limit(Math.max(1, limit));
+    if (error) fail("listUnsettledRoomLevelRooms", error.message);
+    return (data ?? []).map((r) => (r as { id: string }).id);
   }
 }

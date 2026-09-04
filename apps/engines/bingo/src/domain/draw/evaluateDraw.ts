@@ -157,7 +157,7 @@ export async function applyMarksAndEvaluateWithState(
     const settleStep = await timedStep(() =>
       settleRoomIfNeeded(supabase, repo, state.roomId, {
         fullWinnerThisDraw: true,
-      })
+      }, { state })
     );
     if (settleStep.result) {
       breakdown.fn_finish_room_and_settle = settleStep.timing;

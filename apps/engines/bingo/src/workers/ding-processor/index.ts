@@ -69,6 +69,10 @@ export function startDingProcessor(ctx: WorkerContext): () => void {
     if (!executesBusinessLogic(config.runtime)) return;
     if (!config.dingAsyncEnabled) return;
 
+    if (!(await repo.needsPerDrawDingProcessor())) {
+      return;
+    }
+
     inFlight = true;
     let lockHeld = false;
 

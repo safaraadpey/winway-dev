@@ -4,6 +4,7 @@
  */
 
 import { GameRepo } from "../repositories/index.js";
+import { replayRoomDingFromMarks } from "../domain/ding/roomDingState.js";
 import { RoomRuntimeState, type RoomStateSnapshot } from "./room-state.js";
 
 export interface LoadRoomSnapshotResult {
@@ -53,6 +54,29 @@ export async function loadRoomSnapshot(
   };
 
   const state = new RoomRuntimeState(snapshot);
+
+  if (state.usesRoomLevelDing()) {
+    const processedDrawNumbers = drawnNumbers.filter(
+      (n) => !unprocessedDrawNumbers.includes(n)
+    );
+    const marksByDraw = new Map<number, { ticket_id: string; value: number }[]>();
+    for (const drawNumber of processedDrawNumbers) {
+      const rows: { ticket_id: string; value: number }[] = [];
+      for (const ticket of tickets) {
+        const marked = markedByTicket.get(ticket.id);
+        if (marked?.has(drawNumber)) {
+          rows.push({ ticket_id: ticket.id, value: drawNumber });
+        }
+      }
+      marksByDraw.set(drawNumber, rows);
+    }
+    const pending = replayRoomDingFromMarks({
+      state,
+      processedDrawNumbers,
+      marksByDraw,
+    });
+    state.replaceRoomDingPending(pending);
+  }
 
   return {
     state,

@@ -1,3 +1,13 @@
+export {
+  accumulateDrawDingCredits,
+  buildRoomFinalizationDingPayload,
+  isRoomLevelDing,
+  replayRoomDingFromMarks,
+  roomDingSettlementKey,
+  toRpcDingCredits,
+  type RoomFinalizationDingPayload,
+} from "./roomDingState.js";
+
 /**
  * Ding aggregation — engine-mode port of public.fn_aggregate_ding_for_processed_draw.
  *

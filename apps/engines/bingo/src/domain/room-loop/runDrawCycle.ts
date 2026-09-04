@@ -85,6 +85,7 @@ export async function runOneDrawCycle(
     next,
     evalResult.persistence.marks
   );
+  state.accumulateRoomDing(ding.credits);
 
   state.recordDrawInserted(next);
 

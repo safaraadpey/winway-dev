@@ -8,6 +8,8 @@ export type RoomStatus =
   | "finished"
   | "cancelled";
 
+export type DingSettleMode = "per_draw" | "room_level";
+
 export interface RoomRow {
   id: string;
   status: RoomStatus;
@@ -24,6 +26,9 @@ export interface RoomRow {
   line_reward_percentage: number | null;
   full_reward_percentage: number | null;
   ding_per_number: number | null;
+  ding_settle_mode?: DingSettleMode | null;
+  ding_settled_at?: string | null;
+  ding_settlement_key?: string | null;
   meta: Record<string, unknown> | null;
   engine_owner_id?: string | null;
   engine_lease_until?: string | null;

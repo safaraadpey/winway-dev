@@ -10,7 +10,15 @@ import {
   maskFromMarkedValues,
 } from "../core/bitmask/index.js";
 import type { GlobalCardRegistry } from "../core/card-registry/types.js";
-import type { ResultRow, RoomRow, TicketRow } from "../repositories/types.js";
+import type { DingSettleMode, ResultRow, RoomRow, TicketRow } from "../repositories/types.js";
+import {
+  accumulateDrawDingCredits,
+  buildRoomFinalizationDingPayload,
+  isRoomLevelDing,
+  pendingDingForUser,
+  snapshotRoomDing,
+  type RoomFinalizationDingPayload,
+} from "../domain/ding/roomDingState.js";
 import {
   buildRoomAssignmentIndex,
   type RoomAssignmentIndex,
@@ -47,6 +55,9 @@ export class RoomRuntimeState {
   /** Per-room card masks: ticketId → 15-bit mask */
   readonly maskByTicket: Map<string, number>;
 
+  /** Accumulated pending Ding for room_level settlement (no ledger writes until finish). */
+  readonly roomDingPending = new Map<string, number>();
+
   drawsProcessed = 0;
   /** Highest draw_number processed in this engine session (ordering guard). */
   lastProcessedDrawNumber: number | null = null;
@@ -66,6 +77,38 @@ export class RoomRuntimeState {
 
     this.assignments = buildRoomAssignmentIndex(this.tickets);
     this.maskByTicket = new Map();
+  }
+
+  getDingSettleMode(): DingSettleMode {
+    return this.room.ding_settle_mode ?? "per_draw";
+  }
+
+  usesRoomLevelDing(): boolean {
+    return isRoomLevelDing(this.getDingSettleMode());
+  }
+
+  accumulateRoomDing(credits: readonly { user_id: string; amount: number }[]): void {
+    if (!this.usesRoomLevelDing()) return;
+    accumulateDrawDingCredits(this.roomDingPending, credits);
+  }
+
+  replaceRoomDingPending(from: ReadonlyMap<string, number>): void {
+    this.roomDingPending.clear();
+    for (const [userId, amount] of from) {
+      if (amount > 0) this.roomDingPending.set(userId, amount);
+    }
+  }
+
+  getPendingDingForUser(userId: string): number {
+    return pendingDingForUser(this.roomDingPending, userId);
+  }
+
+  getRoomDingSnapshot() {
+    return snapshotRoomDing(this.roomDingPending);
+  }
+
+  buildRoomDingFinalizationPayload(): RoomFinalizationDingPayload {
+    return buildRoomFinalizationDingPayload(this.roomId, this.roomDingPending);
   }
 
   countDingMatchedByUser(

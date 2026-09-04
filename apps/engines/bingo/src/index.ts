@@ -129,6 +129,7 @@ async function main(): Promise<void> {
     coordinationStrict: config.coordinationStrict,
     engineReplicaCount: config.engineReplicaCount,
     dingAsyncEnabled: config.dingAsyncEnabled,
+    dingRoomSettleEnabled: config.dingRoomSettleEnabled,
     ...(config.dingAsyncEnabled
       ? {
           dingProcessorConcurrency: config.dingProcessorConcurrency,
@@ -160,6 +161,13 @@ async function main(): Promise<void> {
   const stops: Array<() => void> = [];
 
   const repo = new GameRepo(supabase);
+  if (config.dingRoomSettleEnabled) {
+    await repo.syncDingRoomSettleRuntimeFlag(true);
+    log.info("[DingRoomSettle] runtime flag enabled for new rooms");
+  } else {
+    await repo.syncDingRoomSettleRuntimeFlag(false);
+  }
+
   const roomState = new RoomStateManager(repo, log, config.roomStateCheckpointEvery);
   if (config.schedulerEnabled && executesBusinessLogic(config.runtime)) {
     await getGlobalCardRegistry(repo, log);

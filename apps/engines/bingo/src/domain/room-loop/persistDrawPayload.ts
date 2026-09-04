@@ -112,6 +112,7 @@ export async function persistClockDrawPayload(
   });
 
   const finalizeStarted = nowFinalizeMs();
+  const skipPerDrawDing = state.usesRoomLevelDing();
   const credited = await repo.finalizeEngineDrawJob({
     jobId,
     roomId,
@@ -119,8 +120,8 @@ export async function persistClockDrawPayload(
     marks: payload.persistence.marks,
     results: payload.persistence.results,
     setFirstLineDrawNumber: payload.persistence.setFirstLineDrawNumber,
-    dingPerCard: payload.ding.dingPerCard,
-    dingCredits: payload.ding.credits,
+    dingPerCard: skipPerDrawDing ? 0 : payload.ding.dingPerCard,
+    dingCredits: skipPerDrawDing ? [] : payload.ding.credits,
     queueWaitMs,
     processingMs: 0,
     drainStartedAt: payload.drawnAtIso,
@@ -130,7 +131,7 @@ export async function persistClockDrawPayload(
     actorFinalizeStartedAt,
     ownerId: actor.leaseFence.ownerId,
     leaseEpoch: actor.leaseFence.leaseEpoch,
-    deferDing: actor.config.dingAsyncEnabled,
+    deferDing: actor.config.dingAsyncEnabled && !skipPerDrawDing,
   });
   const finalizeRpcMs = elapsedFinalizeMs(finalizeStarted);
 
@@ -187,7 +188,7 @@ export async function persistClockDrawPayload(
     try {
       const settled = await settleRoomIfNeeded(supabase, repo, roomId, {
         fullWinnerThisDraw: true,
-      });
+      }, { state });
       if (settled) {
         stateManager.evict(roomId);
         log.info("room settled (full winner, persist recorder)", {

@@ -705,7 +705,9 @@ export interface LiveRoomSnapshot {
     commission_rate: number;
     ding_per_number?: number;
     draw_interval_sec?: number;
+    ding_settle_mode?: "per_draw" | "room_level";
   };
+  pending_room_ding?: number;
   tournament?: {
     id: string;
     title: string | null;

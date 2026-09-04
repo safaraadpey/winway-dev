@@ -12,6 +12,8 @@
  */
 
 import type { SupabaseAdmin } from "../db/supabase-admin.js";
+import type { RoomFinalizationDingPayload } from "../domain/ding/roomDingState.js";
+import { toRpcDingCredits } from "../domain/ding/roomDingState.js";
 import {
   type CommissionRates,
   type CommissionSplit,
@@ -79,21 +81,44 @@ export async function distributeTicketCommission(
   return Number(data ?? 0);
 }
 
+/** Optional Engine Ding payload for room_level atomic settlement. */
+export interface FinishRoomDingPayload {
+  settlementKey: string;
+  settlementVersion: number;
+  dingCredits: { user_id: string; amount: number }[];
+}
+
 /**
  * Wraps game_finance.fn_finish_room_and_settle. This is the atomic settlement
  * entry point: consume tickets, capture holds, distribute commission, split the
  * prize pool, pay winners, flip the room to finished. Idempotent in the DB.
+ *
+ * For room_level Ding, pass dingPayload so prize + Ding + consume commit together.
  */
 export async function finishRoomAndSettle(
   supabase: SupabaseAdmin,
   roomId: string,
-  adminUser?: string | null
+  adminUser?: string | null,
+  dingPayload?: FinishRoomDingPayload | null
 ): Promise<void> {
   const { error } = await supabase.rpc("fn_finish_room_and_settle", {
     p_room: roomId,
     p_admin_user: adminUser ?? null,
+    p_ding_settlement_key: dingPayload?.settlementKey ?? null,
+    p_ding_settlement_version: dingPayload?.settlementVersion ?? null,
+    p_ding_credits: dingPayload?.dingCredits ?? null,
   });
   if (error) throw rpcErr("fn_finish_room_and_settle", error.message);
+}
+
+export function finishDingPayloadFromEngine(
+  payload: RoomFinalizationDingPayload
+): FinishRoomDingPayload {
+  return {
+    settlementKey: payload.settlementKey,
+    settlementVersion: payload.settlementVersion,
+    dingCredits: toRpcDingCredits(payload),
+  };
 }
 
 /**

@@ -36,6 +36,8 @@ export interface Balances {
   refreshWalletBalances?: () => Promise<void>;
   refreshAllBalances?: (options?: RefreshBalancesOptions) => Promise<void>;
   creditDingOnReveal?: (revealKey: string, delta: number) => void;
+  /** room_level: display settled + Engine pending from live-room snapshot. */
+  syncRoomPendingDing?: (pending: number) => void;
   scheduleWalletBalanceSync?: (reason?: string) => void;
 }
 
@@ -92,6 +94,8 @@ export function useBalances(): Balances {
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const balanceUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const currentBalanceRef = useRef<number>(initialRef.current.dingBalance);
+  const settledDingRef = useRef<number>(initialRef.current.dingBalance);
+  const pendingRoomDingRef = useRef<number>(0);
   const fetchInFlightRef = useRef(false);
 
   const creditedRevealKeysRef = useRef<Set<string>>(new Set());
@@ -284,6 +288,8 @@ export function useBalances(): Balances {
         }
 
         if (isMountedRef.current) {
+          settledDingRef.current = ding;
+          ding = ding + pendingRoomDingRef.current;
           applyBalances(ding, balance, locked);
         }
 
@@ -505,6 +511,20 @@ export function useBalances(): Balances {
     }, 800);
   };
 
+  const syncRoomPendingDing = (pending: number) => {
+    pendingRoomDingRef.current = Math.max(0, pending);
+    const displayed = settledDingRef.current + pendingRoomDingRef.current;
+    currentBalanceRef.current = displayed;
+    setDingBalance(displayed);
+    persistBalanceShell(
+      displayed,
+      currentTomanBalanceRef.current,
+      lockedTomanBalanceRef.current
+    );
+    hasHydratedRef.current = true;
+    setHasHydrated(true);
+  };
+
   const creditDingOnReveal = (revealKey: string, delta: number) => {
     if (!revealKey || delta <= 0) return;
     if (creditedRevealKeysRef.current.has(revealKey)) return;
@@ -607,6 +627,7 @@ export function useBalances(): Balances {
     refreshWalletBalances,
     refreshAllBalances,
     creditDingOnReveal,
+    syncRoomPendingDing,
     scheduleWalletBalanceSync,
   };
 }

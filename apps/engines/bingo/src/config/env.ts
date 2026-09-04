@@ -106,6 +106,8 @@ export interface EngineConfig {
   lockRenewIntervalMs: number;
   /** Phase 2B: defer Ding from finalize to ding_apply_jobs worker (default false). */
   dingAsyncEnabled: boolean;
+  /** Stamp new rooms with room_level Ding (room-boundary cutover). */
+  dingRoomSettleEnabled: boolean;
   dingProcessorIntervalMs: number;
   dingProcessorBatchSize: number;
   /** Max parallel rpc_apply_ding_credits_for_draw calls per pick batch (cap 12). */
@@ -263,6 +265,7 @@ export function loadConfig(): EngineConfig {
     engineDrainTimeoutMs: Number(process.env.ENGINE_DRAIN_TIMEOUT_MS ?? "25000"),
     lockRenewIntervalMs: Number(process.env.LOCK_RENEW_INTERVAL_MS ?? "10000"),
     dingAsyncEnabled: process.env.DING_ASYNC_ENABLED === "true",
+    dingRoomSettleEnabled: process.env.DING_ROOM_SETTLE_ENABLED === "true",
     dingProcessorIntervalMs: Number(
       process.env.DING_PROCESSOR_INTERVAL_MS ?? "500"
     ),

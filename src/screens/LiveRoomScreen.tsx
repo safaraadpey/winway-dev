@@ -158,7 +158,7 @@ export default function LiveRoomScreen({
   const session = useSession();
   const { setShowStatusBar, setBalanceRefreshDisabled, setFullPageScroll } =
     useHeaderVisibility();
-  const { creditDingOnReveal, scheduleWalletBalanceSync, refreshAllBalances } =
+  const { creditDingOnReveal, syncRoomPendingDing, scheduleWalletBalanceSync, refreshAllBalances } =
     useBalancesContext();
   const { invalidate: invalidateActiveGames } = useActiveGamesContext();
 
@@ -387,9 +387,27 @@ export default function LiveRoomScreen({
     []
   );
 
+  const applySnapshotPendingDing = useCallback(
+    (snapshot: LiveRoomSnapshot | null | undefined) => {
+      if (!snapshot) return;
+      const mode = snapshot.room?.ding_settle_mode ?? "per_draw";
+      if (mode !== "room_level") {
+        syncRoomPendingDing?.(0);
+        return;
+      }
+      syncRoomPendingDing?.(Math.max(0, Number(snapshot.pending_room_ding ?? 0)));
+    },
+    [syncRoomPendingDing]
+  );
+
+  useEffect(() => {
+    applySnapshotPendingDing(data);
+  }, [data, applySnapshotPendingDing]);
+
   const creditDingForRevealedNumber = useCallback(
     (number: number, snapshot: LiveRoomSnapshot | null | undefined) => {
       if (!roomId || number == null) return;
+      if (snapshot?.room?.ding_settle_mode === "room_level") return;
 
       const matchedCards = countMatchedMyCards(number, snapshot);
       if (matchedCards <= 0) return;

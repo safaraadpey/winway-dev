@@ -120,6 +120,9 @@ export async function processEngineDrawJob(
             matched_cards: number;
           }[],
         };
+    state?.accumulateRoomDing(dingPayload.credits);
+
+    const skipPerDrawDing = state?.usesRoomLevelDing() === true;
 
     const processingMs = Date.now() - processingStartMs;
     const actorFinalizeStartedAt = opts.actorTiming
@@ -147,8 +150,8 @@ export async function processEngineDrawJob(
         marks: persistence.marks,
         results: persistence.results,
         setFirstLineDrawNumber: persistence.setFirstLineDrawNumber,
-        dingPerCard: dingPayload.dingPerCard,
-        dingCredits: dingPayload.credits,
+        dingPerCard: skipPerDrawDing ? 0 : dingPayload.dingPerCard,
+        dingCredits: skipPerDrawDing ? [] : dingPayload.credits,
         queueWaitMs,
         processingMs,
         drainStartedAt: pickContext.drainStartedAt,
@@ -158,7 +161,7 @@ export async function processEngineDrawJob(
         actorFinalizeStartedAt,
         ownerId: opts.leaseFence?.ownerId ?? null,
         leaseEpoch: opts.leaseFence?.leaseEpoch ?? null,
-        deferDing: opts.deferDing === true,
+        deferDing: opts.deferDing === true && !skipPerDrawDing,
       });
       if (credited === -1) {
         log.warn("[Room] finalize fenced — stale lease epoch or owner", {
@@ -226,7 +229,7 @@ export async function processEngineDrawJob(
         const settleStep = await timedStep(() =>
           settleRoomIfNeeded(supabase, repo, job.room_id, {
             fullWinnerThisDraw: true,
-          })
+          }, { state: state ?? undefined })
         );
         if (settleStep.result) {
           breakdown.fn_finish_room_and_settle = settleStep.timing;
