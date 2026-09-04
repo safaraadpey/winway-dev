@@ -5,6 +5,7 @@ import {
   type DingApplyJob,
 } from "../../domain/ding/processDingApplyJob.js";
 import { logDingApplyHealth } from "../../metrics/dingApplyObservability.js";
+import { runBoundedPool } from "../../lib/runBoundedPool.js";
 import { GameRepo } from "../../repositories/index.js";
 import { redisKeysV2 } from "../../redis/keysV2.js";
 import { acquireLeaderLock, releaseLeaderLock } from "../../redis/leaderLock.js";
@@ -90,14 +91,14 @@ export function startDingProcessor(ctx: WorkerContext): () => void {
       await maybeLogHealth();
 
       const jobs = await repo.pickDingApplyJobs(config.dingProcessorBatchSize);
-      for (const job of jobs) {
-        if (stopped) break;
+      await runBoundedPool(jobs, config.dingProcessorConcurrency, async (job) => {
+        if (stopped) return;
         const outcome = await processDingApplyJob(repo, log, job as DingApplyJob, {
           maxAttempts: config.dingProcessorMaxAttempts,
         });
         if (outcome === "failed") applyErrorCount += 1;
         if (outcome === "requeue") applyRetryCount += 1;
-      }
+      });
     } catch (err) {
       log.error(`${worker} tick error`, {
         error: err instanceof Error ? err.message : String(err),

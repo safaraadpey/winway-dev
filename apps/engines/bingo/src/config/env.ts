@@ -108,6 +108,8 @@ export interface EngineConfig {
   dingAsyncEnabled: boolean;
   dingProcessorIntervalMs: number;
   dingProcessorBatchSize: number;
+  /** Max parallel rpc_apply_ding_credits_for_draw calls per pick batch (cap 12). */
+  dingProcessorConcurrency: number;
   dingProcessorMaxAttempts: number;
   dingProcessorLockTtlSec: number;
   /** Requeue ding_apply_jobs in `processing` older than this (seconds). */
@@ -266,6 +268,10 @@ export function loadConfig(): EngineConfig {
     ),
     dingProcessorBatchSize: Number(
       process.env.DING_PROCESSOR_BATCH_SIZE ?? "50"
+    ),
+    dingProcessorConcurrency: Math.min(
+      12,
+      Math.max(1, Number(process.env.DING_PROCESSOR_CONCURRENCY ?? "1"))
     ),
     dingProcessorMaxAttempts: Number(
       process.env.DING_PROCESSOR_MAX_ATTEMPTS ?? "10"

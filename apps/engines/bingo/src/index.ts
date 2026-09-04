@@ -129,6 +129,13 @@ async function main(): Promise<void> {
     coordinationStrict: config.coordinationStrict,
     engineReplicaCount: config.engineReplicaCount,
     dingAsyncEnabled: config.dingAsyncEnabled,
+    ...(config.dingAsyncEnabled
+      ? {
+          dingProcessorConcurrency: config.dingProcessorConcurrency,
+          dingProcessorBatchSize: config.dingProcessorBatchSize,
+          dingProcessorIntervalMs: config.dingProcessorIntervalMs,
+        }
+      : {}),
   });
   const pingRedis = redis ? () => redis!.ping() : undefined;
   const readiness = async () => {
