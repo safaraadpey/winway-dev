@@ -53,10 +53,14 @@ function getPeriodDateRange(period: ReportPeriod): { from: Date; to: Date } {
 
 /**
  * بارگذاری گزارشات مالی برای پلیر
+ * لیست تراکنش‌ها فقط وقتی `includeTransactions: true` باشد خوانده می‌شود.
  */
 export async function loadFinancialReports(
-  period: ReportPeriod = "month"
+  period: ReportPeriod = "month",
+  options?: { includeTransactions?: boolean }
 ): Promise<FinancialReportsData> {
+  const includeTransactions = options?.includeTransactions === true;
+
   try {
     const creditTypes = new Set([
       "deposit",
@@ -115,6 +119,16 @@ export async function loadFinancialReports(
     }
 
     const { from, to } = getPeriodDateRange(period);
+    let allTransactions: FinancialTransaction[] = [];
+
+    if (!includeTransactions) {
+      console.info("[Reports] Skipping transaction list", { period });
+    } else {
+      console.info("[Reports] Loading transaction list", {
+        period,
+        from: from.toISOString(),
+        to: to.toISOString(),
+      });
 
     // گرفتن تراکنش‌ها که player در آن‌ها receiver است
     const { data: transactionsAsReceiver, error: receiverError } = await supabase
@@ -265,7 +279,6 @@ export async function loadFinancialReports(
     };
 
     // ترکیب و تبدیل تراکنش‌ها
-    const allTransactions: FinancialTransaction[] = [];
     const seenTransactionIds = new Set<string>();
 
     // تراکنش‌های به عنوان receiver
@@ -318,6 +331,7 @@ export async function loadFinancialReports(
     allTransactions.sort((a, b) => 
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
+    }
 
     // محاسبه خلاصه
     const totalDeposits = allTransactions

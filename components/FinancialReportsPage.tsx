@@ -34,8 +34,16 @@ export default function FinancialReportsPage() {
   const [transactionFilter, setTransactionFilter] =
     useState<TransactionFilter>("deposit");
   const [statsExpanded, setStatsExpanded] = useState(true);
+  const [transactionsLoadingPeriod, setTransactionsLoadingPeriod] =
+    useState<ReportPeriod | null>(null);
+  const [transactionsReadyByPeriod, setTransactionsReadyByPeriod] = useState<
+    Partial<Record<ReportPeriod, boolean>>
+  >({});
   const periodCacheRef = useRef<Partial<Record<ReportPeriod, FinancialReportsData>>>({});
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const activePeriodRef = useRef(activePeriod);
+  const transactionsLoadingRef = useRef(false);
+  activePeriodRef.current = activePeriod;
   const { menus: paymentMenus, loading: paymentMenusLoading } =
     usePaymentMenus();
 
@@ -126,14 +134,16 @@ export default function FinancialReportsPage() {
     async function fetchData() {
       try {
         setLoading(true);
-        const result = await loadFinancialReports(activePeriod);
+        const result = await loadFinancialReports(activePeriod, {
+          includeTransactions: false,
+        });
         periodCacheRef.current[activePeriod] = result;
         if (!cancelled) {
           setData(result);
         }
       } catch (error: any) {
         if (!cancelled) {
-          console.error("Error loading financial reports:", error);
+          console.error("[Reports] Error loading financial reports:", error);
           toast.error(error.message || "خطا در بارگذاری گزارشات مالی");
         }
       } finally {
@@ -148,6 +158,30 @@ export default function FinancialReportsPage() {
     return () => {
       cancelled = true;
     };
+  }, [activePeriod]);
+
+  const handleRefreshTransactions = useCallback(async () => {
+    const period = activePeriod;
+    if (transactionsLoadingRef.current) return;
+    transactionsLoadingRef.current = true;
+    setTransactionsLoadingPeriod(period);
+    try {
+      console.info("[Reports] Refreshing transaction list", { period });
+      const result = await loadFinancialReports(period, {
+        includeTransactions: true,
+      });
+      periodCacheRef.current[period] = result;
+      setTransactionsReadyByPeriod((prev) => ({ ...prev, [period]: true }));
+      if (activePeriodRef.current === period) {
+        setData(result);
+      }
+    } catch (error: any) {
+      console.error("[Reports] Error loading transactions:", error);
+      toast.error(error.message || "خطا در بارگذاری تراکنش‌ها");
+    } finally {
+      transactionsLoadingRef.current = false;
+      setTransactionsLoadingPeriod(null);
+    }
   }, [activePeriod]);
 
   const formatAmount = (amount: number): string => {
@@ -244,7 +278,12 @@ export default function FinancialReportsPage() {
     );
   }
 
-  const { summary, transactions, gameStats } = data;
+  const { transactions: loadedTransactions, gameStats, summary } = data;
+  const transactionsReady = Boolean(transactionsReadyByPeriod[activePeriod]);
+  const dataMatchesPeriod = summary.period === activePeriod;
+  const showTransactionList = transactionsReady && dataMatchesPeriod;
+  const transactions = showTransactionList ? loadedTransactions : [];
+  const isRefreshingCurrentPeriod = transactionsLoadingPeriod === activePeriod;
 
   // Fallback برای gameStats در صورت undefined
   const safeGameStats = gameStats || {
@@ -333,7 +372,14 @@ export default function FinancialReportsPage() {
             {(["day", "week", "month"] as ReportPeriod[]).map((period) => (
               <button
                 key={period}
-                onClick={() => setActivePeriod(period)}
+                onClick={() => {
+                  setActivePeriod(period);
+                  const cached = periodCacheRef.current[period];
+                  if (cached) {
+                    setData(cached);
+                    setLoading(false);
+                  }
+                }}
                 className={`${styles.periodTab} ${
                   activePeriod === period ? styles.periodTabActive : ""
                 }`}
@@ -361,61 +407,105 @@ export default function FinancialReportsPage() {
             <div className={styles.statsItem}>
               <span className={styles.statsLabel}>جمع واریزی</span>
               <span className={`${styles.statsValue} ${styles.positive}`}>
-                {formatAmount(manualDeposits)} تومان
+                {showTransactionList
+                  ? `${formatAmount(manualDeposits)} تومان`
+                  : "—"}
               </span>
             </div>
             <div className={styles.statsItem}>
               <span className={styles.statsLabel}>جمع برداشت</span>
               <span className={`${styles.statsValue} ${styles.negative}`}>
-                {formatAmount(manualWithdrawals)} تومان
+                {showTransactionList
+                  ? `${formatAmount(manualWithdrawals)} تومان`
+                  : "—"}
               </span>
             </div>
             <div className={styles.statsItem}>
               <span className={styles.statsLabel}>بیلان</span>
               <span
                 className={`${styles.statsValue} ${
-                  manualDeposits - manualWithdrawals >= 0 ? styles.positive : styles.negative
+                  !showTransactionList
+                    ? ""
+                    : manualDeposits - manualWithdrawals >= 0
+                      ? styles.positive
+                      : styles.negative
                 }`}
               >
-                {formatAmount(manualDeposits - manualWithdrawals)} تومان
+                {showTransactionList
+                  ? `${formatAmount(manualDeposits - manualWithdrawals)} تومان`
+                  : "—"}
               </span>
             </div>
           </div>
         </div>
 
-        {/* لیست تراکنش‌ها */}
+        {/* لیست تراکنش‌ها — فقط پس از دکمه به‌روزرسانی لود می‌شود */}
         <div className={styles.transactionsSection}>
           <div className={styles.transactionsSectionHeader}>
-            <h2 className={styles.sectionTitle}>
-              <span className={styles.sectionTitleIcon} aria-hidden="true">
-                💳
-              </span>
-              تراکنش‌ها
-            </h2>
-            <div
-              className={styles.transactionFilterTabs}
-              role="tablist"
-              aria-label="فیلتر نوع تراکنش"
-            >
-              {(["deposit", "withdraw"] as TransactionFilter[]).map((filter) => (
+            <div className={styles.transactionsTitleRow}>
+              <h2 className={styles.sectionTitle}>
+                <span className={styles.sectionTitleIcon} aria-hidden="true">
+                  💳
+                </span>
+                تراکنش‌ها
+              </h2>
+              {showTransactionList ? (
                 <button
-                  key={filter}
                   type="button"
-                  role="tab"
-                  aria-selected={transactionFilter === filter}
-                  onClick={() => setTransactionFilter(filter)}
-                  className={`${styles.transactionFilterTab} ${
-                    transactionFilter === filter
-                      ? styles.transactionFilterTabActive
-                      : ""
-                  }`}
+                  className={styles.transactionsRefreshButton}
+                  onClick={() => void handleRefreshTransactions()}
+                  disabled={isRefreshingCurrentPeriod}
                 >
-                  {TRANSACTION_FILTER_LABELS[filter]}
+                  {isRefreshingCurrentPeriod ? "در حال بارگذاری..." : "به‌روزرسانی"}
                 </button>
-              ))}
+              ) : null}
             </div>
+            {showTransactionList ? (
+              <div
+                className={styles.transactionFilterTabs}
+                role="tablist"
+                aria-label="فیلتر نوع تراکنش"
+              >
+                {(["deposit", "withdraw"] as TransactionFilter[]).map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    role="tab"
+                    aria-selected={transactionFilter === filter}
+                    onClick={() => setTransactionFilter(filter)}
+                    className={`${styles.transactionFilterTab} ${
+                      transactionFilter === filter
+                        ? styles.transactionFilterTabActive
+                        : ""
+                    }`}
+                  >
+                    {TRANSACTION_FILTER_LABELS[filter]}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
-          {filteredTransactions.length === 0 ? (
+          {!showTransactionList ? (
+            <div className={styles.transactionsPlaceholder}>
+              {isRefreshingCurrentPeriod ? (
+                <>
+                  <div className={styles.transactionsSectionSpinner}></div>
+                  <p>در حال بارگذاری تراکنش‌ها...</p>
+                </>
+              ) : (
+                <>
+                  <p>برای مشاهده گزارش تراکنش‌ها دکمه به‌روزرسانی را بزنید</p>
+                  <button
+                    type="button"
+                    className={styles.transactionsRefreshButtonLarge}
+                    onClick={() => void handleRefreshTransactions()}
+                  >
+                    به‌روزرسانی
+                  </button>
+                </>
+              )}
+            </div>
+          ) : filteredTransactions.length === 0 ? (
             <div className={styles.emptyState}>
               <p>
                 {transactions.length === 0

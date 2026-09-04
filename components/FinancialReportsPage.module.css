@@ -277,6 +277,77 @@
   margin-bottom: 1rem;
 }
 
+.transactionsTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.transactionsTitleRow .sectionTitle {
+  margin-bottom: 0;
+}
+
+.transactionsRefreshButton,
+.transactionsRefreshButtonLarge {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0.5rem 1rem;
+  background-color: transparent;
+  color: #ffffff;
+  border: 1px solid rgba(73, 72, 76, 1);
+  border-radius: 200px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.transactionsRefreshButton:hover,
+.transactionsRefreshButtonLarge:hover {
+  background-color: rgba(0, 0, 0, 0.15);
+}
+
+.transactionsRefreshButton:disabled,
+.transactionsRefreshButtonLarge:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.transactionsRefreshButtonLarge {
+  min-height: 44px;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.9375rem;
+  background-image: url("../src/assets/logo/lobbyInfo.png");
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: 100% 100%;
+}
+
+.transactionsRefreshButtonLarge:hover {
+  background-color: transparent;
+}
+
+.transactionsPlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  text-align: center;
+  padding: 1.5rem 1rem;
+  color: #9ca3af;
+}
+
+.transactionsSectionSpinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #2d2d2d;
+  border-top-color: #00d4aa;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
 .transactionsSectionHeader .sectionTitle {
   margin-bottom: 0;
 }
@@ -594,6 +665,35 @@
 :global(html[data-theme="light"]) .transactionsSection {
   background-color: transparent;
   padding: 0;
+}
+
+:global(html[data-theme="light"]) .transactionsRefreshButton,
+:global(html[data-theme="light"]) .transactionsRefreshButtonLarge {
+  background-image: linear-gradient(135deg, #c084fc 0%, #a855f7 48%, #6366f1 100%);
+  background-color: transparent;
+  color: #ffffff;
+  border-color: transparent;
+  border-radius: 1rem;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.28);
+}
+
+:global(html[data-theme="light"]) .transactionsRefreshButton:hover,
+:global(html[data-theme="light"]) .transactionsRefreshButtonLarge:hover {
+  background-color: transparent;
+}
+
+:global(html[data-theme="light"]) .transactionsPlaceholder {
+  background-color: #ffffff;
+  border: 1px solid #ddd6fe;
+  border-radius: 1rem;
+  color: #7c3aed;
+  box-shadow: 0 4px 16px rgba(124, 58, 237, 0.06);
+}
+
+:global(html[data-theme="light"]) .transactionsSectionSpinner {
+  border-color: rgba(17, 24, 39, 0.08);
+  border-top-color: #7c3aed;
 }
 
 :global(html[data-theme="light"]) .transactionFilterTab {
