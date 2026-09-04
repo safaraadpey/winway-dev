@@ -14,17 +14,42 @@ function comparePayload(a: ClockDrawPayload, b: ClockDrawPayload): number {
   return a.seq - b.seq || a.number - b.number;
 }
 
+type PersistClockDraw = typeof persistClockDrawPayload;
+
+export interface RoomPersistQueueHooks {
+  persist?: PersistClockDraw;
+  delay?: (ms: number) => Promise<void>;
+}
+
+const MAX_PERSIST_RETRIES = 3;
+
+function persistBackoffMs(attempt: number): number {
+  return 250 * 2 ** (attempt - 1);
+}
+
+function defaultDelay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export class RoomPersistQueue {
   private readonly queue: ClockDrawPayload[] = [];
   private pumping = false;
   private stopped = false;
   /** In-flight persist (insert or finalize). */
   private inFlight = false;
+  private readonly persistFn: PersistClockDraw;
+  private readonly delayFn: (ms: number) => Promise<void>;
+  /** Persist attempt count per payload seq (survives enqueue sort). */
+  private readonly persistAttemptsBySeq = new Map<number, number>();
 
   constructor(
     private readonly actor: RoomGameActor,
-    private readonly onOutcome: (outcome: EngineJobOutcome) => void
-  ) {}
+    private readonly onOutcome: (outcome: EngineJobOutcome) => void,
+    hooks?: RoomPersistQueueHooks
+  ) {
+    this.persistFn = hooks?.persist ?? persistClockDrawPayload;
+    this.delayFn = hooks?.delay ?? defaultDelay;
+  }
 
   /** RAM payloads waiting for insert/finalize. */
   depth(): number {
@@ -44,7 +69,16 @@ export class RoomPersistQueue {
     this.queue.push(payload);
     this.queue.sort(comparePayload);
     queueMicrotask(() => {
-      void this.pump();
+      this.schedulePump();
+    });
+  }
+
+  private schedulePump(): void {
+    void this.pump().catch((err) => {
+      this.actor.log.error("[Room] persist pump rejected", {
+        roomId: this.actor.roomId,
+        error: err instanceof Error ? err.message : String(err),
+      });
     });
   }
 
@@ -56,7 +90,39 @@ export class RoomPersistQueue {
         const payload = this.queue.shift()!;
         this.inFlight = true;
         try {
-          const outcome = await persistClockDrawPayload(this.actor, payload);
+          let outcome: EngineJobOutcome;
+          try {
+            outcome = await this.persistFn(this.actor, payload);
+            this.persistAttemptsBySeq.delete(payload.seq);
+          } catch (err) {
+            const attempt = (this.persistAttemptsBySeq.get(payload.seq) ?? 0) + 1;
+            this.persistAttemptsBySeq.set(payload.seq, attempt);
+
+            this.actor.log.warn("[Room] persist failed", {
+              roomId: this.actor.roomId,
+              drawNumber: payload.number,
+              attempt,
+              error: err instanceof Error ? err.message : String(err),
+            });
+
+            if (attempt <= MAX_PERSIST_RETRIES) {
+              this.queue.unshift(payload);
+              await this.delayFn(persistBackoffMs(attempt));
+              break;
+            }
+
+            this.persistAttemptsBySeq.delete(payload.seq);
+            this.actor.log.error("[Room] persist retries exhausted", {
+              roomId: this.actor.roomId,
+              drawNumber: payload.number,
+              attempts: attempt,
+            });
+            this.stop();
+            this.actor.markNeedsRecovery();
+            this.actor.exitAfterPersist("persist-failed");
+            break;
+          }
+
           this.onOutcome(outcome);
           if (outcome === "requeue") {
             this.queue.unshift(payload);
@@ -82,7 +148,7 @@ export class RoomPersistQueue {
     } finally {
       this.pumping = false;
       if (this.queue.length > 0 && !this.stopped) {
-        void this.pump();
+        this.schedulePump();
       }
     }
   }
