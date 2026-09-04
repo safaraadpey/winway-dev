@@ -878,6 +878,156 @@ export class GameRepo {
     };
   }
 
+  /** Async Ding queue + processed/ding gap snapshot for production health logs. */
+  async fetchDingApplyHealthSnapshot(args: {
+    staleProcessingSec: number;
+    staleQueuedSec: number;
+  }): Promise<{
+    queuedCount: number;
+    processingCount: number;
+    failedCount: number;
+    oldestQueuedAgeMs: number;
+    oldestProcessingAgeMs: number;
+    staleQueuedCount: number;
+    staleProcessingCount: number;
+    processedDingGapCount: number;
+    historicalGapCount: number;
+  }> {
+    const now = Date.now();
+    const ageMs = (iso: string | null | undefined): number =>
+      iso == null ? 0 : Math.max(0, now - Date.parse(iso));
+    const staleIso = (sec: number): string =>
+      new Date(now - sec * 1000).toISOString();
+
+    const [
+      queued,
+      processing,
+      failed,
+      oldestQueued,
+      oldestProcessing,
+      staleQueued,
+      staleProcessing,
+      processedDingGap,
+      historicalGap,
+    ] = await Promise.all([
+      this.db
+        .from("ding_apply_jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "queued"),
+      this.db
+        .from("ding_apply_jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "processing"),
+      this.db
+        .from("ding_apply_jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "failed"),
+      this.db
+        .from("ding_apply_jobs")
+        .select("created_at")
+        .eq("status", "queued")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+      this.db
+        .from("ding_apply_jobs")
+        .select("updated_at")
+        .eq("status", "processing")
+        .order("updated_at", { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+      this.db
+        .from("ding_apply_jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "queued")
+        .lt("created_at", staleIso(args.staleQueuedSec)),
+      this.db
+        .from("ding_apply_jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "processing")
+        .lt("updated_at", staleIso(args.staleProcessingSec)),
+      this.db
+        .from("draws")
+        .select("id", { count: "exact", head: true })
+        .not("processed_at", "is", null)
+        .is("ding_aggregated_at", null),
+      this.db
+        .from("draws")
+        .select("room_id,number")
+        .not("processed_at", "is", null)
+        .is("ding_aggregated_at", null)
+        .limit(100),
+    ]);
+
+    if (queued.error) fail("fetchDingApplyHealthSnapshot:queued", queued.error.message);
+    if (processing.error) {
+      fail("fetchDingApplyHealthSnapshot:processing", processing.error.message);
+    }
+    if (failed.error) fail("fetchDingApplyHealthSnapshot:failed", failed.error.message);
+    if (oldestQueued.error) {
+      fail("fetchDingApplyHealthSnapshot:oldestQueued", oldestQueued.error.message);
+    }
+    if (oldestProcessing.error) {
+      fail(
+        "fetchDingApplyHealthSnapshot:oldestProcessing",
+        oldestProcessing.error.message
+      );
+    }
+    if (staleQueued.error) {
+      fail("fetchDingApplyHealthSnapshot:staleQueued", staleQueued.error.message);
+    }
+    if (staleProcessing.error) {
+      fail(
+        "fetchDingApplyHealthSnapshot:staleProcessing",
+        staleProcessing.error.message
+      );
+    }
+    if (processedDingGap.error) {
+      fail(
+        "fetchDingApplyHealthSnapshot:processedDingGap",
+        processedDingGap.error.message
+      );
+    }
+
+    let historicalGapCount = 0;
+    if (historicalGap.error) {
+      fail(
+        "fetchDingApplyHealthSnapshot:historicalGap",
+        historicalGap.error.message
+      );
+    }
+    for (const row of (historicalGap.data ?? []) as {
+      room_id: string;
+      number: number;
+    }[]) {
+      const { count, error: jobErr } = await this.db
+        .from("ding_apply_jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("room_id", row.room_id)
+        .eq("draw_number", row.number);
+      if (jobErr) {
+        fail("fetchDingApplyHealthSnapshot:historicalGapJob", jobErr.message);
+      }
+      if ((count ?? 0) === 0) historicalGapCount += 1;
+    }
+
+    return {
+      queuedCount: queued.count ?? 0,
+      processingCount: processing.count ?? 0,
+      failedCount: failed.count ?? 0,
+      oldestQueuedAgeMs: ageMs(
+        (oldestQueued.data as { created_at: string } | null)?.created_at
+      ),
+      oldestProcessingAgeMs: ageMs(
+        (oldestProcessing.data as { updated_at: string } | null)?.updated_at
+      ),
+      staleQueuedCount: staleQueued.count ?? 0,
+      staleProcessingCount: staleProcessing.count ?? 0,
+      processedDingGapCount: processedDingGap.count ?? 0,
+      historicalGapCount,
+    };
+  }
+
   /** Live draw_jobs + rooms snapshot for pick-path diagnostics. */
   async fetchPickDebugQueueState(): Promise<{
     queuedJobsCount: number;

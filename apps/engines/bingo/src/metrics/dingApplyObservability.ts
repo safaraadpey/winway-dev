@@ -58,3 +58,57 @@ export function logDingApply(log: Logger, fields: DingApplyFields): void {
   }
   log.info(DING_APPLY_LOG, meta);
 }
+
+export const DING_APPLY_HEALTH_LOG = "[DingApplyHealth]";
+
+export interface DingApplyHealthSnapshot {
+  queuedCount: number;
+  processingCount: number;
+  failedCount: number;
+  oldestQueuedAgeMs: number;
+  oldestProcessingAgeMs: number;
+  staleQueuedCount: number;
+  staleProcessingCount: number;
+  processedDingGapCount: number;
+  historicalGapCount: number;
+  applyErrorCount: number;
+  applyRetryCount: number;
+}
+
+export function dingApplyHealthMeta(
+  snapshot: DingApplyHealthSnapshot
+): Record<string, unknown> {
+  return {
+    queuedCount: snapshot.queuedCount,
+    processingCount: snapshot.processingCount,
+    failedCount: snapshot.failedCount,
+    oldestQueuedAgeMs: snapshot.oldestQueuedAgeMs,
+    oldestProcessingAgeMs: snapshot.oldestProcessingAgeMs,
+    staleQueuedCount: snapshot.staleQueuedCount,
+    staleProcessingCount: snapshot.staleProcessingCount,
+    processedDingGapCount: snapshot.processedDingGapCount,
+    historicalGapCount: snapshot.historicalGapCount,
+    applyErrorCount: snapshot.applyErrorCount,
+    applyRetryCount: snapshot.applyRetryCount,
+    queueLagWarningMs: 30_000,
+    staleQueuedThresholdMs: 300_000,
+  };
+}
+
+export function logDingApplyHealth(
+  log: Logger,
+  snapshot: DingApplyHealthSnapshot
+): void {
+  const meta = dingApplyHealthMeta(snapshot);
+  const critical =
+    snapshot.failedCount > 0 ||
+    snapshot.staleQueuedCount > 0 ||
+    snapshot.staleProcessingCount > 0 ||
+    snapshot.historicalGapCount > 0 ||
+    snapshot.oldestQueuedAgeMs > 30_000;
+  if (critical) {
+    log.warn(DING_APPLY_HEALTH_LOG, meta);
+    return;
+  }
+  log.info(DING_APPLY_HEALTH_LOG, meta);
+}

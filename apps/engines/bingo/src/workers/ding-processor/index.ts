@@ -4,6 +4,7 @@ import {
   processDingApplyJob,
   type DingApplyJob,
 } from "../../domain/ding/processDingApplyJob.js";
+import { logDingApplyHealth } from "../../metrics/dingApplyObservability.js";
 import { GameRepo } from "../../repositories/index.js";
 import { redisKeysV2 } from "../../redis/keysV2.js";
 import { acquireLeaderLock, releaseLeaderLock } from "../../redis/leaderLock.js";
@@ -20,7 +21,35 @@ export function startDingProcessor(ctx: WorkerContext): () => void {
   let stopped = false;
   let inFlight = false;
   let lastReapMs = 0;
+  let lastHealthMs = 0;
+  let applyErrorCount = 0;
+  let applyRetryCount = 0;
   const redisLockDegraded = { value: false };
+
+  const maybeLogHealth = async (): Promise<void> => {
+    if (!executesBusinessLogic(config.runtime)) return;
+    const now = Date.now();
+    if (now - lastHealthMs < config.dingJobReapIntervalMs) return;
+    lastHealthMs = now;
+
+    try {
+      const snapshot = await repo.fetchDingApplyHealthSnapshot({
+        staleProcessingSec: config.dingJobStaleSec,
+        staleQueuedSec: 300,
+      });
+      logDingApplyHealth(log, {
+        ...snapshot,
+        applyErrorCount,
+        applyRetryCount,
+      });
+      applyErrorCount = 0;
+      applyRetryCount = 0;
+    } catch (err) {
+      log.warn("[DingApplyHealth] snapshot error", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
 
   const maybeReap = async (): Promise<void> => {
     if (!executesBusinessLogic(config.runtime)) return;
@@ -58,13 +87,16 @@ export function startDingProcessor(ctx: WorkerContext): () => void {
       lockHeld = lock.lockHeld;
 
       await maybeReap();
+      await maybeLogHealth();
 
       const jobs = await repo.pickDingApplyJobs(config.dingProcessorBatchSize);
       for (const job of jobs) {
         if (stopped) break;
-        await processDingApplyJob(repo, log, job as DingApplyJob, {
+        const outcome = await processDingApplyJob(repo, log, job as DingApplyJob, {
           maxAttempts: config.dingProcessorMaxAttempts,
         });
+        if (outcome === "failed") applyErrorCount += 1;
+        if (outcome === "requeue") applyRetryCount += 1;
       }
     } catch (err) {
       log.error(`${worker} tick error`, {
