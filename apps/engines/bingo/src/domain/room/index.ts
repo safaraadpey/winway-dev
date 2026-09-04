@@ -66,15 +66,22 @@ async function promoteWaitingRoom(
   action: "promote" | "promote_max_capacity",
   stateManager?: RoomStateManager
 ): Promise<boolean> {
-  const ok = await repo.setRoomPlaying(
-    room.id,
-    addSecondsWithJitter(now, FIRST_DRAW_DELAY_SEC, room.id),
-    nowIso
-  );
-  if (ok) {
-    logWaitingRoomScheduler(log, room, players, minPlayers, action);
-    stateManager?.preload(room.id);
-    return true;
+  try {
+    const ok = await repo.setRoomPlaying(
+      room.id,
+      addSecondsWithJitter(now, FIRST_DRAW_DELAY_SEC, room.id),
+      nowIso
+    );
+    if (ok) {
+      logWaitingRoomScheduler(log, room, players, minPlayers, action);
+      stateManager?.preload(room.id);
+      return true;
+    }
+  } catch (err) {
+    log.error("[Scheduler] waiting room promote failed", {
+      roomId: room.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
   logWaitingRoomScheduler(log, room, players, minPlayers, "skip");
   return false;

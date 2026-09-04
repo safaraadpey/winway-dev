@@ -61,3 +61,48 @@
   color: #ffffff;
 }
 
+.refreshButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: none;
+  padding: 0.25rem;
+  cursor: pointer;
+  color: #ffffff;
+  transition: opacity 0.2s;
+}
+
+.refreshButton:active:not(:disabled) {
+  opacity: 0.7;
+}
+
+.refreshButton:disabled {
+  cursor: wait;
+  opacity: 0.85;
+}
+
+.refreshIcon {
+  width: 20px;
+  height: 20px;
+  color: #ffffff;
+}
+
+.refreshSpinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: dingHeaderRefreshSpin 0.7s linear infinite;
+}
+
+@keyframes dingHeaderRefreshSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+

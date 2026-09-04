@@ -27,6 +27,7 @@ function AdminLayoutContent({
             balanceMuted
             showBackButton={showBackButton}
             onBackClick={onBackClick || undefined}
+            showRefreshButton
           />
         </div>
       )}
