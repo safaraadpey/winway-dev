@@ -141,7 +141,7 @@ export class GameRepo {
     const { data, error } = await this.db
       .from("rooms")
       .select(
-        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,waiting_started_at,min_players,max_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,meta"
+        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,waiting_started_at,min_players,max_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,meta,engine_owner_id,engine_lease_until,engine_lease_epoch"
       )
       .eq("id", roomId)
       .maybeSingle();

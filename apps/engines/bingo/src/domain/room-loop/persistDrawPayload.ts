@@ -240,7 +240,6 @@ export async function recoverUnprocessedDrawFromDb(
         pickMsPerJob: 0,
         drainStartedAt: createdAtIso,
       },
-      skipExistingCheck: true,
       actorTiming: true,
       leaseFence: actor.leaseFence,
       ramClockRecovery: true,

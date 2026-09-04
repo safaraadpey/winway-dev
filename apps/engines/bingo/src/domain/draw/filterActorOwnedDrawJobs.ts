@@ -1,11 +1,12 @@
 /**
- * draw-processor must not evaluate actor-owned rooms — the room-loop actor
+ * draw-processor must not evaluate live actor-owned rooms — the room-loop actor
  * inserts and finalizes draws inline. Jobs still enqueue via trg_after_draw_enqueue;
- * this filter clears them without double-processing.
+ * rpc_pick_draw_jobs also excludes live-owned rooms; this filter is a second layer.
  */
 import type { Logger } from "../../metrics/logger.js";
 import { GameRepo } from "../../repositories/index.js";
 import type { RoomRow } from "../../repositories/types.js";
+import { isLiveActorOwnedRoom } from "./finalizeOwnership.js";
 import type { DrawJob } from "./types.js";
 
 export interface ActorJobFilterResult {
@@ -14,17 +15,24 @@ export interface ActorJobFilterResult {
   skippedRequeued: number;
 }
 
-/** Playing rooms are driven by the room-loop actor in engine runtime. */
+export type RoomFilterSnapshot = Pick<
+  RoomRow,
+  "status" | "engine_owner_id" | "engine_lease_until" | "engine_lease_epoch"
+>;
+
+/** Re-export for tests and callers that used the old name. */
 export function isActorOwnedLiveRoom(
-  room: Pick<RoomRow, "status"> | null
+  room: RoomFilterSnapshot | null,
+  nowMs: number = Date.now()
 ): boolean {
-  return room?.status === "playing";
+  return isLiveActorOwnedRoom(room, nowMs);
 }
 
 export function partitionActorOwnedJobs(
   jobs: DrawJob[],
-  roomById: Map<string, Pick<RoomRow, "status"> | null>,
-  processedDrawNumbersByRoom: Map<string, Set<number>>
+  roomById: Map<string, RoomFilterSnapshot | null>,
+  processedDrawNumbersByRoom: Map<string, Set<number>>,
+  nowMs: number = Date.now()
 ): { toProcess: DrawJob[]; markDone: DrawJob[]; requeue: DrawJob[] } {
   const toProcess: DrawJob[] = [];
   const markDone: DrawJob[] = [];
@@ -32,7 +40,7 @@ export function partitionActorOwnedJobs(
 
   for (const job of jobs) {
     const room = roomById.get(job.room_id);
-    if (!room || !isActorOwnedLiveRoom(room)) {
+    if (!room || !isLiveActorOwnedRoom(room, nowMs)) {
       toProcess.push(job);
       continue;
     }
@@ -58,18 +66,28 @@ export async function filterActorOwnedDrawJobs(
   }
 
   const roomIds = [...new Set(jobs.map((j) => j.room_id))];
-  const roomById = new Map<string, Pick<RoomRow, "status"> | null>();
+  const roomById = new Map<string, RoomFilterSnapshot | null>();
   await Promise.all(
     roomIds.map(async (id) => {
       const room = await repo.getRoom(id);
-      roomById.set(id, room ? { status: room.status } : null);
+      roomById.set(
+        id,
+        room
+          ? {
+              status: room.status,
+              engine_owner_id: room.engine_owner_id ?? null,
+              engine_lease_until: room.engine_lease_until ?? null,
+              engine_lease_epoch: room.engine_lease_epoch ?? null,
+            }
+          : null
+      );
     })
   );
 
   const processedDrawNumbersByRoom = new Map<string, Set<number>>();
   for (const roomId of roomIds) {
     const room = roomById.get(roomId);
-    if (!room || !isActorOwnedLiveRoom(room)) continue;
+    if (!room || !isLiveActorOwnedRoom(room)) continue;
     const numbers = jobs
       .filter((j) => j.room_id === roomId)
       .map((j) => j.draw_number);

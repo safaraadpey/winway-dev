@@ -26,8 +26,6 @@ export interface ProcessEngineDrawJobOptions {
   maxAttempts: number;
   cardRegistry?: GlobalCardRegistry | null;
   pickContext: DrawJobPickContext;
-  /** Skip getDraw when the caller just inserted this draw (actor hot path). */
-  skipExistingCheck?: boolean;
   /** Stamp actor_evaluate/finalize columns on finalize RPC. */
   actorTiming?: boolean;
   /** Room-loop ownership fence for actor finalization. */
@@ -52,21 +50,19 @@ export async function processEngineDrawJob(
   try {
     const owner = opts.ramClockRecovery ? "recovery" : "draw-processor";
 
-    if (!opts.skipExistingCheck) {
-      const existingDraw = await repo.getDraw(job.room_id, job.draw_number);
-      if (existingDraw?.processed_at) {
-        logDrawFinalize(log, {
-          owner,
-          roomId: job.room_id,
-          drawNumber: job.draw_number,
-          jobId: job.id,
-          outcome: "duplicate",
-          queueWaitMs,
-          alreadyProcessed: true,
-        });
-        await repo.completeDrawJobs([job.id]);
-        return "done";
-      }
+    const existingDraw = await repo.getDraw(job.room_id, job.draw_number);
+    if (existingDraw?.processed_at) {
+      logDrawFinalize(log, {
+        owner,
+        roomId: job.room_id,
+        drawNumber: job.draw_number,
+        jobId: job.id,
+        outcome: "duplicate",
+        queueWaitMs,
+        alreadyProcessed: true,
+      });
+      await repo.completeDrawJobs([job.id]);
+      return "done";
     }
 
     const processingStartMs = Date.now();
