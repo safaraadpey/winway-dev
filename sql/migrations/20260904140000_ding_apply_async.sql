@@ -300,9 +300,10 @@ BEGIN
         )
       )
     )
-    SELECT count(DISTINCT user_id)::integer
+    SELECT count(DISTINCT ins.user_id)::integer
       INTO v_credited
-    FROM ins;
+    FROM ins
+    CROSS JOIN tourn;
   END IF;
 
   UPDATE public.draws
