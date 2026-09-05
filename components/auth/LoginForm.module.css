@@ -6,7 +6,7 @@
   align-items: flex-start;
   justify-content: center;
   background-color: rgba(9, 12, 27, 1);
-  background-image: url("../../src/assets/logo/login_BG.png");
+  background-image: url("../../src/assets/logo/login_BG.webp");
   background-repeat: no-repeat;
   background-size: cover;
   background-position: top center;
@@ -19,7 +19,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  /* disable generated background layers; use login_BG.png as the page background */
+  /* disable generated background layers; use login_BG.webp as the page background */
   background: none;
   opacity: 0;
   pointer-events: none;

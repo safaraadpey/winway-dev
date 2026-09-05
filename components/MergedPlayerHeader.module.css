@@ -19,7 +19,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background-image: var(--player-header-frame-image, url(/themes/dark/assets/headerframe.png));
+  background-image: var(--player-header-frame-image, url(/themes/dark/assets/headerframe.webp));
   background-repeat: no-repeat;
   background-position: center center;
   background-size: 100% 100%;
@@ -87,7 +87,7 @@
   padding-top: 0px;
   margin-top: 0px;
   margin-bottom: 0px;
-  background-image: url("../src/assets/logo/header.png");
+  background-image: url("../src/assets/logo/header.webp");
   background-repeat: no-repeat;
   background-position: left center;
   background-size: cover;

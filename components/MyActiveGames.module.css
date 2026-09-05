@@ -38,7 +38,7 @@
   min-width: fit-content;
   box-sizing: border-box;
   border-radius: var(--player-active-game-chip-radius, 999px);
-  background-image: var(--player-active-game-chip-bg-image, url(/themes/dark/assets/gamebadge.png));
+  background-image: var(--player-active-game-chip-bg-image, url(/themes/dark/assets/gamebadge.webp));
   background-repeat: no-repeat;
   background-position: center;
   background-size: 100% 100%;
