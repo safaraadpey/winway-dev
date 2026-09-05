@@ -3,6 +3,8 @@
  * Mirrors lib/liveRoomSnapshotPg.ts in the Next.js app.
  */
 
+import { parseGameManifestPayload } from "../domain/replay/parseManifest.js";
+import type { GameManifest } from "../domain/replay/types.js";
 import { pgPool } from "../db/pg.js";
 
 const LIVE_ROOM_PG_COMPARE_LOG_UNTIL_MS = Date.parse("2026-06-17T23:59:59.999Z");
@@ -230,6 +232,120 @@ export type CardPoolVersionMeta = {
   prngVersion: string;
   cardCount: number;
 };
+
+export type FrozenManifestRoomMeta = {
+  roomCode: string | null;
+  roomSeedHash: string | null;
+  cardPrice: number;
+  commissionRate: number;
+  lineRewardPercentage: number;
+  fullRewardPercentage: number;
+};
+
+/** Inverse of LiveRoomScreen prize pool math: ceil(gross * rate) === commission taken. */
+export function deriveCommissionRateFromManifest(
+  manifest: GameManifest
+): number {
+  const cardPrice = manifest.cardPrice ?? manifest.tickets[0]?.price ?? 0;
+  if (cardPrice <= 0 || manifest.commissions.length === 0) return 0;
+
+  const entry = manifest.commissions[0]!;
+  const ticket = manifest.tickets.find((t) => t.ticketId === entry.ticketId);
+  const gross = ticket?.price ?? cardPrice;
+  if (gross <= 0) return 0;
+
+  const totalCommission = Math.max(0, gross - entry.amountToPool);
+  if (totalCommission <= 0) return 0;
+
+  for (let numer = 0; numer <= 10_000; numer++) {
+    const rate = numer / 10_000;
+    if (Math.ceil(gross * rate) === totalCommission) return rate;
+  }
+
+  return Math.min(1, totalCommission / gross);
+}
+
+export function normalizeFrozenPrizeSplits(
+  lineRaw: number,
+  fullRaw: number
+): { lineRewardPercentage: number; fullRewardPercentage: number } {
+  let linePct = Math.max(lineRaw, 0);
+  let fullPct = Math.max(fullRaw, 0);
+
+  if (linePct === 0 && fullPct === 0) {
+    linePct = 0.5;
+    fullPct = 0.5;
+  }
+
+  if (linePct + fullPct > 1) {
+    linePct = linePct / (linePct + fullPct);
+    fullPct = 1 - linePct;
+  }
+
+  return {
+    lineRewardPercentage: linePct,
+    fullRewardPercentage: fullPct,
+  };
+}
+
+export async function loadFrozenManifestRoomMetaFromPg(
+  roomId: string
+): Promise<FrozenManifestRoomMeta | null> {
+  if (!pgPool) return null;
+
+  try {
+    const result = await pgPool.query<{
+      room_code: string | null;
+      room_seed_hash: string | null;
+      payload: unknown;
+      manifest_version: number;
+      rng_algorithm: string;
+      rng_version: string;
+    }>(
+      `
+      select
+        r.room_code,
+        r.room_seed_hash,
+        m.payload,
+        m.manifest_version,
+        m.rng_algorithm,
+        m.rng_version
+      from public.game_manifests m
+      inner join public.rooms r on r.id = m.room_id
+      where m.room_id = $1::uuid
+      limit 1
+      `,
+      [roomId]
+    );
+
+    const row = result.rows[0];
+    if (!row) return null;
+
+    const manifest = parseGameManifestPayload(row.payload, {
+      manifestVersion: row.manifest_version,
+      rngAlgorithm: row.rng_algorithm,
+      rngVersion: row.rng_version,
+    });
+
+    const cardPrice = Number(manifest.cardPrice ?? manifest.tickets[0]?.price ?? 0);
+    const { lineRewardPercentage, fullRewardPercentage } = normalizeFrozenPrizeSplits(
+      manifest.lineRewardPercentage,
+      manifest.fullRewardPercentage
+    );
+
+    return {
+      roomCode: row.room_code,
+      roomSeedHash: row.room_seed_hash ?? manifest.roomSeedHash ?? null,
+      cardPrice,
+      commissionRate: deriveCommissionRateFromManifest(manifest),
+      lineRewardPercentage,
+      fullRewardPercentage,
+    };
+  } catch (err) {
+    console.error("[LiveRoom] loadFrozenManifestRoomMetaFromPg error:", err);
+    return null;
+  }
+}
 
 export async function loadCardPoolMetaForRoomFromPg(
   roomId: string

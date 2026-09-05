@@ -11,6 +11,7 @@ import {
   loadLiveTicketsFromPg,
   loadLiveCardNumbersFromPg,
   loadCardPoolMetaForRoomFromPg,
+  loadFrozenManifestRoomMetaFromPg,
   mapDrawRows,
   type LiveDrawRow,
   type LiveTicketRow,
@@ -117,9 +118,12 @@ export async function buildLiveRoomSnapshotFromRam(
 
   const cards = buildLiveRoomCards(tickets, cardNumberMap, userMap, userId);
   const cardPool = (await loadCardPoolMetaForRoomFromPg(roomId)) ?? null;
+  const frozenMeta = (await loadFrozenManifestRoomMetaFromPg(roomId)) ?? null;
 
-  const resolvedLinePct = room.line_reward_percentage ?? 0.5;
-  const resolvedFullPct = room.full_reward_percentage ?? 0.5;
+  const resolvedLinePct =
+    frozenMeta?.lineRewardPercentage ?? room.line_reward_percentage ?? 0.5;
+  const resolvedFullPct =
+    frozenMeta?.fullRewardPercentage ?? room.full_reward_percentage ?? 0.5;
 
   return {
     source: "engine_ram",
@@ -128,10 +132,10 @@ export async function buildLiveRoomSnapshotFromRam(
     room: {
       id: roomId,
       status: room.status,
-      room_code: null,
+      room_code: frozenMeta?.roomCode ?? null,
       room_name: null,
-      room_seed_hash: null,
-      card_price: 0,
+      room_seed_hash: frozenMeta?.roomSeedHash ?? null,
+      card_price: frozenMeta?.cardPrice ?? 0,
       currency: room.currency || "IRR",
       min_players: room.min_players,
       max_cards_per_player: null,
@@ -139,7 +143,7 @@ export async function buildLiveRoomSnapshotFromRam(
       next_draw_at: ramNextDrawAtIso ?? room.next_draw_at,
       line_reward_percentage: resolvedLinePct,
       full_reward_percentage: resolvedFullPct,
-      commission_rate: 0,
+      commission_rate: frozenMeta?.commissionRate ?? 0,
       ding_per_number: Number(room.ding_per_number ?? 1),
       draw_interval_sec: drawIntervalSec,
       ding_settle_mode: room.ding_settle_mode ?? "per_draw",
