@@ -717,6 +717,7 @@ export interface LiveRoomSnapshot {
     title: string | null;
     round_no: number | null;
   } | null;
+  is_tournament?: boolean;
   server_now?: string;
   draws: ProcessedDraw[];
   card_pool?: {
@@ -744,6 +745,41 @@ export interface LiveRoomSnapshot {
     userId: string;
     drawNumber: number;
   }>;
+}
+
+/** Tournament page id for a seated table, or null for normal rooms. */
+export async function resolveTournamentIdForRoom(
+  roomId: string
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("tournament_round_rooms")
+    .select("tournament_id")
+    .eq("room_id", roomId)
+    .maybeSingle();
+
+  if (!error && data?.tournament_id) {
+    return String(data.tournament_id);
+  }
+
+  const { data: room } = await supabase
+    .from("rooms")
+    .select("meta")
+    .eq("id", roomId)
+    .maybeSingle();
+  const metaTournamentId =
+    room?.meta && typeof room.meta === "object"
+      ? (room.meta as { tournament_id?: unknown }).tournament_id
+      : null;
+  if (typeof metaTournamentId === "string" && metaTournamentId.trim()) {
+    return metaTournamentId.trim();
+  }
+
+  try {
+    const snapshot = await fetchLiveRoomSnapshot(roomId);
+    return snapshot.tournament?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchLiveRoomSnapshot(

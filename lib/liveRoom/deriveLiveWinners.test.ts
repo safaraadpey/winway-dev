@@ -154,4 +154,40 @@ describe("resolveDisplayLineWinners", () => {
     assert.equal(winners[0]?.ticketId, "t-line");
     assert.equal(winners[0]?.drawNumber, 5);
   });
+
+  it("hides line winners when snapshot.tournament is set", () => {
+    const snapshot: LiveRoomSnapshot = {
+      source: "engine_ram",
+      room,
+      draws: [],
+      cards: [LINE_CARD],
+      tournament: {
+        id: "tour-1",
+        title: "تورنومنت",
+        round_no: 1,
+      },
+    };
+    const winners = resolveDisplayLineWinners({
+      snapshot,
+      calledInOrder: [1, 2, 3, 4, 5],
+      dbLineWinners: [],
+    });
+    assert.deepEqual(winners, []);
+  });
+
+  it("hides line winners when manifest marks the room as tournament", () => {
+    const snapshot: LiveRoomSnapshot = {
+      source: "engine_ram",
+      room,
+      draws: [],
+      cards: [LINE_CARD],
+      is_tournament: true,
+    };
+    const winners = resolveDisplayLineWinners({
+      snapshot,
+      calledInOrder: [1, 2, 3, 4, 5],
+      dbLineWinners: [],
+    });
+    assert.deepEqual(winners, []);
+  });
 });

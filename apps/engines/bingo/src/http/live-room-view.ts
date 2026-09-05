@@ -47,6 +47,7 @@ export type LiveRoomResponse = {
     title: string | null;
     round_no: number | null;
   } | null;
+  is_tournament?: boolean;
   server_now: string;
   draws: Array<{
     id: string;
@@ -438,6 +439,7 @@ export async function buildLiveRoomSnapshot(
       draw_interval_sec: drawIntervalSec,
     },
     tournament,
+    is_tournament: Boolean(tournament?.id),
     server_now: new Date().toISOString(),
     draws: mapDrawRows(draws),
     cards,

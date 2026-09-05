@@ -52,6 +52,7 @@ import {
 } from "@/lib/liveRoom/engineRamSnapshot";
 import {
   canOpenLiveResultsDialog,
+  isTournamentLiveSnapshot,
   resolveDisplayFullWinners,
   resolveDisplayLineWinners,
   revealCountThroughFirstFullWin,
@@ -386,7 +387,7 @@ export default function LiveRoomScreen({
       if (!snapshot || !shouldSyncWinnersDisplayFromDb(snapshot)) return;
       try {
         const roomResults = await fetchResultsSnapshot(roomId);
-        if (!snapshot.tournament?.id) {
+        if (!isTournamentLiveSnapshot(snapshot)) {
           const nextLine = mapWinnersFromApi(
             roomResults.lineWinners,
             snapshot.cards
@@ -419,7 +420,7 @@ export default function LiveRoomScreen({
     if (data.source !== "engine_ram" && data.room.gameplay_persist_mode !== "manifest_ram") {
       return;
     }
-    if (data.line_winners) {
+    if (data.line_winners && !isTournamentLiveSnapshot(data)) {
       const nextLine = data.line_winners.map((w) => ({
         ticketId: w.ticketId,
         userId: w.userId,
@@ -1603,7 +1604,7 @@ export default function LiveRoomScreen({
   );
 
   const hasRevealedLineWinner =
-    !data.tournament?.id && displayLineWinners.length > 0;
+    !isTournamentLiveSnapshot(data) && displayLineWinners.length > 0;
 
   const hasRevealedFullWinner = displayFullWinners.length > 0;
 
@@ -1624,7 +1625,7 @@ export default function LiveRoomScreen({
             <RoomHeader
               linePrize={linePrize}
               fullPrize={fullPrize}
-              isTournament={!!data.tournament?.id}
+              isTournament={isTournamentLiveSnapshot(data)}
               tournamentName={data.tournament?.title ?? null}
               roundNumber={data.tournament?.round_no ?? null}
               hasLineWinner={hasRevealedLineWinner}

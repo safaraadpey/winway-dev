@@ -117,13 +117,21 @@ export function revealReadyWinners(
   });
 }
 
+export function isTournamentLiveSnapshot(
+  snapshot: LiveRoomSnapshot | null | undefined
+): boolean {
+  if (!snapshot) return false;
+  if (snapshot.is_tournament === true) return true;
+  return Boolean(snapshot.tournament?.id);
+}
+
 export function resolveDisplayLineWinners(args: {
   snapshot: LiveRoomSnapshot | null | undefined;
   calledInOrder: readonly number[];
   dbLineWinners: DerivedCardWinner[];
 }): DerivedCardWinner[] {
   const { snapshot, calledInOrder, dbLineWinners } = args;
-  if (!snapshot || snapshot.tournament?.id) return [];
+  if (!snapshot || isTournamentLiveSnapshot(snapshot)) return [];
 
   const derived = deriveFirstLineWinners(snapshot.cards, calledInOrder);
   if (derived.length > 0) return derived;

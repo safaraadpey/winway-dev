@@ -38,6 +38,7 @@ export type LiveRoomSnapshotPayload = {
     title: string | null;
     round_no: number | null;
   } | null;
+  is_tournament?: boolean;
   server_now: string;
   draws: Array<{
     id: string;
@@ -435,6 +436,7 @@ export async function loadLiveRoomSnapshotForRoom(
       gameplay_persist_mode: gameplayPersistMode,
     },
     tournament,
+    is_tournament: Boolean(tournament?.id),
     server_now: new Date().toISOString(),
     draws: mapDrawRows(draws),
     cards,

@@ -182,11 +182,22 @@ export function applyLiveRoomSnapshotUpdate(
     incoming.full_winners
   );
 
+  const tournament =
+    incoming.tournament !== undefined && incoming.tournament !== null
+      ? incoming.tournament
+      : prev?.tournament ?? incoming.tournament ?? null;
+  const is_tournament =
+    incoming.is_tournament === true ||
+    prev?.is_tournament === true ||
+    Boolean(tournament?.id);
+
   const snapshot: LiveRoomSnapshot = {
     ...(prev ?? incoming),
     ...incoming,
     room,
     cards,
+    tournament,
+    is_tournament,
     line_winners,
     full_winners,
     draws: mergedDraws,

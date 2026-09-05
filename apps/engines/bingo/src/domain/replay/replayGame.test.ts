@@ -243,9 +243,11 @@ describe("replayGame", () => {
       ding_settle_mode: "room_level",
       pool_id: "p1",
       pool_commit_hash: "h",
+      is_tournament: true,
     });
     assert.equal(parsed.tickets[0]?.ticketId, "t1");
     assert.equal(parsed.commissionPool, 9);
+    assert.equal(parsed.isTournament, true);
   });
 });
 

@@ -9,7 +9,7 @@ import { useTour } from "@/lib/contexts/TourContext";
 import { rememberGameRoomPath } from "@/lib/tour/lastGameRoomPath";
 import { GAME_ROOM_TOUR_ID } from "@/lib/tour/configs/gameRoomTour";
 import { fetchAutoBuySnapshot } from "@/lib/autoBuy/client";
-import { fetchGameRoomView } from "@/services/rooms";
+import { fetchGameRoomView, resolveTournamentIdForRoom } from "@/services/rooms";
 import { isHardExiting } from "@/lib/auth/hardExit";
 import {
   ACTIVE_GAME_ENTER_LIVE_PARAM,
@@ -106,25 +106,44 @@ export default function GameRoomClient() {
     );
   }, [roomId, templateId]);
 
-  // Spectator of a tournament table (live or replay) returns to that tournament.
-  // Other game-room entry paths still return to the lobby.
+  useEffect(() => {
+    if (!roomId) return;
+    let cancelled = false;
+    void resolveTournamentIdForRoom(roomId).then((tournamentId) => {
+      if (cancelled || !tournamentId) return;
+      handleResolvedTournamentId(tournamentId);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [roomId, handleResolvedTournamentId]);
+
+  // Tournament tables always return to that tournament page (player or watch).
+  // Normal rooms still return to the lobby.
   useEffect(() => {
     setShowBackButton(true);
     setOnBackClick(() => () => {
       setLiveRoomId(null);
       pendingLiveRoomIdRef.current = null;
-      const tournamentId = (resolvedTournamentId || queryTournamentId)?.trim();
-      if (spectate && tournamentId) {
-        console.info("[Room] Back to tournament", {
-          tournamentId,
-          roomId,
-          spectate: true,
-        });
-        router.push(playerTournamentHref(tournamentId));
+      const knownId = (resolvedTournamentId || queryTournamentId)?.trim() || null;
+      const go = (tournamentId: string | null) => {
+        if (tournamentId) {
+          console.info("[Room] Back to tournament", {
+            tournamentId,
+            roomId,
+            spectate,
+          });
+          router.push(playerTournamentHref(tournamentId));
+          return;
+        }
+        console.info("[Room] Back to lobby", { roomId, spectate });
+        router.push("/player/lobby");
+      };
+      if (knownId || !roomId) {
+        go(knownId);
         return;
       }
-      console.info("[Room] Back to lobby", { roomId, spectate });
-      router.push("/player/lobby");
+      void resolveTournamentIdForRoom(roomId).then(go);
     });
     return () => {
       setShowBackButton(false);

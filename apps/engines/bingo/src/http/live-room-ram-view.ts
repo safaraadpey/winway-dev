@@ -12,6 +12,7 @@ import {
   loadLiveCardNumbersFromPg,
   loadCardPoolMetaForRoomFromPg,
   loadFrozenManifestRoomMetaFromPg,
+  loadLiveTournamentForRoomFromPg,
   mapDrawRows,
   type LiveDrawRow,
   type LiveTicketRow,
@@ -156,6 +157,8 @@ export async function buildLiveRoomSnapshotFromRam(
   const cards = buildLiveRoomCards(tickets, cardNumberMap, userMap, userId);
   const cardPool = (await loadCardPoolMetaForRoomFromPg(roomId)) ?? null;
   const frozenMeta = (await loadFrozenManifestRoomMetaFromPg(roomId)) ?? null;
+  const tournament = (await loadLiveTournamentForRoomFromPg(roomId)) ?? null;
+  const isTournament = Boolean(frozenMeta?.isTournament || tournament?.id);
 
   const resolvedLinePct =
     frozenMeta?.lineRewardPercentage ?? room.line_reward_percentage ?? 0.5;
@@ -186,12 +189,13 @@ export async function buildLiveRoomSnapshotFromRam(
       ding_settle_mode: room.ding_settle_mode ?? "per_draw",
       gameplay_persist_mode: "manifest_ram",
     },
-    tournament: null,
+    tournament,
+    is_tournament: isTournament,
     server_now: new Date().toISOString(),
     draws,
     cards,
     card_pool: cardPool,
-    line_winners: winners.line_winners,
+    line_winners: isTournament ? [] : winners.line_winners,
     full_winners: winners.full_winners,
   } as LiveRoomResponse;
 }

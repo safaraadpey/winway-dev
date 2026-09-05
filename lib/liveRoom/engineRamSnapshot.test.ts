@@ -293,6 +293,25 @@ describe("applyLiveRoomSnapshotUpdate winners", () => {
     ]);
   });
 
+  it("keeps tournament identity when draws-only poll omits it", () => {
+    const prev = baseSnapshot({
+      eventSeq: 2,
+      is_tournament: true,
+      tournament: { id: "tour-1", title: "تورنومنت", round_no: 1 },
+    });
+    const incoming = baseSnapshot({
+      eventSeq: 4,
+      tournament: undefined,
+      is_tournament: undefined,
+    });
+    delete incoming.tournament;
+    delete incoming.is_tournament;
+    const result = applyLiveRoomSnapshotUpdate(prev, incoming);
+    assert.equal(result.accepted, true);
+    assert.equal(result.snapshot.is_tournament, true);
+    assert.equal(result.snapshot.tournament?.id, "tour-1");
+  });
+
   it("accepts new RAM line winners from draws poll", () => {
     const prev = baseSnapshot({ eventSeq: 2, line_winners: [] });
     const incoming = baseSnapshot({

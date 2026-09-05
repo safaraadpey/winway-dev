@@ -240,7 +240,50 @@ export type FrozenManifestRoomMeta = {
   commissionRate: number;
   lineRewardPercentage: number;
   fullRewardPercentage: number;
+  isTournament: boolean;
 };
+
+export type LiveTournamentMeta = {
+  id: string;
+  title: string | null;
+  round_no: number | null;
+};
+
+export async function loadLiveTournamentForRoomFromPg(
+  roomId: string
+): Promise<LiveTournamentMeta | null> {
+  if (!pgPool) return null;
+
+  try {
+    const result = await pgPool.query<{
+      tournament_id: string;
+      round_no: number | null;
+      title: string | null;
+    }>(
+      `
+      select
+        trr.tournament_id::text as tournament_id,
+        trr.round_no,
+        t.title
+      from public.tournament_round_rooms trr
+      left join public.tournaments t on t.id = trr.tournament_id
+      where trr.room_id = $1::uuid
+      limit 1
+      `,
+      [roomId]
+    );
+    const row = result.rows[0];
+    if (!row?.tournament_id) return null;
+    return {
+      id: row.tournament_id,
+      title: row.title ?? null,
+      round_no: row.round_no ?? null,
+    };
+  } catch (err) {
+    console.error("[LiveRoom] loadLiveTournamentForRoomFromPg error:", err);
+    return null;
+  }
+}
 
 /** Inverse of LiveRoomScreen prize pool math: ceil(gross * rate) === commission taken. */
 export function deriveCommissionRateFromManifest(
@@ -340,6 +383,7 @@ export async function loadFrozenManifestRoomMetaFromPg(
       commissionRate: deriveCommissionRateFromManifest(manifest),
       lineRewardPercentage,
       fullRewardPercentage,
+      isTournament: manifest.isTournament === true,
     };
   } catch (err) {
     console.error("[LiveRoom] loadFrozenManifestRoomMetaFromPg error:", err);

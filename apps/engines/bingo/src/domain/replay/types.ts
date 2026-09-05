@@ -48,6 +48,8 @@ export interface GameManifest {
   commissionPool: number;
   commissions: GameManifestCommission[];
   tickets: GameManifestTicket[];
+  /** Frozen at manifest insert — tournament tables have no line-prize display. */
+  isTournament?: boolean;
 }
 
 export interface GameReplayWinner {

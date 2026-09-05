@@ -69,6 +69,7 @@ export function parseGameManifestPayload(
       };
     }),
     tickets: ticketsRaw.map((t) => parseTicket((t ?? {}) as Record<string, unknown>)),
+    isTournament: Boolean(p.is_tournament ?? p.isTournament),
   };
 
   if (meta?.rngAlgorithm && meta.rngAlgorithm !== RNG_ALGORITHM) {
