@@ -51,7 +51,7 @@ export function startLegacyWorkerWithGate<TSnapshot>(
     });
     if (signature === lastLoggedSignature) return;
     lastLoggedSignature = signature;
-    opts.log.info("[LegacyWorkerGate]", payload as Record<string, unknown>);
+    opts.log.info("[LegacyWorkerGate]", { ...payload });
   };
 
   const applyDecision = async (): Promise<void> => {
