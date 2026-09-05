@@ -84,6 +84,21 @@ export function shouldPollDrawsAfterStatus(
   return false;
 }
 
+/**
+ * Display-only: room is terminal but no full house is visible on revealed balls yet.
+ * Used to keep polling after RAM evict until PG snapshot restores the winning draw.
+ */
+export function needsTerminalFullHouseCatchUp(args: {
+  status: string;
+  cards: LiveRoomSnapshot["cards"] | null | undefined;
+  revealedCalled: readonly number[];
+}): boolean {
+  const normalized = (args.status || "").trim().toLowerCase();
+  if (normalized !== "settling" && normalized !== "finished") return false;
+  if (!args.cards?.length) return false;
+  return deriveFirstFullWinners(args.cards, args.revealedCalled).length === 0;
+}
+
 /** Once a card is already full on revealed balls, do not read the next number. */
 export function shouldRevealNextLiveDraw(
   cards: LiveRoomSnapshot["cards"] | null | undefined,

@@ -8,6 +8,7 @@ import {
   canOpenLiveResultsDialog,
   deriveFirstFullWinners,
   deriveFirstLineWinners,
+  needsTerminalFullHouseCatchUp,
   resolveDisplayLineWinners,
   revealCountThroughFirstFullWin,
   shouldPollDrawsAfterStatus,
@@ -103,6 +104,71 @@ describe("shouldPollDrawsAfterStatus", () => {
     assert.equal(shouldPollDrawsAfterStatus("settling", false), true);
     assert.equal(shouldPollDrawsAfterStatus("finished", true), true);
     assert.equal(shouldPollDrawsAfterStatus("finished", false), false);
+  });
+});
+
+describe("needsTerminalFullHouseCatchUp", () => {
+  const fullCard = card("t-full", "u1", [
+    [1, 2, 3, 4, 5, null, null, null, null],
+    [11, 12, 13, 14, 15, null, null, null, null],
+    [21, 22, 23, 24, 25, null, null, null, null],
+  ]);
+  const almostFull = [11, 12, 13, 14, 15, 21, 22, 23, 24, 25, 2, 3, 4, 5];
+  const fullRevealed = [...almostFull, 1];
+
+  it("returns true when finished but card is one ball short", () => {
+    assert.equal(
+      needsTerminalFullHouseCatchUp({
+        status: "finished",
+        cards: [fullCard],
+        revealedCalled: almostFull,
+      }),
+      true
+    );
+  });
+
+  it("returns true when settling but card is one ball short", () => {
+    assert.equal(
+      needsTerminalFullHouseCatchUp({
+        status: "settling",
+        cards: [fullCard],
+        revealedCalled: almostFull,
+      }),
+      true
+    );
+  });
+
+  it("returns false when finished and card is already full on revealed balls", () => {
+    assert.equal(
+      needsTerminalFullHouseCatchUp({
+        status: "finished",
+        cards: [fullCard],
+        revealedCalled: fullRevealed,
+      }),
+      false
+    );
+  });
+
+  it("returns false while still playing", () => {
+    assert.equal(
+      needsTerminalFullHouseCatchUp({
+        status: "playing",
+        cards: [fullCard],
+        revealedCalled: almostFull,
+      }),
+      false
+    );
+  });
+
+  it("returns false when cancelled", () => {
+    assert.equal(
+      needsTerminalFullHouseCatchUp({
+        status: "cancelled",
+        cards: [fullCard],
+        revealedCalled: almostFull,
+      }),
+      false
+    );
   });
 });
 

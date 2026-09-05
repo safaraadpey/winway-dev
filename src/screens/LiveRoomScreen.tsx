@@ -53,6 +53,7 @@ import {
 import {
   canOpenLiveResultsDialog,
   isTournamentLiveSnapshot,
+  needsTerminalFullHouseCatchUp,
   resolveDisplayFullWinners,
   resolveDisplayLineWinners,
   revealCountThroughFirstFullWin,
@@ -103,6 +104,9 @@ const DRAW_WATCHDOG_TICK_MS = 1_000;
 const VISUAL_PRE_DRAW_COUNTDOWN_START = 5;
 /** بعد از نمایش آخرین عدد در UI، قبل از بنر پایان بازی. */
 const RESULTS_BANNER_DELAY_MS = 6_000;
+/** Poll PG after terminal status until full house is visible on revealed balls. */
+const TERMINAL_FULL_HOUSE_CATCHUP_MAX_ATTEMPTS = 10;
+const TERMINAL_FULL_HOUSE_CATCHUP_INTERVAL_MS = 300;
 
 const ACTIVE_ROOM_STATUSES = new Set([
   "waiting",
@@ -120,6 +124,17 @@ function isRoomTerminalStatus(status: string): boolean {
     normalized !== "" &&
     !["running", "playing", "live", "waiting"].includes(normalized)
   );
+}
+
+function getRevealedCalledNumbers(
+  snap: LiveRoomSnapshot | null | undefined,
+  revealedDrawCount: number
+): number[] {
+  const called = orderDrawsForLiveRoom(
+    snap?.draws ?? [],
+    resolveDrawSource(snap)
+  ).map((d) => d.number);
+  return called.slice(0, Math.min(revealedDrawCount, called.length));
 }
 
 function takePendingDrawsForSnapshot(
@@ -281,6 +296,10 @@ export default function LiveRoomScreen({
   const pendingRtDrawsRef = useRef<ProcessedDraw[]>([]);
   const lastEventSeqRef = useRef<number | null>(null);
   const winnersSyncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const terminalCatchUpAttemptsRef = useRef(0);
+  const terminalCatchUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
 
@@ -466,6 +485,11 @@ export default function LiveRoomScreen({
     setData(snapshot);
     setHasLiveSnapshot(false);
     setError(null);
+    terminalCatchUpAttemptsRef.current = 0;
+    if (terminalCatchUpTimerRef.current) {
+      clearTimeout(terminalCatchUpTimerRef.current);
+      terminalCatchUpTimerRef.current = null;
+    }
   }, [roomId]);
 
   const creditDingForPerDrawReveal = useCallback(
@@ -749,20 +773,57 @@ export default function LiveRoomScreen({
     return revealedDrawCountRef.current < called.length;
   };
 
+  const needsTerminalFullHouseRecovery = () => {
+    if (
+      terminalCatchUpAttemptsRef.current >=
+      TERMINAL_FULL_HOUSE_CATCHUP_MAX_ATTEMPTS
+    ) {
+      return false;
+    }
+    const snap = dataRef.current;
+    const status = roomStatusRef.current || snap?.room?.status || "";
+    return needsTerminalFullHouseCatchUp({
+      status,
+      cards: snap?.cards,
+      revealedCalled: getRevealedCalledNumbers(
+        snap,
+        revealedDrawCountRef.current
+      ),
+    });
+  };
+
+  const needsAnyDrawCatchUp = () =>
+    needsDrawCatchUp() || needsTerminalFullHouseRecovery();
+
+  const scheduleTerminalCatchUpPoll = () => {
+    if (terminalCatchUpTimerRef.current) return;
+    terminalCatchUpTimerRef.current = setTimeout(() => {
+      terminalCatchUpTimerRef.current = null;
+      void runDrawSyncPollRef.current();
+    }, TERMINAL_FULL_HOUSE_CATCHUP_INTERVAL_MS);
+  };
+
   const runDrawSyncPoll = useCallback(async () => {
     if (isHardExiting()) return;
     if (!roomId || pollInFlightRef.current) return;
 
     const status = roomStatusRef.current;
-    if (!shouldPollDrawsAfterStatus(status, needsDrawCatchUp())) return;
+    const localDrawCatchUp = needsDrawCatchUp();
+    const terminalRecovery = needsTerminalFullHouseRecovery();
+    if (
+      !shouldPollDrawsAfterStatus(status, localDrawCatchUp || terminalRecovery)
+    ) {
+      return;
+    }
 
     pollInFlightRef.current = true;
+    const wasTerminalRecovery = terminalRecovery;
     try {
       let snapshot;
       try {
         snapshot = await fetchSnapshot(roomId, {
           scope: "draws",
-          engineOnly: resolveEngineOnlyFetch(),
+          engineOnly: wasTerminalRecovery ? false : resolveEngineOnlyFetch(),
         });
       } catch (err) {
         if (!shouldPollDrawsAfterStatus(status, true)) throw err;
@@ -770,21 +831,47 @@ export default function LiveRoomScreen({
         snapshot = await fetchSnapshot(roomId, { scope: "draws" });
       }
       roomStatusRef.current = (snapshot.room.status || "").trim().toLowerCase();
-      setData((prev) =>
-        commitSnapshotUpdate(
-          prev,
-          snapshot,
-          takePendingDrawsForSnapshot(prev, pendingRtDrawsRef)
-        ) ?? prev
+      const pending = takePendingDrawsForSnapshot(
+        dataRef.current,
+        pendingRtDrawsRef
       );
+      const merged = commitSnapshotUpdate(dataRef.current, snapshot, pending);
+      setData((prev) => merged ?? prev);
       markDrawSynced();
       console.log("[LiveRoom] draw sync poll (engine snapshot)", {
         serverDraws: snapshot.draws.length,
         eventSeq: snapshot.eventSeq,
         source: snapshot.source,
       });
-      if (shouldSyncWinnersDisplayFromDb(dataRef.current)) {
-        void syncWinnersFromApiRef.current(dataRef.current);
+      if (shouldSyncWinnersDisplayFromDb(merged ?? dataRef.current)) {
+        void syncWinnersFromApiRef.current(merged ?? dataRef.current);
+      }
+
+      if (wasTerminalRecovery && merged) {
+        terminalCatchUpAttemptsRef.current += 1;
+        const revealed = getRevealedCalledNumbers(
+          merged,
+          revealedDrawCountRef.current
+        );
+        console.log("[LiveRoom] terminal full-house catch-up", {
+          roomId,
+          attempt: terminalCatchUpAttemptsRef.current,
+          serverDraws: merged.draws.length,
+          revealed: revealed.length,
+          status: merged.room.status,
+          source: merged.source,
+        });
+        if (
+          needsTerminalFullHouseCatchUp({
+            status: roomStatusRef.current,
+            cards: merged.cards,
+            revealedCalled: revealed,
+          }) &&
+          terminalCatchUpAttemptsRef.current <
+            TERMINAL_FULL_HOUSE_CATCHUP_MAX_ATTEMPTS
+        ) {
+          scheduleTerminalCatchUpPoll();
+        }
       }
     } catch (err) {
       console.warn("[LiveRoom] draw sync poll error:", err);
@@ -803,17 +890,18 @@ export default function LiveRoomScreen({
     if (!roomId || pollInFlightRef.current) return;
 
     const status = roomStatusRef.current;
-    if (status && !shouldPollDrawsAfterStatus(status, needsDrawCatchUp())) {
+    if (status && !shouldPollDrawsAfterStatus(status, needsAnyDrawCatchUp())) {
       return;
     }
 
     pollInFlightRef.current = true;
+    const terminalRecovery = needsTerminalFullHouseRecovery();
     try {
       const cardPoolMeta = cardPoolMetaRef.current;
       if (shouldUseDrawsOnlyLiveRoomFallback(cardPoolMeta)) {
         const snapshot = await fetchSnapshot(roomId, {
           scope: "draws",
-          engineOnly: resolveEngineOnlyFetch(),
+          engineOnly: terminalRecovery ? false : resolveEngineOnlyFetch(),
         });
         const nextStatus = (snapshot.room.status || "").trim().toLowerCase();
         roomStatusRef.current = nextStatus;
@@ -834,7 +922,7 @@ export default function LiveRoomScreen({
       }
 
       const snapshot = await fetchSnapshot(roomId, {
-        engineOnly: resolveEngineOnlyFetch(),
+        engineOnly: terminalRecovery ? false : resolveEngineOnlyFetch(),
       });
       const nextStatus = (snapshot.room.status || "").trim().toLowerCase();
       roomStatusRef.current = nextStatus;
@@ -937,6 +1025,11 @@ export default function LiveRoomScreen({
     resultsDelayResolveRef.current = null;
     resultsOpenGenerationRef.current += 1;
     pendingRtDrawsRef.current = [];
+    terminalCatchUpAttemptsRef.current = 0;
+    if (terminalCatchUpTimerRef.current) {
+      clearTimeout(terminalCatchUpTimerRef.current);
+      terminalCatchUpTimerRef.current = null;
+    }
     drawsHydratedRef.current = false;
     revealedDrawCountRef.current = 0;
     setRevealedDrawCount(0);
@@ -963,6 +1056,10 @@ export default function LiveRoomScreen({
       if (resultsDelayTimerRef.current) {
         clearTimeout(resultsDelayTimerRef.current);
         resultsDelayTimerRef.current = null;
+      }
+      if (terminalCatchUpTimerRef.current) {
+        clearTimeout(terminalCatchUpTimerRef.current);
+        terminalCatchUpTimerRef.current = null;
       }
       resultsDelayResolveRef.current?.();
       resultsDelayResolveRef.current = null;
@@ -1120,14 +1217,22 @@ export default function LiveRoomScreen({
 
   useEffect(() => {
     roomStatusRef.current = (data?.room?.status || "").trim().toLowerCase();
-    if (
-      isRoomTerminalStatus(roomStatusRef.current) &&
-      needsDrawCatchUp()
-    ) {
+    const status = roomStatusRef.current;
+    const revealed = getRevealedCalledNumbers(data, revealedDrawCountRef.current);
+    const needsTerminal =
+      needsTerminalFullHouseCatchUp({
+        status,
+        cards: data?.cards,
+        revealedCalled: revealed,
+      }) &&
+      terminalCatchUpAttemptsRef.current <
+        TERMINAL_FULL_HOUSE_CATCHUP_MAX_ATTEMPTS;
+
+    if (needsTerminal || (isRoomTerminalStatus(status) && needsDrawCatchUp())) {
       console.log("[LiveRoom] terminal catch-up poll for last draw");
       void runDrawSyncPollRef.current();
     }
-  }, [data?.room?.status]);
+  }, [data?.room?.status, data?.draws?.length, data?.cards, revealedDrawCount]);
 
   // watchdog draw: در playing اگر ریل‌تایم draw نیامد، ~draw_interval+1.5s poll
   useEffect(() => {
@@ -1137,7 +1242,7 @@ export default function LiveRoomScreen({
     const tick = () => {
       if (cancelled || isHardExiting()) return;
       const status = roomStatusRef.current;
-      if (!shouldPollDrawsAfterStatus(status, needsDrawCatchUp())) return;
+      if (!shouldPollDrawsAfterStatus(status, needsAnyDrawCatchUp())) return;
 
       const staleMs =
         drawIntervalSecRef.current * 1000 + DRAW_SYNC_BUFFER_MS;
