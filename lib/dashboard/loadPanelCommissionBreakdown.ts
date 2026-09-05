@@ -1,9 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { pgPool } from "@/lib/pg";
-import { getRollingWeekStart, getRollingMonthStart } from "@/lib/dashboard/loadCommissionDailyStats";
+import { getRollingMonthStart } from "@/lib/dashboard/loadCommissionDailyStats";
 import {
   getOpenTehranAccountingWindow,
+  getOpenTehranWeekAccountingWindow,
   getTehranSnapshotDateRangeFromBounds,
+  getTehranWeekSnapshotDateRange,
 } from "@/lib/dashboard/tehranAccountingWindow";
 import {
   loadOperatorPlayedPlayerCountsByPeriod,
@@ -1217,7 +1219,7 @@ async function loadPeriodFromSupabase(
   const dayIso = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
   ).toISOString();
-  const weekIso = getRollingWeekStart(now).toISOString();
+  const weekWindow = getOpenTehranWeekAccountingWindow(now);
   const monthIso = getRollingMonthStart(now).toISOString();
   const events = await loadOperatorEarnedEventsFromSupabase(supabase, monthIso);
   const monthAmounts = collectAmountsSince(events.panel, monthIso);
@@ -1234,9 +1236,9 @@ async function loadPeriodFromSupabase(
       collectAmountsSince(events.admin, dayIso)
     ),
     week: operatorsFromAmountMap(
-      collectAmountsSince(events.panel, weekIso),
+      collectAmountsSince(events.panel, weekWindow.fromIso, weekWindow.toIso),
       names,
-      collectAmountsSince(events.admin, weekIso)
+      collectAmountsSince(events.admin, weekWindow.fromIso, weekWindow.toIso)
     ),
     month: operatorsFromAmountMap(monthAmounts, names, monthAdminAmounts),
   };
@@ -1255,8 +1257,8 @@ async function loadRangeFromSupabase(
  * plus adminAmount (کانیات ادمین) attributed to that super or direct agent.
  * Only direct admin panels (parent is admin, or no parent) are listed.
  *
- * Week/month use the same timestamp windows as the admin dashboard
- * (now()-7d / now()-30d on created_at). Overall still lives in daily rollup.
+ * Week uses closed daily snapshots (Sat 08:00 → today 08:00 Tehran).
+ * Month still uses a rolling 30d live tail. Overall still lives in daily rollup.
  */
 export async function loadPanelCommissionBreakdownByPeriod(
   supabase?: SupabaseClient
@@ -1302,6 +1304,36 @@ export async function loadPanelCommissionBreakdownByPeriod(
         console.error("[Dashboard] panel breakdown supabase period error:", err);
       }
     }
+  }
+
+  try {
+    const weekRange = getTehranWeekSnapshotDateRange();
+    let weekRows = await loadClosedPanelBreakdownFromSnapshot(
+      weekRange.fromSnapshotDate,
+      weekRange.throughSnapshotDate
+    );
+    if (weekRows.length === 0 && supabase) {
+      weekRows = await loadClosedPanelBreakdownFromSupabase(
+        supabase,
+        weekRange.fromSnapshotDate,
+        weekRange.throughSnapshotDate
+      );
+    }
+    breakdown = {
+      ...breakdown,
+      week: sortOperators(
+        weekRows.map((row) =>
+          toOperator(row.userId, row.role, row.displayName, row.amount, 0, row.adminAmount)
+        )
+      ),
+    };
+    console.info("[Dashboard] panel breakdown week from daily snapshots", {
+      fromSnapshotDate: weekRange.fromSnapshotDate,
+      throughSnapshotDate: weekRange.throughSnapshotDate,
+      count: breakdown.week.length,
+    });
+  } catch (err) {
+    console.error("[Dashboard] panel breakdown week snapshot error:", err);
   }
 
   const [played, playingCounts] = await Promise.all([

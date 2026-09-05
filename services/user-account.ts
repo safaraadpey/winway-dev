@@ -11,7 +11,6 @@ import {
   type PlayerGamePerformance,
 } from "@/lib/dashboard/playerGamePerformance";
 import {
-  getRollingWeekStart,
   getRollingMonthStart,
   loadCommissionDailyStatRows,
   loadCommissionDailyTotals,
@@ -19,7 +18,10 @@ import {
   type CommissionDailyStatRow,
   type CommissionDailyTotals,
 } from "@/lib/dashboard/loadCommissionDailyStats";
-import { getOpenTehranAccountingWindow } from "@/lib/dashboard/tehranAccountingWindow";
+import {
+  getOpenTehranAccountingWindow,
+  getOpenTehranWeekAccountingWindow,
+} from "@/lib/dashboard/tehranAccountingWindow";
 import {
   emptyCommissionTotals,
   loadOperatorCommissionSummaryRange,
@@ -352,7 +354,7 @@ function getPeriodStart(period: UserAccountPeriod): Date | null {
   if (period === "overall") return null;
 
   if (period === "week") {
-    return getRollingWeekStart();
+    return new Date(getOpenTehranWeekAccountingWindow().fromIso);
   }
 
   if (period === "month") {
@@ -602,13 +604,15 @@ async function loadInboundCashflowRows(
 
 function sumPanelCashflow(
   rows: PanelCashflowRow[],
-  startMs: number | null
+  startMs: number | null,
+  endMs: number | null = null
 ): { deposits: number; withdrawals: number; net: number } {
   let deposits = 0;
   let withdrawals = 0;
   for (const row of rows) {
     const ms = Date.parse(row.created_at);
     if (startMs !== null && ms < startMs) continue;
+    if (endMs !== null && ms > endMs) continue;
     deposits += row.depositAmount;
     withdrawals += row.withdrawAmount;
   }
@@ -791,6 +795,7 @@ function buildActivitiesFromMonthlySource(
 ): Record<UserAccountPeriod, UserAccountActivity> {
   const dayStartMs = getPeriodStart("day")?.getTime() ?? 0;
   const weekStartMs = getPeriodStart("week")?.getTime() ?? 0;
+  const weekEndMs = Date.parse(getOpenTehranWeekAccountingWindow().toIso);
   const monthStartMs = getPeriodStart("month")?.getTime() ?? 0;
 
   const results = (source.resultsRows || []).map((r) => ({
@@ -803,37 +808,47 @@ function buildActivitiesFromMonthlySource(
     roomId: t.room_id,
   }));
 
-  const getGamesPlayed = (startMs: number | null) => {
+  const inWindow = (ms: number, startMs: number | null, endMs: number | null) => {
+    if (startMs !== null && ms < startMs) return false;
+    if (endMs !== null && ms > endMs) return false;
+    return true;
+  };
+
+  const getGamesPlayed = (startMs: number | null, endMs: number | null = null) => {
     const rooms = new Set<string>();
     for (const t of tickets) {
-      if (startMs !== null && t.ms < startMs) continue;
+      if (!inWindow(t.ms, startMs, endMs)) continue;
       if (t.roomId) rooms.add(t.roomId);
     }
     return rooms.size;
   };
 
-  const getLineFullWins = (startMs: number | null) => {
+  const getLineFullWins = (startMs: number | null, endMs: number | null = null) => {
     let lineWins = 0;
     let fullWins = 0;
     for (const r of results) {
-      if (startMs !== null && r.ms < startMs) continue;
+      if (!inWindow(r.ms, startMs, endMs)) continue;
       if (r.winType === "line") lineWins += 1;
       else if (r.winType === "full") fullWins += 1;
     }
     return { lineWins, fullWins };
   };
 
-  const getDepositsWithdrawals = (startMs: number | null) =>
-    sumPanelCashflow(source.panelCashflowRows || [], startMs);
+  const getDepositsWithdrawals = (startMs: number | null, endMs: number | null = null) =>
+    sumPanelCashflow(source.panelCashflowRows || [], startMs, endMs);
 
-  const getCommission = (period: UserAccountPeriod, startMs: number | null) => {
+  const getCommission = (
+    period: UserAccountPeriod,
+    startMs: number | null,
+    endMs: number | null = null
+  ) => {
     let commission = 0;
     let commissionTotal: number | null = null;
 
     if (userRole === "admin" && source.kind === "admin_commission_tx") {
       commission = (source.commissionTxRows || []).reduce((sum, row) => {
         const ms = Date.parse(row.created_at);
-        if (startMs !== null && ms < startMs) return sum;
+        if (!inWindow(ms, startMs, endMs)) return sum;
         return sum + Number(row.amount || 0);
       }, 0);
       commissionTotal = null;
@@ -862,7 +877,7 @@ function buildActivitiesFromMonthlySource(
     commissionTotal = 0;
     for (const row of source.commissionRows || []) {
       const ms = Date.parse(String((row as any).created_at));
-      if (startMs !== null && ms < startMs) continue;
+      if (!inWindow(ms, startMs, endMs)) continue;
 
       commission +=
         Number((row as any).agent_amount || 0) +
@@ -874,11 +889,15 @@ function buildActivitiesFromMonthlySource(
     return { commission, commissionTotal };
   };
 
-  const buildOne = (period: UserAccountPeriod, startMs: number | null): UserAccountActivity => {
-    const gamesPlayed = getGamesPlayed(startMs);
-    const { lineWins, fullWins } = getLineFullWins(startMs);
-    const { deposits, withdrawals, net } = getDepositsWithdrawals(startMs);
-    const { commission, commissionTotal } = getCommission(period, startMs);
+  const buildOne = (
+    period: UserAccountPeriod,
+    startMs: number | null,
+    endMs: number | null = null
+  ): UserAccountActivity => {
+    const gamesPlayed = getGamesPlayed(startMs, endMs);
+    const { lineWins, fullWins } = getLineFullWins(startMs, endMs);
+    const { deposits, withdrawals, net } = getDepositsWithdrawals(startMs, endMs);
+    const { commission, commissionTotal } = getCommission(period, startMs, endMs);
     return {
       period,
       gamesPlayed,
@@ -894,7 +913,7 @@ function buildActivitiesFromMonthlySource(
 
   return {
     day: buildOne("day", dayStartMs),
-    week: buildOne("week", weekStartMs),
+    week: buildOne("week", weekStartMs, weekEndMs),
     month:
       userRole === "player" ? emptyUserAccountActivity("month") : buildOne("month", monthStartMs),
     overall:
@@ -1331,10 +1350,15 @@ async function calculateUserActivity(
   try {
     const periodStart = getPeriodStart(period);
     const periodStartIso = periodStart?.toISOString() ?? null;
+    const periodEndIso =
+      period === "week" ? getOpenTehranWeekAccountingWindow().toIso : null;
 
     let resultsQuery = supabase.from("results").select("win_type").eq("user_id", userId);
     if (periodStartIso) {
       resultsQuery = resultsQuery.gte("created_at", periodStartIso);
+    }
+    if (periodEndIso) {
+      resultsQuery = resultsQuery.lte("created_at", periodEndIso);
     }
     const { data: resultsData, error: resultsError } = await resultsQuery;
 
@@ -1355,6 +1379,9 @@ async function calculateUserActivity(
         .in("reservation_status", ["confirmed", "consumed"]);
       if (periodStartIso) {
         ticketsQuery = ticketsQuery.gte("created_at", periodStartIso);
+      }
+      if (periodEndIso) {
+        ticketsQuery = ticketsQuery.lte("created_at", periodEndIso);
       }
       const { data: ticketsData, error: ticketsError } = await ticketsQuery;
 
@@ -1385,6 +1412,9 @@ async function calculateUserActivity(
       if (periodStartIso) {
         commissionQuery = commissionQuery.gte("created_at", periodStartIso);
       }
+      if (periodEndIso) {
+        commissionQuery = commissionQuery.lte("created_at", periodEndIso);
+      }
       const { data: commissionData, error: commissionError } = await commissionQuery;
 
       if (commissionError) {
@@ -1412,7 +1442,7 @@ async function calculateUserActivity(
           role: userRole,
         });
       } else if (periodStartIso) {
-        const toIso = new Date().toISOString();
+        const toIso = periodEndIso ?? new Date().toISOString();
         totals = await loadOperatorCommissionSummaryRange({
           supabase,
           userId,
@@ -1435,6 +1465,9 @@ async function calculateUserActivity(
       if (periodStartIso) {
         commissionTxQuery = commissionTxQuery.gte("created_at", periodStartIso);
       }
+      if (periodEndIso) {
+        commissionTxQuery = commissionTxQuery.lte("created_at", periodEndIso);
+      }
       const { data: commissionTxs, error: commissionTxErr } = await commissionTxQuery;
 
       if (commissionTxErr) {
@@ -1451,6 +1484,7 @@ async function calculateUserActivity(
     // واریز: درگاه + رمز ارز + شارژ پنل/ایجنت — برداشت: کلیم بالاسری + درخواست برداشت تأییدشده
     const panelCashflowRows = await loadInboundCashflowRows(userId, userRole, {
       fromIso: periodStartIso ?? undefined,
+      toIso: periodEndIso ?? undefined,
     });
     const { deposits, withdrawals, net } = sumPanelCashflowAll(panelCashflowRows);
 

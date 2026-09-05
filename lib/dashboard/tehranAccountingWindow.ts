@@ -83,8 +83,10 @@ function parseTehranDateString(value: string): {
 }
 
 /**
- * Closed week for snapshot aggregation: Saturday 08:00 Tehran through current day 08:00 Tehran.
- * Returns inclusive snapshot_date bounds (performance_daily_stats.snapshot_date).
+ * Canonical closed week for all admin/agent/super reports:
+ * last Saturday 08:00 Tehran through today 08:00 Tehran, as inclusive daily
+ * snapshot_date rows (performance_daily_stats) — not a weekly snapshot table.
+ * On Saturday after 08:00 that is [شنبه هفته قبل ۰۸:۰۰, شنبه امروز ۰۸:۰۰).
  */
 export function getTehranWeekSnapshotDateRange(now = new Date()): {
   fromSnapshotDate: string;
@@ -159,14 +161,26 @@ export function getOpenTehranWeekAccountingWindowFrom(now = new Date()): Date {
   return start;
 }
 
-/** Live open week window: last Saturday 08:00 Tehran → request time. */
+/**
+ * Week history window: Saturday 08:00 → today 08:00 Tehran (not "now").
+ * On Saturday that is [شنبه هفته قبل ۰۸:۰۰, شنبه امروز ۰۸:۰۰).
+ */
 export function getOpenTehranWeekAccountingWindow(now = new Date()): {
   fromIso: string;
   toIso: string;
 } {
+  const closed = getTehranWeekClosedPeriodIsoBounds(now);
+  if (closed) {
+    return {
+      fromIso: closed.fromIso,
+      toIso: toInclusiveEndIso(closed.toExclusiveIso),
+    };
+  }
+
+  const endExclusive = getOpenTehranAccountingWindowFrom(now);
   return {
     fromIso: getOpenTehranWeekAccountingWindowFrom(now).toISOString(),
-    toIso: now.toISOString(),
+    toIso: toInclusiveEndIso(endExclusive.toISOString()),
   };
 }
 

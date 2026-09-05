@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getTehranWeekSnapshotDateRange } from "@/lib/dashboard/tehranAccountingWindow";
 
 export type CommissionDailySourceKind = "ticket" | "tournament";
 export type CommissionOperatorRole = "agent" | "super";
@@ -100,7 +101,8 @@ export function getUtcPeriodStart(period: "day" | "week" | "month"): Date {
   }
 
   if (period === "week") {
-    return getRollingWeekStart(now);
+    const { fromSnapshotDate } = getTehranWeekSnapshotDateRange(now);
+    return new Date(`${fromSnapshotDate}T00:00:00.000Z`);
   }
 
   return getRollingMonthStart(now);
@@ -110,6 +112,9 @@ export function commissionStatFromDateForPeriod(
   period: "day" | "week" | "month" | "overall"
 ): string | null {
   if (period === "overall") return null;
+  if (period === "week") {
+    return getTehranWeekSnapshotDateRange().fromSnapshotDate;
+  }
   return dateIsoFromUtcDate(getUtcPeriodStart(period));
 }
 

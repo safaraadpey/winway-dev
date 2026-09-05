@@ -357,7 +357,7 @@ export async function loadOperatorPlayerGamePerformanceByPeriod(params: {
         role: params.role,
         fromSnapshotDate: weekRange.fromSnapshotDate,
         throughSnapshotDate: weekRange.throughSnapshotDate,
-        includeLiveTail: true,
+        includeLiveTail: false,
       }),
       loadOperatorPeriodTotals({
         operatorId: params.operatorId,
@@ -524,7 +524,7 @@ export async function loadPlayerGamePerformanceByPeriod(params: {
         playerId: params.playerId,
         fromSnapshotDate: weekRange.fromSnapshotDate,
         throughSnapshotDate: weekRange.throughSnapshotDate,
-        includeLiveTail: true,
+        includeLiveTail: false,
       }),
       loadPlayerPeriodTotals({
         playerId: params.playerId,

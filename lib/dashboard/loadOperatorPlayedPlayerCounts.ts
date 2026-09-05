@@ -3,8 +3,8 @@ import { pgPool } from "@/lib/pg";
 import {
   dateIsoFromUtcDate,
   getRollingMonthStart,
-  getRollingWeekStart,
 } from "@/lib/dashboard/loadCommissionDailyStats";
+import { getTehranWeekSnapshotDateRange } from "@/lib/dashboard/tehranAccountingWindow";
 
 export type OperatorPlayedCount = {
   userId: string;
@@ -59,6 +59,7 @@ async function loadPeriodFromPostgres(): Promise<Record<
 > | null> {
   if (!pgPool) return null;
 
+  const weekRange = getTehranWeekSnapshotDateRange();
   const result = await pgPool.query<PeriodPlayedRow>(
     `
     with b as (
@@ -67,7 +68,8 @@ async function loadPeriodFromPostgres(): Promise<Record<
     bounds as (
       select
         ((n at time zone 'utc'))::date as day_from,
-        ((n - interval '7 days') at time zone 'utc')::date as week_from,
+        $1::date as week_from,
+        $2::date as week_through,
         ((n - interval '30 days') at time zone 'utc')::date as month_from
       from b
     )
@@ -76,7 +78,9 @@ async function loadPeriodFromPostgres(): Promise<Record<
       d.operator_role::text as role,
       coalesce(nullif(btrim(p.nickname), ''), nullif(btrim(u.username), ''), 'پنل') as display_name,
       count(distinct d.player_id) filter (where d.stat_date >= bounds.day_from) as day_count,
-      count(distinct d.player_id) filter (where d.stat_date >= bounds.week_from) as week_count,
+      count(distinct d.player_id) filter (
+        where d.stat_date >= bounds.week_from and d.stat_date <= bounds.week_through
+      ) as week_count,
       count(distinct d.player_id) filter (where d.stat_date >= bounds.month_from) as month_count
     from public.operator_player_play_days d
     cross join bounds
@@ -84,7 +88,8 @@ async function loadPeriodFromPostgres(): Promise<Record<
     left join public.user_profiles p on p.user_id = d.operator_id
     where u.role in ('agent', 'super')
     group by d.operator_id, d.operator_role, p.nickname, u.username
-    `
+    `,
+    [weekRange.fromSnapshotDate, weekRange.throughSnapshotDate]
   );
 
   const byPeriod = emptyPeriodCounts();
@@ -208,7 +213,7 @@ async function loadRangeFromSupabase(
 }
 
 /**
- * Unique downline players who played in the rolling day/week/month windows.
+ * Unique downline players who played in day / closed Tehran week / rolling month.
  * Source of truth: PostgreSQL operator_player_play_days.
  */
 export async function loadOperatorPlayedPlayerCountsByPeriod(
@@ -239,13 +244,13 @@ export async function loadOperatorPlayedPlayerCountsByPeriod(
     const dayDate = dateIsoFromUtcDate(
       new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
     );
-    const weekDate = dateIsoFromUtcDate(getRollingWeekStart(now));
+    const weekRange = getTehranWeekSnapshotDateRange(now);
     const monthDate = dateIsoFromUtcDate(getRollingMonthStart(now));
     const today = dateIsoFromUtcDate(now);
 
     const [month, week, day] = await Promise.all([
       loadRangeFromSupabase(supabase, monthDate, today),
-      loadRangeFromSupabase(supabase, weekDate, today),
+      loadRangeFromSupabase(supabase, weekRange.fromSnapshotDate, weekRange.throughSnapshotDate),
       loadRangeFromSupabase(supabase, dayDate, today),
     ]);
 

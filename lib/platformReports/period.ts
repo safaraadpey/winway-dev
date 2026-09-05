@@ -1,24 +1,30 @@
+import {
+  getOpenTehranAccountingWindow,
+  getOpenTehranWeekAccountingWindow,
+} from "@/lib/dashboard/tehranAccountingWindow";
+
 export function getPeriodRange(period: string): { from: Date; to: Date } {
-  const now = new Date();
   if (period === "day") {
-    const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    return { from, to: now };
+    const { fromIso, toIso } = getOpenTehranAccountingWindow();
+    return { from: new Date(fromIso), to: new Date(toIso) };
   }
   if (period === "week") {
-    const dayOfWeek = now.getDay();
-    const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-    const from = new Date(now.getFullYear(), now.getMonth(), diff);
-    return { from, to: now };
+    const { fromIso, toIso } = getOpenTehranWeekAccountingWindow();
+    return { from: new Date(fromIso), to: new Date(toIso) };
   }
+  const now = new Date();
   const from = new Date(now.getFullYear(), now.getMonth(), 1);
   return { from, to: now };
 }
 
-export function parsePeriodParams(searchParams: URLSearchParams): {
+export function parsePeriodParams(
+  searchParams: URLSearchParams,
+  defaultPeriod = "month"
+): {
   from: Date;
   to: Date;
 } | { error: string } {
-  const period = (searchParams.get("period") || "month").toLowerCase();
+  const period = (searchParams.get("period") || defaultPeriod).toLowerCase();
 
   if (period === "range") {
     const fromStr = searchParams.get("from");

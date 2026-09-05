@@ -7,7 +7,6 @@ import { supabase } from "@/lib/supabaseClient";
 import { callAdminApi } from "@/lib/adminApiClient";
 import { sumGatewayPurchasesInRange } from "@/lib/dashboard/gatewayPurchases";
 import {
-  getRollingWeekStart,
   getRollingMonthStart,
   loadCommissionDailyStatRows,
   sumCommissionDailyRows,
@@ -27,6 +26,7 @@ import {
   type OperatorPlayerGamePerformanceByPeriod,
   type PlayerGamePerformance,
 } from "@/lib/dashboard/playerGamePerformance";
+import { getOpenTehranWeekAccountingWindow } from "@/lib/dashboard/tehranAccountingWindow";
 import type {
   DashboardData,
   DashboardPanelOperator,
@@ -667,7 +667,7 @@ function getPeriodStart(period: DashboardPeriod): Date {
   if (period === "day") {
     return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   } else if (period === "week") {
-    return getRollingWeekStart(now);
+    return new Date(getOpenTehranWeekAccountingWindow(now).fromIso);
   } else {
     return getRollingMonthStart(now);
   }

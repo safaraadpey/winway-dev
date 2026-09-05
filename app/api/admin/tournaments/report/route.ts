@@ -1,27 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminContextOrThrow } from "@/lib/supabaseServer";
+import { parsePeriodParams } from "@/lib/platformReports/period";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function getPeriodRange(period: string): { from: Date; to: Date } {
-  const now = new Date();
-
-  if (period === "day") {
-    const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    return { from, to: now };
-  }
-
-  if (period === "week") {
-    const dayOfWeek = now.getDay();
-    const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-    const from = new Date(now.getFullYear(), now.getMonth(), diff);
-    return { from, to: now };
-  }
-
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  return { from, to: now };
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -35,41 +17,19 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const period = (searchParams.get("period") || "day").toLowerCase();
     const page = Math.max(parseInt(searchParams.get("page") || "1", 10) || 1, 1);
     const pageSizeRaw = parseInt(searchParams.get("pageSize") || "20", 10) || 20;
     const pageSize = Math.min(Math.max(pageSizeRaw, 1), 100);
     const offset = (page - 1) * pageSize;
 
-    let from: Date;
-    let to: Date;
-    if (period === "range") {
-      const fromStr = searchParams.get("from");
-      const toStr = searchParams.get("to");
-      if (!fromStr || !toStr) {
-        return NextResponse.json(
-          { ok: false, error: "validation_error", message: "برای بازه، تاریخ از/تا الزامی است." },
-          { status: 400 }
-        );
-      }
-      from = new Date(`${fromStr}T00:00:00.000`);
-      to = new Date(`${toStr}T23:59:59.999`);
-      if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from > to) {
-        return NextResponse.json(
-          { ok: false, error: "validation_error", message: "بازه تاریخ نامعتبر است." },
-          { status: 400 }
-        );
-      }
-    } else if (period === "day" || period === "week" || period === "month") {
-      const range = getPeriodRange(period);
-      from = range.from;
-      to = range.to;
-    } else {
+    const parsed = parsePeriodParams(searchParams, "day");
+    if ("error" in parsed) {
       return NextResponse.json(
-        { ok: false, error: "validation_error", message: "period نامعتبر است." },
+        { ok: false, error: "validation_error", message: parsed.error },
         { status: 400 }
       );
     }
+    const { from, to } = parsed;
 
     const fromIso = from.toISOString();
     const toIso = to.toISOString();

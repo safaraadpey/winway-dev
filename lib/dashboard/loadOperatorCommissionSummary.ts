@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getOpenTehranWeekAccountingWindow } from "@/lib/dashboard/tehranAccountingWindow";
 import type {
   CommissionDailyTotals,
   CommissionOperatorRole,
@@ -75,27 +76,34 @@ export async function loadOperatorPeriodCommissionSummary(params: {
     month: emptyCommissionTotals(),
   };
 
-  const { data, error } = await params.supabase.rpc(
-    "fn_dashboard_operator_commission_summary",
-    {
+  const weekWindow = getOpenTehranWeekAccountingWindow();
+  const [periodResult, weekTotals] = await Promise.all([
+    params.supabase.rpc("fn_dashboard_operator_commission_summary", {
       p_user_id: params.userId,
       p_role: params.role,
-    }
-  );
+    }),
+    loadOperatorCommissionSummaryRange({
+      supabase: params.supabase,
+      userId: params.userId,
+      role: params.role,
+      fromIso: weekWindow.fromIso,
+      toIso: weekWindow.toIso,
+    }),
+  ]);
+
+  const { data, error } = periodResult;
 
   if (error) {
     console.error("[Dashboard] operator commission summary error:", error.message);
-    return empty;
+    return { ...empty, week: weekTotals };
   }
 
   const row = (Array.isArray(data) ? data[0] : data) as SummaryRow | null;
-  if (!row) return empty;
+  if (!row) return { ...empty, week: weekTotals };
 
   const dayTourEarned = toNumber(row.day_tournament_earned);
-  const weekTourEarned = toNumber(row.week_tournament_earned);
   const monthTourEarned = toNumber(row.month_tournament_earned);
   const dayTourBase = toNumber(row.day_tournament_base);
-  const weekTourBase = toNumber(row.week_tournament_base);
   const monthTourBase = toNumber(row.month_tournament_base);
 
   return {
@@ -105,12 +113,7 @@ export async function loadOperatorPeriodCommissionSummary(params: {
       dayTourEarned,
       dayTourBase
     ),
-    week: totalsFromParts(
-      toNumber(row.week_earned),
-      toNumber(row.week_base),
-      weekTourEarned,
-      weekTourBase
-    ),
+    week: weekTotals,
     month: totalsFromParts(
       toNumber(row.month_earned),
       toNumber(row.month_base),
