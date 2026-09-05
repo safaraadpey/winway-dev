@@ -14,8 +14,12 @@ export function isRoomLevelDingUi(mode: string | null | undefined): boolean {
 
 /** Legacy per_draw only: mid-game header credit on ball reveal. */
 export function shouldCreditDingOnLiveReveal(
-  mode: string | null | undefined
+  mode: string | null | undefined,
+  gameplayPersistMode?: string | null | undefined,
+  source?: LiveRoomSnapshot["source"]
 ): boolean {
+  if (gameplayPersistMode === "manifest_ram") return false;
+  if (source === "engine_ram") return false;
   return !isRoomLevelDingUi(mode);
 }
 
@@ -52,7 +56,15 @@ export function buildPerDrawRevealCredit(
   drawNumber: number
 ): { revealKey: string; delta: number } | null {
   if (!snapshot?.room?.id || drawNumber == null) return null;
-  if (!shouldCreditDingOnLiveReveal(snapshot.room.ding_settle_mode)) return null;
+  if (
+    !shouldCreditDingOnLiveReveal(
+      snapshot.room.ding_settle_mode,
+      snapshot.room.gameplay_persist_mode,
+      snapshot.source
+    )
+  ) {
+    return null;
+  }
 
   const matchedCards = countMatchedMyCardsForDing(snapshot.cards, drawNumber);
   const delta = computePerDrawRevealDingDelta(

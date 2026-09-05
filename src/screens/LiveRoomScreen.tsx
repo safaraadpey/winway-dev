@@ -36,9 +36,15 @@ import { playLiveRoomMusic, stopLiveRoomMusic } from "@/lib/audio/music";
 import { isMusicEnabled } from "@/lib/audio-settings";
 import {
   mergeDrawLists,
-  sortDraws,
+  orderDrawsForLiveRoom,
   type ProcessedDraw,
 } from "@/lib/draw-order";
+import {
+  applyLiveRoomSnapshotUpdate,
+  isManifestRamEngineOnlyPhase,
+  resolveDrawSource,
+  shouldRewindRevealCursor,
+} from "@/lib/liveRoom/engineRamSnapshot";
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 import { useSession } from "@/lib/contexts/SessionContext";
 import { isHardExiting } from "@/lib/auth/hardExit";
@@ -176,14 +182,25 @@ export default function LiveRoomScreen({
   const { invalidate: invalidateActiveGames } = useActiveGamesContext();
 
   const fetchSnapshot = useCallback(
-    (targetRoomId: string, options?: { scope?: "full" | "draws" }) => {
+    (
+      targetRoomId: string,
+      options?: { scope?: "full" | "draws"; engineOnly?: boolean }
+    ) => {
       if (guestSpectate) {
-        return fetchWatchLiveRoomSnapshot(guestSpectate.watchCode, targetRoomId, options);
+        return fetchWatchLiveRoomSnapshot(
+          guestSpectate.watchCode,
+          targetRoomId,
+          options
+        );
       }
       return fetchLiveRoomSnapshot(targetRoomId, options);
     },
     [guestSpectate]
   );
+
+  const resolveEngineOnlyFetch = useCallback((): boolean => {
+    return isManifestRamEngineOnlyPhase(dataRef.current);
+  }, []);
 
   const fetchResultsSnapshot = useCallback(
     (targetRoomId: string) => {
@@ -249,6 +266,7 @@ export default function LiveRoomScreen({
   const replayModeRef = useRef(false);
   /** RT draws received while a draw poll is in-flight (merged when poll completes). */
   const pendingRtDrawsRef = useRef<ProcessedDraw[]>([]);
+  const lastEventSeqRef = useRef<number | null>(null);
   const winnersSyncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
@@ -421,9 +439,36 @@ export default function LiveRoomScreen({
     [creditDingOnReveal]
   );
 
+  const commitSnapshotUpdate = useCallback(
+    (
+      prev: LiveRoomSnapshot | null,
+      incoming: LiveRoomSnapshot,
+      pendingDraws: ProcessedDraw[] = []
+    ): LiveRoomSnapshot | null => {
+      const result = applyLiveRoomSnapshotUpdate(prev, incoming, { pendingDraws });
+      if (!result.accepted) {
+        console.warn("[LiveRoom] rejected stale engine_ram snapshot", {
+          incomingEventSeq: incoming.eventSeq,
+          lastEventSeq: lastEventSeqRef.current,
+        });
+        return prev;
+      }
+      if (result.snapshot.eventSeq != null) {
+        lastEventSeqRef.current = result.snapshot.eventSeq;
+      }
+      return result.snapshot;
+    },
+    []
+  );
+
+  const liveDrawSource = resolveDrawSource(data);
+
   const authoritativeCalledNumbers = useMemo(
-    () => sortDraws(data?.draws ?? []).map((d) => d.number),
-    [data?.draws]
+    () =>
+      orderDrawsForLiveRoom(data?.draws ?? [], liveDrawSource).map(
+        (d) => d.number
+      ),
+    [data?.draws, liveDrawSource]
   );
 
   const displayedCalledNumbers = useMemo(
@@ -448,7 +493,11 @@ export default function LiveRoomScreen({
   const scheduleNextDrawReveal = useCallback(() => {
     if (revealTimerRef.current) return;
 
-    const sorted = sortDraws(dataRef.current?.draws ?? []);
+    const drawSource = resolveDrawSource(dataRef.current);
+    const sorted = orderDrawsForLiveRoom(
+      dataRef.current?.draws ?? [],
+      drawSource
+    );
     if (revealedDrawCountRef.current >= sorted.length) return;
 
     const intervalMs = Math.max(drawIntervalSecRef.current * 1000, 500);
@@ -457,7 +506,10 @@ export default function LiveRoomScreen({
 
     revealTimerRef.current = setTimeout(() => {
       revealTimerRef.current = null;
-      const latestSorted = sortDraws(dataRef.current?.draws ?? []);
+      const latestSorted = orderDrawsForLiveRoom(
+        dataRef.current?.draws ?? [],
+        resolveDrawSource(dataRef.current)
+      );
       const nextIdx = revealedDrawCountRef.current;
       if (nextIdx >= latestSorted.length) return;
 
@@ -486,7 +538,11 @@ export default function LiveRoomScreen({
   }, [displayedCalledNumbers]);
 
   useEffect(() => {
-    const authCount = sortDraws(data?.draws ?? []).length;
+    const drawSource = resolveDrawSource(data);
+    const authCount = orderDrawsForLiveRoom(
+      data?.draws ?? [],
+      drawSource
+    ).length;
 
     if (!hasLiveSnapshot) return;
 
@@ -498,7 +554,13 @@ export default function LiveRoomScreen({
       return;
     }
 
-    if (authCount < revealedDrawCountRef.current) {
+    if (
+      shouldRewindRevealCursor(
+        authCount,
+        revealedDrawCountRef.current,
+        data?.source
+      )
+    ) {
       revealedDrawCountRef.current = authCount;
       setRevealedDrawCount(authCount);
     }
@@ -506,7 +568,7 @@ export default function LiveRoomScreen({
     if (authCount > revealedDrawCountRef.current) {
       scheduleNextDrawRevealRef.current();
     }
-  }, [data?.draws, hasLiveSnapshot]);
+  }, [data?.draws, data?.source, hasLiveSnapshot]);
 
   useEffect(() => {
     if (replayModeRef.current) return;
@@ -551,40 +613,41 @@ export default function LiveRoomScreen({
 
     pollInFlightRef.current = true;
     try {
-      const snapshot = await fetchSnapshot(roomId, { scope: "draws" });
+      const snapshot = await fetchSnapshot(roomId, {
+        scope: "draws",
+        engineOnly: resolveEngineOnlyFetch(),
+      });
       roomStatusRef.current = (snapshot.room.status || "").trim().toLowerCase();
       const pending = pendingRtDrawsRef.current;
       pendingRtDrawsRef.current = [];
-      const mergedDraws = mergeDrawLists(snapshot.draws, pending);
-      setData((prev) =>
-        prev
-          ? {
-              ...prev,
-              draws: mergedDraws,
-              room: {
-                ...prev.room,
-                status: snapshot.room.status ?? prev.room.status,
-                next_draw_at:
-                  snapshot.room.next_draw_at ?? prev.room.next_draw_at ?? null,
-                draw_interval_sec:
-                  snapshot.room.draw_interval_sec ?? prev.room.draw_interval_sec,
-              },
-              server_now: snapshot.server_now ?? prev.server_now,
-            }
-          : prev
-      );
+      setData((prev) => {
+        const next = commitSnapshotUpdate(prev, snapshot, pending);
+        if (!next) return prev;
+        return {
+          ...next,
+          room: {
+            ...next.room,
+            status: snapshot.room.status ?? next.room.status,
+            next_draw_at:
+              snapshot.room.next_draw_at ?? next.room.next_draw_at ?? null,
+            draw_interval_sec:
+              snapshot.room.draw_interval_sec ?? next.room.draw_interval_sec,
+          },
+          server_now: snapshot.server_now ?? next.server_now,
+        };
+      });
       markDrawSynced();
       console.log("[LiveRoom] draw sync poll (realtime draw stale)", {
         serverDraws: snapshot.draws.length,
         pendingRt: pending.length,
-        mergedDraws: mergedDraws.length,
+        eventSeq: snapshot.eventSeq,
       });
     } catch (err) {
       console.warn("[LiveRoom] draw sync poll error:", err);
     } finally {
       pollInFlightRef.current = false;
     }
-  }, [roomId, markDrawSynced, fetchSnapshot]);
+  }, [roomId, markDrawSynced, fetchSnapshot, commitSnapshotUpdate, resolveEngineOnlyFetch]);
 
   const runDrawSyncPollRef = useRef(runDrawSyncPoll);
   useEffect(() => {
@@ -602,45 +665,47 @@ export default function LiveRoomScreen({
     try {
       const cardPoolMeta = cardPoolMetaRef.current;
       if (shouldUseDrawsOnlyLiveRoomFallback(cardPoolMeta)) {
-        const snapshot = await fetchSnapshot(roomId, { scope: "draws" });
+        const snapshot = await fetchSnapshot(roomId, {
+          scope: "draws",
+          engineOnly: resolveEngineOnlyFetch(),
+        });
         const nextStatus = (snapshot.room.status || "").trim().toLowerCase();
         roomStatusRef.current = nextStatus;
         const pending = pendingRtDrawsRef.current;
         pendingRtDrawsRef.current = [];
-        const mergedDraws = mergeDrawLists(snapshot.draws, pending);
-        setData((prev) =>
-          prev
-            ? {
-                ...prev,
-                draws: mergedDraws,
-                room: {
-                  ...prev.room,
-                  status: snapshot.room.status ?? prev.room.status,
-                  next_draw_at:
-                    snapshot.room.next_draw_at ?? prev.room.next_draw_at ?? null,
-                  draw_interval_sec:
-                    snapshot.room.draw_interval_sec ?? prev.room.draw_interval_sec,
-                },
-                server_now: snapshot.server_now ?? prev.server_now,
-              }
-            : prev
-        );
+        setData((prev) => {
+          const next = commitSnapshotUpdate(prev, snapshot, pending);
+          if (!next) return prev;
+          return {
+            ...next,
+            room: {
+              ...next.room,
+              status: snapshot.room.status ?? next.room.status,
+              next_draw_at:
+                snapshot.room.next_draw_at ?? next.room.next_draw_at ?? null,
+              draw_interval_sec:
+                snapshot.room.draw_interval_sec ?? next.room.draw_interval_sec,
+            },
+            server_now: snapshot.server_now ?? next.server_now,
+          };
+        });
         markDrawSynced();
         console.log("[LiveRoom] fallback poll (draws-only, card pool cache warm)", {
           serverDraws: snapshot.draws.length,
           pendingRt: pending.length,
-          mergedDraws: mergedDraws.length,
+          eventSeq: snapshot.eventSeq,
         });
         return;
       }
 
-      const snapshot = await fetchSnapshot(roomId);
+      const snapshot = await fetchSnapshot(roomId, {
+        engineOnly: resolveEngineOnlyFetch(),
+      });
       const nextStatus = (snapshot.room.status || "").trim().toLowerCase();
       roomStatusRef.current = nextStatus;
       const pending = pendingRtDrawsRef.current;
       pendingRtDrawsRef.current = [];
-      const mergedDraws = mergeDrawLists(snapshot.draws, pending);
-      setData({ ...snapshot, draws: mergedDraws });
+      setData((prev) => commitSnapshotUpdate(prev, snapshot, pending) ?? prev);
       markDrawSynced();
 
       const isTerminal = ["settling", "finished", "cancelled"].includes(
@@ -663,6 +728,8 @@ export default function LiveRoomScreen({
     tryOpenResultsDialog,
     markRealtimeActivity,
     fetchSnapshot,
+    commitSnapshotUpdate,
+    resolveEngineOnlyFetch,
   ]);
 
   const runFallbackPollRef = useRef(runFallbackPoll);
@@ -699,6 +766,7 @@ export default function LiveRoomScreen({
     resultsRequestedRef.current = false;
     openingResultsRef.current = false;
     replayModeRef.current = false;
+    lastEventSeqRef.current = null;
     lastRealtimeActivityRef.current = Date.now();
     lastDrawSyncAtRef.current = Date.now();
     roomStatusRef.current = "";
@@ -796,7 +864,9 @@ export default function LiveRoomScreen({
       if (!roomId || isHardExiting()) return;
       try {
         console.info("[LiveRoom] Fetching live-room snapshot", { roomId });
-        const snapshot = await fetchSnapshot(roomId);
+        const snapshot = await fetchSnapshot(roomId, {
+          engineOnly: resolveEngineOnlyFetch(),
+        });
         if (!isMounted) return;
 
         roomStatusRef.current = (snapshot.room.status || "")
@@ -809,7 +879,7 @@ export default function LiveRoomScreen({
             status: roomStatusRef.current,
           });
         }
-        setData(snapshot);
+        setData((prev) => commitSnapshotUpdate(prev, snapshot) ?? snapshot);
         setHasLiveSnapshot(true);
         persistLiveRoomShellCache(roomId, snapshot);
         markDrawSynced();
@@ -847,7 +917,7 @@ export default function LiveRoomScreen({
     return () => {
       isMounted = false;
     };
-  }, [roomId, fetchSnapshot]);
+  }, [roomId, fetchSnapshot, commitSnapshotUpdate, resolveEngineOnlyFetch]);
 
   useEffect(() => {
     roomStatusRef.current = (data?.room?.status || "").trim().toLowerCase();

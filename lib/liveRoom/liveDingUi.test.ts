@@ -77,6 +77,23 @@ describe("liveDingUi room_level guards", () => {
     assert.equal(credit?.revealKey, "room-1:7");
     assert.equal(credit?.delta, 2);
   });
+
+  it("manifest_ram and engine_ram never build mid-game reveal credits", () => {
+    const manifest = snapshot({
+      ding_settle_mode: "per_draw",
+      room: { gameplay_persist_mode: "manifest_ram" },
+    });
+    assert.equal(buildPerDrawRevealCredit(manifest, 7), null);
+    assert.equal(shouldCreditDingOnLiveReveal("per_draw", "manifest_ram"), false);
+
+    const engineRam = snapshot({
+      ding_settle_mode: "per_draw",
+      source: "engine_ram",
+      room: { gameplay_persist_mode: "manifest_ram" },
+    });
+    assert.equal(buildPerDrawRevealCredit(engineRam, 7), null);
+    assert.equal(shouldCreditDingOnLiveReveal("per_draw", "per_draw", "engine_ram"), false);
+  });
 });
 
 describe("liveDingUi end-of-game ledger", () => {

@@ -29,6 +29,19 @@ export function sortDraws(draws: readonly ProcessedDraw[]): ProcessedDraw[] {
   });
 }
 
+export type LiveDrawSource = "engine_ram" | "pg" | undefined;
+
+/** Preserve engine_ram API array order; per_draw/PG keeps timestamp sort. */
+export function orderDrawsForLiveRoom(
+  draws: readonly ProcessedDraw[],
+  source?: LiveDrawSource
+): ProcessedDraw[] {
+  if (source === "engine_ram") {
+    return [...draws];
+  }
+  return sortDraws(draws);
+}
+
 /** Merge draw rows; incoming server fields win on conflict. */
 export function mergeDrawLists(
   existing: readonly ProcessedDraw[],
@@ -54,4 +67,17 @@ export function mergeDrawLists(
     );
   }
   return sortDraws([...byKey.values()]);
+}
+
+/** Merge draws respecting engine_ram call-sequence order from the server. */
+export function mergeDrawListsForLiveRoom(
+  existing: readonly ProcessedDraw[],
+  incoming: readonly ProcessedDraw[],
+  source?: LiveDrawSource
+): ProcessedDraw[] {
+  if (source === "engine_ram") {
+    if (incoming.length > 0) return [...incoming];
+    return [...existing];
+  }
+  return mergeDrawLists(existing, incoming);
 }

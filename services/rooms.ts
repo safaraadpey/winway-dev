@@ -737,7 +737,7 @@ export interface LiveRoomSnapshot {
 
 export async function fetchLiveRoomSnapshot(
   roomId: string,
-  options?: { scope?: "full" | "draws" }
+  options?: { scope?: "full" | "draws"; engineOnly?: boolean }
 ): Promise<LiveRoomSnapshot> {
   const drawsOnly = options?.scope === "draws";
   let snapshot: LiveRoomSnapshot;
@@ -751,6 +751,12 @@ export async function fetchLiveRoomSnapshot(
         error instanceof Error &&
         error.message.includes("engine_ram_unavailable")
       ) {
+        throw error;
+      }
+      if (options?.engineOnly) {
+        console.warn(
+          "[LiveRoom] engine-only manifest_ram play — skipping PG/Vercel draw fallback"
+        );
         throw error;
       }
       console.info("[FALLBACK_PATH] live-room → Vercel /api/player/live-room");
