@@ -6,7 +6,7 @@
  * seats every table in a single tick (legacy behavior).
  */
 
-export const TOURNAMENT_ROOM_CREATE_STAGGER_SEC_DEFAULT = 3;
+export const TOURNAMENT_ROOM_CREATE_STAGGER_SEC_DEFAULT = 5;
 export const TOURNAMENT_ROOM_CREATE_STAGGER_SEC_MAX = 120;
 
 export function clampRoomCreateStaggerSec(raw: number): number {

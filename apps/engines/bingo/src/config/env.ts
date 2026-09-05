@@ -222,7 +222,7 @@ export function loadConfig(): EngineConfig {
       process.env.TOURNAMENT_TICK_BATCH_LIMIT ?? "50"
     ),
     tournamentRoomCreateStaggerSec: Number(
-      process.env.TOURNAMENT_ROOM_CREATE_STAGGER_SEC ?? "3"
+      process.env.TOURNAMENT_ROOM_CREATE_STAGGER_SEC ?? "5"
     ),
     roomStateCheckpointEvery: Number(
       process.env.ROOM_STATE_CHECKPOINT_EVERY ?? "10"
