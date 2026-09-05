@@ -210,6 +210,139 @@ function uniqueOperatorIds(...lists: DashboardPanelOperator[][]): string[] {
   return [...new Set(lists.flatMap((list) => list.map((op) => op.userId)))];
 }
 
+function keepDirectAdminOperators(
+  operators: DashboardPanelOperator[],
+  allowedIds: Set<string>
+): DashboardPanelOperator[] {
+  return operators.filter((op) => allowedIds.has(op.userId));
+}
+
+function keepDirectAdminOperatorsByPeriod(
+  byPeriod: Record<DashboardPeriod, DashboardPanelOperator[]>,
+  allowedIds: Set<string>
+): Record<DashboardPeriod, DashboardPanelOperator[]> {
+  return {
+    day: keepDirectAdminOperators(byPeriod.day, allowedIds),
+    week: keepDirectAdminOperators(byPeriod.week, allowedIds),
+    month: keepDirectAdminOperators(byPeriod.month, allowedIds),
+    overall: keepDirectAdminOperators(byPeriod.overall, allowedIds),
+  };
+}
+
+async function loadDirectAdminOperatorIdsFromPostgres(
+  userIds: string[]
+): Promise<Set<string> | null> {
+  if (!pgPool) return userIds.length === 0 ? new Set() : null;
+  if (userIds.length === 0) return new Set();
+
+  const result = await pgPool.query<{ user_id: string }>(
+    `
+    select u.id::text as user_id
+    from public.users u
+    left join public.users p on p.id = u.parent_id
+    where u.id = any($1::uuid[])
+      and u.role in ('agent', 'super')
+      and (u.parent_id is null or p.role = 'admin')
+    `,
+    [userIds]
+  );
+
+  return new Set(result.rows.map((row) => row.user_id));
+}
+
+async function loadDirectAdminOperatorIdsFromSupabase(
+  supabase: SupabaseClient,
+  userIds: string[]
+): Promise<Set<string>> {
+  const allowed = new Set<string>();
+  if (userIds.length === 0) return allowed;
+
+  const { data: users, error } = await supabase
+    .from("users")
+    .select("id, role, parent_id")
+    .in("id", userIds);
+
+  if (error) {
+    console.error("[Dashboard] direct-admin panel users lookup error:", error.message);
+    return allowed;
+  }
+
+  const parentIds = [
+    ...new Set(
+      (users || [])
+        .map((row) => String((row as { parent_id?: string | null }).parent_id || ""))
+        .filter(Boolean)
+    ),
+  ];
+  const parentRoleById = new Map<string, string>();
+  if (parentIds.length > 0) {
+    const { data: parents, error: parentsError } = await supabase
+      .from("users")
+      .select("id, role")
+      .in("id", parentIds);
+    if (parentsError) {
+      console.error("[Dashboard] direct-admin panel parent lookup error:", parentsError.message);
+      return allowed;
+    }
+    for (const parent of parents || []) {
+      parentRoleById.set(String(parent.id), String(parent.role || "").toLowerCase());
+    }
+  }
+
+  for (const row of users || []) {
+    const role = String((row as { role?: string }).role || "").toLowerCase();
+    if (role !== "agent" && role !== "super") continue;
+    const parentId = (row as { parent_id?: string | null }).parent_id
+      ? String((row as { parent_id?: string | null }).parent_id)
+      : "";
+    if (!parentId || parentRoleById.get(parentId) === "admin") {
+      allowed.add(String((row as { id: string }).id));
+    }
+  }
+
+  return allowed;
+}
+
+async function loadDirectAdminOperatorIds(
+  userIds: string[],
+  supabase?: SupabaseClient
+): Promise<Set<string>> {
+  const uniqueIds = [...new Set(userIds.filter(Boolean))];
+  if (uniqueIds.length === 0) return new Set();
+
+  try {
+    const fromPg = await loadDirectAdminOperatorIdsFromPostgres(uniqueIds);
+    if (fromPg) {
+      console.log("[Dashboard] direct-admin panels resolved", {
+        source: "postgres",
+        operators: uniqueIds.length,
+        kept: fromPg.size,
+      });
+      return fromPg;
+    }
+  } catch (err) {
+    console.error("[Dashboard] direct-admin panels postgres error:", err);
+  }
+
+  if (!supabase) {
+    console.warn("[Dashboard] direct-admin panels fallback skipped: no supabase client");
+    return new Set();
+  }
+
+  try {
+    const fromSupabase = await loadDirectAdminOperatorIdsFromSupabase(supabase, uniqueIds);
+    console.log("[Dashboard] direct-admin panels resolved", {
+      source: "supabase",
+      operators: uniqueIds.length,
+      kept: fromSupabase.size,
+    });
+    return fromSupabase;
+  } catch (err) {
+    console.error("[Dashboard] direct-admin panels supabase error:", err);
+    return new Set();
+  }
+}
+
 /** Same >1-as-percent rule as ticket/tournament commission split. */
 function normalizeCommissionRate(rate: number | null | undefined): number {
   const value = Number(rate ?? 0);
@@ -1120,6 +1253,7 @@ async function loadRangeFromSupabase(
 /**
  * Per-agent / per-super commission that makes up admin "کانیات پنل‌ها",
  * plus adminAmount (کانیات ادمین) attributed to that super or direct agent.
+ * Only direct admin panels (parent is admin, or no parent) are listed.
  *
  * Week/month use the same timestamp windows as the admin dashboard
  * (now()-7d / now()-30d on created_at). Overall still lives in daily rollup.
@@ -1178,11 +1312,16 @@ export async function loadPanelCommissionBreakdownByPeriod(
     mergePlayedCountsByPeriod(breakdown, played),
     playingCounts
   );
-  const flaggedAgentIds = await loadTakesFullSuperCommissionIds(
+  const allowedIds = await loadDirectAdminOperatorIds(
     uniqueOperatorIds(withPlaying.day, withPlaying.week, withPlaying.month, withPlaying.overall),
     supabase
   );
-  return applyTakesFullSuperCommissionByPeriod(withPlaying, flaggedAgentIds);
+  const directOnly = keepDirectAdminOperatorsByPeriod(withPlaying, allowedIds);
+  const flaggedAgentIds = await loadTakesFullSuperCommissionIds(
+    uniqueOperatorIds(directOnly.day, directOnly.week, directOnly.month, directOnly.overall),
+    supabase
+  );
+  return applyTakesFullSuperCommissionByPeriod(directOnly, flaggedAgentIds);
 }
 
 export async function loadPanelCommissionBreakdownInRange(
@@ -1205,11 +1344,13 @@ export async function loadPanelCommissionBreakdownInRange(
     ]);
     const withPlayed = mergePlayedCounts(cached, played);
     const withPlaying = attachPlayingCounts(withPlayed, playingCounts);
+    const allowedIds = await loadDirectAdminOperatorIds(uniqueOperatorIds(withPlaying), supabase);
+    const directOnly = keepDirectAdminOperators(withPlaying, allowedIds);
     const flaggedAgentIds = await loadTakesFullSuperCommissionIds(
-      uniqueOperatorIds(withPlaying),
+      uniqueOperatorIds(directOnly),
       supabase
     );
-    return applyTakesFullSuperCommission(withPlaying, flaggedAgentIds);
+    return applyTakesFullSuperCommission(directOnly, flaggedAgentIds);
   }
 
   const playedPromise = loadOperatorPlayedPlayerCountsInRange(fromIso, toIso, supabase);
@@ -1254,9 +1395,11 @@ export async function loadPanelCommissionBreakdownInRange(
     loadOperatorPlayingPlayerCounts(supabase),
   ]);
   const withPlaying = attachPlayingCounts(mergePlayedCounts(list, played), playingCounts);
+  const allowedIds = await loadDirectAdminOperatorIds(uniqueOperatorIds(withPlaying), supabase);
+  const directOnly = keepDirectAdminOperators(withPlaying, allowedIds);
   const flaggedAgentIds = await loadTakesFullSuperCommissionIds(
-    uniqueOperatorIds(withPlaying),
+    uniqueOperatorIds(directOnly),
     supabase
   );
-  return applyTakesFullSuperCommission(withPlaying, flaggedAgentIds);
+  return applyTakesFullSuperCommission(directOnly, flaggedAgentIds);
 }

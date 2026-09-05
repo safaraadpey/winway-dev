@@ -96,6 +96,9 @@ function PanelOperatorsBreakdown({ operators }: { operators: DashboardPanelOpera
   }
 
   const rows = tab === "panels" ? panelRows : adminRows;
+  const panelTotal = panelRows.reduce((sum, op) => sum + op.amount, 0);
+  const adminTotal = adminRows.reduce((sum, op) => sum + (op.adminAmount ?? 0), 0);
+  const tabTotal = tab === "panels" ? panelTotal : adminTotal;
   const scrolls = rows.length > PANEL_OPERATOR_VISIBLE_ROWS;
   const maxHeightPx = scrolls
     ? PANEL_OPERATOR_PADDING_PX + PANEL_OPERATOR_ROW_PX * PANEL_OPERATOR_VISIBLE_ROWS
@@ -107,20 +110,22 @@ function PanelOperatorsBreakdown({ operators }: { operators: DashboardPanelOpera
         <button
           type="button"
           onClick={() => setTab("panels")}
-          className={`py-1.5 ${
+          className={`flex flex-col items-center gap-0.5 py-1.5 ${
             tab === "panels" ? "bg-teal-500 text-black" : "bg-black/40 text-gray-400"
           }`}
         >
-          کانیات پنل‌ها
+          <span>کانیات پنل‌ها</span>
+          <DashboardAmount value={panelTotal} size="12" />
         </button>
         <button
           type="button"
           onClick={() => setTab("admin")}
-          className={`py-1.5 ${
+          className={`flex flex-col items-center gap-0.5 py-1.5 ${
             tab === "admin" ? "bg-teal-500 text-black" : "bg-black/40 text-gray-400"
           }`}
         >
-          کانیات ادمین
+          <span>کانیات ادمین</span>
+          <DashboardAmount value={adminTotal} size="12" />
         </button>
       </div>
       <div
@@ -172,6 +177,14 @@ function PanelOperatorsBreakdown({ operators }: { operators: DashboardPanelOpera
           ))
         )}
       </div>
+      {rows.length > 0 ? (
+        <div className="mt-1 grid grid-cols-2 border-t border-gray-800 pt-1 text-xs font-semibold text-gray-100">
+          <span>مجموع</span>
+          <span className="text-right">
+            <DashboardAmount value={tabTotal} size="12" />
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }
