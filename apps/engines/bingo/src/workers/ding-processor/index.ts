@@ -11,13 +11,36 @@ import { redisKeysV2 } from "../../redis/keysV2.js";
 import { acquireLeaderLock, releaseLeaderLock } from "../../redis/leaderLock.js";
 import { executesBusinessLogic } from "../../runtime.js";
 import type { WorkerContext } from "../context.js";
+import { parseLegacyDingProcessorEnabled } from "../../coordination/legacyWorkerGate.js";
+import {
+  createDingProcessorGateOptions,
+  startLegacyWorkerWithGate,
+} from "../legacyWorkerGateController.js";
 
 export function startDingProcessor(ctx: WorkerContext): () => void {
-  const { supabase, config, log, redis } = ctx;
+  const { supabase, config, log } = ctx;
+  const repo = new GameRepo(supabase);
+
+  return startLegacyWorkerWithGate(
+    createDingProcessorGateOptions({
+      resolveConfigEnabled: () =>
+        parseLegacyDingProcessorEnabled(process.env.LEGACY_DING_PROCESSOR_ENABLED),
+      heartbeatMs: config.legacyWorkerGateHeartbeatMs,
+      log,
+      fetchSnapshot: () => repo.fetchLegacyDingProcessorGateSnapshot(),
+      startWorker: () => startDingProcessorInner(ctx, repo),
+    })
+  );
+}
+
+function startDingProcessorInner(
+  ctx: WorkerContext,
+  repo: GameRepo
+): () => void {
+  const { config, log, redis } = ctx;
   const lockToken = randomUUID();
   const lockKey = redisKeysV2.lockWorkerDingProcessor();
   const worker = "ding-processor";
-  const repo = new GameRepo(supabase);
 
   let stopped = false;
   let inFlight = false;

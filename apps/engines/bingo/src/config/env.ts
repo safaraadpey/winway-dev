@@ -1,3 +1,8 @@
+import {
+  parseLegacyDingProcessorEnabled,
+  parseLegacyDrawProcessorEnabled,
+} from "../coordination/legacyWorkerGate.js";
+
 export type GameRuntime = "legacy_db" | "hybrid" | "engine";
 
 export type EngineRole =
@@ -120,6 +125,12 @@ export interface EngineConfig {
   dingJobStaleSec: number;
   /** How often to run stale ding job reaper (milliseconds). */
   dingJobReapIntervalMs: number;
+  /** When false, skip legacy draw-processor polling if queue/per_draw rooms are clear (fail-closed). */
+  legacyDrawProcessorEnabled: boolean;
+  /** When false, skip legacy ding-processor polling if queue/per_draw rooms are clear (fail-closed). */
+  legacyDingProcessorEnabled: boolean;
+  /** Heartbeat interval for legacy worker gate telemetry (milliseconds). */
+  legacyWorkerGateHeartbeatMs: number;
 }
 
 function parseRoles(raw: string | undefined): Set<EngineRole> {
@@ -289,6 +300,15 @@ export function loadConfig(): EngineConfig {
     dingJobStaleSec: Number(process.env.DING_JOB_STALE_SEC ?? "120"),
     dingJobReapIntervalMs: Number(
       process.env.DING_JOB_REAP_INTERVAL_MS ?? "30000"
+    ),
+    legacyDrawProcessorEnabled: parseLegacyDrawProcessorEnabled(
+      process.env.LEGACY_DRAW_PROCESSOR_ENABLED
+    ),
+    legacyDingProcessorEnabled: parseLegacyDingProcessorEnabled(
+      process.env.LEGACY_DING_PROCESSOR_ENABLED
+    ),
+    legacyWorkerGateHeartbeatMs: Number(
+      process.env.LEGACY_WORKER_GATE_HEARTBEAT_MS ?? "60000"
     ),
   };
 }

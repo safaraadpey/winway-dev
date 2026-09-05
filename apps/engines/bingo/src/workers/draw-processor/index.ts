@@ -22,6 +22,12 @@ import {
 } from "../../runtime/draw-processor-wake.js";
 import { executesBusinessLogic } from "../../runtime.js";
 import type { WorkerContext } from "../context.js";
+import { enrichLegacyDrawGateSnapshot } from "../../coordination/legacyWorkerGateSnapshot.js";
+import { parseLegacyDrawProcessorEnabled } from "../../coordination/legacyWorkerGate.js";
+import {
+  createDrawProcessorGateOptions,
+  startLegacyWorkerWithGate,
+} from "../legacyWorkerGateController.js";
 import { startPerRoomActorProcessor } from "./startPerRoomActorProcessor.js";
 import { startDrawJobWakeListener } from "./wakeListener.js";
 import { createAdaptivePollScheduler } from "./adaptivePollScheduler.js";
@@ -34,13 +40,28 @@ const RESET_BACKOFF_REASONS = new Set<DrawProcessorWakeReason>([
 ]);
 
 export function startDrawProcessor(ctx: WorkerContext): () => void {
-  if (
-    ctx.config.drawProcessorPerRoomActor &&
-    executesBusinessLogic(ctx.config.runtime)
-  ) {
-    return startPerRoomActorProcessor(ctx);
-  }
-  return startLegacyDrainProcessor(ctx);
+  const repo = new GameRepo(ctx.supabase);
+
+  const startInner = (): (() => void) => {
+    if (
+      ctx.config.drawProcessorPerRoomActor &&
+      executesBusinessLogic(ctx.config.runtime)
+    ) {
+      return startPerRoomActorProcessor(ctx);
+    }
+    return startLegacyDrainProcessor(ctx);
+  };
+
+  return startLegacyWorkerWithGate(
+    createDrawProcessorGateOptions({
+      resolveConfigEnabled: () =>
+        parseLegacyDrawProcessorEnabled(process.env.LEGACY_DRAW_PROCESSOR_ENABLED),
+      heartbeatMs: ctx.config.legacyWorkerGateHeartbeatMs,
+      log: ctx.log,
+      fetchSnapshot: () => enrichLegacyDrawGateSnapshot(repo),
+      startWorker: startInner,
+    })
+  );
 }
 
 /**

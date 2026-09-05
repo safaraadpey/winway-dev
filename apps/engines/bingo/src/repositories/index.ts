@@ -1136,6 +1136,130 @@ export class GameRepo {
     if (error) fail("syncGameplayManifestRamRuntimeFlag", error.message);
   }
 
+  /** Snapshot for R8B-2 legacy draw-processor config gate (fail-closed disable). */
+  async fetchLegacyDrawProcessorGateSnapshot(): Promise<{
+    activePerDrawRooms: number;
+    drawJobsQueued: number;
+    drawJobsProcessing: number;
+    drawJobsFailed: number;
+    terminalManifestRamDrawJobsPending: number;
+  }> {
+    const [activeRoomsRes, queuedRes, processingRes, failedRes] =
+      await Promise.all([
+        this.db
+          .from("rooms")
+          .select("id", { count: "exact", head: true })
+          .eq("gameplay_persist_mode", "per_draw")
+          .in("status", ["waiting", "playing", "settling"]),
+        this.db
+          .from("draw_jobs")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "queued"),
+        this.db
+          .from("draw_jobs")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "processing"),
+        this.db
+          .from("draw_jobs")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "failed"),
+      ]);
+
+    if (activeRoomsRes.error) {
+      fail(
+        "fetchLegacyDrawProcessorGateSnapshot:activeRooms",
+        activeRoomsRes.error.message
+      );
+    }
+    if (queuedRes.error) {
+      fail(
+        "fetchLegacyDrawProcessorGateSnapshot:queued",
+        queuedRes.error.message
+      );
+    }
+    if (processingRes.error) {
+      fail(
+        "fetchLegacyDrawProcessorGateSnapshot:processing",
+        processingRes.error.message
+      );
+    }
+    if (failedRes.error) {
+      fail(
+        "fetchLegacyDrawProcessorGateSnapshot:failed",
+        failedRes.error.message
+      );
+    }
+
+    return {
+      activePerDrawRooms: activeRoomsRes.count ?? 0,
+      drawJobsQueued: queuedRes.count ?? 0,
+      drawJobsProcessing: processingRes.count ?? 0,
+      drawJobsFailed: failedRes.count ?? 0,
+      terminalManifestRamDrawJobsPending: 0,
+    };
+  }
+
+  /** Snapshot for R8B-2 legacy ding-processor config gate (fail-closed disable). */
+  async fetchLegacyDingProcessorGateSnapshot(): Promise<{
+    activePerDrawDingRooms: number;
+    dingJobsQueued: number;
+    dingJobsProcessing: number;
+    dingJobsFailed: number;
+  }> {
+    const [activeRoomsRes, queuedRes, processingRes, failedRes] =
+      await Promise.all([
+        this.db
+          .from("rooms")
+          .select("id", { count: "exact", head: true })
+          .in("status", ["playing", "settling"])
+          .eq("ding_settle_mode", "per_draw"),
+        this.db
+          .from("ding_apply_jobs")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "queued"),
+        this.db
+          .from("ding_apply_jobs")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "processing"),
+        this.db
+          .from("ding_apply_jobs")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "failed"),
+      ]);
+
+    if (activeRoomsRes.error) {
+      fail(
+        "fetchLegacyDingProcessorGateSnapshot:activeRooms",
+        activeRoomsRes.error.message
+      );
+    }
+    if (queuedRes.error) {
+      fail(
+        "fetchLegacyDingProcessorGateSnapshot:queued",
+        queuedRes.error.message
+      );
+    }
+    if (processingRes.error) {
+      fail(
+        "fetchLegacyDingProcessorGateSnapshot:processing",
+        processingRes.error.message
+      );
+    }
+    if (failedRes.error) {
+      fail(
+        "fetchLegacyDingProcessorGateSnapshot:failed",
+        failedRes.error.message
+      );
+    }
+
+    return {
+      activePerDrawDingRooms: activeRoomsRes.count ?? 0,
+      dingJobsQueued: queuedRes.count ?? 0,
+      dingJobsProcessing: processingRes.count ?? 0,
+      dingJobsFailed: failedRes.count ?? 0,
+    };
+  }
+
   /** True while per_draw jobs or active per_draw rooms remain (ding-processor drain gate). */
   async needsPerDrawDingProcessor(): Promise<boolean> {
     const [queueRes, roomRes] = await Promise.all([
