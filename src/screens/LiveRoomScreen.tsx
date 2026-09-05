@@ -1740,6 +1740,7 @@ export default function LiveRoomScreen({
             <DrawStrip
               roomName={roomCode}
               displayRoomName={displayRoomName}
+              cardPrice={cardPrice}
               showRoomBadge={false}
               commitHash={roomCommitHash}
               currentNumber={latestNumber ?? null}

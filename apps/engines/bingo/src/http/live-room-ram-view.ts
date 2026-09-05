@@ -173,7 +173,7 @@ export async function buildLiveRoomSnapshotFromRam(
       id: roomId,
       status: room.status,
       room_code: frozenMeta?.roomCode ?? null,
-      room_name: null,
+      room_name: frozenMeta?.roomName ?? null,
       room_seed_hash: frozenMeta?.roomSeedHash ?? null,
       card_price: frozenMeta?.cardPrice ?? 0,
       currency: room.currency || "IRR",

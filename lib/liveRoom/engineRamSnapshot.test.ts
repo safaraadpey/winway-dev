@@ -153,6 +153,7 @@ describe("applyLiveRoomSnapshotUpdate", () => {
         line_reward_percentage: 0.1,
         full_reward_percentage: 0.9,
         room_code: "254655",
+        room_name: "پنج هزار",
       },
     });
     const incoming = baseSnapshot({
@@ -178,6 +179,7 @@ describe("applyLiveRoomSnapshotUpdate", () => {
     assert.equal(result.snapshot.room.line_reward_percentage, 0.1);
     assert.equal(result.snapshot.room.full_reward_percentage, 0.9);
     assert.equal(result.snapshot.room.room_code, "254655");
+    assert.equal(result.snapshot.room.room_name, "پنج هزار");
     assert.equal(result.snapshot.cards.length, 1);
   });
 

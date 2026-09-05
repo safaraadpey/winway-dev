@@ -6,6 +6,8 @@ interface DrawStripProps {
   roomName?: string;
   /** Lobby template display name (e.g. «پنج هزار») — shown left of commit pill. */
   displayRoomName?: string | null;
+  /** Ticket price fallback when template name is missing (manifest_ram). */
+  cardPrice?: number | null;
   showRoomBadge?: boolean;
   commitHash?: string | null;
   currentNumber: number | null;
@@ -21,6 +23,7 @@ interface DrawStripProps {
 export default function DrawStrip({
   roomName,
   displayRoomName = null,
+  cardPrice = null,
   showRoomBadge = true,
   commitHash = null,
   currentNumber,
@@ -133,6 +136,8 @@ export default function DrawStrip({
     currentNumber === winningFullDrawNumber;
 
   const trimmedDisplayName = displayRoomName?.trim() || null;
+  const showCardPriceFallback =
+    !trimmedDisplayName && cardPrice != null && Number.isFinite(cardPrice) && cardPrice > 0;
 
   return (
     <div className={styles.container}>
@@ -148,6 +153,13 @@ export default function DrawStrip({
           <span className={styles.commitGroup} dir="ltr">
             {trimmedDisplayName ? (
               <span className={styles.commitRoomName}>{trimmedDisplayName}</span>
+            ) : showCardPriceFallback ? (
+              <span
+                className={`${styles.commitRoomName} numeric-text numeric-text--14`}
+                dir="ltr"
+              >
+                {cardPrice.toLocaleString("en-US")}
+              </span>
             ) : null}
             <span className={styles.commitRow}>
               {copyToast && (

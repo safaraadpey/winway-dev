@@ -235,6 +235,8 @@ export type CardPoolVersionMeta = {
 
 export type FrozenManifestRoomMeta = {
   roomCode: string | null;
+  /** Lobby template name (e.g. «پنج هزار») — DrawStrip ticket-price label. */
+  roomName: string | null;
   roomSeedHash: string | null;
   cardPrice: number;
   commissionRate: number;
@@ -339,6 +341,7 @@ export async function loadFrozenManifestRoomMetaFromPg(
   try {
     const result = await pgPool.query<{
       room_code: string | null;
+      template_name: string | null;
       room_seed_hash: string | null;
       payload: unknown;
       manifest_version: number;
@@ -348,6 +351,7 @@ export async function loadFrozenManifestRoomMetaFromPg(
       `
       select
         r.room_code,
+        rt.name as template_name,
         r.room_seed_hash,
         m.payload,
         m.manifest_version,
@@ -355,6 +359,7 @@ export async function loadFrozenManifestRoomMetaFromPg(
         m.rng_version
       from public.game_manifests m
       inner join public.rooms r on r.id = m.room_id
+      left join public.room_templates rt on rt.id = r.room_template_id
       where m.room_id = $1::uuid
       limit 1
       `,
@@ -376,8 +381,14 @@ export async function loadFrozenManifestRoomMetaFromPg(
       manifest.fullRewardPercentage
     );
 
+    const roomName =
+      typeof row.template_name === "string" && row.template_name.trim()
+        ? row.template_name.trim()
+        : null;
+
     return {
       roomCode: row.room_code,
+      roomName,
       roomSeedHash: row.room_seed_hash ?? manifest.roomSeedHash ?? null,
       cardPrice,
       commissionRate: deriveCommissionRateFromManifest(manifest),
