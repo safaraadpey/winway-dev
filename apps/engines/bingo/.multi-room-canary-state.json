@@ -1,0 +1,34 @@
+{
+  "rooms": [
+    {
+      "roomId": "9370502c-1711-4708-899b-d9e9b858665b",
+      "templateId": "e6903960-8ce4-466a-afc2-5f031f7fe363",
+      "crashRecovery": true
+    },
+    {
+      "roomId": "f2fb6895-ae4b-4c43-8207-04e5aad880a3",
+      "templateId": "35474b3d-4d65-4805-ba6a-2060c13b53cf",
+      "crashRecovery": false
+    },
+    {
+      "roomId": "c7f83c7d-cd3d-4dfb-a131-b86a0c63a7f3",
+      "templateId": "dc2fc0d7-b4f2-43ca-a8dd-33f1899f4246",
+      "crashRecovery": false
+    },
+    {
+      "roomId": "ce0dcd08-858d-4fca-90db-2032a2e26940",
+      "templateId": "2472a8c3-355f-486d-ab68-de54141cf088",
+      "crashRecovery": false
+    },
+    {
+      "roomId": "e52b0d1d-5e49-4241-a2c7-83c09ee67913",
+      "templateId": "b5f36132-63b1-4ad1-9b10-5a249d577f20",
+      "crashRecovery": false
+    }
+  ],
+  "startedAt": "2026-09-05T00:39:26.329Z",
+  "maxRamDrawLagMs": 0,
+  "dbTimeouts": 0,
+  "leaseErrors": 0,
+  "rollbackTriggered": false
+}

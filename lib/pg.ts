@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { logServicePoolConfig } from "@/lib/db/poolObservability";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -55,12 +56,21 @@ function createPgPool(): Pool | null {
     max: usesTransactionPooler ? 10 : 3,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
+    application_name: "vercel-api",
   });
 }
 
 const normalizedConnectionString = process.env.DATABASE_URL
   ? normalizePgConnectionString(process.env.DATABASE_URL)
   : null;
+
+if (normalizedConnectionString) {
+  logServicePoolConfig("vercel-api", {
+    connectionString: normalizedConnectionString,
+    max: normalizedConnectionString.includes(":6543") ? 10 : 3,
+    application_name: "vercel-api",
+  });
+}
 
 if (
   process.env.NODE_ENV !== "production" &&

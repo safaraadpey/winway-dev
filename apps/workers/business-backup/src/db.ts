@@ -1,13 +1,49 @@
 import { Pool, type PoolClient } from "pg";
 
 const ssl = { rejectUnauthorized: false };
+const IDLE_TIMEOUT_MS = 30_000;
+const CONNECT_TIMEOUT_MS = 5_000;
+
+function logPoolConfig(label: string, connectionString: string, max: number): void {
+  try {
+    const dbUrl = new URL(connectionString);
+    const port = dbUrl.port || "5432";
+    const mode =
+      port === "6543" || dbUrl.searchParams.get("pgbouncer") === "true"
+        ? "transaction-pooler"
+        : port === "5432"
+          ? "session-pooler"
+          : "direct";
+    console.info("[Pool] service pool configured", {
+      service: label,
+      max,
+      application_name: "business-backup",
+      host: dbUrl.hostname,
+      port,
+      mode,
+    });
+  } catch {
+    console.info("[Pool] service pool configured", {
+      service: label,
+      max,
+      application_name: "business-backup",
+    });
+  }
+}
 
 export function createProdPool(connectionString: string): Pool {
-  const pool = new Pool({ connectionString, ssl, max: 2 });
+  const pool = new Pool({
+    connectionString,
+    ssl,
+    max: 2,
+    idleTimeoutMillis: IDLE_TIMEOUT_MS,
+    connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
+    application_name: "business-backup",
+  });
+  logPoolConfig("business-backup-prod-read", connectionString, 2);
   pool.on("connect", (client) => {
     void client.query(`
       SET default_transaction_read_only = on;
-      SET application_name = 'winway-backup';
       SET search_path = public, deposit, platform, tic_tac_toe, storage;
     `);
   });
@@ -15,7 +51,15 @@ export function createProdPool(connectionString: string): Pool {
 }
 
 export function createBackupPool(connectionString: string): Pool {
-  return new Pool({ connectionString, ssl, max: 4 });
+  logPoolConfig("business-backup-archive", connectionString, 4);
+  return new Pool({
+    connectionString,
+    ssl,
+    max: 4,
+    idleTimeoutMillis: IDLE_TIMEOUT_MS,
+    connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
+    application_name: "business-backup",
+  });
 }
 
 export async function withProdReadOnly<T>(

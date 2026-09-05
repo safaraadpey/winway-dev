@@ -10,8 +10,36 @@ export function createPool(connectionString: string): Pool {
     connectionString,
     ssl,
     max: 2,
-    application_name: "winway-performance-snapshot",
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 5_000,
+    application_name: "performance-snapshot",
   });
+
+  try {
+    const dbUrl = new URL(connectionString);
+    const port = dbUrl.port || "5432";
+    const mode =
+      port === "6543" || dbUrl.searchParams.get("pgbouncer") === "true"
+        ? "transaction-pooler"
+        : port === "5432"
+          ? "session-pooler"
+          : "direct";
+    console.info("[Pool] service pool configured", {
+      service: "performance-snapshot",
+      max: 2,
+      application_name: "performance-snapshot",
+      host: dbUrl.hostname,
+      port,
+      mode,
+    });
+  } catch {
+    console.info("[Pool] service pool configured", {
+      service: "performance-snapshot",
+      max: 2,
+      application_name: "performance-snapshot",
+    });
+  }
+
   return pool;
 }
 

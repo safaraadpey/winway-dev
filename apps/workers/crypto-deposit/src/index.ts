@@ -55,10 +55,41 @@ async function main(): Promise<void> {
 
   const { startCryptoScanners } = await import("./scheduler.js");
 
+  const connectionString = requireEnv("DATABASE_URL");
+  // deposit-core mapPool uses DEFAULT_CONCURRENCY=4 per scan tick.
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString,
     ssl: { rejectUnauthorized: false },
+    max: 4,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 5_000,
+    application_name: "crypto-deposit",
   });
+
+  try {
+    const dbUrl = new URL(connectionString);
+    const port = dbUrl.port || "5432";
+    const mode =
+      port === "6543" || dbUrl.searchParams.get("pgbouncer") === "true"
+        ? "transaction-pooler"
+        : port === "5432"
+          ? "session-pooler"
+          : "direct";
+    console.log("[Pool] service pool configured", {
+      service: "crypto-deposit",
+      max: 4,
+      application_name: "crypto-deposit",
+      host: dbUrl.hostname,
+      port,
+      mode,
+    });
+  } catch {
+    console.log("[Pool] service pool configured", {
+      service: "crypto-deposit",
+      max: 4,
+      application_name: "crypto-deposit",
+    });
+  }
 
   const httpPort = resolveHttpPort(process.env.CRYPTO_DEPOSIT_HTTP_PORT, 8080);
 

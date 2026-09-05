@@ -21,10 +21,40 @@ function resolveHttpPort(workerPortEnv: string | undefined, defaultPort: number)
 
 async function main(): Promise<void> {
   requireEnv("DATABASE_URL");
+  const connectionString = process.env.DATABASE_URL!;
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString,
     ssl: { rejectUnauthorized: false },
+    max: 2,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 5_000,
+    application_name: "leo-engine",
   });
+
+  try {
+    const dbUrl = new URL(connectionString);
+    const port = dbUrl.port || "5432";
+    const mode =
+      port === "6543" || dbUrl.searchParams.get("pgbouncer") === "true"
+        ? "transaction-pooler"
+        : port === "5432"
+          ? "session-pooler"
+          : "direct";
+    console.log("[Pool] service pool configured", {
+      service: "leo-engine",
+      max: 2,
+      application_name: "leo-engine",
+      host: dbUrl.hostname,
+      port,
+      mode,
+    });
+  } catch {
+    console.log("[Pool] service pool configured", {
+      service: "leo-engine",
+      max: 2,
+      application_name: "leo-engine",
+    });
+  }
 
   const httpPort = resolveHttpPort(process.env.LEO_ENGINE_HTTP_PORT, 8081);
   const schedulerMs = parsePositiveInt(process.env.LEO_SCHEDULER_INTERVAL_MS, 60_000);
