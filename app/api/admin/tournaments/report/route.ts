@@ -34,23 +34,37 @@ export async function GET(request: NextRequest) {
     const fromIso = from.toISOString();
     const toIso = to.toISOString();
 
+    // Admin panel (admin + sub-admins): hide test tournaments from this report.
+    // Super/agent report queries stay unchanged.
+    const excludeTestTournaments = session.role === "admin";
+
+    let countQuery = supabase
+      .from("tournaments")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "finished")
+      .gte("updated_at", fromIso)
+      .lte("updated_at", toIso);
+    let rowsQuery = supabase
+      .from("tournaments")
+      .select(
+        "id,title,status,start_at,updated_at,currency,ticket_price,guaranteed_prize,commission_snapshot_at"
+      )
+      .eq("status", "finished")
+      .gte("updated_at", fromIso)
+      .lte("updated_at", toIso)
+      .order("updated_at", { ascending: false })
+      .range(offset, offset + pageSize - 1);
+
+    if (excludeTestTournaments) {
+      const notTest =
+        "meta->is_test_tournament.is.null,meta->is_test_tournament.eq.false";
+      countQuery = countQuery.or(notTest);
+      rowsQuery = rowsQuery.or(notTest);
+    }
+
     const [{ count, error: countError }, { data: rows, error: rowsError }] = await Promise.all([
-      supabase
-        .from("tournaments")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "finished")
-        .gte("updated_at", fromIso)
-        .lte("updated_at", toIso),
-      supabase
-        .from("tournaments")
-        .select(
-          "id,title,status,start_at,updated_at,currency,ticket_price,guaranteed_prize,commission_snapshot_at"
-        )
-        .eq("status", "finished")
-        .gte("updated_at", fromIso)
-        .lte("updated_at", toIso)
-        .order("updated_at", { ascending: false })
-        .range(offset, offset + pageSize - 1),
+      countQuery,
+      rowsQuery,
     ]);
 
     if (countError || rowsError) {
