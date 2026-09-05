@@ -199,6 +199,46 @@ export function applyLiveRoomSnapshotUpdate(
   return { accepted: true, snapshot };
 }
 
+export function isEngineRamUnavailableError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const text = error.message.toLowerCase();
+  return (
+    text.includes("engine_ram_unavailable") ||
+    text.includes("live room state is on the game engine")
+  );
+}
+
+export function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/** Brief retries while engine RAM is still warming after room start. */
+export async function retryWhileEngineRamUnavailable<T>(
+  run: () => Promise<T>,
+  opts?: { delaysMs?: number[] }
+): Promise<T> {
+  const delays = opts?.delaysMs ?? [120, 250, 400];
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= delays.length; attempt += 1) {
+    try {
+      return await run();
+    } catch (error) {
+      lastError = error;
+      if (!isEngineRamUnavailableError(error) || attempt === delays.length) {
+        throw error;
+      }
+      console.info("[LiveRoom] engine RAM unavailable, retry", {
+        attempt: attempt + 1,
+        delayMs: delays[attempt],
+      });
+      await waitMs(delays[attempt]);
+    }
+  }
+  throw lastError;
+}
+
 /** engine_ram reveal cursor must never shrink on shorter draw lists. */
 export function shouldRewindRevealCursor(
   authCount: number,

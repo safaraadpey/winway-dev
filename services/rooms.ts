@@ -14,6 +14,7 @@ import {
   joinOrCreateRoomViaEngine,
   mapJoinEngineError,
 } from "@/lib/gameEngineClient";
+import { retryWhileEngineRamUnavailable } from "@/lib/liveRoom/engineRamSnapshot";
 import { ensureCardPoolCache } from "@/lib/cardPool/client";
 import { applyCardPoolCacheToSnapshot } from "@/lib/cardPool/resolve";
 import { isCardPoolCacheEnabled } from "@/lib/cardPool/config";
@@ -754,7 +755,9 @@ export async function fetchLiveRoomSnapshot(
 
   if (isGameEngineEnabled()) {
     try {
-      snapshot = (await getLiveRoom(roomId, options?.scope)) as LiveRoomSnapshot;
+      snapshot = (await retryWhileEngineRamUnavailable(
+        () => getLiveRoom(roomId, options?.scope) as Promise<LiveRoomSnapshot>
+      )) as LiveRoomSnapshot;
     } catch (error) {
       console.error("[LiveRoom] engine path failed", error);
       if (

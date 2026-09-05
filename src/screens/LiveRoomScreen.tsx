@@ -42,11 +42,13 @@ import {
 } from "@/lib/draw-order";
 import {
   applyLiveRoomSnapshotUpdate,
+  isEngineRamUnavailableError,
   isManifestRamEngineOnlyPhase,
   resolveDrawSource,
   shouldRewindRevealCursor,
   shouldSyncWinnersDisplayFromDb,
   shouldUsePgLiveDrawUpdates,
+  waitMs,
 } from "@/lib/liveRoom/engineRamSnapshot";
 import {
   canOpenLiveResultsDialog,
@@ -1040,52 +1042,70 @@ export default function LiveRoomScreen({
 
     async function loadInitialSnapshot() {
       if (!roomId || isHardExiting()) return;
-      try {
-        console.info("[LiveRoom] Fetching live-room snapshot", { roomId });
-        const snapshot = await fetchSnapshot(roomId, {
-          engineOnly: resolveEngineOnlyFetch(),
-        });
-        if (!isMounted) return;
-
-        roomStatusRef.current = (snapshot.room.status || "")
-          .trim()
-          .toLowerCase();
-        replayModeRef.current = isRoomTerminalStatus(roomStatusRef.current);
-        if (replayModeRef.current) {
-          console.log("[LiveRoom] Replay mode; results dialog suppressed", {
-            roomId,
-            status: roomStatusRef.current,
+      let attempt = 0;
+      while (isMounted && !isHardExiting()) {
+        try {
+          console.info("[LiveRoom] Fetching live-room snapshot", { roomId, attempt });
+          const snapshot = await fetchSnapshot(roomId, {
+            engineOnly: resolveEngineOnlyFetch(),
           });
-        }
-        setData((prev) => commitSnapshotUpdate(prev, snapshot) ?? snapshot);
-        setHasLiveSnapshot(true);
-        persistLiveRoomShellCache(roomId, snapshot);
-        markDrawSynced();
-        setError(null);
+          if (!isMounted) return;
 
-        console.info("[LiveRoom] Hydrated from snapshot", {
-          roomId,
-          draws: snapshot.draws.map((d) => d.number),
-        });
+          roomStatusRef.current = (snapshot.room.status || "")
+            .trim()
+            .toLowerCase();
+          replayModeRef.current = isRoomTerminalStatus(roomStatusRef.current);
+          if (replayModeRef.current) {
+            console.log("[LiveRoom] Replay mode; results dialog suppressed", {
+              roomId,
+              status: roomStatusRef.current,
+            });
+          }
+          setData((prev) => commitSnapshotUpdate(prev, snapshot) ?? snapshot);
+          setHasLiveSnapshot(true);
+          persistLiveRoomShellCache(roomId, snapshot);
+          markDrawSynced();
+          setError(null);
 
-        if (
-          isMounted &&
-          PLAYING_ROOM_STATUSES.has(
-            (snapshot.room.status || "").trim().toLowerCase()
-          ) &&
-          snapshot.draws.length === 0
-        ) {
-          void runDrawSyncPollRef.current();
-        }
+          console.info("[LiveRoom] Hydrated from snapshot", {
+            roomId,
+            draws: snapshot.draws.map((d) => d.number),
+          });
 
-        if (isMounted) {
-          markRealtimeActivityRef.current();
-          await syncWinnersFromApiRef.current(snapshot);
-        }
-      } catch (err: any) {
-        console.error("[LiveRoom] snapshot load error:", err);
-        if (isMounted) {
-          setError(err.message || "خطا در بارگذاری اطلاعات بازی");
+          if (
+            isMounted &&
+            PLAYING_ROOM_STATUSES.has(
+              (snapshot.room.status || "").trim().toLowerCase()
+            ) &&
+            snapshot.draws.length === 0
+          ) {
+            void runDrawSyncPollRef.current();
+          }
+
+          if (isMounted) {
+            markRealtimeActivityRef.current();
+            await syncWinnersFromApiRef.current(snapshot);
+          }
+          return;
+        } catch (err: unknown) {
+          if (isEngineRamUnavailableError(err)) {
+            attempt += 1;
+            if (attempt <= 3 || attempt % 5 === 0) {
+              console.info("[LiveRoom] waiting for engine RAM, keep live shell", {
+                roomId,
+                attempt,
+              });
+            }
+            await waitMs(attempt < 6 ? 400 : 1000);
+            continue;
+          }
+          console.error("[LiveRoom] snapshot load error:", err);
+          if (isMounted) {
+            const message =
+              err instanceof Error ? err.message : "خطا در بارگذاری اطلاعات بازی";
+            setError(message);
+          }
+          return;
         }
       }
     }
