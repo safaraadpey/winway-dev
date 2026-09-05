@@ -48,7 +48,14 @@ import {
   shouldSyncWinnersDisplayFromDb,
   shouldUsePgLiveDrawUpdates,
 } from "@/lib/liveRoom/engineRamSnapshot";
-import { resolveDisplayLineWinners } from "@/lib/liveRoom/deriveLiveWinners";
+import {
+  canOpenLiveResultsDialog,
+  resolveDisplayFullWinners,
+  resolveDisplayLineWinners,
+  revealCountThroughFirstFullWin,
+  shouldPollDrawsAfterStatus,
+  shouldRevealNextLiveDraw,
+} from "@/lib/liveRoom/deriveLiveWinners";
 import { useActiveGamesContext } from "@/lib/contexts/ActiveGamesContext";
 import { useSession } from "@/lib/contexts/SessionContext";
 import { isHardExiting } from "@/lib/auth/hardExit";
@@ -155,28 +162,13 @@ function cardWinnersEqual(a: CardWinner[], b: CardWinner[]): boolean {
   return b.every((w) => setA.has(key(w)));
 }
 
-function isFullWinRevealedInUi(
-  fullWinners: FullWinner[],
-  calledNumbers: number[]
-): boolean {
-  if (fullWinners.length === 0) return true;
-  return fullWinners.every((w) => {
-    const draw = w.drawNumber;
-    if (draw == null || draw === 0) return true;
-    return calledNumbers.includes(draw);
-  });
-}
-
-/** پاپ‌آپ نتایج وقتی اتاق تمام شده و توپ برنده full در UI دیده شده. */
+/** پاپ‌آپ نتایج فقط وقتی دبرنا روی کارت‌های دیده‌شده کامل شده. */
 function canOpenResultsDialog(
   fullWinners: FullWinner[],
-  calledNumbers: number[],
+  _calledNumbers: number[],
   status: string
 ): boolean {
-  const terminal = isRoomTerminalStatus(status);
-  if (!terminal && fullWinners.length === 0) return false;
-  if (!isFullWinRevealedInUi(fullWinners, calledNumbers)) return false;
-  return terminal || fullWinners.length > 0;
+  return canOpenLiveResultsDialog(fullWinners, status);
 }
 
 export default function LiveRoomScreen({
@@ -527,10 +519,19 @@ export default function LiveRoomScreen({
     [data?.draws, liveDrawSource]
   );
 
-  const displayedCalledNumbers = useMemo(
-    () => authoritativeCalledNumbers.slice(0, revealedDrawCount),
-    [authoritativeCalledNumbers, revealedDrawCount]
+  const fullWinRevealCap = useMemo(
+    () =>
+      revealCountThroughFirstFullWin(data?.cards, authoritativeCalledNumbers),
+    [data?.cards, authoritativeCalledNumbers]
   );
+
+  const displayedCalledNumbers = useMemo(() => {
+    const cap =
+      fullWinRevealCap == null
+        ? revealedDrawCount
+        : Math.min(revealedDrawCount, fullWinRevealCap);
+    return authoritativeCalledNumbers.slice(0, cap);
+  }, [authoritativeCalledNumbers, revealedDrawCount, fullWinRevealCap]);
 
   const displayLineWinners = useMemo(
     () =>
@@ -540,6 +541,16 @@ export default function LiveRoomScreen({
         dbLineWinners: lineWinners,
       }),
     [data, displayedCalledNumbers, lineWinners]
+  );
+
+  const displayFullWinners = useMemo(
+    () =>
+      resolveDisplayFullWinners({
+        snapshot: data,
+        calledInOrder: displayedCalledNumbers,
+        dbFullWinners: fullWinners,
+      }),
+    [data, displayedCalledNumbers, fullWinners]
   );
 
   const handleNewDraw = useCallback(
@@ -565,7 +576,19 @@ export default function LiveRoomScreen({
       dataRef.current?.draws ?? [],
       drawSource
     );
-    if (revealedDrawCountRef.current >= sorted.length) return;
+    const called = sorted.map((d) => d.number);
+    const already = called.slice(0, revealedDrawCountRef.current);
+    if (!shouldRevealNextLiveDraw(dataRef.current?.cards, already)) {
+      console.log("[LiveRoom] stop number reveal — full house already on table");
+      return;
+    }
+    const fullCap = revealCountThroughFirstFullWin(
+      dataRef.current?.cards,
+      called
+    );
+    const revealLimit =
+      fullCap == null ? sorted.length : Math.min(sorted.length, fullCap);
+    if (revealedDrawCountRef.current >= revealLimit) return;
 
     const intervalMs = Math.max(drawIntervalSecRef.current * 1000, 500);
     const elapsed = Date.now() - lastRevealAtRef.current;
@@ -577,15 +600,34 @@ export default function LiveRoomScreen({
         dataRef.current?.draws ?? [],
         resolveDrawSource(dataRef.current)
       );
+      const latestCalled = latestSorted.map((d) => d.number);
+      const latestCap = revealCountThroughFirstFullWin(
+        dataRef.current?.cards,
+        latestCalled
+      );
+      const latestLimit =
+        latestCap == null
+          ? latestSorted.length
+          : Math.min(latestSorted.length, latestCap);
       const nextIdx = revealedDrawCountRef.current;
-      if (nextIdx >= latestSorted.length) return;
+      if (nextIdx >= latestLimit) return;
+      const alreadyRevealed = latestCalled.slice(0, nextIdx);
+      if (!shouldRevealNextLiveDraw(dataRef.current?.cards, alreadyRevealed)) {
+        console.log("[LiveRoom] skip playNumber — full house already revealed");
+        return;
+      }
 
       handleNewDraw(latestSorted[nextIdx]!.number);
       revealedDrawCountRef.current = nextIdx + 1;
       setRevealedDrawCount(nextIdx + 1);
       lastRevealAtRef.current = Date.now();
 
-      if (revealedDrawCountRef.current < latestSorted.length) {
+      const revealedNow = latestCalled.slice(0, revealedDrawCountRef.current);
+      if (!shouldRevealNextLiveDraw(dataRef.current?.cards, revealedNow)) {
+        console.log("[LiveRoom] stop number reveal after winning ball");
+        return;
+      }
+      if (revealedDrawCountRef.current < latestLimit) {
         scheduleNextDrawRevealRef.current();
       }
     }, delay);
@@ -597,8 +639,13 @@ export default function LiveRoomScreen({
   }, [scheduleNextDrawReveal]);
 
   useEffect(() => {
-    fullWinnersRef.current = fullWinners;
-  }, [fullWinners]);
+    fullWinnersRef.current = displayFullWinners;
+    if (displayFullWinners.length === 0) return;
+    if (revealTimerRef.current) {
+      clearTimeout(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
+  }, [displayFullWinners]);
 
   useEffect(() => {
     calledNumbersRef.current = displayedCalledNumbers;
@@ -632,23 +679,36 @@ export default function LiveRoomScreen({
       setRevealedDrawCount(authCount);
     }
 
-    if (authCount > revealedDrawCountRef.current) {
+    const cap = revealCountThroughFirstFullWin(
+      data?.cards,
+      orderDrawsForLiveRoom(data?.draws ?? [], drawSource).map((d) => d.number)
+    );
+    const limit = cap == null ? authCount : Math.min(authCount, cap);
+    if (revealedDrawCountRef.current >= limit) {
+      if (revealTimerRef.current) {
+        clearTimeout(revealTimerRef.current);
+        revealTimerRef.current = null;
+      }
+      return;
+    }
+
+    if (limit > revealedDrawCountRef.current) {
       scheduleNextDrawRevealRef.current();
     }
-  }, [data?.draws, data?.source, hasLiveSnapshot]);
+  }, [data?.draws, data?.source, data?.cards, hasLiveSnapshot]);
 
   useEffect(() => {
     if (replayModeRef.current) return;
     if (resultsRequestedRef.current) return;
     const status = (data?.room?.status || "").trim().toLowerCase();
-    if (!canOpenResultsDialog(fullWinners, displayedCalledNumbers, status)) {
+    if (!canOpenResultsDialog(displayFullWinners, displayedCalledNumbers, status)) {
       return;
     }
     void tryOpenResultsDialog();
   }, [
     data?.room?.status,
     data?.draws?.length,
-    fullWinners,
+    displayFullWinners,
     displayedCalledNumbers,
     tryOpenResultsDialog,
   ]);
@@ -671,19 +731,41 @@ export default function LiveRoomScreen({
 
   const markDrawSynced = markDrawSync;
 
+  const needsDrawCatchUp = () => {
+    const snap = dataRef.current;
+    const called = orderDrawsForLiveRoom(
+      snap?.draws ?? [],
+      resolveDrawSource(snap)
+    ).map((d) => d.number);
+    if (called.length === 0) return false;
+    const revealed = called.slice(
+      0,
+      Math.min(revealedDrawCountRef.current, called.length)
+    );
+    if (!shouldRevealNextLiveDraw(snap?.cards, revealed)) return false;
+    return revealedDrawCountRef.current < called.length;
+  };
+
   const runDrawSyncPoll = useCallback(async () => {
     if (isHardExiting()) return;
     if (!roomId || pollInFlightRef.current) return;
 
     const status = roomStatusRef.current;
-    if (!PLAYING_ROOM_STATUSES.has(status)) return;
+    if (!shouldPollDrawsAfterStatus(status, needsDrawCatchUp())) return;
 
     pollInFlightRef.current = true;
     try {
-      const snapshot = await fetchSnapshot(roomId, {
-        scope: "draws",
-        engineOnly: resolveEngineOnlyFetch(),
-      });
+      let snapshot;
+      try {
+        snapshot = await fetchSnapshot(roomId, {
+          scope: "draws",
+          engineOnly: resolveEngineOnlyFetch(),
+        });
+      } catch (err) {
+        if (!shouldPollDrawsAfterStatus(status, true)) throw err;
+        console.warn("[LiveRoom] catch-up engine poll failed, retrying", err);
+        snapshot = await fetchSnapshot(roomId, { scope: "draws" });
+      }
       roomStatusRef.current = (snapshot.room.status || "").trim().toLowerCase();
       setData((prev) =>
         commitSnapshotUpdate(
@@ -718,7 +800,9 @@ export default function LiveRoomScreen({
     if (!roomId || pollInFlightRef.current) return;
 
     const status = roomStatusRef.current;
-    if (status && !ACTIVE_ROOM_STATUSES.has(status)) return;
+    if (status && !shouldPollDrawsAfterStatus(status, needsDrawCatchUp())) {
+      return;
+    }
 
     pollInFlightRef.current = true;
     try {
@@ -1015,6 +1099,13 @@ export default function LiveRoomScreen({
 
   useEffect(() => {
     roomStatusRef.current = (data?.room?.status || "").trim().toLowerCase();
+    if (
+      isRoomTerminalStatus(roomStatusRef.current) &&
+      needsDrawCatchUp()
+    ) {
+      console.log("[LiveRoom] terminal catch-up poll for last draw");
+      void runDrawSyncPollRef.current();
+    }
   }, [data?.room?.status]);
 
   // watchdog draw: در playing اگر ریل‌تایم draw نیامد، ~draw_interval+1.5s poll
@@ -1025,7 +1116,7 @@ export default function LiveRoomScreen({
     const tick = () => {
       if (cancelled || isHardExiting()) return;
       const status = roomStatusRef.current;
-      if (!PLAYING_ROOM_STATUSES.has(status)) return;
+      if (!shouldPollDrawsAfterStatus(status, needsDrawCatchUp())) return;
 
       const staleMs =
         drawIntervalSecRef.current * 1000 + DRAW_SYNC_BUFFER_MS;
@@ -1494,15 +1585,10 @@ export default function LiveRoomScreen({
   const hasRevealedLineWinner =
     !data.tournament?.id && displayLineWinners.length > 0;
 
-  const hasRevealedFullWinner = fullWinners.some(
-    (w) =>
-      w.drawNumber == null ||
-      w.drawNumber === 0 ||
-      displayedCalledNumbers.includes(w.drawNumber)
-  );
+  const hasRevealedFullWinner = displayFullWinners.length > 0;
 
   const winningFullDrawNumber =
-    fullWinners.find((w) => w.drawNumber != null && w.drawNumber > 0)
+    displayFullWinners.find((w) => w.drawNumber != null && w.drawNumber > 0)
       ?.drawNumber ?? null;
 
   return (
@@ -1587,7 +1673,7 @@ export default function LiveRoomScreen({
                 isMyCard={card.is_my_card}
                 linePrize={true}
                 lineWinners={displayLineWinners}
-                fullWinners={fullWinners}
+                fullWinners={displayFullWinners}
                 cardData={card.card}
                 infoPresentation={overlayVariant ? "row1-overlay" : "header"}
                 infoOverlayVisible={overlayVariant && cardsInfoVisible}

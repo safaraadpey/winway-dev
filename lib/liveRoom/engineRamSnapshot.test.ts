@@ -317,6 +317,47 @@ describe("shouldRewindRevealCursor", () => {
   });
 });
 
+describe("applyLiveRoomSnapshotUpdate post-finish PG catch-up", () => {
+  it("keeps cards and does not balloon RAM+PG draw ids (1BAD36)", () => {
+    const ramDraws = Array.from({ length: 73 }, (_, i) => ({
+      id: `ram-room-${i + 1}`,
+      number: i + 1,
+      created_at: "t",
+      processed_at: "t",
+    }));
+    const prev = baseSnapshot({
+      eventSeq: 80,
+      draws: ramDraws,
+      cards: [CARD],
+    });
+    const incoming: LiveRoomSnapshot = {
+      source: undefined,
+      eventSeq: undefined,
+      room: {
+        id: "room-1",
+        status: "finished",
+      } as LiveRoomSnapshot["room"],
+      cards: [],
+      draws: Array.from({ length: 88 }, (_, i) => ({
+        id: `aaaaaaaa-bbbb-cccc-dddd-${String(i + 1).padStart(12, "0")}`,
+        number: i + 1,
+        created_at: "t",
+        processed_at: "t",
+      })),
+    };
+    const result = applyLiveRoomSnapshotUpdate(prev, incoming);
+    assert.equal(result.accepted, true);
+    assert.equal(result.snapshot.cards.length, 1);
+    assert.equal(result.snapshot.draws.length, 88);
+    assert.deepEqual(
+      result.snapshot.draws.map((d) => d.number).slice(0, 73),
+      ramDraws.map((d) => d.number)
+    );
+    assert.equal(result.snapshot.room.gameplay_persist_mode, "manifest_ram");
+    assert.equal(result.snapshot.room.status, "finished");
+  });
+});
+
 describe("engine_ram sequence 1..15", () => {
   it("preserves numeric call order through applyLiveRoomSnapshotUpdate", () => {
     const prev = baseSnapshot({ eventSeq: 0, draws: [] });

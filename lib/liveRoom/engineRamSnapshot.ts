@@ -140,7 +140,12 @@ export function applyLiveRoomSnapshotUpdate(
   incoming: LiveRoomSnapshot,
   opts?: { pendingDraws?: ProcessedDraw[] }
 ): ApplySnapshotResult {
-  const drawSource = resolveDrawSource(incoming) ?? resolveDrawSource(prev ?? undefined);
+  const roomForSource = mergeLiveRoomRoomFields(prev?.room, incoming.room);
+  const drawSource =
+    resolveDrawSource({
+      source: incoming.source ?? prev?.source,
+      room: roomForSource,
+    }) ?? resolveDrawSource(prev ?? undefined);
   const pending =
     drawSource === "engine_ram" ? [] : (opts?.pendingDraws ?? []);
 
@@ -163,8 +168,11 @@ export function applyLiveRoomSnapshotUpdate(
     ? mergeDrawListsForLiveRoom(prev.draws, incomingDraws, drawSource)
     : incomingDraws;
 
-  const cards = preserveLiveRoomCards(prev?.cards, incoming.cards, incoming);
-  const room = mergeLiveRoomRoomFields(prev?.room, incoming.room);
+  const cards = preserveLiveRoomCards(prev?.cards, incoming.cards, {
+    source: incoming.source ?? prev?.source,
+    room: roomForSource,
+  });
+  const room = roomForSource;
   const line_winners = mergeLiveRoomWinners(
     prev?.line_winners,
     incoming.line_winners

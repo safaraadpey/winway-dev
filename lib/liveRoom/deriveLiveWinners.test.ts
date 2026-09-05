@@ -5,8 +5,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { LiveRoomSnapshot } from "@/services/rooms";
 import {
+  canOpenLiveResultsDialog,
+  deriveFirstFullWinners,
   deriveFirstLineWinners,
   resolveDisplayLineWinners,
+  revealCountThroughFirstFullWin,
+  shouldPollDrawsAfterStatus,
+  shouldRevealNextLiveDraw,
 } from "./deriveLiveWinners.js";
 
 function card(
@@ -57,6 +62,50 @@ describe("deriveFirstLineWinners", () => {
   });
 });
 
+describe("deriveFirstFullWinners", () => {
+  it("stops at the first ball that completes a card, even if that ball is 1", () => {
+    const fullCard = card("t-full", "u1", [
+      [1, 2, 3, 4, 5, null, null, null, null],
+      [11, 12, 13, 14, 15, null, null, null, null],
+      [21, 22, 23, 24, 25, null, null, null, null],
+    ]);
+    const called = [11, 12, 13, 14, 15, 21, 22, 23, 24, 25, 2, 3, 4, 5, 90, 1, 70];
+    const winners = deriveFirstFullWinners([fullCard], called);
+    assert.deepEqual(winners, [
+      { ticketId: "t-full", userId: "u1", drawNumber: 1 },
+    ]);
+    assert.equal(revealCountThroughFirstFullWin([fullCard], called), 16);
+    assert.equal(
+      shouldRevealNextLiveDraw([fullCard], called.slice(0, 16)),
+      false
+    );
+    assert.equal(
+      shouldRevealNextLiveDraw([fullCard], called.slice(0, 15)),
+      true
+    );
+    assert.equal(
+      canOpenLiveResultsDialog([], "finished"),
+      false
+    );
+    assert.equal(
+      canOpenLiveResultsDialog(
+        [{ ticketId: "t-full", userId: "u1", drawNumber: 1 }],
+        "playing"
+      ),
+      true
+    );
+  });
+});
+
+describe("shouldPollDrawsAfterStatus", () => {
+  it("keeps polling through settling and finished until UI caught the last ball", () => {
+    assert.equal(shouldPollDrawsAfterStatus("playing", false), true);
+    assert.equal(shouldPollDrawsAfterStatus("settling", false), true);
+    assert.equal(shouldPollDrawsAfterStatus("finished", true), true);
+    assert.equal(shouldPollDrawsAfterStatus("finished", false), false);
+  });
+});
+
 describe("resolveDisplayLineWinners", () => {
   const room = {
     id: "r1",
@@ -89,7 +138,7 @@ describe("resolveDisplayLineWinners", () => {
     assert.equal(winners[0]?.drawNumber, 5);
   });
 
-  it("prefers engine RAM winners when present and revealed", () => {
+  it("uses visible cards over RAM when a line is already complete", () => {
     const snapshot: LiveRoomSnapshot = {
       source: "engine_ram",
       room,
@@ -102,8 +151,7 @@ describe("resolveDisplayLineWinners", () => {
       calledInOrder: [1, 2, 3, 4, 5],
       dbLineWinners: [],
     });
-    assert.deepEqual(winners, [
-      { ticketId: "t-engine", userId: "u9", drawNumber: 5 },
-    ]);
+    assert.equal(winners[0]?.ticketId, "t-line");
+    assert.equal(winners[0]?.drawNumber, 5);
   });
 });

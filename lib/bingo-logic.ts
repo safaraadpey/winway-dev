@@ -26,7 +26,8 @@ export function checkFullCardBingo(
     for (let col = 0; col < card[row].length; col++) {
       const value = card[row][col];
       if (value !== null && value !== undefined) {
-        cardNumbersSet.add(value);
+        const n = Number(value);
+        if (Number.isFinite(n)) cardNumbersSet.add(n);
       }
     }
   }
@@ -36,9 +37,13 @@ export function checkFullCardBingo(
     return false;
   }
 
+  const called = new Set(
+    calledNumbers.map((n) => Number(n)).filter((n) => Number.isFinite(n))
+  );
+
   // بررسی اینکه آیا تمام اعداد کارت در لیست اعداد اعلام شده هستند
   for (const num of cardNumbersSet) {
-    if (!calledNumbers.includes(num)) {
+    if (!called.has(num)) {
       return false;
     }
   }
@@ -150,6 +155,9 @@ export function getCompleteRows(
   calledNumbers: number[]
 ): number[] {
   const completeRows: number[] = [];
+  const called = new Set(
+    calledNumbers.map((n) => Number(n)).filter((n) => Number.isFinite(n))
+  );
 
   for (let row = 0; row < card.length; row++) {
     const rowNumbers: number[] = [];
@@ -158,14 +166,14 @@ export function getCompleteRows(
     for (let col = 0; col < card[row].length; col++) {
       const value = card[row][col];
       if (value !== null && value !== undefined) {
-        rowNumbers.push(value);
+        const n = Number(value);
+        if (Number.isFinite(n)) rowNumbers.push(n);
       }
     }
 
     // اگر سطر 5 عدد دارد (قانون Bingo)
     if (rowNumbers.length === 5) {
-      // بررسی اینکه آیا تمام اعداد این سطر خوانده شده‌اند
-      const allCalled = rowNumbers.every(num => calledNumbers.includes(num));
+      const allCalled = rowNumbers.every((num) => called.has(num));
       
       if (allCalled) {
         completeRows.push(row);

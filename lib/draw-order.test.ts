@@ -78,6 +78,48 @@ describe("mergeDrawListsForLiveRoom", () => {
     assert.equal(merged.length, 10);
   });
 
+  it("does not concatenate RAM + PG ids of the same balls (1BAD36 73+88=161)", () => {
+    const ram = Array.from({ length: 73 }, (_, i) => ramDraw(i + 1, (i % 90) + 1));
+    const pg = Array.from({ length: 88 }, (_, i) => ({
+      id: `aaaaaaaa-bbbb-cccc-dddd-${String(i + 1).padStart(12, "0")}`,
+      number: (i % 90) + 1,
+      created_at: NOW,
+      processed_at: NOW,
+    }));
+    const merged = mergeDrawListsForLiveRoom(ram, pg, "engine_ram");
+    assert.equal(merged.length, 88);
+    assert.deepEqual(
+      merged.map((d) => d.number).slice(0, 73),
+      ram.map((d) => d.number)
+    );
+    assert.deepEqual(merged.map((d) => d.number).slice(73), [
+      74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88,
+    ]);
+  });
+
+  it("appends only new balls from a PG dump without rewriting RAM order", () => {
+    const ram = [ramDraw(1, 7), ramDraw(2, 19), ramDraw(3, 12)];
+    const pg: ProcessedDraw[] = [
+      {
+        id: "pg-12",
+        number: 12,
+        created_at: NOW,
+        processed_at: NOW,
+      },
+      {
+        id: "pg-43",
+        number: 43,
+        created_at: NOW,
+        processed_at: NOW,
+      },
+    ];
+    const merged = mergeDrawListsForLiveRoom(ram, pg, "engine_ram");
+    assert.deepEqual(
+      merged.map((d) => d.number),
+      [7, 19, 12, 43]
+    );
+  });
+
   it("per_draw merge still dedupes and sorts by processed_at", () => {
     const merged = mergeDrawLists(
       [

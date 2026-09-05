@@ -8,6 +8,7 @@ import dingCoinIcon from '@/src/assets/icons/ding-coin.png';
 import logoWatermark from "@/src/assets/logo/logo.webp";
 import styles from './BingoCardDemo.module.css';
 import { analyzeCardState } from "@/lib/live-room-helper";
+import { getCompleteRows } from "@/lib/bingo-logic";
 import { isAudioPlaybackAllowedNow } from "@/lib/audio/foreground";
 
 const BASE_WIDTH_PX = 381; // base width including margins/padding for outer wrapper at scale 1
@@ -296,24 +297,30 @@ export default function BingoCardDemo({
     );
     if (!myLineWin) return [];
 
-    const winDrawNumber = myLineWin.drawNumber ?? null;
-    if (winDrawNumber == null) return [];
+    const completeNow = getCompleteRows(card, calledNumbers);
+    if (completeNow.length === 0) return [];
 
-    // افکت برنده خط هم‌زمان با reveal همان عدد در UI نمایش داده شود
-    if (!calledNumbers.includes(winDrawNumber)) return [];
-
-    const winDrawIndex = calledNumbers.indexOf(winDrawNumber);
-    const numbersAtLineWin = calledNumbers.slice(0, winDrawIndex + 1);
-
-    const rowsAtWin = card.reduce((rows: number[], row, idx) => {
-      const values = row.filter((n): n is number => n !== null);
-      if (values.length > 0 && values.every((n) => numbersAtLineWin.includes(n))) {
-        rows.push(idx);
+    const winDrawNumber = Number(myLineWin.drawNumber);
+    if (Number.isFinite(winDrawNumber) && winDrawNumber > 0) {
+      const winDrawIndex = calledNumbers.findIndex(
+        (n) => Number(n) === winDrawNumber
+      );
+      if (winDrawIndex >= 0) {
+        const atWin = getCompleteRows(
+          card,
+          calledNumbers.slice(0, winDrawIndex + 1)
+        );
+        if (atWin.length > 0) {
+          const rows = [atWin[0]];
+          winnerRowsRef.current = rows;
+          hasShownLineWinnerRef.current = true;
+          console.log("[BingoCardDemo] Line winner displayed for ticket:", ticketId, "rows:", rows);
+          return rows;
+        }
       }
-      return rows;
-    }, []);
+    }
 
-    const rows = rowsAtWin.length > 0 ? [rowsAtWin[0]] : [];
+    const rows = [completeNow[0]];
 
     if (rows.length > 0) {
       winnerRowsRef.current = rows;

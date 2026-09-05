@@ -11,7 +11,24 @@ export type ProcessedDraw = {
 };
 
 export function drawKey(draw: ProcessedDraw): string {
+  const n = Number(draw.number);
+  if (Number.isFinite(n) && n >= 1 && n <= 90) return `n:${n}`;
   return draw.id ?? `n:${draw.number}`;
+}
+
+/** Bingo has 90 unique balls — drop duplicate numbers, keep first call order. */
+export function uniqueDrawsInCallOrder(
+  draws: readonly ProcessedDraw[]
+): ProcessedDraw[] {
+  const seen = new Set<number>();
+  const out: ProcessedDraw[] = [];
+  for (const draw of draws) {
+    const n = Number(draw.number);
+    if (!Number.isFinite(n) || n < 1 || n > 90 || seen.has(n)) continue;
+    seen.add(n);
+    out.push({ ...draw, number: n });
+  }
+  return out;
 }
 
 export function sortDraws(draws: readonly ProcessedDraw[]): ProcessedDraw[] {
@@ -37,9 +54,9 @@ export function orderDrawsForLiveRoom(
   source?: LiveDrawSource
 ): ProcessedDraw[] {
   if (source === "engine_ram") {
-    return [...draws];
+    return uniqueDrawsInCallOrder(draws);
   }
-  return sortDraws(draws);
+  return uniqueDrawsInCallOrder(sortDraws(draws));
 }
 
 /** Merge draw rows; incoming server fields win on conflict. */
@@ -69,6 +86,11 @@ export function mergeDrawLists(
   return sortDraws([...byKey.values()]);
 }
 
+function looksLikeEngineRamDrawIds(draws: readonly ProcessedDraw[]): boolean {
+  if (draws.length === 0) return false;
+  return draws.every((d) => !d.id || d.id.startsWith("ram-"));
+}
+
 /** Merge draws respecting engine_ram call-sequence order from the server. */
 export function mergeDrawListsForLiveRoom(
   existing: readonly ProcessedDraw[],
@@ -76,12 +98,20 @@ export function mergeDrawListsForLiveRoom(
   source?: LiveDrawSource
 ): ProcessedDraw[] {
   if (source === "engine_ram") {
-    if (incoming.length === 0) return [...existing];
-    // Never shrink — stale/partial polls must not rewind draw count (DrawStrip 90/x).
-    if (existing.length === 0 || incoming.length >= existing.length) {
-      return [...incoming];
+    const prev = uniqueDrawsInCallOrder(existing);
+    const next = uniqueDrawsInCallOrder(incoming);
+    if (next.length === 0) return prev;
+    if (prev.length === 0) return next;
+    // Live engine polls: take the longer RAM array. Never shrink.
+    if (looksLikeEngineRamDrawIds(incoming) && next.length >= prev.length) {
+      return next;
     }
-    return [...existing];
+    if (looksLikeEngineRamDrawIds(incoming)) {
+      return prev;
+    }
+    // Post-finish PG dump: keep RAM call order, only append missing balls.
+    const seen = new Set(prev.map((d) => d.number));
+    return [...prev, ...next.filter((d) => !seen.has(d.number))];
   }
-  return mergeDrawLists(existing, incoming);
+  return uniqueDrawsInCallOrder(mergeDrawLists(existing, incoming));
 }
