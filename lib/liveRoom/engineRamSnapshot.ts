@@ -100,13 +100,49 @@ export type ApplySnapshotResult =
   | { accepted: true; snapshot: LiveRoomSnapshot }
   | { accepted: false; reason: "stale_event_seq" };
 
+/** manifest_ram live play must not merge PG/realtime draw rows into UI state. */
+export function shouldUsePgLiveDrawUpdates(
+  snapshot: Pick<LiveRoomSnapshot, "source" | "room"> | null | undefined
+): boolean {
+  return resolveDrawSource(snapshot) !== "engine_ram";
+}
+
+/**
+ * PG results are empty during manifest_ram play (writes-per-draw=0).
+ * Sync from DB only after the room leaves the engine-only live phase.
+ */
+export function shouldSyncWinnersDisplayFromDb(
+  snapshot: Pick<LiveRoomSnapshot, "source" | "room"> | null | undefined
+): boolean {
+  if (!snapshot) return false;
+  const status = (snapshot.room.status || "").trim().toLowerCase();
+  const terminal =
+    status !== "" &&
+    !["running", "playing", "live", "waiting"].includes(status);
+  if (
+    snapshot.source === "engine_ram" ||
+    snapshot.room.gameplay_persist_mode === "manifest_ram"
+  ) {
+    return terminal;
+  }
+  return true;
+}
+
+export function mergeLiveRoomWinners<T>(
+  prev: T[] | undefined,
+  incoming: T[] | undefined
+): T[] | undefined {
+  return incoming !== undefined ? incoming : prev;
+}
+
 export function applyLiveRoomSnapshotUpdate(
   prev: LiveRoomSnapshot | null,
   incoming: LiveRoomSnapshot,
   opts?: { pendingDraws?: ProcessedDraw[] }
 ): ApplySnapshotResult {
-  const pending = opts?.pendingDraws ?? [];
   const drawSource = resolveDrawSource(incoming) ?? resolveDrawSource(prev ?? undefined);
+  const pending =
+    drawSource === "engine_ram" ? [] : (opts?.pendingDraws ?? []);
 
   if (
     prev &&
@@ -129,12 +165,22 @@ export function applyLiveRoomSnapshotUpdate(
 
   const cards = preserveLiveRoomCards(prev?.cards, incoming.cards, incoming);
   const room = mergeLiveRoomRoomFields(prev?.room, incoming.room);
+  const line_winners = mergeLiveRoomWinners(
+    prev?.line_winners,
+    incoming.line_winners
+  );
+  const full_winners = mergeLiveRoomWinners(
+    prev?.full_winners,
+    incoming.full_winners
+  );
 
   const snapshot: LiveRoomSnapshot = {
     ...(prev ?? incoming),
     ...incoming,
     room,
     cards,
+    line_winners,
+    full_winners,
     draws: mergedDraws,
     eventSeq:
       incoming.eventSeq != null

@@ -111,6 +111,16 @@ export type LiveRoomEngineResponse = {
     card: (number | null)[][];
     is_my_card: boolean;
   }>;
+  line_winners?: Array<{
+    ticketId: string;
+    userId: string;
+    drawNumber: number;
+  }>;
+  full_winners?: Array<{
+    ticketId: string;
+    userId: string;
+    drawNumber: number;
+  }>;
 };
 
 const LIVE_ROOM_ENGINE_TIMEOUT_MS = 12_000;

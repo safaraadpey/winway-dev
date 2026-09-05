@@ -44,7 +44,12 @@ export default function DrawStrip({
     }, 1500);
   };
 
-  const drawsCount = totalDraws ?? (history.length + (currentNumber ? 1 : 0));
+  const visibleDrawCount =
+    history.length + (currentNumber != null ? 1 : 0);
+  const drawsCount =
+    totalDraws != null
+      ? Math.max(totalDraws, visibleDrawCount)
+      : visibleDrawCount;
   const display =
     currentNumber != null
       ? String(currentNumber)

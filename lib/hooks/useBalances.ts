@@ -547,6 +547,7 @@ export function useBalances(): Balances {
     (balance: number) => {
       if (!isMountedRef.current) return;
       const safeBalance = Number(balance) || 0;
+      const prevBalance = currentBalanceRef.current;
       settledDingRef.current = safeBalance;
       currentBalanceRef.current = safeBalance;
       setDingBalance(safeBalance);
@@ -557,6 +558,9 @@ export function useBalances(): Balances {
       );
       hasHydratedRef.current = true;
       setHasHydrated(true);
+      if (safeBalance > prevBalance) {
+        triggerDingCelebrate();
+      }
     },
     [persistBalanceShell]
   );

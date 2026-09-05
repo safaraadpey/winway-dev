@@ -18,6 +18,12 @@ import {
 } from "./live-room-snapshot-pg.js";
 import type { LiveRoomResponse } from "./live-room-view.js";
 
+export type RamLiveWinner = {
+  ticketId: string;
+  userId: string;
+  drawNumber: number;
+};
+
 function buildDrawsFromRam(state: RoomRuntimeState): LiveDrawRow[] {
   const now = new Date().toISOString();
   return state.getDrawnNumbers().map((number, idx) => ({
@@ -26,6 +32,34 @@ function buildDrawsFromRam(state: RoomRuntimeState): LiveDrawRow[] {
     created_at: now,
     processed_at: now,
   }));
+}
+
+/** Live line/full winners from engine RAM — not public.results (writes-per-draw=0). */
+export function buildRamLiveWinners(state: RoomRuntimeState): {
+  line_winners: RamLiveWinner[];
+  full_winners: RamLiveWinner[];
+} {
+  const userByTicket = new Map(
+    state.getTickets().map((t) => [t.id, t.player_user_id])
+  );
+  const mapWinners = (
+    draws: ReadonlyMap<string, number>
+  ): RamLiveWinner[] =>
+    [...draws.entries()]
+      .map(([ticketId, drawNumber]) => ({
+        ticketId,
+        userId: userByTicket.get(ticketId) ?? "",
+        drawNumber,
+      }))
+      .sort(
+        (a, b) =>
+          a.drawNumber - b.drawNumber || a.ticketId.localeCompare(b.ticketId)
+      );
+
+  return {
+    line_winners: mapWinners(state.getLineWinnerDraws()),
+    full_winners: mapWinners(state.getFullWinnerDraws()),
+  };
 }
 
 export async function buildLiveRoomSnapshotFromRam(
@@ -52,6 +86,7 @@ export async function buildLiveRoomSnapshotFromRam(
   );
 
   const draws = mapDrawRows(buildDrawsFromRam(state));
+  const winners = buildRamLiveWinners(state);
 
   if (drawsOnly) {
     return {
@@ -67,6 +102,8 @@ export async function buildLiveRoomSnapshotFromRam(
       },
       server_now: new Date().toISOString(),
       draws,
+      line_winners: winners.line_winners,
+      full_winners: winners.full_winners,
     } as LiveRoomResponse;
   }
 
@@ -154,5 +191,7 @@ export async function buildLiveRoomSnapshotFromRam(
     draws,
     cards,
     card_pool: cardPool,
+    line_winners: winners.line_winners,
+    full_winners: winners.full_winners,
   } as LiveRoomResponse;
 }

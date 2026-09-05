@@ -4,13 +4,16 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { LiveRoomSnapshot } from "@/services/rooms";
+import type { ProcessedDraw } from "@/lib/draw-order";
 import {
   applyLiveRoomSnapshotUpdate,
-  mergeLiveRoomRoomFields,
+  isManifestRamEngineOnlyPhase,
   preserveLiveRoomCards,
   resolveDrawSource,
   shouldAcceptEngineRamEventSeq,
   shouldRewindRevealCursor,
+  shouldSyncWinnersDisplayFromDb,
+  shouldUsePgLiveDrawUpdates,
 } from "./engineRamSnapshot.js";
 
 const CARD = {
@@ -176,6 +179,131 @@ describe("applyLiveRoomSnapshotUpdate", () => {
     assert.equal(result.snapshot.room.full_reward_percentage, 0.9);
     assert.equal(result.snapshot.room.room_code, "254655");
     assert.equal(result.snapshot.cards.length, 1);
+  });
+
+  it("ignores pending draws when source is engine_ram", () => {
+    const prev = baseSnapshot({
+      eventSeq: 2,
+      draws: [
+        { id: "ram-room-1", number: 1, created_at: "t", processed_at: "t" },
+        { id: "ram-room-2", number: 2, created_at: "t", processed_at: "t" },
+      ],
+    });
+    const incoming = baseSnapshot({
+      eventSeq: 4,
+      draws: [
+        { id: "ram-room-1", number: 1, created_at: "t", processed_at: "t" },
+        { id: "ram-room-2", number: 2, created_at: "t", processed_at: "t" },
+        { id: "ram-room-3", number: 3, created_at: "t", processed_at: "t" },
+      ],
+    });
+    const pgDraw: ProcessedDraw = {
+      id: "pg-99",
+      number: 99,
+      created_at: "t2",
+      processed_at: "t2",
+    };
+    const result = applyLiveRoomSnapshotUpdate(prev, incoming, {
+      pendingDraws: [pgDraw],
+    });
+    assert.equal(result.accepted, true);
+    assert.deepEqual(
+      result.snapshot.draws.map((d) => d.number),
+      [1, 2, 3]
+    );
+  });
+});
+
+describe("shouldUsePgLiveDrawUpdates", () => {
+  it("returns false for engine_ram and manifest_ram", () => {
+    assert.equal(
+      shouldUsePgLiveDrawUpdates({
+        source: "engine_ram",
+        room: { gameplay_persist_mode: "manifest_ram" } as LiveRoomSnapshot["room"],
+      }),
+      false
+    );
+    assert.equal(
+      shouldUsePgLiveDrawUpdates({
+        source: undefined,
+        room: { gameplay_persist_mode: "manifest_ram" } as LiveRoomSnapshot["room"],
+      }),
+      false
+    );
+  });
+
+  it("returns true for per_draw", () => {
+    assert.equal(
+      shouldUsePgLiveDrawUpdates({
+        source: undefined,
+        room: { gameplay_persist_mode: "per_draw" } as LiveRoomSnapshot["room"],
+      }),
+      true
+    );
+  });
+});
+
+describe("shouldSyncWinnersDisplayFromDb", () => {
+  it("skips PG results during manifest_ram play", () => {
+    assert.equal(shouldSyncWinnersDisplayFromDb(baseSnapshot()), false);
+  });
+
+  it("allows PG results after manifest_ram finish", () => {
+    assert.equal(
+      shouldSyncWinnersDisplayFromDb(
+        baseSnapshot({
+          room: { ...baseSnapshot().room, status: "finished" },
+        })
+      ),
+      true
+    );
+  });
+
+  it("still syncs per_draw from PG during play", () => {
+    assert.equal(
+      shouldSyncWinnersDisplayFromDb({
+        source: undefined,
+        room: {
+          gameplay_persist_mode: "per_draw",
+          status: "playing",
+        } as LiveRoomSnapshot["room"],
+      }),
+      true
+    );
+  });
+});
+
+describe("applyLiveRoomSnapshotUpdate winners", () => {
+  it("keeps RAM line winners when draws-only poll omits them", () => {
+    const prev = baseSnapshot({
+      eventSeq: 2,
+      line_winners: [{ ticketId: "t1", userId: "u1", drawNumber: 37 }],
+    });
+    const incoming = baseSnapshot({
+      eventSeq: 4,
+      line_winners: undefined,
+      full_winners: undefined,
+    });
+    delete incoming.line_winners;
+    delete incoming.full_winners;
+    const result = applyLiveRoomSnapshotUpdate(prev, incoming);
+    assert.equal(result.accepted, true);
+    assert.deepEqual(result.snapshot.line_winners, [
+      { ticketId: "t1", userId: "u1", drawNumber: 37 },
+    ]);
+  });
+
+  it("accepts new RAM line winners from draws poll", () => {
+    const prev = baseSnapshot({ eventSeq: 2, line_winners: [] });
+    const incoming = baseSnapshot({
+      eventSeq: 5,
+      line_winners: [{ ticketId: "t1", userId: "u1", drawNumber: 37 }],
+    });
+    const result = applyLiveRoomSnapshotUpdate(prev, incoming);
+    assert.equal(result.accepted, true);
+    assert.deepEqual(result.snapshot.line_winners, [
+      { ticketId: "t1", userId: "u1", drawNumber: 37 },
+    ]);
   });
 });
 

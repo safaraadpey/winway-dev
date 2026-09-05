@@ -15,11 +15,10 @@ export function isRoomLevelDingUi(mode: string | null | undefined): boolean {
 /** Legacy per_draw only: mid-game header credit on ball reveal. */
 export function shouldCreditDingOnLiveReveal(
   mode: string | null | undefined,
-  gameplayPersistMode?: string | null | undefined,
-  source?: LiveRoomSnapshot["source"]
+  _gameplayPersistMode?: string | null | undefined,
+  _source?: LiveRoomSnapshot["source"]
 ): boolean {
-  if (gameplayPersistMode === "manifest_ram") return false;
-  if (source === "engine_ram") return false;
+  // room_level: ding is settled server-side at end of room — no mid-game credits.
   return !isRoomLevelDingUi(mode);
 }
 
@@ -40,6 +39,15 @@ export function countMatchedMyCardsForDing(
       card.card?.some((row) => row.some((value) => value === number)) ?? false;
     return hasNumber ? count + 1 : count;
   }, 0);
+}
+
+/** Display-only: play ding tone when the ball hits a card you own. */
+export function shouldPlayDingToneOnLiveReveal(
+  snapshot: LiveRoomSnapshot | null | undefined,
+  drawNumber: number
+): boolean {
+  if (!snapshot || drawNumber == null) return false;
+  return countMatchedMyCardsForDing(snapshot.cards, drawNumber) > 0;
 }
 
 export function computePerDrawRevealDingDelta(

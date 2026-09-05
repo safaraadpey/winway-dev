@@ -733,6 +733,16 @@ export interface LiveRoomSnapshot {
     card: (number | null)[][];
     is_my_card: boolean;
   }>;
+  line_winners?: Array<{
+    ticketId: string;
+    userId: string;
+    drawNumber: number;
+  }>;
+  full_winners?: Array<{
+    ticketId: string;
+    userId: string;
+    drawNumber: number;
+  }>;
 }
 
 export async function fetchLiveRoomSnapshot(

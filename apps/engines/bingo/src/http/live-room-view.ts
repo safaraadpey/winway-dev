@@ -69,6 +69,17 @@ export type LiveRoomResponse = {
     prngVersion: string;
     cardCount: number;
   } | null;
+  /** Engine RAM winners (manifest_ram). Omitted on PG per_draw snapshots. */
+  line_winners?: Array<{
+    ticketId: string;
+    userId: string;
+    drawNumber: number;
+  }>;
+  full_winners?: Array<{
+    ticketId: string;
+    userId: string;
+    drawNumber: number;
+  }>;
 };
 
 export type LiveRoomDrawsOnlyResponse = {
@@ -84,6 +95,8 @@ export type LiveRoomDrawsOnlyResponse = {
   };
   server_now: string;
   draws: LiveRoomResponse["draws"];
+  line_winners?: LiveRoomResponse["line_winners"];
+  full_winners?: LiveRoomResponse["full_winners"];
 };
 
 export async function buildLiveRoomSnapshot(

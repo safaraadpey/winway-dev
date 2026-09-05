@@ -76,7 +76,11 @@ export function mergeDrawListsForLiveRoom(
   source?: LiveDrawSource
 ): ProcessedDraw[] {
   if (source === "engine_ram") {
-    if (incoming.length > 0) return [...incoming];
+    if (incoming.length === 0) return [...existing];
+    // Never shrink — stale/partial polls must not rewind draw count (DrawStrip 90/x).
+    if (existing.length === 0 || incoming.length >= existing.length) {
+      return [...incoming];
+    }
     return [...existing];
   }
   return mergeDrawLists(existing, incoming);

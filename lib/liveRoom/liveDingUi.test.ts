@@ -11,6 +11,7 @@ import {
   countMatchedMyCardsForDing,
   isRoomLevelDingUi,
   shouldCreditDingOnLiveReveal,
+  shouldPlayDingToneOnLiveReveal,
 } from "./liveDingUi";
 
 function snapshot(
@@ -78,21 +79,42 @@ describe("liveDingUi room_level guards", () => {
     assert.equal(credit?.delta, 2);
   });
 
-  it("manifest_ram and engine_ram never build mid-game reveal credits", () => {
+  it("manifest_ram per_draw still builds reveal credits (display-only)", () => {
     const manifest = snapshot({
       ding_settle_mode: "per_draw",
       room: { gameplay_persist_mode: "manifest_ram" },
     });
-    assert.equal(buildPerDrawRevealCredit(manifest, 7), null);
-    assert.equal(shouldCreditDingOnLiveReveal("per_draw", "manifest_ram"), false);
+    const credit = buildPerDrawRevealCredit(manifest, 7);
+    assert.equal(credit?.revealKey, "room-1:7");
+    assert.equal(credit?.delta, 2);
+    assert.equal(shouldCreditDingOnLiveReveal("per_draw", "manifest_ram"), true);
 
     const engineRam = snapshot({
       ding_settle_mode: "per_draw",
       source: "engine_ram",
       room: { gameplay_persist_mode: "manifest_ram" },
     });
-    assert.equal(buildPerDrawRevealCredit(engineRam, 7), null);
-    assert.equal(shouldCreditDingOnLiveReveal("per_draw", "per_draw", "engine_ram"), false);
+    assert.equal(buildPerDrawRevealCredit(engineRam, 7)?.delta, 2);
+    assert.equal(shouldCreditDingOnLiveReveal("per_draw", "manifest_ram", "engine_ram"), true);
+  });
+
+  it("manifest_ram room_level still skips mid-game reveal credits", () => {
+    const manifest = snapshot({
+      ding_settle_mode: "room_level",
+      room: { gameplay_persist_mode: "manifest_ram" },
+    });
+    assert.equal(buildPerDrawRevealCredit(manifest, 7), null);
+    assert.equal(shouldCreditDingOnLiveReveal("room_level", "manifest_ram"), false);
+  });
+
+  it("room_level still plays ding tone when the ball hits my card", () => {
+    const snap = snapshot({
+      ding_settle_mode: "room_level",
+      source: "engine_ram",
+      room: { gameplay_persist_mode: "manifest_ram" },
+    });
+    assert.equal(shouldPlayDingToneOnLiveReveal(snap, 7), true);
+    assert.equal(shouldPlayDingToneOnLiveReveal(snap, 90), false);
   });
 });
 

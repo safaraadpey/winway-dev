@@ -63,12 +63,19 @@ describe("orderDrawsForLiveRoom engine_ram", () => {
 });
 
 describe("mergeDrawListsForLiveRoom", () => {
-  it("engine_ram uses incoming server list as authoritative", () => {
+  it("engine_ram uses incoming server list when it grows", () => {
     const existing = [ramDraw(1, 1), ramDraw(2, 2)];
     const incoming = Array.from({ length: 5 }, (_, i) => ramDraw(i + 1, i + 1));
     const merged = mergeDrawListsForLiveRoom(existing, incoming, "engine_ram");
     assert.equal(merged.length, 5);
     assert.deepEqual(merged.map((d) => d.number), [1, 2, 3, 4, 5]);
+  });
+
+  it("engine_ram never shrinks on shorter incoming poll", () => {
+    const existing = Array.from({ length: 10 }, (_, i) => ramDraw(i + 1, i + 1));
+    const incoming = Array.from({ length: 4 }, (_, i) => ramDraw(i + 1, i + 1));
+    const merged = mergeDrawListsForLiveRoom(existing, incoming, "engine_ram");
+    assert.equal(merged.length, 10);
   });
 
   it("per_draw merge still dedupes and sorts by processed_at", () => {
