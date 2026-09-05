@@ -114,6 +114,10 @@ export interface ReplayDiff {
   rosterMismatch: boolean;
   drawCountMismatch: boolean;
   postManifestTicketCount: number;
+  /** manifest_ram only — per-draw writes before final settlement boundary. */
+  unexpectedPerDrawWrites: number;
+  /** manifest_ram only — stored finalization_sha256 vs replayGame checksum. */
+  finalizationChecksumMismatch: boolean;
   errorCode?: string;
 }
 

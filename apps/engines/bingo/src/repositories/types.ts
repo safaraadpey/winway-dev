@@ -39,6 +39,7 @@ export interface RoomRow {
   finalization_contract_version?: number | null;
   ding_settled_at?: string | null;
   ding_settlement_key?: string | null;
+  prize_paid_at?: string | null;
   meta: Record<string, unknown> | null;
   engine_owner_id?: string | null;
   engine_lease_until?: string | null;

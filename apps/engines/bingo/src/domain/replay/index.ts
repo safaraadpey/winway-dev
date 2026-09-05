@@ -30,5 +30,6 @@ export {
 export { parseGameManifestPayload, assertManifestSeed } from "./parseManifest.js";
 export { replayGame } from "./replayGame.js";
 export { diffReplayAgainstPersisted } from "./compareReplay.js";
+export { diffManifestRamReplay, persistedFromReplay } from "./compareManifestRamAudit.js";
 export { evaluateReplayProofGate } from "./proofGate.js";
-export { runShadowReplayTick, processGameReplayJob } from "./processGameReplayJob.js";
+export { runShadowReplayTick, processGameReplayJob, auditGameRoom } from "./processGameReplayJob.js";

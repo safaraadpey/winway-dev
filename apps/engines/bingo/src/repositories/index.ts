@@ -141,7 +141,7 @@ export class GameRepo {
     const { data, error } = await this.db
       .from("rooms")
       .select(
-        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,waiting_started_at,min_players,max_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,ding_settle_mode,gameplay_persist_mode,finalization_sha256,finalization_contract_version,ding_settled_at,ding_settlement_key,meta,engine_owner_id,engine_lease_until,engine_lease_epoch"
+        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,waiting_started_at,min_players,max_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,ding_settle_mode,gameplay_persist_mode,finalization_sha256,finalization_contract_version,ding_settled_at,ding_settlement_key,prize_paid_at,meta,engine_owner_id,engine_lease_until,engine_lease_epoch"
       )
       .eq("id", roomId)
       .maybeSingle();
@@ -1229,6 +1229,79 @@ export class GameRepo {
     return ((data ?? []) as { number: number }[]).map((d) => d.number);
   }
 
+  /** manifest_ram bulk history — insertion order, not processed_at timing. */
+  async getDrawSequenceByInsertOrder(roomId: string): Promise<number[]> {
+    const { data, error } = await this.db
+      .from("draws")
+      .select("number,id")
+      .eq("room_id", roomId)
+      .order("id", { ascending: true });
+    if (error) fail("getDrawSequenceByInsertOrder", error.message);
+    return ((data ?? []) as { number: number }[]).map((d) => d.number);
+  }
+
+  /**
+   * manifest_ram audit — gameplay rows created strictly before final settlement.
+   * Bulk history written at prize_paid_at is not counted (created_at >= boundary).
+   */
+  async countUnexpectedPreFinalizationWrites(roomId: string): Promise<number> {
+    const { data: room, error: roomErr } = await this.db
+      .from("rooms")
+      .select("prize_paid_at,updated_at,status")
+      .eq("id", roomId)
+      .maybeSingle();
+    if (roomErr) fail("countUnexpectedPreFinalizationWrites.room", roomErr.message);
+    if (!room) return 0;
+
+    const row = room as { prize_paid_at: string | null; updated_at: string; status: string };
+    const boundary =
+      row.prize_paid_at ?? (row.status === "finished" ? row.updated_at : null);
+    if (!boundary) return 0;
+
+    const [draws, drawJobs, dingJobs, ticketIds] = await Promise.all([
+      this.db
+        .from("draws")
+        .select("id", { count: "exact", head: true })
+        .eq("room_id", roomId)
+        .lt("created_at", boundary),
+      this.db
+        .from("draw_jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("room_id", roomId)
+        .lt("created_at", boundary),
+      this.db
+        .from("ding_apply_jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("room_id", roomId)
+        .lt("created_at", boundary),
+      this.db.from("tickets").select("id").eq("room_id", roomId),
+    ]);
+
+    if (draws.error) fail("countUnexpectedPreFinalizationWrites.draws", draws.error.message);
+    if (drawJobs.error) fail("countUnexpectedPreFinalizationWrites.drawJobs", drawJobs.error.message);
+    if (dingJobs.error) fail("countUnexpectedPreFinalizationWrites.dingJobs", dingJobs.error.message);
+    if (ticketIds.error) fail("countUnexpectedPreFinalizationWrites.tickets", ticketIds.error.message);
+
+    let marksBefore = 0;
+    const ids = ((ticketIds.data ?? []) as { id: string }[]).map((t) => t.id);
+    if (ids.length > 0) {
+      const { count, error: marksErr } = await this.db
+        .from("marks")
+        .select("ticket_id", { count: "exact", head: true })
+        .in("ticket_id", ids)
+        .lt("created_at", boundary);
+      if (marksErr) fail("countUnexpectedPreFinalizationWrites.marks", marksErr.message);
+      marksBefore = count ?? 0;
+    }
+
+    return (
+      (draws.count ?? 0) +
+      marksBefore +
+      (drawJobs.count ?? 0) +
+      (dingJobs.count ?? 0)
+    );
+  }
+
   async getCardNumbersForPoolCardIds(
     poolCardIds: string[]
   ): Promise<{ pool_card_id: string; value: number; row_no: number; col_no: number }[]> {
@@ -1336,6 +1409,8 @@ export class GameRepo {
     roster_mismatch?: boolean;
     draw_count_mismatch?: boolean;
     post_manifest_ticket_count?: number;
+    unexpected_per_draw_writes?: number;
+    finalization_checksum_mismatch?: boolean;
     stopped_reason: string | null;
     error_code: string | null;
     replay_duration_ms: number | null;

@@ -1,8 +1,11 @@
 import type { Logger } from "../../metrics/logger.js";
 import type { GameRepo } from "../../repositories/index.js";
+import { isManifestRamMode } from "../../repositories/types.js";
 import type { RawCardNumber } from "../../core/card-registry/build.js";
+import { diffManifestRamReplay } from "./compareManifestRamAudit.js";
 import { diffReplayAgainstPersisted } from "./compareReplay.js";
 import { parseGameManifestPayload } from "./parseManifest.js";
+import { buildManifestRamAuditFinalization } from "./manifestRamAuditSim.js";
 import { replayGame } from "./replayGame.js";
 import type { GameReplayJobRow, PersistedGameplaySnapshot, ReplayAuditOutcome } from "./types.js";
 
@@ -28,6 +31,9 @@ export async function processGameReplayJob(
       return "ERROR";
     }
 
+    const room = await repo.getRoom(roomId);
+    const manifestRam = isManifestRamMode(room?.gameplay_persist_mode);
+
     const manifest = parseGameManifestPayload(row.payload, {
       rngAlgorithm: row.rng_algorithm,
       rngVersion: row.rng_version,
@@ -38,7 +44,9 @@ export async function processGameReplayJob(
       manifest.tickets.map((t) => t.poolCardId)
     )) as RawCardNumber[];
 
-    const replay = replayGame({ manifest, cardNumbers });
+    const { replay, finalization } = manifestRam
+      ? buildManifestRamAuditFinalization(manifest, cardNumbers, room)
+      : { replay: replayGame({ manifest, cardNumbers }), finalization: null };
     const results = await repo.getResults(roomId);
     const marksByTicket = await repo.getMarksForTickets(manifest.tickets.map((t) => t.ticketId));
     const persistedMarks = [];
@@ -60,8 +68,12 @@ export async function processGameReplayJob(
       (t) => Date.parse(t.created_at) > Date.parse(row.created_at)
     ).length;
 
+    const drawSequence = manifestRam
+      ? await repo.getDrawSequenceByInsertOrder(roomId)
+      : await repo.getProcessedDrawSequence(roomId);
+
     const persisted: PersistedGameplaySnapshot = {
-      drawSequence: await repo.getProcessedDrawSequence(roomId),
+      drawSequence,
       marks: persistedMarks,
       lineWinners: results
         .filter((r) => r.win_type === "line")
@@ -89,7 +101,14 @@ export async function processGameReplayJob(
       postManifestTicketCount,
     };
 
-    const diff = diffReplayAgainstPersisted(replay, persisted);
+    const diff = manifestRam
+      ? diffManifestRamReplay(replay, persisted, {
+          storedFinalizationSha256: room?.finalization_sha256 ?? null,
+          auditFinalizationSha256: finalization!.resultSha256,
+          unexpectedPerDrawWrites: await repo.countUnexpectedPreFinalizationWrites(roomId),
+        })
+      : diffReplayAgainstPersisted(replay, persisted);
+
     const durationMs = Date.now() - t0;
 
     await writeAudit(repo, log, {
@@ -107,6 +126,9 @@ export async function processGameReplayJob(
       rosterMismatch: diff.rosterMismatch,
       drawCountMismatch: diff.drawCountMismatch,
       postManifestTicketCount: diff.postManifestTicketCount,
+      unexpectedPerDrawWrites: diff.unexpectedPerDrawWrites,
+      finalizationChecksumMismatch: diff.finalizationChecksumMismatch,
+      gameplayPersistMode: manifestRam ? "manifest_ram" : "per_draw",
       stoppedReason: replay.stoppedReason,
       durationMs,
     });
@@ -160,6 +182,21 @@ export async function processGameReplayJob(
   }
 }
 
+/** Manual re-audit for a finished room (does not mutate gameplay). */
+export async function auditGameRoom(
+  repo: GameRepo,
+  log: Logger,
+  roomId: string
+): Promise<ReplayAuditOutcome> {
+  return processGameReplayJob(repo, log, {
+    id: 0,
+    room_id: roomId,
+    status: "manual",
+    attempts: 0,
+    created_at: new Date().toISOString(),
+  });
+}
+
 async function writeAudit(
   repo: GameRepo,
   log: Logger,
@@ -178,6 +215,9 @@ async function writeAudit(
     rosterMismatch?: boolean;
     drawCountMismatch?: boolean;
     postManifestTicketCount?: number;
+    unexpectedPerDrawWrites?: number;
+    finalizationChecksumMismatch?: boolean;
+    gameplayPersistMode?: "per_draw" | "manifest_ram";
     stoppedReason?: string;
     errorCode?: string;
     durationMs: number;
@@ -188,6 +228,7 @@ async function writeAudit(
     jobId: args.jobId,
     manifestVersion: args.manifestVersion ?? null,
     rngVersion: args.rngVersion ?? null,
+    gameplayPersistMode: args.gameplayPersistMode ?? null,
     drawDiffCount: args.drawDiffCount ?? 0,
     markDiffCount: args.markDiffCount ?? 0,
     resultDiffCount: args.resultDiffCount ?? 0,
@@ -197,6 +238,8 @@ async function writeAudit(
     rosterMismatch: args.rosterMismatch ?? false,
     drawCountMismatch: args.drawCountMismatch ?? false,
     postManifestTicketCount: args.postManifestTicketCount ?? 0,
+    unexpectedPerDrawWrites: args.unexpectedPerDrawWrites ?? 0,
+    finalizationChecksumMismatch: args.finalizationChecksumMismatch ?? false,
     outcome: args.outcome,
     replayDurationMs: args.durationMs,
     errorCode: args.errorCode ?? null,
@@ -206,7 +249,7 @@ async function writeAudit(
   try {
     await repo.insertGameReplayAudit({
       room_id: args.roomId,
-      job_id: args.jobId,
+      job_id: args.jobId > 0 ? args.jobId : null,
       manifest_version: args.manifestVersion ?? null,
       rng_version: args.rngVersion ?? null,
       outcome: args.outcome,
@@ -219,9 +262,15 @@ async function writeAudit(
       roster_mismatch: args.rosterMismatch ?? false,
       draw_count_mismatch: args.drawCountMismatch ?? false,
       post_manifest_ticket_count: args.postManifestTicketCount ?? 0,
+      unexpected_per_draw_writes: args.unexpectedPerDrawWrites ?? 0,
+      finalization_checksum_mismatch: args.finalizationChecksumMismatch ?? false,
       stopped_reason: args.stoppedReason ?? null,
       error_code: args.errorCode ?? null,
       replay_duration_ms: args.durationMs,
+      details:
+        args.gameplayPersistMode != null
+          ? { gameplay_persist_mode: args.gameplayPersistMode }
+          : undefined,
     });
   } catch (err) {
     log.warn("[GameReplayAudit] audit insert failed (non-critical)", {
