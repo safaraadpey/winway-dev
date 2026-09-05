@@ -55,6 +55,10 @@ export class RoomRuntimeState {
   /** Per-room card masks: ticketId → 15-bit mask */
   readonly maskByTicket: Map<string, number>;
 
+  /** Draw number when each ticket won line/full (manifest_ram finalization). */
+  private readonly lineWinnerDrawByTicket = new Map<string, number>();
+  private readonly fullWinnerDrawByTicket = new Map<string, number>();
+
   /** Accumulated pending Ding for room_level settlement (no ledger writes until finish). */
   readonly roomDingPending = new Map<string, number>();
   /** Clock fence: no further picks after the first full-house evaluation. */
@@ -107,6 +111,14 @@ export class RoomRuntimeState {
 
   getRoomDingSnapshot() {
     return snapshotRoomDing(this.roomDingPending);
+  }
+
+  getLineWinnerDraws(): ReadonlyMap<string, number> {
+    return this.lineWinnerDrawByTicket;
+  }
+
+  getFullWinnerDraws(): ReadonlyMap<string, number> {
+    return this.fullWinnerDrawByTicket;
   }
 
   buildRoomDingFinalizationPayload(): RoomFinalizationDingPayload {
@@ -330,8 +342,13 @@ export class RoomRuntimeState {
 
   absorbEvaluation(evalOut: EvaluateOutput, drawNumber: number): void {
     for (const r of evalOut.newResults) {
-      if (r.winType === "line") this.existingLineTickets.add(r.ticketId);
-      else this.existingFullTickets.add(r.ticketId);
+      if (r.winType === "line") {
+        this.existingLineTickets.add(r.ticketId);
+        this.lineWinnerDrawByTicket.set(r.ticketId, drawNumber);
+      } else {
+        this.existingFullTickets.add(r.ticketId);
+        this.fullWinnerDrawByTicket.set(r.ticketId, drawNumber);
+      }
     }
     if (evalOut.setFirstLineDrawNumber) {
       this.room = { ...this.room, first_line_draw_number: drawNumber };

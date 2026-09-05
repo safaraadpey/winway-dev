@@ -18,6 +18,9 @@ import {
 } from "./live-room-snapshot-pg.js";
 
 export type LiveRoomResponse = {
+  source?: "pg" | "engine_ram";
+  eventSeq?: number;
+  terminal?: boolean;
   room: {
     id: string;
     status: string | null;
@@ -36,6 +39,8 @@ export type LiveRoomResponse = {
     commission_rate: number;
     ding_per_number: number;
     draw_interval_sec: number;
+    ding_settle_mode?: "per_draw" | "room_level";
+    gameplay_persist_mode?: "per_draw" | "manifest_ram";
   };
   tournament?: {
     id: string;
@@ -67,12 +72,15 @@ export type LiveRoomResponse = {
 };
 
 export type LiveRoomDrawsOnlyResponse = {
+  source?: "pg" | "engine_ram";
+  eventSeq?: number;
   room: {
     id: string;
     status: string | null;
     room_code: string | null;
     next_draw_at: string | null;
     draw_interval_sec: number;
+    gameplay_persist_mode?: "per_draw" | "manifest_ram";
   };
   server_now: string;
   draws: LiveRoomResponse["draws"];

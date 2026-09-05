@@ -898,9 +898,16 @@ export default function LiveRoomScreen({
   }, [roomId]);
 
   // ریل‌تایم: draws + rooms + results (بعد از setAuth)
+  // manifest_ram: Engine snapshot is authoritative — skip PG draws/results oracle.
   useEffect(() => {
     if (isGuestSpectate) return;
     if (!roomId || !session.authReady) return;
+    if (
+      dataRef.current?.source === "engine_ram" ||
+      dataRef.current?.room?.gameplay_persist_mode === "manifest_ram"
+    ) {
+      return;
+    }
 
     console.log("[LiveRoom] realtime useEffect mount for room", roomId);
 
@@ -1168,7 +1175,14 @@ export default function LiveRoomScreen({
         channel = null;
       }
     };
-  }, [roomId, session.authReady, session.tokenVersion, session.accessToken]);
+  }, [
+    roomId,
+    session.authReady,
+    session.tokenVersion,
+    session.accessToken,
+    data?.source,
+    data?.room?.gameplay_persist_mode,
+  ]);
 
   // userId فعلی
   const currentUserId = useMemo(() => {

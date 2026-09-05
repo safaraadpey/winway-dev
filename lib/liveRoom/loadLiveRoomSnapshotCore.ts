@@ -31,6 +31,7 @@ export type LiveRoomSnapshotPayload = {
     ding_per_number: number;
     draw_interval_sec: number;
     ding_settle_mode?: "per_draw" | "room_level";
+    gameplay_persist_mode?: "per_draw" | "manifest_ram";
   };
   tournament?: {
     id: string;
@@ -111,6 +112,7 @@ export async function loadLiveRoomSnapshotForRoom(
         room_template_id,
         ding_per_number,
         ding_settle_mode,
+        gameplay_persist_mode,
         pool_id,
         meta
       `
@@ -405,6 +407,11 @@ export async function loadLiveRoomSnapshotForRoom(
     (room as { ding_settle_mode?: string | null }).ding_settle_mode === "room_level"
       ? "room_level"
       : "per_draw";
+  const gameplayPersistMode =
+    (room as { gameplay_persist_mode?: string | null }).gameplay_persist_mode ===
+    "manifest_ram"
+      ? "manifest_ram"
+      : "per_draw";
 
   return {
     room: {
@@ -425,6 +432,7 @@ export async function loadLiveRoomSnapshotForRoom(
       ding_per_number: resolvedDingPerNumber,
       draw_interval_sec: drawIntervalSec,
       ding_settle_mode: dingSettleMode,
+      gameplay_persist_mode: gameplayPersistMode,
     },
     tournament,
     server_now: new Date().toISOString(),

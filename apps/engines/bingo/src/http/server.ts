@@ -11,6 +11,7 @@
 import http from "node:http";
 import type { SupabaseAdmin } from "../db/supabase-admin.js";
 import type { Logger } from "../metrics/logger.js";
+import type { GameRepo } from "../repositories/index.js";
 import { bearerToken, verifyUser } from "./auth.js";
 import { applyCors } from "./cors.js";
 import {
@@ -26,6 +27,7 @@ export interface ApiServerContext {
   supabase: SupabaseAdmin;
   log: Logger;
   pingRedis?: () => Promise<boolean>;
+  repo?: GameRepo;
 }
 
 function send(res: http.ServerResponse, result: CommandResult): void {
@@ -129,7 +131,7 @@ export function startApiServer(port: number, ctx: ApiServerContext): http.Server
         }
         return send(
           res,
-          await getLiveRoom(supabase, user, { roomId, scope })
+          await getLiveRoom(supabase, user, { roomId, scope }, { repo: ctx.repo })
         );
       }
 

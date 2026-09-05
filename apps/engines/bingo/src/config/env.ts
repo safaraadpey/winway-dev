@@ -108,6 +108,8 @@ export interface EngineConfig {
   dingAsyncEnabled: boolean;
   /** Stamp new rooms with room_level Ding (room-boundary cutover). */
   dingRoomSettleEnabled: boolean;
+  /** Stamp new rooms with manifest_ram gameplay (CANARY OFF by default). */
+  gameplayManifestRamEnabled: boolean;
   dingProcessorIntervalMs: number;
   dingProcessorBatchSize: number;
   /** Max parallel rpc_apply_ding_credits_for_draw calls per pick batch (cap 12). */
@@ -266,6 +268,8 @@ export function loadConfig(): EngineConfig {
     lockRenewIntervalMs: Number(process.env.LOCK_RENEW_INTERVAL_MS ?? "10000"),
     dingAsyncEnabled: process.env.DING_ASYNC_ENABLED === "true",
     dingRoomSettleEnabled: process.env.DING_ROOM_SETTLE_ENABLED === "true",
+    gameplayManifestRamEnabled:
+      process.env.GAMEPLAY_MANIFEST_RAM_ENABLED === "true",
     dingProcessorIntervalMs: Number(
       process.env.DING_PROCESSOR_INTERVAL_MS ?? "500"
     ),

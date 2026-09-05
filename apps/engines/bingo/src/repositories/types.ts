@@ -9,6 +9,13 @@ export type RoomStatus =
   | "cancelled";
 
 export type DingSettleMode = "per_draw" | "room_level";
+export type GameplayPersistMode = "per_draw" | "manifest_ram";
+
+export function isManifestRamMode(
+  mode: GameplayPersistMode | null | undefined
+): boolean {
+  return mode === "manifest_ram";
+}
 
 export interface RoomRow {
   id: string;
@@ -27,6 +34,9 @@ export interface RoomRow {
   full_reward_percentage: number | null;
   ding_per_number: number | null;
   ding_settle_mode?: DingSettleMode | null;
+  gameplay_persist_mode?: GameplayPersistMode | null;
+  finalization_sha256?: string | null;
+  finalization_contract_version?: number | null;
   ding_settled_at?: string | null;
   ding_settlement_key?: string | null;
   meta: Record<string, unknown> | null;

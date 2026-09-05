@@ -141,7 +141,7 @@ export class GameRepo {
     const { data, error } = await this.db
       .from("rooms")
       .select(
-        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,waiting_started_at,min_players,max_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,ding_settle_mode,ding_settled_at,ding_settlement_key,meta,engine_owner_id,engine_lease_until,engine_lease_epoch"
+        "id,status,currency,room_seed,room_template_id,next_draw_at,starts_at,waiting_started_at,min_players,max_players,countdown_sec,first_line_draw_number,line_reward_percentage,full_reward_percentage,ding_per_number,ding_settle_mode,gameplay_persist_mode,finalization_sha256,finalization_contract_version,ding_settled_at,ding_settlement_key,meta,engine_owner_id,engine_lease_until,engine_lease_epoch"
       )
       .eq("id", roomId)
       .maybeSingle();
@@ -1124,6 +1124,16 @@ export class GameRepo {
       updated_at: new Date().toISOString(),
     });
     if (error) fail("syncDingRoomSettleRuntimeFlag", error.message);
+  }
+
+  /** Sync manifest_ram canary flag (default OFF — new rooms stay per_draw). */
+  async syncGameplayManifestRamRuntimeFlag(enabled: boolean): Promise<void> {
+    const { error } = await this.db.from("app_runtime_flags").upsert({
+      id: true,
+      gameplay_manifest_ram_enabled: enabled,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) fail("syncGameplayManifestRamRuntimeFlag", error.message);
   }
 
   /** True while per_draw jobs or active per_draw rooms remain (ding-processor drain gate). */

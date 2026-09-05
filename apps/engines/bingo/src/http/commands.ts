@@ -16,6 +16,10 @@ import type { AuthedUser } from "./auth.js";
 import { buildGameRoomView } from "./gameroom-view.js";
 import { buildLobbySnapshot } from "./lobby-snapshot.js";
 import { buildLiveRoomSnapshot } from "./live-room-view.js";
+import { buildLiveRoomSnapshotFromRam } from "./live-room-ram-view.js";
+import { getLiveRoomRamProvider } from "./liveRoomRamRegistry.js";
+import { isManifestRamMode } from "../repositories/types.js";
+import type { GameRepo } from "../repositories/index.js";
 
 export interface CommandResult {
   status: number;
@@ -121,7 +125,8 @@ export async function getLobby(
 export async function getLiveRoom(
   supabase: SupabaseAdmin,
   user: AuthedUser,
-  params: { roomId: string; scope?: "full" | "draws" }
+  params: { roomId: string; scope?: "full" | "draws" },
+  deps?: { repo?: GameRepo }
 ): Promise<CommandResult> {
   if (!params.roomId) {
     return bad("roomId is required.");
@@ -130,6 +135,33 @@ export async function getLiveRoom(
   const scope = params.scope === "draws" ? "draws" : "full";
 
   try {
+    if (deps?.repo) {
+      const room = await deps.repo.getRoom(params.roomId);
+      if (room && isManifestRamMode(room.gameplay_persist_mode)) {
+        const ram = getLiveRoomRamProvider()?.getRamLiveContext(params.roomId);
+        if (ram) {
+          const snapshot = await buildLiveRoomSnapshotFromRam(
+            supabase,
+            user.id,
+            params.roomId,
+            ram,
+            scope
+          );
+          if (snapshot) return ok(snapshot);
+        }
+        if (room.status === "playing" || room.status === "settling") {
+          return {
+            status: 503,
+            body: {
+              error: "engine_ram_unavailable",
+              message: "Live room state is on the game engine. Retry shortly.",
+              gameplay_persist_mode: "manifest_ram",
+            },
+          };
+        }
+      }
+    }
+
     const snapshot = await buildLiveRoomSnapshot(
       supabase,
       user.id,

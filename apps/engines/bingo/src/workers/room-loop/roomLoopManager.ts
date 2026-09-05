@@ -24,6 +24,12 @@ import {
 } from "./roomGameActor.js";
 import { claimRoomLease, releaseRoomLease } from "./roomLease.js";
 import { RoomLoopMetrics } from "./roomLoopMetrics.js";
+import {
+  setLiveRoomRamProvider,
+  type LiveRoomRamProvider,
+  type RamLiveRoomContext,
+} from "../../http/liveRoomRamRegistry.js";
+import { isManifestRamMode } from "../../repositories/types.js";
 
 export interface RoomLoopManagerOptions {
   supabase: SupabaseAdmin;
@@ -41,7 +47,7 @@ export interface RoomLoopManagerOptions {
 
 const HEARTBEAT_MS = 10_000;
 
-export class RoomLoopManager {
+export class RoomLoopManager implements LiveRoomRamProvider {
   private readonly opts: RoomLoopManagerOptions;
   private readonly ownerId: string;
   private readonly actors = new Map<string, RoomGameActor>();
@@ -58,6 +64,7 @@ export class RoomLoopManager {
   }
 
   start(): void {
+    setLiveRoomRamProvider(this);
     this.opts.log.info("room-loop manager starting", {
       ownerId: this.ownerId,
       engineId: this.opts.identity.engineId,
@@ -88,6 +95,7 @@ export class RoomLoopManager {
 
   async stop(): Promise<void> {
     this.stopped = true;
+    setLiveRoomRamProvider(null);
     if (this.discoveryTimer) clearInterval(this.discoveryTimer);
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     const entries = [...this.actors.entries()];
@@ -264,5 +272,19 @@ export class RoomLoopManager {
         ?.removeRoomRoute(roomId, fence.leaseEpoch)
         .catch(() => undefined);
     }
+  }
+
+  /** Engine-resident snapshot for manifest_ram GET /v1/live-room. */
+  getRamLiveContext(roomId: string): RamLiveRoomContext | null {
+    const actor = this.actors.get(roomId);
+    if (!actor) return null;
+    if (!isManifestRamMode(actor.room.gameplay_persist_mode)) return null;
+    const state = this.opts.stateManager.get(roomId);
+    if (!state) return null;
+    return {
+      state,
+      ramNextDrawAtIso: actor.ramNextDrawAtIso,
+      eventSeq: state.getDrawnNumbers().length,
+    };
   }
 }

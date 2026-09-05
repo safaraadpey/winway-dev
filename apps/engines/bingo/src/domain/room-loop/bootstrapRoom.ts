@@ -1,7 +1,9 @@
 /**
  * Preload gate — registry + room snapshot must be ready before the RAM clock starts.
- * Drains DB unprocessed draws (inserted, not finalized) via the persist recorder.
+ * manifest_ram: skip per-draw drain; recovery uses replayGame settleNow when lease epoch > 1.
  */
+import { bootstrapManifestRamRoom } from "./recoverFromManifest.js";
+import { isManifestRamMode } from "../../repositories/types.js";
 import type { RoomGameActor } from "../../workers/room-loop/roomGameActor.js";
 import type { RoomPersistQueue } from "../../workers/room-loop/roomPersistQueue.js";
 
@@ -16,6 +18,10 @@ export async function bootstrapRoomForActor(
       roomId,
     });
     return false;
+  }
+
+  if (isManifestRamMode(actor.room.gameplay_persist_mode)) {
+    return bootstrapManifestRamRoom(actor);
   }
 
   try {

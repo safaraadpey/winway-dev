@@ -76,6 +76,7 @@ export class RoomStateManager {
 
   async maybeCheckpoint(state: RoomRuntimeState): Promise<void> {
     if (this.checkpointEvery <= 0) return;
+    if (state.room.gameplay_persist_mode === "manifest_ram") return;
     if (state.drawsProcessed % this.checkpointEvery !== 0) return;
 
     const rows: { ticket_id: string; value: number }[] = [];

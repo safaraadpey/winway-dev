@@ -687,6 +687,9 @@ export async function fetchGameRoomView(params: {
 }
 
 export interface LiveRoomSnapshot {
+  source?: "pg" | "engine_ram";
+  eventSeq?: number;
+  terminal?: boolean;
   room: {
     id: string;
     status: string | null;
@@ -706,6 +709,7 @@ export interface LiveRoomSnapshot {
     ding_per_number?: number;
     draw_interval_sec?: number;
     ding_settle_mode?: "per_draw" | "room_level";
+    gameplay_persist_mode?: "per_draw" | "manifest_ram";
   };
   tournament?: {
     id: string;
@@ -742,7 +746,13 @@ export async function fetchLiveRoomSnapshot(
     try {
       snapshot = (await getLiveRoom(roomId, options?.scope)) as LiveRoomSnapshot;
     } catch (error) {
-      console.error("[LiveRoom] engine path failed, falling back to Vercel", error);
+      console.error("[LiveRoom] engine path failed", error);
+      if (
+        error instanceof Error &&
+        error.message.includes("engine_ram_unavailable")
+      ) {
+        throw error;
+      }
       console.info("[FALLBACK_PATH] live-room → Vercel /api/player/live-room");
       snapshot = await fetchLiveRoomSnapshotFromVercel(roomId, options);
     }

@@ -9,6 +9,8 @@ import { pickNextNumber } from "../../core/index.js";
 import { prepareDingCreditsFromState } from "../ding/index.js";
 import { parseBytea } from "../../repositories/index.js";
 import { finishExhaustedRoom } from "../room/reconcileWinners.js";
+import { tryFinalizeManifestRamRoom } from "./manifestRamFinalize.js";
+import { isManifestRamMode } from "../../repositories/types.js";
 import type {
   RoomCycleResult,
   RoomGameActor,
@@ -56,6 +58,12 @@ export async function runOneDrawCycle(
 
   const state = await stateManager.ensureLoaded(roomId);
   if (state.isFullHouseFrozen()) {
+    if (isManifestRamMode(room.gameplay_persist_mode)) {
+      const settled = await tryFinalizeManifestRamRoom(actor);
+      if (settled) {
+        return { kind: "exhausted" };
+      }
+    }
     return fullHouseFrozenWait();
   }
 
@@ -85,6 +93,10 @@ export async function runOneDrawCycle(
   const drawn = [...state.getDrawnNumbers()];
   const next = pickNextNumber(seed, drawn);
   if (next === null) {
+    if (isManifestRamMode(room.gameplay_persist_mode)) {
+      await tryFinalizeManifestRamRoom(actor);
+      return { kind: "exhausted" };
+    }
     await finishExhaustedRoom(supabase, repo, log, roomId, stateManager);
     return { kind: "exhausted" };
   }
@@ -117,7 +129,16 @@ export async function runOneDrawCycle(
 
   actor.ramNextDrawAtIso = nextDueAtIso;
   actor.room = { ...actor.room, next_draw_at: nextDueAtIso };
-  actor.persistQueue.enqueue(payload);
+
+  if (isManifestRamMode(room.gameplay_persist_mode)) {
+    log.info("[RamGame] draw in RAM (writes-per-draw=0)", {
+      roomId,
+      drawNumber: next,
+      seq: payload.seq,
+    });
+  } else {
+    actor.persistQueue.enqueue(payload);
+  }
 
   if (evalResult.fullWinnerThisDraw) {
     state.freezeAfterFullHouse();

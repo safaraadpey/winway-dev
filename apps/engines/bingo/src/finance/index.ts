@@ -111,6 +111,22 @@ export async function finishRoomAndSettle(
   if (error) throw rpcErr("fn_finish_room_and_settle", error.message);
 }
 
+/** manifest_ram: one atomic settlement from Engine GameFinalizationResult. */
+export async function finishRoomFromFinalization(
+  supabase: SupabaseAdmin,
+  roomId: string,
+  finalization: Record<string, unknown>,
+  opts?: { adminUser?: string | null; persistHistory?: boolean }
+): Promise<void> {
+  const { error } = await supabase.rpc("fn_finish_room_from_finalization", {
+    p_room: roomId,
+    p_finalization: finalization,
+    p_admin_user: opts?.adminUser ?? null,
+    p_persist_history: opts?.persistHistory ?? true,
+  });
+  if (error) throw rpcErr("fn_finish_room_from_finalization", error.message);
+}
+
 export function finishDingPayloadFromEngine(
   payload: RoomFinalizationDingPayload
 ): FinishRoomDingPayload {

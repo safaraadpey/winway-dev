@@ -11,6 +11,7 @@ export const PROOF_GATE_MIN_ROOMS = 2000;
 export const PROOF_GATE_MIN_DAYS = 14;
 
 export type DingSettleMode = "per_draw" | "room_level";
+export type GameplayPersistMode = "per_draw" | "manifest_ram";
 export type ReplayStoppedReason = "full_house" | "exhausted";
 export type ReplayAuditOutcome = "MATCH" | "MISMATCH" | "ERROR";
 
@@ -122,4 +123,18 @@ export interface GameReplayJobRow {
   status: string;
   attempts: number;
   created_at: string;
+}
+
+/** Versioned wrapper — live stop and replayGame must produce identical checksums. */
+export interface GameFinalizationResult {
+  contractVersion: number;
+  roomId: string;
+  manifestVersion: number;
+  rngAlgorithm: typeof RNG_ALGORITHM;
+  rngVersion: typeof RNG_VERSION;
+  payload: GameReplayResult;
+  dingSettlementKey: string;
+  dingSettlementVersion: number;
+  resultSha256: string;
+  marksSha256: string;
 }

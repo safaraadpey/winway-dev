@@ -130,6 +130,7 @@ async function main(): Promise<void> {
     engineReplicaCount: config.engineReplicaCount,
     dingAsyncEnabled: config.dingAsyncEnabled,
     dingRoomSettleEnabled: config.dingRoomSettleEnabled,
+    gameplayManifestRamEnabled: config.gameplayManifestRamEnabled,
     ...(config.dingAsyncEnabled
       ? {
           dingProcessorConcurrency: config.dingProcessorConcurrency,
@@ -150,16 +151,6 @@ async function main(): Promise<void> {
     return snap;
   };
 
-  if (config.httpPort > 0) {
-    if (config.apiEnabled) {
-      startApiServer(config.httpPort, { supabase, log, pingRedis });
-    } else {
-      startHealthServer(config.httpPort, log, { pingRedis, readiness });
-    }
-  }
-
-  const stops: Array<() => void> = [];
-
   const repo = new GameRepo(supabase);
   if (config.dingRoomSettleEnabled) {
     await repo.syncDingRoomSettleRuntimeFlag(true);
@@ -167,6 +158,23 @@ async function main(): Promise<void> {
   } else {
     await repo.syncDingRoomSettleRuntimeFlag(false);
   }
+  if (config.gameplayManifestRamEnabled) {
+    await repo.syncGameplayManifestRamRuntimeFlag(true);
+    log.info("[RamGame] manifest_ram runtime flag enabled for new rooms");
+  } else {
+    await repo.syncGameplayManifestRamRuntimeFlag(false);
+    log.info("[RamGame] manifest_ram CANARY OFF — new rooms stay per_draw");
+  }
+
+  if (config.httpPort > 0) {
+    if (config.apiEnabled) {
+      startApiServer(config.httpPort, { supabase, log, pingRedis, repo });
+    } else {
+      startHealthServer(config.httpPort, log, { pingRedis, readiness });
+    }
+  }
+
+  const stops: Array<() => void> = [];
 
   const roomState = new RoomStateManager(repo, log, config.roomStateCheckpointEvery);
   if (config.schedulerEnabled && executesBusinessLogic(config.runtime)) {
