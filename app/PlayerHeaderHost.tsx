@@ -53,12 +53,14 @@ export default function PlayerHeaderHost() {
         dingBalance={dingBalance || 0}
         tomanBalance={availableTomanBalance}
         hasHydrated={hasHydrated}
-        isRefreshing={isRefreshing}
+        isRefreshing={isRefreshing && !balanceRefreshDisabled}
         isAnimating={isAnimating}
         isTomanAnimating={isTomanAnimating}
         showBackButton={showBackButton}
         onBackClick={onBackClick || undefined}
-        onRefreshBalances={() => refreshAllBalances?.({ force: true })}
+        onRefreshBalances={() =>
+          refreshAllBalances?.({ force: true, userInitiated: true })
+        }
         refreshDisabled={isRefreshing || balanceRefreshDisabled}
       />
     </div>

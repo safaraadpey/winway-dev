@@ -23,6 +23,8 @@ import {
 
 export type RefreshBalancesOptions = {
   force?: boolean;
+  /** Only header tap should spin the capsules. Background sync stays silent. */
+  userInitiated?: boolean;
 };
 
 export interface Balances {
@@ -237,7 +239,7 @@ export function useBalances(): Balances {
       }
 
       fetchInFlightRef.current = true;
-      if (force) setIsRefreshing(true);
+      if (options?.userInitiated) setIsRefreshing(true);
       if (!hasHydratedRef.current) setError(null);
 
       try {
@@ -457,7 +459,7 @@ export function useBalances(): Balances {
       }
 
       if (event === "SIGNED_IN") {
-        void fetchBalances({ force: true });
+        void fetchBalances();
         return;
       }
 

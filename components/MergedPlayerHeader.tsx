@@ -89,7 +89,7 @@ function MergedPlayerHeader({
   hasHydrated,
   isRefreshing = false,
   loading,
-  isAnimating = false,
+  isAnimating: _isAnimating = false,
   isTomanAnimating = false,
   showBackButton = false,
   onBackClick,
@@ -115,6 +115,7 @@ function MergedPlayerHeader({
   const kycVerified = isGuestPresentation ? false : profile?.kycVerified ?? false;
 
   const refreshLocked = refreshDisabled || isGuestPresentation;
+  const showRefreshSpin = isRefreshing && !refreshLocked;
 
   const formatBalance = (amount: number) => amount.toLocaleString("en-US");
 
@@ -143,37 +144,8 @@ function MergedPlayerHeader({
       refreshLocked ? "" : ` ${styles.refreshableCapsule}`
     }`;
 
-  const capsuleAnimate = isAnimating
-    ? {
-        boxShadow: [
-          "0 0 0px rgba(251, 191, 36, 0)",
-          "0 0 20px rgba(251, 191, 36, 0.6)",
-          "0 0 15px rgba(251, 191, 36, 0.4)",
-          "0 0 0px rgba(251, 191, 36, 0)",
-        ],
-      }
-    : {};
-
-  const amountAnimate = isAnimating
-    ? {
-        color: ["#ffffff", "#fcd34d", "#fde047", "#ffffff"],
-        filter: [
-          "brightness(1)",
-          "brightness(1.6)",
-          "brightness(1.3)",
-          "brightness(1)",
-        ],
-        textShadow: [
-          "0 0 0px rgba(251, 191, 36, 0)",
-          "0 0 15px rgba(251, 191, 36, 0.8)",
-          "0 0 10px rgba(251, 191, 36, 0.5)",
-          "0 0 0px rgba(251, 191, 36, 0)",
-        ],
-      }
-    : {};
-
-  const dingCapsuleAnimate = capsuleAnimate;
-  const dingAmountAnimate = amountAnimate;
+  const dingCapsuleAnimate = {};
+  const dingAmountAnimate = {};
   const tomanCapsuleAnimate = isTomanAnimating
     ? {
         boxShadow: [
@@ -292,7 +264,7 @@ function MergedPlayerHeader({
               <Image
                 src={refreshIcon}
                 alt="Refresh"
-                className={`${styles.refreshIcon} ${isRefreshing ? styles.refreshSpinning : ""}`}
+                className={`${styles.refreshIcon} ${showRefreshSpin ? styles.refreshSpinning : ""}`}
                 width={32}
                 height={32}
               />
@@ -324,14 +296,11 @@ function MergedPlayerHeader({
               <>
                 {renderBalanceAmount(dingBalance, dingAmountAnimate)}
                 {balancesReady ? (
-                  <motion.div
-                    animate={isAnimating ? { scale: [1, 1.25, 1] } : {}}
-                    transition={{ duration: 0.6, ease: "easeOut" }}
-                  >
+                  <motion.div animate={{}} transition={{ duration: 0.6, ease: "easeOut" }}>
                     <Image
                       src={dingCoinIcon}
                       alt="Ding Coin"
-                      className={`${styles.coinIcon} ${isRefreshing ? styles.refreshSpinning : ""}`}
+                      className={`${styles.coinIcon} ${showRefreshSpin ? styles.refreshSpinning : ""}`}
                       width={30}
                       height={30}
                     />
