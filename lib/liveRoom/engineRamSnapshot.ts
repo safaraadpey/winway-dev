@@ -64,6 +64,38 @@ export function preserveLiveRoomCards(
   return incomingCards ?? [];
 }
 
+/** Draws-only polls omit stable room metadata — keep prior financial/display fields. */
+export function mergeLiveRoomRoomFields(
+  prev: LiveRoomSnapshot["room"] | undefined,
+  incoming: LiveRoomSnapshot["room"]
+): LiveRoomSnapshot["room"] {
+  if (!prev) return incoming;
+
+  const pick = <K extends keyof LiveRoomSnapshot["room"]>(key: K) => {
+    const value = incoming[key];
+    return value !== undefined && value !== null ? value : prev[key];
+  };
+
+  return {
+    ...prev,
+    ...incoming,
+    room_code: pick("room_code"),
+    room_name: pick("room_name"),
+    room_seed_hash: pick("room_seed_hash"),
+    card_price: pick("card_price"),
+    currency: pick("currency"),
+    min_players: pick("min_players"),
+    max_cards_per_player: pick("max_cards_per_player"),
+    started_at: pick("started_at"),
+    line_reward_percentage: pick("line_reward_percentage"),
+    full_reward_percentage: pick("full_reward_percentage"),
+    commission_rate: pick("commission_rate"),
+    ding_per_number: pick("ding_per_number"),
+    ding_settle_mode: pick("ding_settle_mode"),
+    gameplay_persist_mode: pick("gameplay_persist_mode"),
+  };
+}
+
 export type ApplySnapshotResult =
   | { accepted: true; snapshot: LiveRoomSnapshot }
   | { accepted: false; reason: "stale_event_seq" };
@@ -96,10 +128,12 @@ export function applyLiveRoomSnapshotUpdate(
     : incomingDraws;
 
   const cards = preserveLiveRoomCards(prev?.cards, incoming.cards, incoming);
+  const room = mergeLiveRoomRoomFields(prev?.room, incoming.room);
 
   const snapshot: LiveRoomSnapshot = {
     ...(prev ?? incoming),
     ...incoming,
+    room,
     cards,
     draws: mergedDraws,
     eventSeq:

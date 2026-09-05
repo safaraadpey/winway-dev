@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 import type { LiveRoomSnapshot } from "@/services/rooms";
 import {
   applyLiveRoomSnapshotUpdate,
+  mergeLiveRoomRoomFields,
   preserveLiveRoomCards,
   resolveDrawSource,
   shouldAcceptEngineRamEventSeq,
@@ -136,6 +137,44 @@ describe("applyLiveRoomSnapshotUpdate", () => {
     const result = applyLiveRoomSnapshotUpdate(prev, incoming);
     assert.equal(result.accepted, true);
     assert.equal(result.snapshot.draws.length, 4);
+    assert.equal(result.snapshot.cards.length, 1);
+  });
+
+  it("preserves financial room fields on draws-only partial update", () => {
+    const prev = baseSnapshot({
+      eventSeq: 2,
+      room: {
+        ...baseSnapshot().room,
+        card_price: 30_000,
+        commission_rate: 0.1,
+        line_reward_percentage: 0.1,
+        full_reward_percentage: 0.9,
+        room_code: "254655",
+      },
+    });
+    const incoming = baseSnapshot({
+      eventSeq: 4,
+      cards: [],
+      room: {
+        id: "room-1",
+        status: "playing",
+        room_code: null,
+        gameplay_persist_mode: "manifest_ram",
+      } as LiveRoomSnapshot["room"],
+      draws: Array.from({ length: 4 }, (_, i) => ({
+        id: `ram-room-${i + 1}`,
+        number: i + 1,
+        created_at: "t",
+        processed_at: "t",
+      })),
+    });
+    const result = applyLiveRoomSnapshotUpdate(prev, incoming);
+    assert.equal(result.accepted, true);
+    assert.equal(result.snapshot.room.card_price, 30_000);
+    assert.equal(result.snapshot.room.commission_rate, 0.1);
+    assert.equal(result.snapshot.room.line_reward_percentage, 0.1);
+    assert.equal(result.snapshot.room.full_reward_percentage, 0.9);
+    assert.equal(result.snapshot.room.room_code, "254655");
     assert.equal(result.snapshot.cards.length, 1);
   });
 });
